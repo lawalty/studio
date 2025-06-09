@@ -115,3 +115,12 @@ body {
     flex-grow: 1;
   }
 }
+
+@keyframes pulse-speak {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.animate-pulse-speak {
+  animation: pulse-speak 1.5s ease-in-out infinite;
+}
