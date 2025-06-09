@@ -45,203 +45,15 @@ const API_KEYS_STORAGE_KEY = "aiBlairApiKeys";
 
 export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false); // Controls "typing..." indicator
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_SRC);
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const currentAiResponseTextRef = useRef<string | null>(null); // Holds AI text before audio starts
   const { toast } = useToast();
-
-  const browserSpeak = useCallback((text: string) => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel(); // This should trigger onend for the current utterance
-      }
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.pitch = 1;
-      utterance.rate = 1;
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = (event) => {
-        console.error("Browser Speech Synthesis error:", event);
-        setIsSpeaking(false);
-        toast({
-          title: "Browser TTS Error",
-          description: "An error occurred with browser speech synthesis.",
-          variant: "destructive",
-        });
-      };
-      window.speechSynthesis.speak(utterance);
-    } else {
-      console.warn("Browser Speech Synthesis not supported or available.");
-      toast({
-        title: "TTS Not Supported",
-        description: "Your browser does not support speech synthesis.",
-        variant: "default",
-      });
-    }
-  }, [toast, setIsSpeaking]);
-
-  const speakText = useCallback(async (text: string) => {
-    if (text.trim() === "") return;
-
-    // Stop any currently playing ElevenLabs audio
-    if (elevenLabsAudioRef.current) {
-      elevenLabsAudioRef.current.pause();
-      elevenLabsAudioRef.current.onplay = null;
-      elevenLabsAudioRef.current.onended = null;
-      elevenLabsAudioRef.current.onerror = null;
-      if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
-         URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-      }
-      elevenLabsAudioRef.current = null;
-      setIsSpeaking(false);
-    }
-    // Stop any currently playing browser synthesis
-    if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel(); // onend should handle setIsSpeaking(false)
-    }
-
-    const processedText = text.replace(/EZCORP/gi, "E. Z. Corp");
-
-    if (elevenLabsApiKey && elevenLabsVoiceId) {
-      const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
-      const headers = {
-        "Accept": "audio/mpeg",
-        "Content-Type": "application/json",
-        "xi-api-key": elevenLabsApiKey,
-      };
-      const body = JSON.stringify({
-        text: processedText,
-        model_id: "eleven_multilingual_v2", // or your preferred model
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        },
-      });
-
-      try {
-        const response = await fetch(elevenLabsUrl, {
-          method: "POST",
-          headers: headers,
-          body: body,
-        });
-
-        if (response.ok) {
-          const audioBlob = await response.blob();
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl);
-          elevenLabsAudioRef.current = audio;
-
-          audio.onplay = () => setIsSpeaking(true);
-          audio.onended = () => {
-            setIsSpeaking(false);
-            URL.revokeObjectURL(audioUrl);
-            if (elevenLabsAudioRef.current === audio) {
-               elevenLabsAudioRef.current = null;
-            }
-          };
-          audio.onerror = (e) => {
-            console.error("Error playing ElevenLabs audio:", e);
-            setIsSpeaking(false);
-            toast({
-                title: "ElevenLabs Playback Error",
-                description: "Could not play audio from ElevenLabs. Falling back to browser TTS.",
-                variant: "destructive",
-            });
-            if (elevenLabsAudioRef.current === audio) {
-               elevenLabsAudioRef.current = null;
-            }
-            browserSpeak(processedText); // Fallback
-          };
-          await audio.play();
-          return;
-        } else {
-          let errorDetails = "Unknown error";
-          let specificAdvice = "Check console for details.";
-          try {
-            const errorData = await response.json();
-            errorDetails = errorData?.detail?.message || JSON.stringify(errorData);
-            if (response.status === 401) {
-              specificAdvice = "Your ElevenLabs API Key seems to be invalid or missing. Please check it in the Admin Panel.";
-            } else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") {
-              specificAdvice = "The ElevenLabs Voice ID was not found. Please verify it in the Admin Panel.";
-            } else if (errorData?.detail?.message) {
-                specificAdvice = `ElevenLabs Error: ${errorData.detail.message}.`;
-            }
-          } catch (e) {
-             try {
-              errorDetails = await response.text();
-              specificAdvice = `ElevenLabs returned status ${response.status}.`;
-            } catch (textError) {
-              errorDetails = `Status ${response.status} but could not parse error response.`;
-            }
-          }
-          console.error("ElevenLabs API error:", response.status, errorDetails);
-          toast({
-            title: "ElevenLabs TTS Error",
-            description: `${specificAdvice} Falling back to browser TTS.`,
-            variant: "destructive",
-            duration: 7000,
-          });
-        }
-      } catch (error) {
-        console.error("Error calling ElevenLabs API:", error);
-        toast({
-          title: "ElevenLabs Connection Error",
-          description: "Could not connect to ElevenLabs. Falling back to browser TTS.",
-          variant: "destructive",
-        });
-      }
-    }
-    // Fallback to browser speech synthesis
-    browserSpeak(processedText);
-  }, [elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeak, setIsSpeaking]);
-
-
-  useEffect(() => {
-    const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
-    if (storedAvatar) {
-      setAvatarSrc(storedAvatar);
-    } else {
-      setAvatarSrc(DEFAULT_AVATAR_SRC);
-    }
-
-    const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
-    if (storedPersona) {
-      setPersonaTraits(storedPersona);
-    } else {
-      setPersonaTraits(DEFAULT_PERSONA_TRAITS);
-    }
-
-    const storedApiKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    if (storedApiKeys) {
-      try {
-        const keys = JSON.parse(storedApiKeys);
-        setElevenLabsApiKey(keys.tts || null);
-        setElevenLabsVoiceId(keys.voiceId || null);
-      } catch (e) {
-        console.error("Failed to parse API keys from local storage", e);
-      }
-    }
-    
-    const currentAudioRef = elevenLabsAudioRef.current;
-    return () => {
-      // Cleanup speech synthesis and audio on component unmount
-      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-      }
-       if (currentAudioRef) {
-        currentAudioRef.pause();
-        if (currentAudioRef.src && currentAudioRef.src.startsWith('blob:')) {
-            URL.revokeObjectURL(currentAudioRef.src);
-        }
-      }
-      setIsSpeaking(false);
-    };
-  }, [setIsSpeaking]); // setIsSpeaking is stable
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
     setMessages((prevMessages) => [
@@ -250,9 +62,197 @@ export default function HomePage() {
     ]);
   }, []);
 
+  const handleAudioProcessStart = useCallback((text: string) => {
+    currentAiResponseTextRef.current = text;
+    // isSendingMessage is already true or will be set by caller for platform errors.
+  }, []);
+
+  const handleActualAudioStart = useCallback(() => {
+    setIsSpeaking(true);
+    if (currentAiResponseTextRef.current) {
+      addMessage(currentAiResponseTextRef.current, 'ai');
+      currentAiResponseTextRef.current = null;
+    }
+    setIsSendingMessage(false); // Hide "typing..."
+  }, [addMessage, setIsSpeaking, setIsSendingMessage]);
+
+  const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
+    setIsSpeaking(false);
+    if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
+      // Audio failed to start/play, but we have a pending message. Display it.
+      addMessage(currentAiResponseTextRef.current, 'ai');
+      currentAiResponseTextRef.current = null;
+      setIsSendingMessage(false); // Ensure spinner stops
+    } else if (currentAiResponseTextRef.current) {
+      // This case implies audioPlayedSuccessfully was true, but currentAiResponseTextRef was not cleared by handleActualAudioStart
+      // (which shouldn't happen but is a safeguard) or audio played but somehow this is called again with text.
+      addMessage(currentAiResponseTextRef.current, 'ai');
+      currentAiResponseTextRef.current = null;
+      setIsSendingMessage(false);
+    } else if (!audioPlayedSuccessfully) {
+      // Fallback for any other case where audio failed and no message was pending (e.g. platform error already shown)
+      setIsSendingMessage(false);
+    }
+
+    // Clean up ElevenLabs audio object if it exists
+    if (elevenLabsAudioRef.current) {
+        if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
+            URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+        }
+        elevenLabsAudioRef.current.onplay = null;
+        elevenLabsAudioRef.current.onended = null;
+        elevenLabsAudioRef.current.onerror = null;
+        elevenLabsAudioRef.current = null;
+    }
+  }, [addMessage, setIsSpeaking, setIsSendingMessage]);
+
+
+  const speakText = useCallback(async (text: string) => {
+    const processedText = text.replace(/EZCORP/gi, "E. Z. Corp");
+
+    if (processedText.trim() === "") {
+        handleAudioProcessEnd(false); // No audio to play
+        return;
+    }
+
+    // Stop any currently playing ElevenLabs audio
+    if (elevenLabsAudioRef.current) {
+      elevenLabsAudioRef.current.pause();
+      // Detach old handlers to prevent them from firing on a new audio object
+      elevenLabsAudioRef.current.onplay = null;
+      elevenLabsAudioRef.current.onended = null;
+      elevenLabsAudioRef.current.onerror = null;
+      if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
+         URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+      }
+      elevenLabsAudioRef.current = null;
+      // setIsSpeaking(false); // handleAudioProcessEnd will manage this
+    }
+    // Stop any currently playing browser synthesis
+    if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel(); // onend should handle setIsSpeaking(false) via handleAudioProcessEnd
+    }
+
+
+    if (elevenLabsApiKey && elevenLabsVoiceId) {
+      const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
+      const headers = { /* ... */ };
+      const body = JSON.stringify({ /* ... */ });
+
+      try {
+        const response = await fetch(elevenLabsUrl, { method: "POST", headers, body });
+        if (response.ok) {
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          elevenLabsAudioRef.current = audio; // Assign to ref immediately
+
+          audio.onplay = handleActualAudioStart;
+          audio.onended = () => {
+            handleAudioProcessEnd(true);
+            // URL.revokeObjectURL(audioUrl); // Moved to handleAudioProcessEnd general cleanup
+            // if (elevenLabsAudioRef.current === audio) elevenLabsAudioRef.current = null;
+          };
+          audio.onerror = (e) => {
+            console.error("Error playing ElevenLabs audio:", e);
+            toast({
+                title: "ElevenLabs Playback Error",
+                description: "Could not play audio. Falling back to browser TTS.",
+                variant: "destructive",
+            });
+            // handleAudioProcessEnd(false); // Indicate EL audio failed before fallback
+            // Fallback logic will call its own start/end handlers
+            browserSpeakInternal(processedText);
+          };
+          await audio.play();
+          return; // ElevenLabs playback initiated
+        } else {
+          let errorDetails = "Unknown error";
+          let specificAdvice = "Check console for details.";
+          try {
+            const errorData = await response.json();
+            errorDetails = errorData?.detail?.message || JSON.stringify(errorData);
+             if (response.status === 401) specificAdvice = "Your ElevenLabs API Key seems to be invalid or missing.";
+             else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "The ElevenLabs Voice ID was not found.";
+             else if (errorData?.detail?.message) specificAdvice = `ElevenLabs Error: ${errorData.detail.message}.`;
+          } catch (e) { /* ... */ }
+          console.error("ElevenLabs API error:", response.status, errorDetails);
+          toast({ title: "ElevenLabs TTS Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 });
+        }
+      } catch (error) {
+        console.error("Error calling ElevenLabs API:", error);
+        toast({ title: "ElevenLabs Connection Error", description: "Could not connect. Falling back to browser TTS.", variant: "destructive" });
+      }
+    }
+
+    // Fallback to browser speech synthesis
+    browserSpeakInternal(processedText);
+  }, [elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd]);
+
+
+  const browserSpeakInternal = useCallback((text: string) => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.pitch = 1;
+      utterance.rate = 1;
+      utterance.onstart = handleActualAudioStart;
+      utterance.onend = () => handleAudioProcessEnd(true);
+      utterance.onerror = (event) => {
+        console.error("Browser Speech Synthesis error:", event);
+        toast({
+          title: "Browser TTS Error",
+          description: "An error occurred with browser speech synthesis.",
+          variant: "destructive",
+        });
+        handleAudioProcessEnd(false);
+      };
+      window.speechSynthesis.speak(utterance);
+    } else {
+      console.warn("Browser Speech Synthesis not supported or available.");
+      toast({ title: "TTS Not Supported", description: "Your browser does not support speech synthesis.", variant: "default" });
+      handleAudioProcessEnd(false); // Indicate TTS is not possible
+    }
+  }, [toast, handleActualAudioStart, handleAudioProcessEnd]);
+
+
+  useEffect(() => {
+    const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
+    setAvatarSrc(storedAvatar || DEFAULT_AVATAR_SRC);
+    const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
+    setPersonaTraits(storedPersona || DEFAULT_PERSONA_TRAITS);
+    const storedApiKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
+    if (storedApiKeys) {
+      try {
+        const keys = JSON.parse(storedApiKeys);
+        setElevenLabsApiKey(keys.tts || null);
+        setElevenLabsVoiceId(keys.voiceId || null);
+      } catch (e) { console.error("Failed to parse API keys", e); }
+    }
+    
+    const currentAudio = elevenLabsAudioRef.current; // Capture ref for cleanup
+    const currentSynth = window.speechSynthesis;
+
+    return () => {
+      if (currentSynth && currentSynth.speaking) currentSynth.cancel();
+      if (currentAudio) {
+        currentAudio.pause();
+        if (currentAudio.src && currentAudio.src.startsWith('blob:')) {
+            URL.revokeObjectURL(currentAudio.src);
+        }
+      }
+      setIsSpeaking(false); // Ensure speaking state is reset
+      // currentAiResponseTextRef.current = null; // Reset pending text on unmount/re-effect
+    };
+  }, []); // Empty dependency: load once on mount
+
+
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     addMessage(text, 'user');
-    setIsSendingMessage(true);
+    setIsSendingMessage(true); // Show "typing..."
+    currentAiResponseTextRef.current = null; // Clear any previous pending response
 
     const genkitChatHistory = messages.map(msg => ({
       role: msg.sender === 'user' ? 'user' : 'model',
@@ -267,22 +267,20 @@ export default function HomePage() {
         chatHistory: genkitChatHistory,
       };
       const result = await generateChatResponse(flowInput);
-      addMessage(result.aiResponse, 'ai');
-      speakText(result.aiResponse);
+      
+      handleAudioProcessStart(result.aiResponse); // Store AI text, prepare for audio
+      await speakText(result.aiResponse); // This will call appropriate callbacks
+
     } catch (error) {
       console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error trying to respond. Please try again.";
-      addMessage(errorMessage, 'ai');
-      speakText(errorMessage); // Speak the error message too
-      toast({
-        title: "AI Error",
-        description: "Could not get a response from AI Blair. Please check the console for details.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSendingMessage(false);
+      addMessage(errorMessage, 'ai'); // Add error message to chat log immediately
+      // setIsSendingMessage(true); // Already true, or ensure it is if speaking the error
+      handleAudioProcessStart(errorMessage); // Prepare to speak the error
+      await speakText(errorMessage); // This will call appropriate callbacks
+                                     // and handleAudioProcessEnd should ensure isSendingMessage becomes false
     }
-  }, [addMessage, messages, personaTraits, toast, speakText]);
+  }, [addMessage, messages, personaTraits, toast, speakText, handleAudioProcessStart]);
 
   const imageProps: React.ComponentProps<typeof Image> = {
     src: avatarSrc,
@@ -299,7 +297,7 @@ export default function HomePage() {
   if (avatarSrc === DEFAULT_AVATAR_SRC || (avatarSrc && !avatarSrc.startsWith('data:image'))) {
      imageProps['data-ai-hint'] = "professional woman";
      if (!avatarSrc.startsWith('https://placehold.co')) {
-        imageProps.src = DEFAULT_AVATAR_SRC; // Ensure placeholder is used if avatarSrc is invalid local item
+        imageProps.src = DEFAULT_AVATAR_SRC; 
      }
   }
 
