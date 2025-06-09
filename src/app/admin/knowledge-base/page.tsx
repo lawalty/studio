@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2 } from 'lucide-react'; // Added FileType2
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
 interface KnowledgeSource {
@@ -15,22 +15,20 @@ interface KnowledgeSource {
   type: 'text' | 'pdf' | 'document' | 'audio' | 'image' | 'other';
   size: string;
   uploadedAt: string;
-  status: 'Uploaded' | 'Processing (Simulated)' | 'Ready (Simulated)';
-  simulatedContentNotes?: string;
 }
 
 const initialSources: KnowledgeSource[] = [
-  { id: '1', name: 'Pawn_Transactions_Guide.pdf', type: 'pdf', size: '2.3MB', uploadedAt: '2023-10-15', status: 'Ready (Simulated)', simulatedContentNotes: 'Text content would be extracted from this PDF.' },
-  { id: '2', name: 'Jewelry_Appraisal_Tips.txt', type: 'text', size: '15KB', uploadedAt: '2023-10-12', status: 'Ready (Simulated)', simulatedContentNotes: 'Plain text content.' },
-  { id: '3', name: 'Loan_Regulations_Overview.mp3', type: 'audio', size: '5.1MB', uploadedAt: '2023-10-10', status: 'Ready (Simulated)', simulatedContentNotes: 'Audio content would be transcribed to text.' },
-  { id: '4', name: 'Antique_Valuation_Basics.docx', type: 'document', size: '22KB', uploadedAt: '2023-09-28', status: 'Ready (Simulated)', simulatedContentNotes: 'Text content would be extracted from this document.' },
+  { id: '1', name: 'Pawn_Transactions_Guide.pdf', type: 'pdf', size: '2.3MB', uploadedAt: '2023-10-15' },
+  { id: '2', name: 'Jewelry_Appraisal_Tips.txt', type: 'text', size: '15KB', uploadedAt: '2023-10-12' },
+  { id: '3', name: 'Loan_Regulations_Overview.mp3', type: 'audio', size: '5.1MB', uploadedAt: '2023-10-10' },
+  { id: '4', name: 'Antique_Valuation_Basics.docx', type: 'document', size: '22KB', uploadedAt: '2023-09-28' },
 ];
 
 const getFileIcon = (type: KnowledgeSource['type']) => {
   switch (type) {
     case 'pdf': return <FileText className="h-5 w-5 text-red-500" />;
     case 'text': return <FileText className="h-5 w-5 text-blue-500" />;
-    case 'document': return <FileType2 className="h-5 w-5 text-sky-600" />; // Using FileType2 for general documents
+    case 'document': return <FileType2 className="h-5 w-5 text-sky-600" />;
     case 'audio': return <FileAudio className="h-5 w-5 text-purple-500" />;
     case 'image': return <FileImage className="h-5 w-5 text-green-500" />;
     default: return <FileText className="h-5 w-5 text-gray-500" />;
@@ -56,22 +54,17 @@ export default function KnowledgeBasePage() {
     }
 
     let fileType: KnowledgeSource['type'] = 'other';
-    let simNotes = 'File type not specifically handled by simulation. Backend would determine processing.';
     const mimeType = selectedFile.type;
     const fileNameLower = selectedFile.name.toLowerCase();
 
     if (mimeType.startsWith('audio/')) {
       fileType = 'audio';
-      simNotes = 'Audio content would be transcribed to text by a real backend.';
     } else if (mimeType.startsWith('image/')) {
       fileType = 'image';
-      simNotes = 'Image content might be analyzed (e.g., for OCR or descriptions) by a real backend.';
     } else if (mimeType === 'application/pdf') {
       fileType = 'pdf';
-      simNotes = 'Text content would be extracted from this PDF by a real backend.';
     } else if (mimeType.startsWith('text/')) {
       fileType = 'text';
-      simNotes = 'Plain text content, ready for use by a real backend.';
     } else if (
         mimeType === 'application/msword' ||
         mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
@@ -79,7 +72,6 @@ export default function KnowledgeBasePage() {
         fileNameLower.endsWith('.docx')
       ) {
       fileType = 'document';
-      simNotes = 'Text content would be extracted from this document by a real backend.';
     }
 
     const newSource: KnowledgeSource = {
@@ -88,13 +80,11 @@ export default function KnowledgeBasePage() {
       type: fileType,
       size: `${(selectedFile.size / (1024 * 1024)).toFixed(2)}MB`,
       uploadedAt: new Date().toISOString().split('T')[0],
-      status: 'Ready (Simulated)',
-      simulatedContentNotes: simNotes,
     };
 
     setSources(prev => [newSource, ...prev]);
     setSelectedFile(null);
-    if(fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
+    if(fileInputRef.current) fileInputRef.current.value = ""; 
     toast({ title: "File Upload Simulated", description: `${selectedFile.name} has been added to the list. (This is a simulation)` });
   };
 
@@ -112,7 +102,6 @@ export default function KnowledgeBasePage() {
           <CardDescription>
             Add new documents, audio files, or other content to AI Blair's knowledge base.
             This page simulates file uploads. Actual file processing and AI integration would require backend development.
-            Supported types for simulation: text, PDF, DOC(X), MP3.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -123,8 +112,6 @@ export default function KnowledgeBasePage() {
               onChange={handleFileChange}
               className="hidden"
               id="file-upload"
-              // For testing specific types, you can uncomment and modify 'accept'
-              // accept=".txt,.pdf,.doc,.docx,.mp3,audio/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             />
             <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
               <UploadCloud className="mr-2 h-4 w-4" /> Choose File
@@ -165,8 +152,6 @@ export default function KnowledgeBasePage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded At</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Simulated Notes</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -178,12 +163,6 @@ export default function KnowledgeBasePage() {
                   <TableCell className="capitalize">{source.type}</TableCell>
                   <TableCell>{source.size}</TableCell>
                   <TableCell>{source.uploadedAt}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 text-xs rounded-full ${source.status === 'Ready (Simulated)' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                      {source.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{source.simulatedContentNotes}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id)} aria-label="Delete source">
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -199,4 +178,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
