@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -34,12 +35,16 @@ Information on valuing antique items, collectibles, and memorabilia commonly fou
 Focuses on rarity, condition, and provenance as key factors in pricing.
 `;
 
+const AVATAR_STORAGE_KEY = "aiBlairAvatar"; // Same key as used in admin/persona page
+const DEFAULT_AVATAR_SRC = "https://placehold.co/300x300.png";
+
 
 export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [knowledgeBaseSummary, setKnowledgeBaseSummary] = useState<string>("Loading knowledge base summary...");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+  const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_SRC);
   const { toast } = useToast();
 
   const fetchSummary = useCallback(async () => {
@@ -62,6 +67,13 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchSummary();
+
+    const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
+    if (storedAvatar) {
+      setAvatarSrc(storedAvatar);
+    } else {
+      setAvatarSrc(DEFAULT_AVATAR_SRC);
+    }
   }, [fetchSummary]);
 
   const addMessage = (text: string, sender: 'user' | 'ai') => {
@@ -93,6 +105,20 @@ export default function HomePage() {
       // Simulate TTS audio playback starting here
     }, 1500 + Math.random() * 1000);
   };
+  
+  const imageProps: React.ComponentProps<typeof Image> = {
+    src: avatarSrc,
+    alt: "AI Blair Avatar",
+    width: 200,
+    height: 200,
+    className: "rounded-full border-4 border-primary shadow-md object-cover", // Added object-cover
+    priority: true,
+  };
+
+  if (avatarSrc === DEFAULT_AVATAR_SRC) {
+    imageProps['data-ai-hint'] = "professional woman";
+  }
+
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
@@ -100,15 +126,7 @@ export default function HomePage() {
       <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
         <Card className="w-full shadow-xl">
           <CardContent className="pt-6 flex flex-col items-center">
-            <Image
-              src="https://placehold.co/300x300.png"
-              alt="AI Blair Avatar"
-              width={200}
-              height={200}
-              className="rounded-full border-4 border-primary shadow-md"
-              data-ai-hint="professional woman"
-              priority
-            />
+            <Image {...imageProps} />
             <h2 className="mt-4 text-3xl font-bold text-center font-headline text-primary">AI Blair</h2>
           </CardContent>
         </Card>
