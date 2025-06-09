@@ -35,7 +35,7 @@ Information on valuing antique items, collectibles, and memorabilia commonly fou
 Focuses on rarity, condition, and provenance as key factors in pricing.
 `;
 
-const AVATAR_STORAGE_KEY = "aiBlairAvatar"; // Same key as used in admin/persona page
+const AVATAR_STORAGE_KEY = "aiBlairAvatar";
 const DEFAULT_AVATAR_SRC = "https://placehold.co/300x300.png";
 
 
@@ -72,25 +72,22 @@ export default function HomePage() {
     if (storedAvatar) {
       setAvatarSrc(storedAvatar);
     } else {
-      setAvatarSrc(DEFAULT_AVATAR_SRC);
+      setAvatarSrc(DEFAULT_AVATAR_SRC); // Fallback if nothing is stored
     }
   }, [fetchSummary]);
 
-  const addMessage = (text: string, sender: 'user' | 'ai') => {
+  const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
     setMessages((prevMessages) => [
       ...prevMessages,
       { id: Date.now().toString() + Math.random(), text, sender, timestamp: Date.now() },
     ]);
-  };
+  }, []); // setMessages is stable
 
-  const handleSendMessage = async (text: string, method: 'text' | 'voice') => {
+  const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     addMessage(text, 'user');
     setIsSendingMessage(true);
 
     // Simulate AI response
-    // In a real app, this would call the AI backend with 'text' and 'method'
-    // For example, if method is 'voice', it might trigger STT then NLP then TTS.
-    // Here, we'll just echo or give a canned response.
     setTimeout(() => {
       let aiResponse = `AI Blair received your ${method} message: "${text}"`;
       if (text.toLowerCase().includes('hello') || text.toLowerCase().includes('hi')) {
@@ -102,21 +99,24 @@ export default function HomePage() {
       }
       addMessage(aiResponse, 'ai');
       setIsSendingMessage(false);
-      // Simulate TTS audio playback starting here
     }, 1500 + Math.random() * 1000);
-  };
+  }, [addMessage]); // Depends on memoized addMessage. setIsSendingMessage is stable.
   
   const imageProps: React.ComponentProps<typeof Image> = {
     src: avatarSrc,
     alt: "AI Blair Avatar",
     width: 200,
     height: 200,
-    className: "rounded-full border-4 border-primary shadow-md object-cover", // Added object-cover
+    className: "rounded-full border-4 border-primary shadow-md object-cover",
     priority: true,
   };
 
-  if (avatarSrc === DEFAULT_AVATAR_SRC) {
-    imageProps['data-ai-hint'] = "professional woman";
+  if (avatarSrc === DEFAULT_AVATAR_SRC || !avatarSrc.startsWith('data:image')) {
+    // Add data-ai-hint only if it's the placeholder or not a data URI (might still be a placeholder URL)
+     imageProps['data-ai-hint'] = "professional woman";
+     if (!avatarSrc.startsWith('https://placehold.co')) { // Ensure placeholder if not data URI and not already placeholder
+        imageProps.src = DEFAULT_AVATAR_SRC;
+     }
   }
 
 

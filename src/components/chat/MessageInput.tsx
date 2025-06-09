@@ -27,15 +27,12 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
   useEffect(() => {
     const SpeechRecognitionAPI = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
-      // STT not supported
-      // console.warn("Speech Recognition API not supported in this browser.");
-      // Mic button could be disabled here, or show a toast.
       return;
     }
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = false; // True means it keeps listening after pauses. False means it stops after first pause.
-    recognition.interimResults = true; // Show interim results as user speaks
+    recognition.continuous = false; 
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onresult = (event) => {
@@ -60,35 +57,58 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
       });
       setIsListening(false);
     };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      // Auto-send logic was here, but let's make it explicit on final result for `continuous=false`
-      // Or rely on user clicking Send or Enter if they want to edit.
-      // For "automatically processing voice input upon a short pause", this is where it would happen.
-      // If inputValue has content from STT, send it.
-      // We need to access the latest inputValue here, possibly via a ref or by passing it.
-      // For now, let's assume the final transcript is in inputValue.
-      // The onresult event already updates inputValue.
-      // The challenge: onend fires, inputValue might not be the *very latest* if setInputValue is async.
-      // This is why `finalTranscript` was captured above.
-      // Let's refine: if STT ends and there's a final transcript, send it.
-    };
     
     recognitionRef.current = recognition;
 
     return () => {
       if (recognitionRef.current) {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null; // Clean up onend as well
         recognitionRef.current.stop();
       }
     };
   }, [toast]);
 
 
+  // Effect for handling recognition.onend
+  useEffect(() => {
+    const currentRecognition = recognitionRef.current;
+    if (currentRecognition) {
+      const onEndHandler = () => {
+        setIsListening(false); // Update local listening state
+
+        // `inputValue` here is from the closure of this effect.
+        // It will be the value of `inputValue` from the render when this effect last ran.
+        const transcript = inputValue; 
+
+        if (transcript && transcript.trim()) {
+          handleSend(transcript, 'voice'); // Call prop that updates parent
+          setInputValue('');             // Update local state to clear input
+        }
+      };
+      currentRecognition.onend = onEndHandler;
+
+      // Cleanup function for this specific effect
+      return () => {
+        if (currentRecognition) {
+          currentRecognition.onend = null;
+        }
+      };
+    }
+  // Dependencies:
+  // - handleSend: If this changes (e.g. parent's onSendMessage or isSending prop changes), 
+  //   we need to re-attach onEndHandler with the new handleSend.
+  // - inputValue: If inputValue changes (e.g., user types or STT updates it), the onEndHandler, 
+  //   which captures inputValue from its closure, needs to be redefined to get the latest value.
+  // setIsListening and setInputValue are stable and don't need to be listed.
+  }, [handleSend, inputValue]);
+
+
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
     if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop(); // Stop STT, onend will handle sending if needed or user can click send.
+      recognitionRef.current.stop(); 
     } else {
       handleSend(inputValue, 'text');
     }
@@ -106,16 +126,9 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
 
     if (isListening) {
       recognitionRef.current.stop();
-      setIsListening(false); 
-      // If inputValue has content, it will be sent by onSendMessage in recognition.onend,
-      // or user can click Send button / press Enter.
-      // We call stop(), onend will be triggered.
-      // To ensure immediate send if there was content:
-      // if (inputValue.trim()) {
-      //  handleSend(inputValue, 'voice');
-      // }
+      // setIsListening(false); // onend handler will set this
     } else {
-      setInputValue(''); // Clear previous input before starting new STT
+      setInputValue(''); 
       try {
         recognitionRef.current.start();
         setIsListening(true);
@@ -129,24 +142,6 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
       }
     }
   };
-  
-  // Refined onend for auto-send behavior
-  useEffect(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-        // Access inputValue directly here as it should be updated by onresult
-        setInputValue(currentVal => {
-          if (currentVal.trim()) {
-            handleSend(currentVal, 'voice');
-            return ''; // Clear after sending
-          }
-          return currentVal; // Or don't clear if nothing sent
-        });
-      };
-    }
-  }, [handleSend]); // Add handleSend to dependencies of this useEffect
-
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex items-center gap-2">
@@ -155,7 +150,7 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
         variant="outline"
         size="icon"
         onClick={handleMicClick}
-        disabled={isSending} // Potentially disable if STT not supported
+        disabled={isSending} 
         className={isListening ? "bg-accent text-accent-foreground ring-2 ring-accent" : ""}
         aria-label={isListening ? "Stop recording" : "Start recording"}
       >
@@ -166,7 +161,7 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
         placeholder={isListening ? "Listening... Speak now." : "Type your message or click mic to speak..."}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        disabled={isSending || (isListening && recognitionRef.current?.interimResults === false)} // Disable typing during non-interim STT
+        disabled={isSending || (isListening && recognitionRef.current?.interimResults === false)}
         className="flex-grow"
       />
       <Button type="submit" size="icon" disabled={isSending || inputValue.trim() === ''} aria-label="Send message">
