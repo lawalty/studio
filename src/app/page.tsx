@@ -104,6 +104,7 @@ export default function HomePage() {
         window.speechSynthesis.cancel(); // onend should handle setIsSpeaking(false)
     }
 
+    const processedText = text.replace(/EZCORP/gi, "E. Z. Corp");
 
     if (elevenLabsApiKey && elevenLabsVoiceId) {
       const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
@@ -113,7 +114,7 @@ export default function HomePage() {
         "xi-api-key": elevenLabsApiKey,
       };
       const body = JSON.stringify({
-        text: text,
+        text: processedText,
         model_id: "eleven_multilingual_v2", // or your preferred model
         voice_settings: {
           stability: 0.5,
@@ -153,7 +154,7 @@ export default function HomePage() {
             if (elevenLabsAudioRef.current === audio) {
                elevenLabsAudioRef.current = null;
             }
-            browserSpeak(text); // Fallback
+            browserSpeak(processedText); // Fallback
           };
           await audio.play();
           return;
@@ -196,7 +197,7 @@ export default function HomePage() {
       }
     }
     // Fallback to browser speech synthesis
-    browserSpeak(text);
+    browserSpeak(processedText);
   }, [elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeak, setIsSpeaking]);
 
 
@@ -324,3 +325,4 @@ export default function HomePage() {
     </div>
   );
 }
+
