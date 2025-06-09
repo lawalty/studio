@@ -10,28 +10,43 @@ import { useToast } from "@/hooks/use-toast";
 interface MessageInputProps {
   onSendMessage: (text: string, method: 'text' | 'voice') => void;
   isSending: boolean;
+  showMicButton?: boolean;
+  isListening: boolean;
+  onToggleListening: () => void;
+  inputValue: string;
+  onInputValueChange: (value: string) => void;
 }
 
-export default function MessageInput({ onSendMessage, isSending }: MessageInputProps) {
-  const [inputValue, setInputValue] = useState('');
-  const [isListening, setIsListening] = useState(false);
+export default function MessageInput({
+  onSendMessage,
+  isSending,
+  showMicButton = true,
+  isListening,
+  onToggleListening,
+  inputValue,
+  onInputValueChange,
+}: MessageInputProps) {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast } = useToast();
 
   const handleSend = useCallback((text: string, method: 'text' | 'voice') => {
     if (text.trim() === '' || isSending) return;
     onSendMessage(text, method);
-    setInputValue('');
-  }, [onSendMessage, isSending]);
+    onInputValueChange('');
+  }, [onSendMessage, isSending, onInputValueChange]);
 
   useEffect(() => {
     const SpeechRecognitionAPI = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
+      if (showMicButton) { // Only toast if mic button was intended to be shown
+        // console.warn("Speech recognition not supported or enabled in your browser.");
+        // No toast here as page.tsx will handle a global one if mic is attempted.
+      }
       return;
     }
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = false; 
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -45,7 +60,7 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setInputValue(finalTranscript || interimTranscript);
+      onInputValueChange(finalTranscript || interimTranscript); // Update parent's state
     };
 
     recognition.onerror = (event) => {
@@ -55,7 +70,18 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
         description: `Speech recognition error: ${event.error}. Please ensure microphone access is allowed.`,
         variant: "destructive",
       });
-      setIsListening(false);
+      if (isListening) { // If it was listening, call onToggleListening to update parent state
+        onToggleListening();
+      }
+    };
+
+    recognition.onend = () => {
+      // Parent (page.tsx) now controls isListening state changes and sending messages
+      // This onend is mostly for cleanup or if parent needs to know recognition stopped naturally.
+      // The parent's onToggleListening should handle sending the message if inputValue is present.
+       if (isListening) { // If it was listening, call onToggleListening to update parent state
+        onToggleListening(); // This will trigger logic in page.tsx to send if needed
+      }
     };
     
     recognitionRef.current = recognition;
@@ -64,104 +90,68 @@ export default function MessageInput({ onSendMessage, isSending }: MessageInputP
       if (recognitionRef.current) {
         recognitionRef.current.onresult = null;
         recognitionRef.current.onerror = null;
-        recognitionRef.current.onend = null; // Clean up onend as well
+        recognitionRef.current.onend = null;
         recognitionRef.current.stop();
       }
     };
-  }, [toast]);
+  // onToggleListening and onInputValueChange are stable if defined with useCallback in parent
+  // isListening is a prop, if it changes, this effect might re-run, which is generally fine.
+  }, [toast, showMicButton, onInputValueChange, onToggleListening, isListening]);
 
-
-  // Effect for handling recognition.onend
+  // Effect to start/stop recognition based on parent's isListening prop
   useEffect(() => {
-    const currentRecognition = recognitionRef.current;
-    if (currentRecognition) {
-      const onEndHandler = () => {
-        setIsListening(false); // Update local listening state
+    if (!recognitionRef.current) return;
 
-        // `inputValue` here is from the closure of this effect.
-        // It will be the value of `inputValue` from the render when this effect last ran.
-        const transcript = inputValue; 
-
-        if (transcript && transcript.trim()) {
-          handleSend(transcript, 'voice'); // Call prop that updates parent
-          setInputValue('');             // Update local state to clear input
-        }
-      };
-      currentRecognition.onend = onEndHandler;
-
-      // Cleanup function for this specific effect
-      return () => {
-        if (currentRecognition) {
-          currentRecognition.onend = null;
-        }
-      };
+    if (isListening) {
+      onInputValueChange(''); // Clear input when starting to listen via button
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        console.error("Error starting speech recognition:", e);
+        toast({
+            title: "Microphone Error",
+            description: "Could not start speech recognition. Make sure microphone access is allowed.",
+            variant: "destructive",
+        });
+        onToggleListening(); // Turn listening off in parent if start failed
+      }
+    } else {
+      recognitionRef.current.stop();
     }
-  // Dependencies:
-  // - handleSend: If this changes (e.g. parent's onSendMessage or isSending prop changes), 
-  //   we need to re-attach onEndHandler with the new handleSend.
-  // - inputValue: If inputValue changes (e.g., user types or STT updates it), the onEndHandler, 
-  //   which captures inputValue from its closure, needs to be redefined to get the latest value.
-  // setIsListening and setInputValue are stable and don't need to be listed.
-  }, [handleSend, inputValue]);
+  }, [isListening, onToggleListening, toast, onInputValueChange]);
 
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
     if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop(); 
+      // onToggleListening(); // This will stop listening and trigger send in parent
+      recognitionRef.current.stop(); // Stop listening, onend will trigger onToggleListening
     } else {
       handleSend(inputValue, 'text');
     }
   };
 
-  const handleMicClick = () => {
-    if (!recognitionRef.current) {
-       toast({
-        title: "Unsupported Feature",
-        description: "Speech recognition is not supported or enabled in your browser.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-      // setIsListening(false); // onend handler will set this
-    } else {
-      setInputValue(''); 
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (e) {
-         console.error("Error starting speech recognition:", e);
-         toast({
-            title: "Microphone Error",
-            description: "Could not start speech recognition. Make sure microphone access is allowed.",
-            variant: "destructive",
-          });
-      }
-    }
-  };
-
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        onClick={handleMicClick}
-        disabled={isSending} 
-        className={isListening ? "bg-accent text-accent-foreground ring-2 ring-accent" : ""}
-        aria-label={isListening ? "Stop recording" : "Start recording"}
-      >
-        {isListening ? <Square size={20} /> : <Mic size={20} />}
-      </Button>
+      {showMicButton && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={onToggleListening}
+          disabled={isSending}
+          className={isListening ? "bg-accent text-accent-foreground ring-2 ring-accent" : ""}
+          aria-label={isListening ? "Stop recording" : "Start recording"}
+        >
+          {isListening ? <Square size={20} /> : <Mic size={20} />}
+        </Button>
+      )}
       <Input
         type="text"
-        placeholder={isListening ? "Listening... Speak now." : "Type your message or click mic to speak..."}
+        placeholder={isListening ? "Listening... Speak now." : "Type your message..."}
         value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        disabled={isSending || (isListening && recognitionRef.current?.interimResults === false)}
+        onChange={(e) => onInputValueChange(e.target.value)}
+        disabled={isSending || (isListening && !recognitionRef.current?.interimResults)} // was recognitionRef.current?.interimResults === false
         className="flex-grow"
       />
       <Button type="submit" size="icon" disabled={isSending || inputValue.trim() === ''} aria-label="Send message">

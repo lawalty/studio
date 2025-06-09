@@ -1,19 +1,20 @@
 
 import { initializeApp, getApp, getApps, type FirebaseOptions } from "firebase/app";
 import { getStorage } from "firebase/storage";
+import { initializeApp } from "firebase/app";
 
 // TODO: Replace with your actual Firebase project configuration
-const firebaseConfig: FirebaseOptions = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_AUTH_DOMAIN_HERE",
-  projectId: "YOUR_PROJECT_ID_HERE",
-  storageBucket: "YOUR_STORAGE_BUCKET_HERE",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID_HERE",
-  appId: "YOUR_APP_ID_HERE",
-  // measurementId: "YOUR_MEASUREMENT_ID_HERE" // Optional
+const firebaseConfig = {
+  apiKey: "AIzaSyBz0edyk760wi-cssGZ7l0ipTpeDr9G9eQ",
+  authDomain: "ai-blair-7fb8o.firebaseapp.com",
+  projectId: "ai-blair-7fb8o",
+  storageBucket: "ai-blair-7fb8o.firebasestorage.app",
+  messagingSenderId: "513112805900",
+  appId: "1:513112805900:web:9a6f209b3f3ab00fb31429"
 };
 
 // Initialize Firebase
+const app = initializeApp(firebaseConfig);
 let app;
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
