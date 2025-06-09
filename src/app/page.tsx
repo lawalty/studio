@@ -286,8 +286,8 @@ export default function HomePage() {
   const imageProps: React.ComponentProps<typeof Image> = {
     src: avatarSrc,
     alt: "AI Blair Avatar",
-    width: 200,
-    height: 200,
+    width: 120,
+    height: 120,
     className: cn(
       "rounded-full border-4 border-primary shadow-md object-cover transition-transform duration-300",
       isSpeaking && "animate-pulse-speak"
@@ -309,8 +309,8 @@ export default function HomePage() {
         <Card className="w-full shadow-xl">
           <CardContent className="pt-6 flex flex-col items-center">
             <Image {...imageProps} />
-            <h2 className="mt-4 text-3xl font-bold text-center font-headline text-primary">AI Blair</h2>
-             <p className="mt-2 text-center text-lg font-semibold text-muted-foreground">
+            <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">AI Blair</h2>
+             <p className="mt-2 text-center text-base font-semibold text-muted-foreground">
               Hello, I'm here to answer any questions you may have. What's on your mind?
             </p>
           </CardContent>
