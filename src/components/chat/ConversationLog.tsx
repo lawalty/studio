@@ -6,9 +6,10 @@ import React, { useEffect, useRef } from 'react';
 interface ConversationLogProps {
   messages: Message[];
   isLoadingAiResponse: boolean;
+  avatarSrc: string;
 }
 
-export default function ConversationLog({ messages, isLoadingAiResponse }: ConversationLogProps) {
+export default function ConversationLog({ messages, isLoadingAiResponse, avatarSrc }: ConversationLogProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -20,7 +21,7 @@ export default function ConversationLog({ messages, isLoadingAiResponse }: Conve
   return (
     <ScrollArea className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card" ref={scrollAreaRef}>
       {messages.map((msg) => (
-        <ChatBubble key={msg.id} message={msg} />
+        <ChatBubble key={msg.id} message={msg} avatarSrc={avatarSrc} />
       ))}
       {isLoadingAiResponse && (
         <div className="flex items-center justify-start mb-4">

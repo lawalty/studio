@@ -183,13 +183,12 @@ export default function HomePage() {
              if (response.status === 401) specificAdvice = "Your ElevenLabs API Key seems to be invalid or missing.";
              else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "The ElevenLabs Voice ID was not found.";
              else if (errorData?.detail?.message) specificAdvice = `ElevenLabs Error: ${errorData.detail.message}.`;
-             else if (response.status === 422) { // More specific for 422 from the new error
-                const messages = errorData?.detail?.map((err: any) => err.msg).join(', ') || 'Invalid request body.';
+             else if (response.status === 422) { 
+                const messages = Array.isArray(errorData?.detail) ? errorData.detail.map((err: any) => err.msg).join(', ') : 'Invalid request body.';
                 specificAdvice = `ElevenLabs Error (422): ${messages} Falling back to browser TTS.`;
              }
           } catch (e) { 
-            // If response.json() fails, errorDetails might be the raw text
-             errorDetails = await response.text(); // Attempt to get raw text
+             errorDetails = await response.text(); 
              specificAdvice = `ElevenLabs API Error ${response.status}. Response: ${errorDetails.substring(0,100)}... Check console for full error. Falling back.`;
           }
           console.error("ElevenLabs API error:", response.status, errorDetails);
@@ -330,7 +329,7 @@ export default function HomePage() {
       </div>
 
       <div className="md:col-span-2 flex flex-col h-full">
-        <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage} />
+        <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage} avatarSrc={avatarSrc} />
         <MessageInput onSendMessage={handleSendMessage} isSending={isSendingMessage} />
       </div>
     </div>
