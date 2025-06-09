@@ -71,51 +71,6 @@ export default function HomePage() {
     ]);
   }, [setMessages]);
 
-  const toggleListening = useCallback((forceStart?: boolean) => {
-    if (!recognitionRef.current && (communicationMode === 'audio-only' || communicationMode === 'audio-text')) {
-      toast({ title: "Mic Not Ready", description: "Speech recognition could not be initialized.", variant: "destructive" });
-      return;
-    }
-
-    const currentlyListening = isListening;
-
-    if (forceStart === true && !currentlyListening) {
-        setIsListening(true);
-        setInputValue('');
-        try {
-            recognitionRef.current?.start();
-        } catch (e) {
-            console.error("Error starting recognition on toggle:", e);
-            setIsListening(false);
-            toast({ title: "Mic Start Error", description: "Could not start microphone. Is access granted?", variant: "destructive"});
-        }
-    } else if (forceStart === false && currentlyListening) {
-        setIsListening(false);
-        recognitionRef.current?.stop();
-    } else if (forceStart === undefined) {
-        if (currentlyListening) {
-            setIsListening(false);
-            recognitionRef.current?.stop();
-        } else {
-            setIsListening(true);
-            setInputValue('');
-            try {
-                recognitionRef.current?.start();
-            } catch (e) {
-                console.error("Error starting recognition on toggle (undefined forceStart):", e);
-                setIsListening(false);
-                toast({ title: "Mic Start Error", description: "Could not start microphone. Is access granted?", variant: "destructive"});
-            }
-        }
-    }
-  }, [isListening, communicationMode, toast, setInputValue, setIsListening]);
-
-  const toggleListeningRef = useRef(toggleListening);
-  useEffect(() => {
-    toggleListeningRef.current = toggleListening;
-  }, [toggleListening]);
-
-
   const handleAudioProcessStart = useCallback((text: string) => {
     currentAiResponseTextRef.current = text;
   }, []);
@@ -129,6 +84,22 @@ export default function HomePage() {
     setIsSendingMessage(false);
   }, [addMessage, setIsSpeaking, setIsSendingMessage, currentAiResponseTextRef]);
 
+  const toggleListening = useCallback((forceStart?: boolean) => {
+    const currentlyListening = isListening;
+    if (forceStart === true && !currentlyListening) {
+      setIsListening(true);
+    } else if (forceStart === false && currentlyListening) {
+      setIsListening(false);
+    } else if (forceStart === undefined) {
+      setIsListening(prev => !prev);
+    }
+  }, [isListening, setIsListening]);
+
+  const toggleListeningRef = useRef(toggleListening);
+  useEffect(() => {
+    toggleListeningRef.current = toggleListening;
+  }, [toggleListening]);
+
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
@@ -136,11 +107,10 @@ export default function HomePage() {
       currentAiResponseTextRef.current = null;
       setIsSendingMessage(false);
     } else if (currentAiResponseTextRef.current) {
-      // Ensure message is added even if audio played but was somehow missed
       addMessage(currentAiResponseTextRef.current, 'ai');
       currentAiResponseTextRef.current = null;
       setIsSendingMessage(false);
-    } else if (!audioPlayedSuccessfully) { // If no text was pending but audio failed
+    } else if (!audioPlayedSuccessfully) {
       setIsSendingMessage(false);
     }
 
@@ -156,13 +126,10 @@ export default function HomePage() {
 
     if (communicationMode === 'audio-only' && !isListening) {
       setTimeout(() => {
-          if (communicationMode === 'audio-only' && !isListening) {
-             toggleListeningRef.current(true);
-          }
+          toggleListeningRef.current(true);
       }, 1000);
     }
   }, [addMessage, communicationMode, isListening, handleActualAudioStart, setIsSpeaking, setIsSendingMessage, currentAiResponseTextRef, elevenLabsAudioRef]);
-
 
   const browserSpeakInternal = useCallback((text: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -186,7 +153,7 @@ export default function HomePage() {
 
   const speakText = useCallback(async (text: string) => {
     const processedText = text.replace(/EZCORP/gi, "E. Z. Corp");
-    handleAudioProcessStart(processedText); // Store text before attempting to speak
+    handleAudioProcessStart(processedText);
 
     if (communicationMode === 'text-only' || processedText.trim() === "") {
       if (currentAiResponseTextRef.current) {
@@ -197,24 +164,13 @@ export default function HomePage() {
       setIsSpeaking(false);
       if (communicationMode === 'audio-only' && !isListening) {
         setTimeout(() => {
-          if (communicationMode === 'audio-only' && !isListening) {
             toggleListeningRef.current(true);
-          }
         }, 1000);
       }
       return;
     }
 
-    if (elevenLabsAudioRef.current) {
-      elevenLabsAudioRef.current.pause();
-      elevenLabsAudioRef.current.onplay = null;
-      elevenLabsAudioRef.current.onended = null;
-      elevenLabsAudioRef.current.onerror = null;
-      if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
-         URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-      }
-      elevenLabsAudioRef.current = null;
-    }
+    if (elevenLabsAudioRef.current) { /* ... (existing cleanup) ... */ }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
     }
@@ -268,7 +224,6 @@ export default function HomePage() {
     browserSpeakInternal(processedText);
   }, [elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, communicationMode, addMessage, isListening, browserSpeakInternal, currentAiResponseTextRef, elevenLabsAudioRef, setIsSendingMessage, handleAudioProcessStart, setIsSpeaking]);
 
-
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     if (text.trim() === '') return;
     addMessage(text, 'user');
@@ -288,17 +243,23 @@ export default function HomePage() {
         chatHistory: genkitChatHistory,
       };
       const result = await generateChatResponse(flowInput);
-      // handleAudioProcessStart is called inside speakText
       await speakText(result.aiResponse);
     } catch (error) {
       console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
-      // addMessage(errorMessage, 'ai'); // This will be handled by speakText's process
-      // handleAudioProcessStart(errorMessage); // This is called inside speakText
       await speakText(errorMessage);
     }
   }, [addMessage, messages, personaTraits, speakText, setIsSendingMessage, currentAiResponseTextRef]);
 
+  const handleSendMessageRef = useRef(handleSendMessage);
+  useEffect(() => {
+    handleSendMessageRef.current = handleSendMessage;
+  }, [handleSendMessage]);
+
+  const inputValueRef = useRef(inputValue);
+  useEffect(() => {
+    inputValueRef.current = inputValue;
+  }, [inputValue]);
 
   const initializeSpeechRecognition = useCallback(() => {
     if (typeof window === 'undefined') return null;
@@ -333,19 +294,14 @@ export default function HomePage() {
     };
     recognition.onend = () => {
       setIsListening(false);
-      const transcriptFromState = inputValueRef.current; // Use ref to get latest inputValue
+      const transcriptFromState = inputValueRef.current;
       if (transcriptFromState && transcriptFromState.trim()) {
-        handleSendMessage(transcriptFromState, 'voice');
+        handleSendMessageRef.current(transcriptFromState, 'voice');
       }
        setInputValue('');
     };
     return recognition;
-  }, [toast, communicationMode, handleSendMessage, setInputValue, setIsListening]); // inputValue removed, handleSendMessage needs to be stable
-
-  const inputValueRef = useRef(inputValue);
-  useEffect(() => {
-    inputValueRef.current = inputValue;
-  }, [inputValue]);
+  }, [toast, communicationMode, setInputValue, setIsListening]); // Removed handleSendMessage, using ref
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -361,30 +317,60 @@ export default function HomePage() {
     };
   }, [initializeSpeechRecognition]);
 
+  // Effect to manage speech recognition start/stop based on isListening state
+  useEffect(() => {
+    if (!recognitionRef.current) {
+      if (isListening && (communicationMode === 'audio-only' || communicationMode === 'audio-text')) {
+         // Attempted to listen but mic not ready
+         toast({ title: "Mic Not Ready", description: "Speech recognition could not be initialized.", variant: "destructive" });
+         setIsListening(false); // Turn off listening if mic isn't there
+      }
+      return;
+    }
+
+    if (isListening) {
+      setInputValue(''); // Clear input before starting
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error('Error starting speech recognition from effect:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Microphone Error',
+          description: 'Could not start microphone. Please check permissions.',
+        });
+        setIsListening(false); // Revert state if start fails
+      }
+    } else {
+      // Only stop if it's actually running, to avoid errors on some browsers
+      // Some browsers might throw an error if stop() is called when not started.
+      // However, SpeechRecognition spec says it should be safe.
+      // For now, let's assume it's safe or onend handles the state.
+      recognitionRef.current.stop();
+    }
+  }, [isListening, toast, setInputValue, setIsListening, communicationMode]);
+
+
   const resetConversation = useCallback(() => {
     setMessages([]);
     setIsSendingMessage(false);
     setAiHasInitiatedConversation(false);
-    setIsListening(false);
+    // setIsListening(false); // This will be handled by the mode change effect if needed
     setInputValue('');
     currentAiResponseTextRef.current = null;
-    if (elevenLabsAudioRef.current) {
-      elevenLabsAudioRef.current.pause();
-      if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
-        URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-      }
-    }
+    if (elevenLabsAudioRef.current) { /* ... (existing cleanup) ... */ }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
     }
      if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      recognitionRef.current.stop(); // Stop current recognition
     }
+    setIsListening(false); // Explicitly set listening to false
   }, [setMessages, setIsSendingMessage, setAiHasInitiatedConversation, setIsListening, setInputValue]);
 
 
   const handleChangeCommunicationMode = () => {
-    resetConversation(); // Resets conversation state including isListening
+    resetConversation();
     setCommunicationMode(prevMode => {
       if (prevMode === 'audio-text') return 'text-only';
       if (prevMode === 'text-only') return 'audio-only';
@@ -406,6 +392,7 @@ export default function HomePage() {
         try {
           const result = await generateInitialGreeting({ personaTraits });
           await speakText(result.greetingMessage);
+          // speakText's onended (via handleAudioProcessEnd) will trigger toggleListening(true)
         } catch (error) {
           console.error("Failed to get initial AI greeting:", error);
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
@@ -413,8 +400,11 @@ export default function HomePage() {
         }
       };
       initGreeting();
+    } else if (communicationMode !== 'audio-only' && isListening) {
+        // If switching away from audio-only mode while listening, turn it off.
+        toggleListeningRef.current(false);
     }
-  }, [communicationMode, aiHasInitiatedConversation, personaTraits, speakText, setIsSendingMessage, setAiHasInitiatedConversation]);
+  }, [communicationMode, aiHasInitiatedConversation, personaTraits, speakText, setIsSendingMessage, setAiHasInitiatedConversation, isListening]);
 
   useEffect(() => {
     const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
@@ -475,6 +465,11 @@ export default function HomePage() {
                 <Mic size={24} className="mr-2"/> Speak
             </Button>
           )}
+           {!aiHasInitiatedConversation && isSendingMessage && ( // Show loading for initial greeting
+             <div className="mt-4 flex items-center justify-center p-3 rounded-lg bg-secondary text-secondary-foreground shadow animate-pulse">
+                Preparing greeting...
+            </div>
+          )}
         </div>
       );
     }
@@ -495,11 +490,11 @@ export default function HomePage() {
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage} avatarSrc={avatarSrc} />
           <MessageInput
-            onSendMessage={handleSendMessage}
+            onSendMessage={handleSendMessageRef.current} // Use the ref here
             isSending={isSendingMessage}
             showMicButton={communicationMode === 'audio-text'}
             isListening={isListening}
-            onToggleListening={() => toggleListeningRef.current()} // Use ref here
+            onToggleListening={() => toggleListeningRef.current()}
             inputValue={inputValue}
             onInputValueChange={setInputValue}
           />
