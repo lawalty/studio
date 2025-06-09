@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -26,7 +27,7 @@ const AdjustAiPersonaAndPersonalityOutputSchema = z.object({
   updatedPersonaDescription: z
     .string()
     .describe(
-      'A confirmation message indicating that the AI persona and personality have been successfully updated.'
+      'A confirmation message from AI Blair, in its new character, indicating that its persona and personality have been successfully updated.'
     ),
 });
 export type AdjustAiPersonaAndPersonalityOutput = z.infer<
@@ -43,7 +44,11 @@ const prompt = ai.definePrompt({
   name: 'adjustAiPersonaAndPersonalityPrompt',
   input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
   output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
-  prompt: `You are an AI personality tuner. Please review the following persona traits and attributes and confirm that they have been successfully updated.\n\nPersona Traits: {{{personaTraits}}}`,
+  prompt: `You are AI Blair. Your personality settings have just been updated with the following traits:
+"{{{personaTraits}}}"
+
+Please provide a concise and natural-sounding confirmation, in your new character as AI Blair, that your settings have been successfully applied. Do not list or repeat the persona traits in your response; simply confirm the update in character, reflecting this new personality. For example, if your new persona is very formal, your confirmation should be formal. If it's very friendly, be friendly.
+Confirmation:`,
 });
 
 const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
@@ -57,3 +62,4 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     return output!;
   }
 );
+
