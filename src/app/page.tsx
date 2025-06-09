@@ -40,6 +40,7 @@ const AVATAR_STORAGE_KEY = "aiBlairAvatar";
 const DEFAULT_AVATAR_SRC = "https://placehold.co/300x300.png";
 const PERSONA_STORAGE_KEY = "aiBlairPersona";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const API_KEYS_STORAGE_KEY = "aiBlairApiKeys";
 
 
 export default function HomePage() {
@@ -49,18 +50,16 @@ export default function HomePage() {
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_SRC);
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
+  const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
+  const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const speakText = useCallback((text: string) => {
+  const browserSpeak = useCallback((text: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel(); // Cancel current speech before starting new one
+        window.speechSynthesis.cancel();
       }
       const utterance = new SpeechSynthesisUtterance(text);
-      // You could potentially set voice, pitch, rate here if needed
-      // For example:
-      // const voices = window.speechSynthesis.getVoices();
-      // utterance.voice = voices.find(voice => voice.name === 'Your Preferred Voice Name'); // Example
       utterance.pitch = 1;
       utterance.rate = 1;
       window.speechSynthesis.speak(utterance);
@@ -73,6 +72,68 @@ export default function HomePage() {
       });
     }
   }, [toast]);
+
+  const speakText = useCallback(async (text: string) => {
+    if (text.trim() === "") return;
+
+    if (elevenLabsApiKey && elevenLabsVoiceId) {
+      const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
+      const headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": elevenLabsApiKey,
+      };
+      const body = JSON.stringify({
+        text: text,
+        model_id: "eleven_multilingual_v2", // A common default model
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+      });
+
+      try {
+        const response = await fetch(elevenLabsUrl, {
+          method: "POST",
+          headers: headers,
+          body: body,
+        });
+
+        if (response.ok) {
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const audio = new Audio(audioUrl);
+          audio.play().catch(e => {
+              console.error("Error playing ElevenLabs audio:", e);
+              browserSpeak(text); // Fallback if playing fails
+          });
+          audio.onended = () => {
+              URL.revokeObjectURL(audioUrl); // Clean up memory
+          };
+          return; // ElevenLabs TTS succeeded
+        } else {
+          const errorData = await response.text();
+          console.error("ElevenLabs API error:", response.status, errorData);
+          toast({
+            title: "ElevenLabs TTS Error",
+            description: `Failed to generate audio (${response.status}). Falling back to browser TTS. Check console.`,
+            variant: "destructive",
+            duration: 7000,
+          });
+        }
+      } catch (error) {
+        console.error("Error calling ElevenLabs API:", error);
+        toast({
+          title: "ElevenLabs Connection Error",
+          description: "Could not connect to ElevenLabs. Falling back to browser TTS.",
+          variant: "destructive",
+        });
+      }
+    }
+    // Fallback to browser speech synthesis if ElevenLabs not configured or failed
+    browserSpeak(text);
+  }, [elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeak]);
+
 
   const fetchSummary = useCallback(async () => {
     setIsLoadingSummary(true);
@@ -108,11 +169,24 @@ export default function HomePage() {
     } else {
       setPersonaTraits(DEFAULT_PERSONA_TRAITS);
     }
-     // Clear any ongoing speech synthesis when the component unmounts or before a new summary is fetched
+
+    const storedApiKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
+    if (storedApiKeys) {
+      try {
+        const keys = JSON.parse(storedApiKeys);
+        setElevenLabsApiKey(keys.tts || null);
+        setElevenLabsVoiceId(keys.voiceId || null);
+      } catch (e) {
+        console.error("Failed to parse API keys from local storage", e);
+      }
+    }
+
     return () => {
       if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
+      // Any cleanup for ElevenLabs audio if an Audio object is still playing could go here,
+      // though `audio.onended` handles URL.revokeObjectURL.
     };
   }, [fetchSummary]);
 
@@ -141,12 +215,12 @@ export default function HomePage() {
       };
       const result = await generateChatResponse(flowInput);
       addMessage(result.aiResponse, 'ai');
-      speakText(result.aiResponse); // Speak the AI's response
+      speakText(result.aiResponse);
     } catch (error) {
       console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error trying to respond. Please try again.";
       addMessage(errorMessage, 'ai');
-      speakText(errorMessage); // Speak the error message
+      speakText(errorMessage);
       toast({
         title: "AI Error",
         description: "Could not get a response from AI Blair. Please check the console for details.",
@@ -176,7 +250,6 @@ export default function HomePage() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-      {/* Left Column: Avatar and Summary */}
       <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
         <Card className="w-full shadow-xl">
           <CardContent className="pt-6 flex flex-col items-center">
@@ -204,7 +277,6 @@ export default function HomePage() {
         </Card>
       </div>
 
-      {/* Right Column: Conversation Log and Input */}
       <div className="md:col-span-2 flex flex-col h-full">
         <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage} />
         <MessageInput onSendMessage={handleSendMessage} isSending={isSendingMessage} />
@@ -212,3 +284,4 @@ export default function HomePage() {
     </div>
   );
 }
+
