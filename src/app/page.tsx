@@ -253,7 +253,7 @@ export default function HomePage() {
           <CardContent className="pt-6 flex flex-col items-center">
             <Image {...imageProps} />
             <h2 className="mt-4 text-3xl font-bold text-center font-headline text-primary">AI Blair</h2>
-            <p className="mt-2 text-center text-sm text-muted-foreground">
+            <p className="mt-2 text-center text-lg font-semibold text-muted-foreground">
               Hello, I'm here to answer any questions you may have. What's on your mind?
             </p>
           </CardContent>
