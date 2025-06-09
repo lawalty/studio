@@ -82,7 +82,7 @@ export default function HomePage() {
       currentAiResponseTextRef.current = null;
     }
     setIsSendingMessage(false);
-  }, [addMessage, setIsSpeaking, setIsSendingMessage, currentAiResponseTextRef]);
+  }, [addMessage]);
 
   const toggleListening = useCallback((forceState?: boolean) => {
     if (typeof window === 'undefined' || !recognitionRef.current) {
@@ -97,12 +97,12 @@ export default function HomePage() {
         toast({ title: "Please Wait", description: "AI Blair is currently speaking.", variant: "default" });
         return;
     }
-
+    
     setIsListening(prev => {
       const targetState = typeof forceState === 'boolean' ? forceState : !prev;
       return targetState;
     });
-  }, [communicationMode, toast, setIsListening, isSpeaking, recognitionRef]);
+  }, [communicationMode, toast, isSpeaking]);
 
   const toggleListeningRef = useRef(toggleListening);
   useEffect(() => {
@@ -116,6 +116,8 @@ export default function HomePage() {
       addMessage(currentAiResponseTextRef.current, 'ai');
       currentAiResponseTextRef.current = null;
     } else if (currentAiResponseTextRef.current) {
+      // This case ensures message is added if audio played but was not added in handleActualAudioStart
+      // (e.g., if text-only mode or if browser TTS started and ended synchronously without onstart event)
       addMessage(currentAiResponseTextRef.current, 'ai');
       currentAiResponseTextRef.current = null;
     }
@@ -133,17 +135,11 @@ export default function HomePage() {
 
     if (communicationMode === 'audio-only') {
       setTimeout(() => {
-          toggleListeningRef.current(true);
+          toggleListeningRef.current(true); // Always attempt to listen
       }, 1000);
     }
-  }, [
-    addMessage,
-    communicationMode,
-    setIsSpeaking,
-    setIsSendingMessage,
-    currentAiResponseTextRef,
-    elevenLabsAudioRef,
-  ]);
+  }, [communicationMode, addMessage]);
+
 
   const browserSpeakInternal = useCallback((text: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -154,7 +150,9 @@ export default function HomePage() {
       utterance.onend = () => handleAudioProcessEnd(true);
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
         console.error("Browser Speech Synthesis error:", event.error);
-        toast({ title: "Browser TTS Error", description: `Error: ${event.error}`, variant: "destructive" });
+        if (event.error !== 'interrupted') {
+          toast({ title: "Browser TTS Error", description: `Error: ${event.error}`, variant: "destructive" });
+        }
         handleAudioProcessEnd(false);
       };
       window.speechSynthesis.speak(utterance);
@@ -247,11 +245,7 @@ export default function HomePage() {
       communicationMode,
       addMessage,
       browserSpeakInternal,
-      currentAiResponseTextRef,
-      elevenLabsAudioRef,
-      setIsSendingMessage,
       handleAudioProcessStart,
-      setIsSpeaking
     ]);
 
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
@@ -279,7 +273,7 @@ export default function HomePage() {
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       await speakText(errorMessage);
     }
-  }, [addMessage, messages, personaTraits, speakText, setIsSendingMessage, currentAiResponseTextRef]);
+  }, [addMessage, messages, personaTraits, speakText]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => {
@@ -319,19 +313,23 @@ export default function HomePage() {
     };
     recognition.onerror = (event) => {
       console.error("Speech recognition error", event.error);
-      toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Access allowed?`, variant: "destructive" });
-      setIsListening(false);
+      // Don't always toast here as 'no-speech' is common and handled by onend.
+      // Only toast for more critical errors like 'not-allowed' or 'service-not-allowed'.
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Access allowed?`, variant: "destructive" });
+      }
+      setIsListening(false); // Ensure listening state is reset
     };
     recognition.onend = () => {
-      const finalTranscript = inputValueRef.current;
+      const finalTranscript = inputValueRef.current; // Use the ref to get the latest value
       setIsListening(false);
       if (finalTranscript && finalTranscript.trim()) {
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
-       setInputValue('');
+       setInputValue(''); // Clear input field after processing
     };
     return recognition;
-  }, [toast, communicationMode, setInputValue, setIsListening, handleSendMessageRef, inputValueRef]);
+  }, [toast, communicationMode, setInputValue, setIsListening]); // Dependencies: toast, communicationMode
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -341,7 +339,7 @@ export default function HomePage() {
         recognitionRef.current.onresult = null;
         recognitionRef.current.onerror = null;
         recognitionRef.current.onend = null;
-        recognitionRef.current.stop();
+        recognitionRef.current.stop(); // Ensure it stops
         recognitionRef.current = null;
       }
     };
@@ -357,24 +355,43 @@ export default function HomePage() {
     }
 
     if (isListening) {
-      setInputValue('');
+      setInputValue(''); // Clear any stale input
       try {
         recognitionRef.current.start();
-      } catch (error) {
-        console.error('Error starting speech recognition from effect:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Microphone Error',
-          description: 'Could not start microphone. Please check permissions.',
-        });
-        setIsListening(false);
+      } catch (error: any) {
+        // Catch specific errors if possible, e.g., if already started
+        if (error.name !== 'InvalidStateError') { // DOMException for trying to start() when already started
+            console.error('Error starting speech recognition from effect:', error);
+            toast({
+            variant: 'destructive',
+            title: 'Microphone Error',
+            description: 'Could not start microphone. Please check permissions.',
+            });
+        }
+        // Even if error, ensure listening state is false if start fails
+        // unless it's an InvalidStateError (meaning it might already be listening or processing)
+        if (error.name !== 'InvalidStateError') {
+            setIsListening(false);
+        }
       }
     } else {
+      // Ensure stop is only called if recognition is active to avoid errors
+      // Some browsers throw error if stop() is called when not started/active
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+          try {
+            // Check if recognition is actually active before stopping.
+            // This is a bit of a hack as there's no standard 'isActive' property.
+            // Attempting to stop an already stopped recognizer can throw an error in some implementations.
+            // However, simply calling stop() is usually safe.
+            recognitionRef.current.stop();
+          } catch (e) {
+            // console.warn("Attempted to stop speech recognition when not active:", e);
+          }
       }
     }
-  }, [isListening, toast, setInputValue, setIsListening, communicationMode]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isListening, communicationMode]); // Removed toast, setInputValue, setIsListening to prevent re-runs from their changes directly
+                                       // communicationMode is needed to decide if mic-related toasts are shown or if init fails
 
 
   const resetConversation = useCallback(() => {
@@ -395,17 +412,17 @@ export default function HomePage() {
       window.speechSynthesis.cancel();
     }
      if (recognitionRef.current) {
-      recognitionRef.current.onresult = null;
-      recognitionRef.current.onerror = null;
-      recognitionRef.current.onend = null;
-      recognitionRef.current.stop();
+      // recognitionRef.current.onresult = null; // These are set in initializeSpeechRecognition
+      // recognitionRef.current.onerror = null;
+      // recognitionRef.current.onend = null;
+      recognitionRef.current.abort(); // Use abort for a more immediate stop
     }
-    setIsListening(false);
-  }, [setMessages, setIsSendingMessage, setAiHasInitiatedConversation, setIsListening, setInputValue]);
+    setIsListening(false); // Ensure listening is stopped
+  }, []);
 
 
   const handleChangeCommunicationMode = () => {
-    resetConversation();
+    resetConversation(); // This will call recognitionRef.current.abort() and setIsListening(false)
     setCommunicationMode(prevMode => {
       if (prevMode === 'audio-text') return 'text-only';
       if (prevMode === 'text-only') return 'audio-only';
@@ -419,6 +436,7 @@ export default function HomePage() {
     return "Switch to Audio & Text";
   };
 
+  // Effect for AI to initiate conversation in audio-only mode
   useEffect(() => {
     if (communicationMode === 'audio-only' && !aiHasInitiatedConversation && personaTraits && messages.length === 0) {
       setIsSendingMessage(true);
@@ -427,6 +445,7 @@ export default function HomePage() {
         try {
           const result = await generateInitialGreeting({ personaTraits });
           await speakText(result.greetingMessage);
+          // speakText's onend handler (via handleAudioProcessEnd) will trigger listening
         } catch (error) {
           console.error("Failed to get initial AI greeting:", error);
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
@@ -435,10 +454,12 @@ export default function HomePage() {
       };
       initGreeting();
     } else if (communicationMode !== 'audio-only' && isListening) {
+        // If mode changes away from audio-only while listening, stop listening.
         toggleListeningRef.current(false);
     }
-  }, [communicationMode, aiHasInitiatedConversation, personaTraits, speakText, setIsSendingMessage, setAiHasInitiatedConversation, isListening, messages.length]);
+  }, [communicationMode, aiHasInitiatedConversation, personaTraits, speakText, messages.length, isListening]);
 
+  // Effect to load settings from localStorage
   useEffect(() => {
     const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
     setAvatarSrc(storedAvatar || DEFAULT_AVATAR_SRC);
@@ -453,10 +474,11 @@ export default function HomePage() {
       } catch (e) { console.error("Failed to parse API keys", e); }
     }
 
+    // Cleanup function for when the component unmounts
     return () => {
       resetConversation();
     };
-  }, [resetConversation]);
+  }, [resetConversation]); // Added resetConversation to ensure cleanup on unmount
 
 
   const imageProps: React.ComponentProps<typeof Image> = {
