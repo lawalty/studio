@@ -51,6 +51,29 @@ export default function HomePage() {
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const { toast } = useToast();
 
+  const speakText = useCallback((text: string) => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel(); // Cancel current speech before starting new one
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      // You could potentially set voice, pitch, rate here if needed
+      // For example:
+      // const voices = window.speechSynthesis.getVoices();
+      // utterance.voice = voices.find(voice => voice.name === 'Your Preferred Voice Name'); // Example
+      utterance.pitch = 1;
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    } else {
+      console.warn("Browser Speech Synthesis not supported or available.");
+      toast({
+        title: "TTS Not Supported",
+        description: "Your browser does not support speech synthesis.",
+        variant: "default",
+      });
+    }
+  }, [toast]);
+
   const fetchSummary = useCallback(async () => {
     setIsLoadingSummary(true);
     try {
@@ -76,7 +99,7 @@ export default function HomePage() {
     if (storedAvatar) {
       setAvatarSrc(storedAvatar);
     } else {
-      setAvatarSrc(DEFAULT_AVATAR_SRC); 
+      setAvatarSrc(DEFAULT_AVATAR_SRC);
     }
 
     const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
@@ -85,6 +108,12 @@ export default function HomePage() {
     } else {
       setPersonaTraits(DEFAULT_PERSONA_TRAITS);
     }
+     // Clear any ongoing speech synthesis when the component unmounts or before a new summary is fetched
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, [fetchSummary]);
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
@@ -92,7 +121,7 @@ export default function HomePage() {
       ...prevMessages,
       { id: Date.now().toString() + Math.random(), text, sender, timestamp: Date.now() },
     ]);
-  }, []); 
+  }, []);
 
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     addMessage(text, 'user');
@@ -112,9 +141,12 @@ export default function HomePage() {
       };
       const result = await generateChatResponse(flowInput);
       addMessage(result.aiResponse, 'ai');
+      speakText(result.aiResponse); // Speak the AI's response
     } catch (error) {
       console.error("Failed to get AI response:", error);
-      addMessage("Sorry, I encountered an error trying to respond. Please try again.", 'ai');
+      const errorMessage = "Sorry, I encountered an error trying to respond. Please try again.";
+      addMessage(errorMessage, 'ai');
+      speakText(errorMessage); // Speak the error message
       toast({
         title: "AI Error",
         description: "Could not get a response from AI Blair. Please check the console for details.",
@@ -123,8 +155,8 @@ export default function HomePage() {
     } finally {
       setIsSendingMessage(false);
     }
-  }, [addMessage, messages, personaTraits, toast]); 
-  
+  }, [addMessage, messages, personaTraits, toast, speakText]);
+
   const imageProps: React.ComponentProps<typeof Image> = {
     src: avatarSrc,
     alt: "AI Blair Avatar",
@@ -136,7 +168,7 @@ export default function HomePage() {
 
   if (avatarSrc === DEFAULT_AVATAR_SRC || (avatarSrc && !avatarSrc.startsWith('data:image'))) {
      imageProps['data-ai-hint'] = "professional woman";
-     if (!avatarSrc.startsWith('https://placehold.co')) { 
+     if (!avatarSrc.startsWith('https://placehold.co')) {
         imageProps.src = DEFAULT_AVATAR_SRC;
      }
   }
