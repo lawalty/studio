@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
 import { summarizeKnowledgeBase, type SummarizeKnowledgeBaseInput } from '@/ai/flows/summarize-knowledge-base';
+import { generateChatResponse, type GenerateChatResponseInput } from '@/ai/flows/generate-chat-response';
 import { useToast } from "@/hooks/use-toast";
 
 export interface Message {
@@ -37,6 +38,8 @@ Focuses on rarity, condition, and provenance as key factors in pricing.
 
 const AVATAR_STORAGE_KEY = "aiBlairAvatar";
 const DEFAULT_AVATAR_SRC = "https://placehold.co/300x300.png";
+const PERSONA_STORAGE_KEY = "aiBlairPersona";
+const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 
 
 export default function HomePage() {
@@ -45,6 +48,7 @@ export default function HomePage() {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_SRC);
+  const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const { toast } = useToast();
 
   const fetchSummary = useCallback(async () => {
@@ -72,7 +76,14 @@ export default function HomePage() {
     if (storedAvatar) {
       setAvatarSrc(storedAvatar);
     } else {
-      setAvatarSrc(DEFAULT_AVATAR_SRC); // Fallback if nothing is stored
+      setAvatarSrc(DEFAULT_AVATAR_SRC); 
+    }
+
+    const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
+    if (storedPersona) {
+      setPersonaTraits(storedPersona);
+    } else {
+      setPersonaTraits(DEFAULT_PERSONA_TRAITS);
     }
   }, [fetchSummary]);
 
@@ -81,26 +92,38 @@ export default function HomePage() {
       ...prevMessages,
       { id: Date.now().toString() + Math.random(), text, sender, timestamp: Date.now() },
     ]);
-  }, []); // setMessages is stable
+  }, []); 
 
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     addMessage(text, 'user');
     setIsSendingMessage(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      let aiResponse = `AI Blair received your ${method} message: "${text}"`;
-      if (text.toLowerCase().includes('hello') || text.toLowerCase().includes('hi')) {
-        aiResponse = "Hello there! How can I help you with your pawn store questions today?";
-      } else if (text.toLowerCase().includes('pawn')) {
-        aiResponse = "Pawn stores offer a fascinating look into collateralized loans and unique items! What specifically interests you?";
-      } else if (text.toLowerCase().includes('price') || text.toLowerCase().includes('value')) {
-        aiResponse = "Valuation is key in the pawn business. Are you asking about a specific item type or the general process?";
-      }
-      addMessage(aiResponse, 'ai');
+    const genkitChatHistory = messages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.text }],
+    }));
+
+    try {
+      const flowInput: GenerateChatResponseInput = {
+        userMessage: text,
+        knowledgeBaseContent: MOCK_KNOWLEDGE_BASE_CONTENT,
+        personaTraits: personaTraits,
+        chatHistory: genkitChatHistory,
+      };
+      const result = await generateChatResponse(flowInput);
+      addMessage(result.aiResponse, 'ai');
+    } catch (error) {
+      console.error("Failed to get AI response:", error);
+      addMessage("Sorry, I encountered an error trying to respond. Please try again.", 'ai');
+      toast({
+        title: "AI Error",
+        description: "Could not get a response from AI Blair. Please check the console for details.",
+        variant: "destructive",
+      });
+    } finally {
       setIsSendingMessage(false);
-    }, 1500 + Math.random() * 1000);
-  }, [addMessage]); // Depends on memoized addMessage. setIsSendingMessage is stable.
+    }
+  }, [addMessage, messages, personaTraits, toast]); 
   
   const imageProps: React.ComponentProps<typeof Image> = {
     src: avatarSrc,
@@ -111,10 +134,9 @@ export default function HomePage() {
     priority: true,
   };
 
-  if (avatarSrc === DEFAULT_AVATAR_SRC || !avatarSrc.startsWith('data:image')) {
-    // Add data-ai-hint only if it's the placeholder or not a data URI (might still be a placeholder URL)
+  if (avatarSrc === DEFAULT_AVATAR_SRC || (avatarSrc && !avatarSrc.startsWith('data:image'))) {
      imageProps['data-ai-hint'] = "professional woman";
-     if (!avatarSrc.startsWith('https://placehold.co')) { // Ensure placeholder if not data URI and not already placeholder
+     if (!avatarSrc.startsWith('https://placehold.co')) { 
         imageProps.src = DEFAULT_AVATAR_SRC;
      }
   }
