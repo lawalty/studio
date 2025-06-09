@@ -126,18 +126,30 @@ export default function HomePage() {
          URL.revokeObjectURL(elevenLabsAudioRef.current.src);
       }
       elevenLabsAudioRef.current = null;
-      // setIsSpeaking(false); // handleAudioProcessEnd will manage this
     }
     // Stop any currently playing browser synthesis
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel(); // onend should handle setIsSpeaking(false) via handleAudioProcessEnd
+        window.speechSynthesis.cancel();
     }
 
 
     if (elevenLabsApiKey && elevenLabsVoiceId) {
       const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
-      const headers = { /* ... */ };
-      const body = JSON.stringify({ /* ... */ });
+      const headers = {
+        'Accept': 'audio/mpeg',
+        'Content-Type': 'application/json',
+        'xi-api-key': elevenLabsApiKey,
+      };
+      const body = JSON.stringify({
+        text: processedText,
+        model_id: 'eleven_multilingual_v2', // A common, good quality model
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+          style: 0.0, // Adjust if needed for expressive styles
+          use_speaker_boost: true
+        }
+      });
 
       try {
         const response = await fetch(elevenLabsUrl, { method: "POST", headers, body });
@@ -145,13 +157,11 @@ export default function HomePage() {
           const audioBlob = await response.blob();
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
-          elevenLabsAudioRef.current = audio; // Assign to ref immediately
+          elevenLabsAudioRef.current = audio; 
 
           audio.onplay = handleActualAudioStart;
           audio.onended = () => {
             handleAudioProcessEnd(true);
-            // URL.revokeObjectURL(audioUrl); // Moved to handleAudioProcessEnd general cleanup
-            // if (elevenLabsAudioRef.current === audio) elevenLabsAudioRef.current = null;
           };
           audio.onerror = (e) => {
             console.error("Error playing ElevenLabs audio:", e);
@@ -160,12 +170,10 @@ export default function HomePage() {
                 description: "Could not play audio. Falling back to browser TTS.",
                 variant: "destructive",
             });
-            // handleAudioProcessEnd(false); // Indicate EL audio failed before fallback
-            // Fallback logic will call its own start/end handlers
             browserSpeakInternal(processedText);
           };
           await audio.play();
-          return; // ElevenLabs playback initiated
+          return; 
         } else {
           let errorDetails = "Unknown error";
           let specificAdvice = "Check console for details.";
@@ -175,7 +183,15 @@ export default function HomePage() {
              if (response.status === 401) specificAdvice = "Your ElevenLabs API Key seems to be invalid or missing.";
              else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "The ElevenLabs Voice ID was not found.";
              else if (errorData?.detail?.message) specificAdvice = `ElevenLabs Error: ${errorData.detail.message}.`;
-          } catch (e) { /* ... */ }
+             else if (response.status === 422) { // More specific for 422 from the new error
+                const messages = errorData?.detail?.map((err: any) => err.msg).join(', ') || 'Invalid request body.';
+                specificAdvice = `ElevenLabs Error (422): ${messages} Falling back to browser TTS.`;
+             }
+          } catch (e) { 
+            // If response.json() fails, errorDetails might be the raw text
+             errorDetails = await response.text(); // Attempt to get raw text
+             specificAdvice = `ElevenLabs API Error ${response.status}. Response: ${errorDetails.substring(0,100)}... Check console for full error. Falling back.`;
+          }
           console.error("ElevenLabs API error:", response.status, errorDetails);
           toast({ title: "ElevenLabs TTS Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 });
         }
@@ -232,7 +248,7 @@ export default function HomePage() {
       } catch (e) { console.error("Failed to parse API keys", e); }
     }
     
-    const currentAudio = elevenLabsAudioRef.current; // Capture ref for cleanup
+    const currentAudio = elevenLabsAudioRef.current; 
     const currentSynth = window.speechSynthesis;
 
     return () => {
@@ -243,16 +259,15 @@ export default function HomePage() {
             URL.revokeObjectURL(currentAudio.src);
         }
       }
-      setIsSpeaking(false); // Ensure speaking state is reset
-      // currentAiResponseTextRef.current = null; // Reset pending text on unmount/re-effect
+      setIsSpeaking(false); 
     };
-  }, []); // Empty dependency: load once on mount
+  }, []); 
 
 
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     addMessage(text, 'user');
-    setIsSendingMessage(true); // Show "typing..."
-    currentAiResponseTextRef.current = null; // Clear any previous pending response
+    setIsSendingMessage(true); 
+    currentAiResponseTextRef.current = null; 
 
     const genkitChatHistory = messages.map(msg => ({
       role: msg.sender === 'user' ? 'user' : 'model',
@@ -268,17 +283,15 @@ export default function HomePage() {
       };
       const result = await generateChatResponse(flowInput);
       
-      handleAudioProcessStart(result.aiResponse); // Store AI text, prepare for audio
-      await speakText(result.aiResponse); // This will call appropriate callbacks
+      handleAudioProcessStart(result.aiResponse); 
+      await speakText(result.aiResponse); 
 
     } catch (error) {
       console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error trying to respond. Please try again.";
-      addMessage(errorMessage, 'ai'); // Add error message to chat log immediately
-      // setIsSendingMessage(true); // Already true, or ensure it is if speaking the error
-      handleAudioProcessStart(errorMessage); // Prepare to speak the error
-      await speakText(errorMessage); // This will call appropriate callbacks
-                                     // and handleAudioProcessEnd should ensure isSendingMessage becomes false
+      addMessage(errorMessage, 'ai'); 
+      handleAudioProcessStart(errorMessage); 
+      await speakText(errorMessage); 
     }
   }, [addMessage, messages, personaTraits, toast, speakText, handleAudioProcessStart]);
 
