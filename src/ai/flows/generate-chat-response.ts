@@ -42,7 +42,7 @@ export async function generateChatResponse(
 
 const prompt = ai.definePrompt({
   name: 'generateChatResponsePrompt',
-  input: {schema: GenerateChatResponseInputSchema},
+  input: {schema: GenerateChatResponseInputSchema}, // This schema still applies to the `promptInput` overall structure
   output: {schema: GenerateChatResponseOutputSchema},
   prompt: `You are AI Blair. Your personality and style are defined by the following traits:
 {{{personaTraits}}}
@@ -55,8 +55,8 @@ You must answer user questions based on the following knowledge base content:
 {{#if chatHistory.length}}
 Conversation History:
 {{#each chatHistory}}
-{{#if (eq this.role "user")}}User: {{this.parts.[0].text}}{{/if}}
-{{#if (eq this.role "model")}}AI Blair: {{this.parts.[0].text}}{{/if}}
+{{#if this.isUser}}User: {{this.parts.[0].text}}{{/if}}
+{{#if this.isModel}}AI Blair: {{this.parts.[0].text}}{{/if}}
 {{/each}}
 {{/if}}
 
@@ -74,14 +74,23 @@ const generateChatResponseFlow = ai.defineFlow(
     outputSchema: GenerateChatResponseOutputSchema,
   },
   async (input) => {
-    const promptInput: GenerateChatResponseInput = {
+    const processedChatHistory = (input.chatHistory || []).map(msg => ({
+      ...msg,
+      isUser: msg.role === 'user',
+      isModel: msg.role === 'model',
+    }));
+
+    // The promptInput will be validated against GenerateChatResponseInputSchema.
+    // Zod by default passes through unknown keys, so isUser/isModel will be available to the template.
+    const promptInput = {
         userMessage: input.userMessage,
         knowledgeBaseContent: input.knowledgeBaseContent,
         personaTraits: input.personaTraits,
-        chatHistory: input.chatHistory || [], 
+        chatHistory: processedChatHistory,
     };
 
     const {output} = await prompt(promptInput);
     return output!;
   }
 );
+
