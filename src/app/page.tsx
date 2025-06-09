@@ -85,7 +85,7 @@ export default function HomePage() {
       };
       const body = JSON.stringify({
         text: text,
-        model_id: "eleven_multilingual_v2", // A common default model
+        model_id: "eleven_multilingual_v2", 
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -105,18 +105,40 @@ export default function HomePage() {
           const audio = new Audio(audioUrl);
           audio.play().catch(e => {
               console.error("Error playing ElevenLabs audio:", e);
-              browserSpeak(text); // Fallback if playing fails
+              browserSpeak(text); 
           });
           audio.onended = () => {
-              URL.revokeObjectURL(audioUrl); // Clean up memory
+              URL.revokeObjectURL(audioUrl); 
           };
-          return; // ElevenLabs TTS succeeded
+          return; 
         } else {
-          const errorData = await response.text();
-          console.error("ElevenLabs API error:", response.status, errorData);
+          let errorDetails = "Unknown error";
+          let specificAdvice = "Check console for details.";
+          try {
+            const errorData = await response.json(); // Attempt to parse error as JSON
+            errorDetails = errorData?.detail?.message || JSON.stringify(errorData);
+            if (response.status === 401) { // Unauthorized
+              specificAdvice = "Your ElevenLabs API Key seems to be invalid or missing. Please check it in the Admin Panel.";
+            } else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") {
+              specificAdvice = "The ElevenLabs Voice ID was not found. Please verify it in the Admin Panel.";
+            } else if (errorData?.detail?.message) {
+                // Use the message from ElevenLabs if available
+                specificAdvice = `ElevenLabs Error: ${errorData.detail.message}.`;
+            }
+          } catch (e) {
+            // If parsing JSON fails, try to get text
+            try {
+              errorDetails = await response.text();
+              specificAdvice = `ElevenLabs returned status ${response.status}.`;
+            } catch (textError) {
+              errorDetails = `Status ${response.status} but could not parse error response.`;
+            }
+          }
+          
+          console.error("ElevenLabs API error:", response.status, errorDetails);
           toast({
             title: "ElevenLabs TTS Error",
-            description: `Failed to generate audio (${response.status}). Falling back to browser TTS. Check console.`,
+            description: `${specificAdvice} Falling back to browser TTS.`,
             variant: "destructive",
             duration: 7000,
           });
@@ -185,8 +207,6 @@ export default function HomePage() {
       if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
-      // Any cleanup for ElevenLabs audio if an Audio object is still playing could go here,
-      // though `audio.onended` handles URL.revokeObjectURL.
     };
   }, [fetchSummary]);
 
