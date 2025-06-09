@@ -45,9 +45,7 @@ const API_KEYS_STORAGE_KEY = "aiBlairApiKeys";
 
 export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [knowledgeBaseSummary, setKnowledgeBaseSummary] = useState<string>("Loading knowledge base summary...");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_SRC);
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
@@ -85,7 +83,7 @@ export default function HomePage() {
       };
       const body = JSON.stringify({
         text: text,
-        model_id: "eleven_multilingual_v2", 
+        model_id: "eleven_multilingual_v2",
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -105,12 +103,12 @@ export default function HomePage() {
           const audio = new Audio(audioUrl);
           audio.play().catch(e => {
               console.error("Error playing ElevenLabs audio:", e);
-              browserSpeak(text); 
+              browserSpeak(text);
           });
           audio.onended = () => {
-              URL.revokeObjectURL(audioUrl); 
+              URL.revokeObjectURL(audioUrl);
           };
-          return; 
+          return;
         } else {
           let errorDetails = "Unknown error";
           let specificAdvice = "Check console for details.";
@@ -134,7 +132,7 @@ export default function HomePage() {
               errorDetails = `Status ${response.status} but could not parse error response.`;
             }
           }
-          
+
           console.error("ElevenLabs API error:", response.status, errorDetails);
           toast({
             title: "ElevenLabs TTS Error",
@@ -157,27 +155,7 @@ export default function HomePage() {
   }, [elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeak]);
 
 
-  const fetchSummary = useCallback(async () => {
-    setIsLoadingSummary(true);
-    try {
-      const input: SummarizeKnowledgeBaseInput = { knowledgeBaseContent: MOCK_KNOWLEDGE_BASE_CONTENT };
-      const result = await summarizeKnowledgeBase(input);
-      setKnowledgeBaseSummary(result.summary);
-    } catch (error) {
-      console.error("Failed to fetch summary:", error);
-      setKnowledgeBaseSummary("AI Blair is ready to discuss pawn store operations, inventory management, and customer relations. Ask anything about the pawn business!");
-      toast({
-        title: "Error",
-        description: "Could not load knowledge base summary. Using default.",
-        variant: "destructive",
-      });
-    }
-    setIsLoadingSummary(false);
-  }, [toast]);
-
   useEffect(() => {
-    fetchSummary();
-
     const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
     if (storedAvatar) {
       setAvatarSrc(storedAvatar);
@@ -208,7 +186,7 @@ export default function HomePage() {
         window.speechSynthesis.cancel();
       }
     };
-  }, [fetchSummary]);
+  }, []);
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
     setMessages((prevMessages) => [
@@ -277,24 +255,6 @@ export default function HomePage() {
             <h2 className="mt-4 text-3xl font-bold text-center font-headline text-primary">AI Blair</h2>
           </CardContent>
         </Card>
-        <Card className="w-full shadow-xl">
-          <CardHeader>
-            <CardTitle className="font-headline">Knowledge Base Focus</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoadingSummary ? (
-              <div className="space-y-2">
-                <div className="h-4 bg-muted rounded w-3/4 animate-pulse"></div>
-                <div className="h-4 bg-muted rounded w-full animate-pulse"></div>
-                <div className="h-4 bg-muted rounded w-1/2 animate-pulse"></div>
-              </div>
-            ) : (
-              <CardDescription className="text-sm text-foreground">
-                {knowledgeBaseSummary}
-              </CardDescription>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       <div className="md:col-span-2 flex flex-col h-full">
@@ -304,4 +264,3 @@ export default function HomePage() {
     </div>
   );
 }
-
