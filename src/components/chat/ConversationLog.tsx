@@ -1,3 +1,4 @@
+
 import type { Message } from '@/app/page';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";
@@ -14,9 +15,15 @@ export default function ConversationLog({ messages, isLoadingAiResponse, avatarS
 
   useEffect(() => {
     if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+      const viewport = scrollAreaRef.current.firstElementChild;
+      if (viewport && typeof viewport.scrollTo === 'function') {
+        viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+      } else {
+        // Fallback for safety, though the above should work with ShadCN's ScrollArea structure
+        scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+      }
     }
-  }, [messages]);
+  }, [messages, isLoadingAiResponse]); // Also scroll when loading state changes to catch "typing..."
 
   return (
     <ScrollArea className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card" ref={scrollAreaRef}>
