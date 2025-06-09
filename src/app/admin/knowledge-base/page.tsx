@@ -85,7 +85,7 @@ export default function KnowledgeBasePage() {
     setSources(prev => [newSource, ...prev]);
     setSelectedFile(null);
     if(fileInputRef.current) fileInputRef.current.value = ""; 
-    toast({ title: "File Upload Simulated", description: `${selectedFile.name} has been added to the list. (This is a simulation)` });
+    toast({ title: "Source Uploaded", description: `${selectedFile.name} has been added to the list.` });
   };
 
   const handleDelete = (id: string) => {
@@ -98,10 +98,9 @@ export default function KnowledgeBasePage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Upload New Source (Simulated)</CardTitle>
+          <CardTitle className="font-headline">Upload New Source</CardTitle>
           <CardDescription>
             Add new documents, audio files, or other content to AI Blair's knowledge base.
-            This page simulates file uploads. Actual file processing and AI integration would require backend development.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -126,7 +125,7 @@ export default function KnowledgeBasePage() {
         </CardContent>
         <CardFooter>
           <Button onClick={handleUpload} disabled={!selectedFile}>
-            <UploadCloud className="mr-2 h-4 w-4" /> Simulate Upload to List
+            <UploadCloud className="mr-2 h-4 w-4" /> Upload Source
           </Button>
         </CardFooter>
       </Card>
@@ -134,14 +133,14 @@ export default function KnowledgeBasePage() {
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Manage Knowledge Base Sources</CardTitle>
-          <CardDescription>View and remove simulated sources from the list. This does not affect AI Blair's current knowledge.</CardDescription>
+          <CardDescription>View and remove sources from the list. This does not affect AI Blair's current knowledge.</CardDescription>
         </CardHeader>
         <CardContent>
           {sources.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
               <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">No sources found in the list.</p>
-              <p className="text-sm text-muted-foreground">Simulate an upload to get started.</p>
+              <p className="text-sm text-muted-foreground">Upload a source to get started.</p>
             </div>
           ) : (
           <Table>
