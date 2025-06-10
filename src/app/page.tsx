@@ -191,8 +191,15 @@ export default function HomePage() {
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
-    setIsSendingMessage(false); 
-  }, [setIsSpeaking, setIsSendingMessage]);
+    setIsSendingMessage(false); // Hide "typing..." or "Preparing greeting..."
+
+    // Add the AI's message to the log NOW
+    if (currentAiResponseTextRef.current) {
+      if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
+        addMessage(currentAiResponseTextRef.current, 'ai');
+      }
+    }
+  }, [setIsSpeaking, setIsSendingMessage, addMessage, messages]);
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
@@ -231,7 +238,7 @@ export default function HomePage() {
         }
       }, 1500); 
     }
-  }, [addMessage, messages, resetConversation, setShowSplashScreen, setIsSpeaking, setIsSendingMessage]);
+  }, [addMessage, messages, resetConversation, setShowSplashScreen, setIsSpeaking, setIsSendingMessage, toggleListeningRef]);
 
 
   const browserSpeakInternal = useCallback((text: string) => {
@@ -260,13 +267,12 @@ export default function HomePage() {
     const processedText = text.replace(/EZCORP/gi, "E. Z. Corp"); 
     handleAudioProcessStart(processedText); 
 
-    if (processedText.trim() !== "" && currentAiResponseTextRef.current) {
+    if (communicationModeRef.current === 'text-only' || processedText.trim() === "") {
+      if (processedText.trim() !== "" && currentAiResponseTextRef.current) {
         if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
         }
-    }
-
-    if (communicationModeRef.current === 'text-only' || processedText.trim() === "") {
+      }
       setIsSendingMessage(false); 
       setIsSpeaking(false); 
       return;
@@ -335,12 +341,12 @@ export default function HomePage() {
       elevenLabsApiKey,
       elevenLabsVoiceId,
       toast,
-      handleActualAudioStart,
-      handleAudioProcessEnd,
       addMessage,
       messages, 
       browserSpeakInternal,
       handleAudioProcessStart,
+      handleActualAudioStart,
+      handleAudioProcessEnd,
       setIsSendingMessage,
       setIsSpeaking
     ]);
@@ -514,7 +520,7 @@ export default function HomePage() {
   const handleEndChatManually = () => {
      if (communicationMode === 'audio-only') {
         if (isListeningRef.current) {
-            toggleListeningRef.current(false); // This will set isListening to false & abort recognition
+            toggleListeningRef.current(false); 
         }
         if (isSpeakingRef.current) {
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
@@ -527,7 +533,7 @@ export default function HomePage() {
             if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
             }
-            setIsSpeaking(false); // Update state immediately
+            setIsSpeaking(false); 
         }
         
         setShowLogForSaveConfirmation(true);
@@ -611,11 +617,11 @@ export default function HomePage() {
           const assets = siteAssetsDocSnap.data();
           setAvatarSrc(assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
-          setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS); // Load persona traits
+          setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS); 
         } else {
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-          setPersonaTraits(DEFAULT_PERSONA_TRAITS); // Fallback persona traits
+          setPersonaTraits(DEFAULT_PERSONA_TRAITS); 
         }
       } catch (e) {
         console.error("Failed to parse API keys or site assets from Firestore", e);
@@ -673,6 +679,7 @@ export default function HomePage() {
                 setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
                 setIsSplashImageLoaded(true);
               }}
+              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
             <RadioGroup
@@ -713,7 +720,7 @@ export default function HomePage() {
       isSpeaking && "animate-pulse-speak"
     ),
     priority: true,
-    unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.includes("placehold.co") || avatarSrc.startsWith('blob:'),
+    unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.startsWith('blob:') || !avatarSrc.startsWith('https://'),
     onError: () => { console.warn("Custom avatar failed to load on main page, falling back."); setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);}
   };
   
