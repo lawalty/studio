@@ -35,6 +35,7 @@ export interface Message {
   timestamp: number;
 }
 
+// This remains as a base for general knowledge if no specific files cover a topic
 const MOCK_KNOWLEDGE_BASE_CONTENT = `
 Pawn Store Operations Handbook:
 This document covers daily operations, security procedures, and customer service best practices for pawn stores.
@@ -59,6 +60,13 @@ const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP//
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const KNOWLEDGE_SOURCES_STORAGE_KEY = "aiBlairKnowledgeSources"; // From knowledge-base page
+
+interface KnowledgeSource { // Simplified from knowledge-base page for what we need here
+  name: string;
+  type: string;
+  downloadURL?: string; // We might use this in future to fetch .txt content
+}
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -87,6 +95,7 @@ export default function HomePage() {
   const [consecutiveSilencePrompts, setConsecutiveSilencePrompts] = useState(0);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLogForSaveConfirmation, setShowLogForSaveConfirmation] = useState(false);
+  const [knowledgeFileSummary, setKnowledgeFileSummary] = useState<string>('');
 
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -162,7 +171,6 @@ export default function HomePage() {
       if (targetState === true) { 
         if (!recognitionRef.current) {
           if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-            // toast({ title: "Mic Not Supported", description: "Speech recognition is not initialized.", variant: "destructive" });
             console.warn("Speech recognition not initialized on toggleListening(true)");
           }
           return false;
@@ -191,9 +199,8 @@ export default function HomePage() {
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
-    setIsSendingMessage(false); // Hide "typing..." or "Preparing greeting..."
+    setIsSendingMessage(false); 
 
-    // Add the AI's message to the log NOW
     if (currentAiResponseTextRef.current) {
       if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
         addMessage(currentAiResponseTextRef.current, 'ai');
@@ -369,11 +376,13 @@ export default function HomePage() {
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }],
         }));
+    
+    const combinedKnowledgeBase = MOCK_KNOWLEDGE_BASE_CONTENT + (knowledgeFileSummary ? `\n\n${knowledgeFileSummary}` : '');
 
     try {
       const flowInput: GenerateChatResponseInput = {
         userMessage: text,
-        knowledgeBaseContent: MOCK_KNOWLEDGE_BASE_CONTENT,
+        knowledgeBaseContent: combinedKnowledgeBase,
         personaTraits: personaTraits,
         chatHistory: genkitChatHistory, 
       };
@@ -385,7 +394,7 @@ export default function HomePage() {
       await speakTextRef.current(errorMessage);
       setIsSendingMessage(false); 
     } 
-  }, [addMessage, messages, personaTraits, setIsSendingMessage, setConsecutiveSilencePrompts]); 
+  }, [addMessage, messages, personaTraits, knowledgeFileSummary, setIsSendingMessage, setConsecutiveSilencePrompts]); 
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => {
@@ -483,9 +492,7 @@ export default function HomePage() {
         try { 
           recInstance.abort(); 
         } catch (stopError: any) {
-          if (stopError.name !== 'InvalidStateError') {
-            // console.warn('EFFECT: Non-critical error stopping recognition before start:', stopError);
-          }
+          // Non-critical, often "InvalidStateError" if already stopped.
         }
         recInstance.start();
       } catch (startError: any) {
@@ -503,9 +510,7 @@ export default function HomePage() {
       try {
         recInstance.abort(); 
       } catch (e: any) {
-        if (e.name !== 'InvalidStateError') {
-           // console.warn("EFFECT: Error aborting speech recognition (but not InvalidStateError):", e);
-        }
+        // Non-critical, often "InvalidStateError" if not running.
       }
     }
   }, [isListening, toast, setInputValue, setIsListening]); 
@@ -603,6 +608,7 @@ export default function HomePage() {
   useEffect(() => {    
     const fetchFirestoreData = async () => {
       try {
+        // API Keys
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
         if (apiKeysDocSnap.exists()) {
@@ -611,6 +617,7 @@ export default function HomePage() {
           setElevenLabsVoiceId(keys.voiceId || null);
         }
 
+        // Site Assets (Avatar, Splash Image, Persona Traits)
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
         const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
         if (siteAssetsDocSnap.exists()) {
@@ -619,19 +626,45 @@ export default function HomePage() {
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS); 
         } else {
+          // Fallbacks if site_display_assets doesn't exist
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS); 
         }
+
+        // Knowledge Base File Summary from localStorage
+        const storedSourcesString = localStorage.getItem(KNOWLEDGE_SOURCES_STORAGE_KEY);
+        if (storedSourcesString) {
+          const storedSources = JSON.parse(storedSourcesString) as KnowledgeSource[];
+          if (storedSources.length > 0) {
+            const summary = "The knowledge base also includes information from the following uploaded files: " +
+                            storedSources.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
+            setKnowledgeFileSummary(summary);
+          } else {
+            setKnowledgeFileSummary(''); // No files, empty summary
+          }
+        } else {
+            setKnowledgeFileSummary(''); // No key in local storage
+        }
+
       } catch (e) {
-        console.error("Failed to parse API keys or site assets from Firestore", e);
+        console.error("Error fetching initial configuration data:", e);
+        // Set defaults for all potentially fetched items on error
+        setElevenLabsApiKey(null);
+        setElevenLabsVoiceId(null);
         setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL); 
         setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); 
         setPersonaTraits(DEFAULT_PERSONA_TRAITS);
+        setKnowledgeFileSummary('');
+        toast({
+          title: "Configuration Error",
+          description: "Could not load some initial app settings. Using defaults.",
+          variant: "destructive"
+        });
       }
     };
     fetchFirestoreData();
-  }, [setElevenLabsApiKey, setElevenLabsVoiceId, setAvatarSrc, setSplashImageSrc, setPersonaTraits]);
+  }, [toast]); // Added toast to dependency array
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => {
@@ -679,7 +712,6 @@ export default function HomePage() {
                 setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
                 setIsSplashImageLoaded(true);
               }}
-              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
             <RadioGroup
@@ -721,7 +753,10 @@ export default function HomePage() {
     ),
     priority: true,
     unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.startsWith('blob:') || !avatarSrc.startsWith('https://'),
-    onError: () => { console.warn("Custom avatar failed to load on main page, falling back."); setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);}
+    onError: () => { 
+      console.warn("Custom avatar failed to load on main page, falling back."); 
+      setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
+    }
   };
   
   if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) {
