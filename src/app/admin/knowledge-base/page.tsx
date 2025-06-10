@@ -8,31 +8,25 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { storage } from '@/lib/firebase'; // Firebase storage instance
+import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Progress } from "@/components/ui/progress";
 
-interface KnowledgeSource {
+export interface KnowledgeSource {
   id: string;
   name: string;
   type: 'text' | 'pdf' | 'document' | 'audio' | 'image' | 'other';
   size: string;
   uploadedAt: string;
-  storagePath?: string; // Path in Firebase Storage
-  downloadURL?: string; // Download URL from Firebase
-  uploadProgress?: number; // For upload progress
+  storagePath?: string;
+  downloadURL?: string;
+  uploadProgress?: number;
   isUploading?: boolean;
 }
 
-const KNOWLEDGE_SOURCES_STORAGE_KEY = "aiBlairKnowledgeSources";
+const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_meta";
 
-// Initial sources are local placeholders, not in Firebase by default.
-const initialSourcesPlaceholder: Omit<KnowledgeSource, 'id' | 'uploadedAt' | 'storagePath' | 'downloadURL'>[] = [
-  { name: 'Pawn_Transactions_Guide.pdf', type: 'pdf', size: '2.3MB' },
-  { name: 'Jewelry_Appraisal_Tips.txt', type: 'text', size: '15KB' },
-  { name: 'Loan_Regulations_Overview.mp3', type: 'audio', size: '5.1MB' },
-  { name: 'Antique_Valuation_Basics.docx', type: 'document', size: '22KB' },
-];
 
 const getFileIcon = (type: KnowledgeSource['type']) => {
   switch (type) {
@@ -48,37 +42,46 @@ const getFileIcon = (type: KnowledgeSource['type']) => {
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<KnowledgeSource[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isLoadingSources, setIsLoadingSources] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedSourcesString = localStorage.getItem(KNOWLEDGE_SOURCES_STORAGE_KEY);
-    if (storedSourcesString) {
+    const fetchSources = async () => {
+      setIsLoadingSources(true);
       try {
-        const storedSources = JSON.parse(storedSourcesString) as KnowledgeSource[];
-        setSources(storedSources.filter(s => !s.isUploading)); // Remove any stuck uploads
+        const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data()?.sources) {
+          const firestoreSources = docSnap.data().sources as KnowledgeSource[];
+          setSources(firestoreSources.filter(s => !s.isUploading)); // Remove any stuck uploads from previous sessions
+        } else {
+          setSources([]); // No sources found in Firestore
+        }
       } catch (e) {
-        console.error("Failed to parse sources from localStorage", e);
-        setSources([]); // Reset if parsing fails
+        console.error("Failed to fetch sources from Firestore", e);
+        toast({ title: "Error Loading Sources", description: "Could not fetch knowledge sources. Please try again.", variant: "destructive" });
+        setSources([]);
       }
-    } else {
-      // Populate with placeholders if localStorage is empty
-      const placeholderSources = initialSourcesPlaceholder.map((src, index) => ({
-        ...src,
-        id: `placeholder-${index}-${Date.now()}`,
-        uploadedAt: new Date(Date.now() - (initialSourcesPlaceholder.length - index) * 24*60*60*1000).toISOString().split('T')[0], // Stagger dates
-      }));
-      setSources(placeholderSources);
-    }
-  }, []);
+      setIsLoadingSources(false);
+    };
+    fetchSources();
+  }, [toast]);
 
-  useEffect(() => {
-    // Persist sources to localStorage whenever they change, excluding ongoing uploads
-    const sourcesToStore = sources.filter(s => !s.isUploading);
-    if (sourcesToStore.length > 0 || localStorage.getItem(KNOWLEDGE_SOURCES_STORAGE_KEY)) { // Avoid writing empty array if it was never set
-        localStorage.setItem(KNOWLEDGE_SOURCES_STORAGE_KEY, JSON.stringify(sourcesToStore));
+  const saveSourcesToFirestore = async (updatedSources: KnowledgeSource[]) => {
+    try {
+      const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
+      // Filter out temporary upload states before saving
+      const sourcesToSave = updatedSources.filter(s => !s.isUploading).map(s => {
+        const {uploadProgress, isUploading, ...rest} = s; // eslint-disable-line @typescript-eslint/no-unused-vars
+        return rest;
+      });
+      await setDoc(docRef, { sources: sourcesToSave });
+    } catch (error) {
+      console.error("Error saving sources to Firestore:", error);
+      toast({ title: "Error Saving Sources", description: "Could not update knowledge base in the database.", variant: "destructive" });
     }
-  }, [sources]);
+  };
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,7 +96,7 @@ export default function KnowledgeBasePage() {
       return;
     }
 
-    const tempId = `uploading-${Date.now()}`;
+    const tempId = `uploading-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     let fileType: KnowledgeSource['type'] = 'other';
     const mimeType = selectedFile.type;
     const fileNameLower = selectedFile.name.toLowerCase();
@@ -101,7 +104,7 @@ export default function KnowledgeBasePage() {
     if (mimeType.startsWith('audio/')) fileType = 'audio';
     else if (mimeType.startsWith('image/')) fileType = 'image';
     else if (mimeType === 'application/pdf') fileType = 'pdf';
-    else if (mimeType.startsWith('text/')) fileType = 'text';
+    else if (mimeType.startsWith('text/plain') || fileNameLower.endsWith('.txt')) fileType = 'text';
     else if (mimeType === 'application/msword' || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.doc') || fileNameLower.endsWith('.docx')) fileType = 'document';
 
     const newSourceDraft: KnowledgeSource = {
@@ -114,8 +117,9 @@ export default function KnowledgeBasePage() {
       uploadProgress: 0,
     };
 
+    const currentSources = [...sources];
     setSources(prev => [newSourceDraft, ...prev]);
-    const currentFile = selectedFile; // Capture selectedFile
+    const currentFile = selectedFile;
     setSelectedFile(null);
     if(fileInputRef.current) fileInputRef.current.value = "";
 
@@ -124,31 +128,46 @@ export default function KnowledgeBasePage() {
 
     try {
       toast({ title: "Upload Started", description: `Uploading ${currentFile.name}...` });
-      // For simplicity, using uploadBytes. For progress, uploadBytesResumable would be used.
-      // Let's quickly add basic progress for uploadBytesResumable
-      const uploadTask = uploadBytes(fileRef, currentFile); // uploadBytesResumable for progress
-
-      // For a real progress indicator, you'd use uploadBytesResumable and listen to 'state_changed'
-      // For now, we simulate completion after uploadBytes finishes.
-      await uploadTask; // Wait for upload to complete
-
+      await uploadBytes(fileRef, currentFile);
       const downloadURL = await getDownloadURL(fileRef);
 
-      setSources(prev => prev.map(s => s.id === tempId ? {
-        ...s,
-        id: `firebase-${Date.now()}`, // Give it a new permanent ID
+      const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const finalNewSource: KnowledgeSource = {
+        ...newSourceDraft,
+        id: permanentId,
         storagePath: filePath,
         downloadURL,
         isUploading: false,
         uploadProgress: 100,
-      } : s));
+      };
+      
+      const updatedSources = sources.map(s => s.id === tempId ? finalNewSource : s);
+      // If the tempId item wasn't found (e.g., state updated too quickly), add finalNewSource to the start
+      if (!updatedSources.find(s => s.id === permanentId)) {
+        const existingIndex = currentSources.findIndex(s => s.id === tempId);
+        if (existingIndex !== -1) {
+          currentSources.splice(existingIndex, 1, finalNewSource);
+           setSources(currentSources);
+           await saveSourcesToFirestore(currentSources);
+        } else {
+           const newSourceList = [finalNewSource, ...currentSources];
+           setSources(newSourceList);
+           await saveSourcesToFirestore(newSourceList);
+        }
+      } else {
+        setSources(updatedSources);
+        await saveSourcesToFirestore(updatedSources);
+      }
 
       toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded.` });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload error:", error);
-      toast({ title: "Upload Failed", description: `Could not upload ${currentFile.name}. See console for details.`, variant: "destructive" });
-      setSources(prev => prev.filter(s => s.id !== tempId)); // Remove the failed upload attempt
+      let description = `Could not upload ${currentFile.name}.`;
+      if (error.code) description += ` (Error: ${error.code})`;
+      toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
+      setSources(prev => prev.filter(s => s.id !== tempId)); 
+      // No need to save to Firestore here as the failed upload was never fully added
     }
   };
 
@@ -156,21 +175,25 @@ export default function KnowledgeBasePage() {
     const sourceToDelete = sources.find(s => s.id === id);
     if (!sourceToDelete) return;
 
-    setSources(prev => prev.filter(source => source.id !== id)); // Optimistic UI update
+    const updatedSources = sources.filter(source => source.id !== id);
+    setSources(updatedSources); // Optimistic UI update
 
-    if (sourceToDelete.storagePath) { // Only try to delete from Firebase if it has a storagePath
+    if (sourceToDelete.storagePath) {
       const fileRef = storageRef(storage, sourceToDelete.storagePath);
       try {
         await deleteObject(fileRef);
-        toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase Storage and the list.` });
+        await saveSourcesToFirestore(updatedSources);
+        toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
       } catch (error) {
         console.error("Firebase deletion error:", error);
-        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list.`, variant: "destructive" });
-        // Note: The item is already removed from the local list.
-        // You might want to add it back if Firebase deletion fails and that's critical.
+        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
+        // Revert UI if critical, or allow manual refresh. For now, list is updated.
+        // Consider re-fetching or adding sourceToDelete back if Firestore save fails significantly.
       }
     } else {
-      // If no storagePath, it was a local/placeholder item
+      // If no storagePath, it was a local/placeholder item (should not happen if placeholders are removed)
+      // or an item whose storage path was never set. Just save the filtered list.
+      await saveSourcesToFirestore(updatedSources);
       toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from the list.` });
     }
   };
@@ -185,7 +208,9 @@ export default function KnowledgeBasePage() {
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
       const newDownloadURL = await getDownloadURL(fileRef);
-      setSources(prev => prev.map(s => s.id === sourceId ? {...s, downloadURL: newDownloadURL } : s));
+      const updatedSources = sources.map(s => s.id === sourceId ? {...s, downloadURL: newDownloadURL } : s);
+      setSources(updatedSources);
+      await saveSourcesToFirestore(updatedSources);
       toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated.`});
     } catch (error) {
       console.error("Error refreshing download URL:", error);
@@ -200,7 +225,7 @@ export default function KnowledgeBasePage() {
         <CardHeader>
           <CardTitle className="font-headline">Upload New Source</CardTitle>
           <CardDescription>
-            Add new documents, audio files, or other content to AI Blair's knowledge base. Files will be uploaded to Firebase Storage.
+            Add new documents, audio files, or other content to AI Blair's knowledge base. Files are uploaded to Firebase Storage, and their metadata is stored in Firestore.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -224,8 +249,9 @@ export default function KnowledgeBasePage() {
           )}
         </CardContent>
         <CardFooter>
-          <Button onClick={handleUpload} disabled={!selectedFile || sources.some(s => s.isUploading)}>
-            <UploadCloud className="mr-2 h-4 w-4" /> {sources.some(s => s.isUploading) ? 'Uploading...' : 'Upload Source'}
+          <Button onClick={handleUpload} disabled={!selectedFile || sources.some(s => s.isUploading) || isLoadingSources}>
+            <UploadCloud className="mr-2 h-4 w-4" /> 
+            {sources.some(s => s.isUploading) ? 'Uploading...' : (isLoadingSources ? 'Loading sources...' : 'Upload Source')}
           </Button>
         </CardFooter>
       </Card>
@@ -233,10 +259,15 @@ export default function KnowledgeBasePage() {
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Manage Knowledge Base Sources</CardTitle>
-          <CardDescription>View and remove sources. Uploaded files are stored in Firebase Storage.</CardDescription>
+          <CardDescription>View and remove sources. Uploaded files are in Firebase Storage, metadata in Firestore.</CardDescription>
         </CardHeader>
         <CardContent>
-          {sources.length === 0 ? (
+          {isLoadingSources ? (
+             <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
+                <RefreshCw className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
+                <p className="text-muted-foreground">Loading knowledge sources...</p>
+            </div>
+          ) : sources.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
               <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground">No sources found.</p>
@@ -281,14 +312,14 @@ export default function KnowledgeBasePage() {
                       </div>
                     )}
                     {!source.isUploading && !source.downloadURL && source.storagePath && (
-                        <span className="text-xs text-yellow-600">Processing...</span>
+                        <span className="text-xs text-yellow-600">Processing... (Refresh URL if stuck)</span>
                     )}
-                    {!source.storagePath && !source.isUploading && (
-                        <span className="text-xs text-gray-500">Local Only</span>
+                     {!source.isUploading && !source.downloadURL && !source.storagePath && (
+                        <span className="text-xs text-gray-500">Error or Local Draft</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id)} aria-label="Delete source" disabled={source.isUploading}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id)} aria-label="Delete source" disabled={source.isUploading || isLoadingSources}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>

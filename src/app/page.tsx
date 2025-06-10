@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { RotateCcw, Mic, Square as SquareIcon, CheckCircle, Power } from 'lucide-react';
+import { RotateCcw, Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
 
 
 export interface Message {
@@ -35,7 +36,6 @@ export interface Message {
   timestamp: number;
 }
 
-// This remains as a base for general knowledge if no specific files cover a topic
 const MOCK_KNOWLEDGE_BASE_CONTENT = `
 Pawn Store Operations Handbook:
 This document covers daily operations, security procedures, and customer service best practices for pawn stores.
@@ -56,17 +56,11 @@ Focuses on rarity, condition, and provenance as key factors in pricing.
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
-const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Transparent 1x1 GIF
+const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const KNOWLEDGE_SOURCES_STORAGE_KEY = "aiBlairKnowledgeSources"; // From knowledge-base page
-
-interface KnowledgeSource { // Simplified from knowledge-base page for what we need here
-  name: string;
-  type: string;
-  downloadURL?: string; // We might use this in future to fetch .txt content
-}
+const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_meta";
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -95,7 +89,10 @@ export default function HomePage() {
   const [consecutiveSilencePrompts, setConsecutiveSilencePrompts] = useState(0);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLogForSaveConfirmation, setShowLogForSaveConfirmation] = useState(false);
+  
   const [knowledgeFileSummary, setKnowledgeFileSummary] = useState<string>('');
+  const [dynamicKnowledgeContent, setDynamicKnowledgeContent] = useState<string>('');
+  const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
 
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -136,8 +133,6 @@ export default function HomePage() {
     setShowLogForSaveConfirmation(false);
     setShowSaveDialog(false);
     
-
-
     if (elevenLabsAudioRef.current) {
       if (elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
         elevenLabsAudioRef.current.pause();
@@ -377,7 +372,10 @@ export default function HomePage() {
             parts: [{ text: msg.text }],
         }));
     
-    const combinedKnowledgeBase = MOCK_KNOWLEDGE_BASE_CONTENT + (knowledgeFileSummary ? `\n\n${knowledgeFileSummary}` : '');
+    const combinedKnowledgeBase = MOCK_KNOWLEDGE_BASE_CONTENT + 
+                                (knowledgeFileSummary ? `\n\nFile Summary:\n${knowledgeFileSummary}` : '') +
+                                (dynamicKnowledgeContent ? `\n\nExtracted Content from .txt files:\n${dynamicKnowledgeContent}` : '');
+
 
     try {
       const flowInput: GenerateChatResponseInput = {
@@ -394,7 +392,7 @@ export default function HomePage() {
       await speakTextRef.current(errorMessage);
       setIsSendingMessage(false); 
     } 
-  }, [addMessage, messages, personaTraits, knowledgeFileSummary, setIsSendingMessage, setConsecutiveSilencePrompts]); 
+  }, [addMessage, messages, personaTraits, knowledgeFileSummary, dynamicKnowledgeContent, setIsSendingMessage, setConsecutiveSilencePrompts]); 
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => {
@@ -492,7 +490,7 @@ export default function HomePage() {
         try { 
           recInstance.abort(); 
         } catch (stopError: any) {
-          // Non-critical, often "InvalidStateError" if already stopped.
+          // Non-critical
         }
         recInstance.start();
       } catch (startError: any) {
@@ -510,7 +508,7 @@ export default function HomePage() {
       try {
         recInstance.abort(); 
       } catch (e: any) {
-        // Non-critical, often "InvalidStateError" if not running.
+        // Non-critical
       }
     }
   }, [isListening, toast, setInputValue, setIsListening]); 
@@ -587,7 +585,7 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage) {
+    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
       setIsSendingMessage(true);
       setAiHasInitiatedConversation(true); 
       const initGreeting = async () => {
@@ -603,10 +601,13 @@ export default function HomePage() {
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, setIsSendingMessage, setAiHasInitiatedConversation]); 
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge, setIsSendingMessage, setAiHasInitiatedConversation]); 
 
   useEffect(() => {    
     const fetchFirestoreData = async () => {
+      setIsLoadingKnowledge(true);
+      setKnowledgeFileSummary('');
+      setDynamicKnowledgeContent('');
       try {
         // API Keys
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
@@ -626,45 +627,67 @@ export default function HomePage() {
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS); 
         } else {
-          // Fallbacks if site_display_assets doesn't exist
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS); 
         }
 
-        // Knowledge Base File Summary from localStorage
-        const storedSourcesString = localStorage.getItem(KNOWLEDGE_SOURCES_STORAGE_KEY);
-        if (storedSourcesString) {
-          const storedSources = JSON.parse(storedSourcesString) as KnowledgeSource[];
-          if (storedSources.length > 0) {
-            const summary = "The knowledge base also includes information from the following uploaded files: " +
-                            storedSources.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
-            setKnowledgeFileSummary(summary);
-          } else {
-            setKnowledgeFileSummary(''); // No files, empty summary
+        // Knowledge Base File Meta from Firestore
+        const kbMetaDocRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
+        const kbMetaDocSnap = await getDoc(kbMetaDocRef);
+        let sources: KnowledgeSource[] = [];
+        if (kbMetaDocSnap.exists() && kbMetaDocSnap.data()?.sources) {
+          sources = kbMetaDocSnap.data().sources as KnowledgeSource[];
+        }
+
+        if (sources.length > 0) {
+          const summary = "The knowledge base includes information from the following uploaded files: " +
+                          sources.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
+          setKnowledgeFileSummary(summary);
+
+          const textFileContents: string[] = [];
+          for (const source of sources) {
+            if (source.type === 'text' && source.downloadURL) {
+              try {
+                const response = await fetch(source.downloadURL);
+                if (response.ok) {
+                  const textContent = await response.text();
+                  textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
+                } else {
+                  console.warn(`Failed to fetch content for ${source.name}: ${response.status}`);
+                  toast({title: "Knowledge File Error", description: `Could not load content for ${source.name}.`, variant: "destructive", duration: 4000});
+                }
+              } catch (fetchError) {
+                console.error(`Error fetching content for ${source.name}:`, fetchError);
+                toast({title: "Knowledge File Fetch Error", description: `Network error loading ${source.name}.`, variant: "destructive", duration: 4000});
+              }
+            }
           }
+          setDynamicKnowledgeContent(textFileContents.join('\n\n'));
         } else {
-            setKnowledgeFileSummary(''); // No key in local storage
+            setKnowledgeFileSummary('');
+            setDynamicKnowledgeContent('');
         }
 
       } catch (e) {
         console.error("Error fetching initial configuration data:", e);
-        // Set defaults for all potentially fetched items on error
         setElevenLabsApiKey(null);
         setElevenLabsVoiceId(null);
         setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL); 
         setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); 
         setPersonaTraits(DEFAULT_PERSONA_TRAITS);
         setKnowledgeFileSummary('');
+        setDynamicKnowledgeContent('');
         toast({
           title: "Configuration Error",
-          description: "Could not load some initial app settings. Using defaults.",
+          description: "Could not load initial app settings. Using defaults.",
           variant: "destructive"
         });
       }
+      setIsLoadingKnowledge(false);
     };
     fetchFirestoreData();
-  }, [toast]); // Added toast to dependency array
+  }, [toast]); 
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => {
@@ -714,28 +737,40 @@ export default function HomePage() {
               }}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
+             {isLoadingKnowledge && (
+                <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
+                    <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" />
+                    Connecting to knowledge base...
+                </div>
+            )}
             <RadioGroup
               value={selectedInitialMode}
               onValueChange={(value: CommunicationMode) => setSelectedInitialMode(value)}
               className="w-full space-y-2"
             >
               <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="audio-only" id="r1" />
-                <Label htmlFor="r1" className="flex-grow cursor-pointer text-base">Audio Only</Label>
+                <RadioGroupItem value="audio-only" id="r1" disabled={isLoadingKnowledge}/>
+                <Label htmlFor="r1" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio Only</Label>
               </div>
               <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="audio-text" id="r2" />
-                <Label htmlFor="r2" className="flex-grow cursor-pointer text-base">Audio & Text (Recommended)</Label>
+                <RadioGroupItem value="audio-text" id="r2" disabled={isLoadingKnowledge}/>
+                <Label htmlFor="r2" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio & Text (Recommended)</Label>
               </div>
               <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="text-only" id="r3" />
-                <Label htmlFor="r3" className="flex-grow cursor-pointer text-base">Text Only</Label>
+                <RadioGroupItem value="text-only" id="r3" disabled={isLoadingKnowledge}/>
+                <Label htmlFor="r3" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Text Only</Label>
               </div>
             </RadioGroup>
-            <Button onClick={handleModeSelectionSubmit} size="lg" className="w-full">
+            <Button onClick={handleModeSelectionSubmit} size="lg" className="w-full" disabled={isLoadingKnowledge}>
               <CheckCircle className="mr-2"/>
-              Start Chatting
+              {isLoadingKnowledge ? "Loading..." : "Start Chatting"}
             </Button>
+             {!isLoadingKnowledge && elevenLabsApiKey === null && (
+                <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2">
+                    <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" />
+                    <span>Voice features (ElevenLabs TTS) may be limited. API key not configured. Using browser default TTS.</span>
+                </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -767,6 +802,15 @@ export default function HomePage() {
   const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messages.length === 0;
 
   const mainContent = () => {
+    if (isLoadingKnowledge) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center py-8">
+                <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
+                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Base</h2>
+                <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p>
+            </div>
+        );
+    }
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
@@ -861,7 +905,7 @@ export default function HomePage() {
       <div className="flex-grow">
         {mainContent()}
       </div>
-      {!showSplashScreen && (
+      {!showSplashScreen && !isLoadingKnowledge &&(
         <div className="py-4 text-center border-t mt-auto">
           <Button onClick={handleChangeCommunicationMode} variant="outline">
             <RotateCcw size={16} className="mr-2" /> {modeButtonText()}
@@ -872,3 +916,4 @@ export default function HomePage() {
   );
 }
     
+
