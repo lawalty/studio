@@ -189,6 +189,7 @@ export default function HomePage() {
 
 
   const handleAudioProcessStart = useCallback((text: string) => {
+    // This stores the original AI response text for display in chat bubbles
     currentAiResponseTextRef.current = text;
   }, []);
 
@@ -196,6 +197,7 @@ export default function HomePage() {
     setIsSpeaking(true);
     setIsSendingMessage(false); 
 
+    // Add the message to the log (using the original text stored in currentAiResponseTextRef)
     if (currentAiResponseTextRef.current) {
       if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
         addMessage(currentAiResponseTextRef.current, 'ai');
@@ -213,6 +215,8 @@ export default function HomePage() {
       return; 
     }
 
+    // If audio failed and we have text, ensure it's in the log.
+    // This is a fallback; ideally, it's added by handleActualAudioStart.
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
@@ -243,10 +247,10 @@ export default function HomePage() {
   }, [addMessage, messages, resetConversation, setShowSplashScreen, setIsSpeaking, setIsSendingMessage, toggleListeningRef]);
 
 
-  const browserSpeakInternal = useCallback((text: string) => {
+  const browserSpeakInternal = useCallback((textForSpeech: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       if (window.speechSynthesis.speaking) window.speechSynthesis.cancel(); 
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = new SpeechSynthesisUtterance(textForSpeech);
       utterance.pitch = 1; utterance.rate = 1; 
       utterance.onstart = handleActualAudioStart;
       utterance.onend = () => handleAudioProcessEnd(true);
@@ -266,11 +270,14 @@ export default function HomePage() {
   }, [toast, handleActualAudioStart, handleAudioProcessEnd]);
 
   const speakText = useCallback(async (text: string) => {
-    const processedText = text.replace(/EZCORP/gi, "E. Z. Corp"); 
-    handleAudioProcessStart(processedText); 
+    // Store the original text for display and log
+    handleAudioProcessStart(text); 
+    // Create a version of the text specifically for speech synthesis
+    const textForSpeech = text.replace(/EZCORP/gi, "E. Z. Corp");
 
-    if (communicationModeRef.current === 'text-only' || processedText.trim() === "") {
-      if (processedText.trim() !== "" && currentAiResponseTextRef.current) {
+    if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "") {
+      // If text-only or empty, add the original message text to log if not already there
+      if (text.trim() !== "" && currentAiResponseTextRef.current) {
         if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
         }
@@ -280,6 +287,7 @@ export default function HomePage() {
       return;
     }
 
+    // Cancel any ongoing speech
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
        elevenLabsAudioRef.current.pause();
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) { 
@@ -299,8 +307,9 @@ export default function HomePage() {
         'Content-Type': 'application/json',
         'xi-api-key': elevenLabsApiKey,
       };
+      // Use textForSpeech for ElevenLabs
       const body = JSON.stringify({
-        text: processedText,
+        text: textForSpeech,
         model_id: 'eleven_multilingual_v2', 
         voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }
       });
@@ -317,7 +326,7 @@ export default function HomePage() {
           audio.onerror = (e) => {
             console.error("Error playing ElevenLabs audio:", e);
             toast({ title: "ElevenLabs Playback Error", description: "Could not play audio. Falling back to browser TTS.", variant: "destructive" });
-            browserSpeakInternal(processedText); 
+            browserSpeakInternal(textForSpeech); // Fallback with textForSpeech
           };
           await audio.play();
           return; 
@@ -338,7 +347,7 @@ export default function HomePage() {
         toast({ title: "ElevenLabs Connection Error", description: "Could not connect to ElevenLabs. Falling back to browser TTS.", variant: "destructive" });
       }
     }
-    browserSpeakInternal(processedText);
+    browserSpeakInternal(textForSpeech); // Fallback or primary browser TTS with textForSpeech
   }, [
       elevenLabsApiKey,
       elevenLabsVoiceId,
