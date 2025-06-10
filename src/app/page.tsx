@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { RotateCcw, Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle } from 'lucide-react';
+import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -189,7 +189,6 @@ export default function HomePage() {
 
 
   const handleAudioProcessStart = useCallback((text: string) => {
-    // This stores the original AI response text for display in chat bubbles
     currentAiResponseTextRef.current = text;
   }, []);
 
@@ -197,7 +196,6 @@ export default function HomePage() {
     setIsSpeaking(true);
     setIsSendingMessage(false); 
 
-    // Add the message to the log (using the original text stored in currentAiResponseTextRef)
     if (currentAiResponseTextRef.current) {
       if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
         addMessage(currentAiResponseTextRef.current, 'ai');
@@ -215,8 +213,6 @@ export default function HomePage() {
       return; 
     }
 
-    // If audio failed and we have text, ensure it's in the log.
-    // This is a fallback; ideally, it's added by handleActualAudioStart.
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
@@ -270,13 +266,10 @@ export default function HomePage() {
   }, [toast, handleActualAudioStart, handleAudioProcessEnd]);
 
   const speakText = useCallback(async (text: string) => {
-    // Store the original text for display and log
     handleAudioProcessStart(text); 
-    // Create a version of the text specifically for speech synthesis
     const textForSpeech = text.replace(/EZCORP/gi, "E. Z. Corp");
 
     if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "") {
-      // If text-only or empty, add the original message text to log if not already there
       if (text.trim() !== "" && currentAiResponseTextRef.current) {
         if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
@@ -287,7 +280,6 @@ export default function HomePage() {
       return;
     }
 
-    // Cancel any ongoing speech
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
        elevenLabsAudioRef.current.pause();
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) { 
@@ -307,7 +299,6 @@ export default function HomePage() {
         'Content-Type': 'application/json',
         'xi-api-key': elevenLabsApiKey,
       };
-      // Use textForSpeech for ElevenLabs
       const body = JSON.stringify({
         text: textForSpeech,
         model_id: 'eleven_multilingual_v2', 
@@ -326,7 +317,7 @@ export default function HomePage() {
           audio.onerror = (e) => {
             console.error("Error playing ElevenLabs audio:", e);
             toast({ title: "ElevenLabs Playback Error", description: "Could not play audio. Falling back to browser TTS.", variant: "destructive" });
-            browserSpeakInternal(textForSpeech); // Fallback with textForSpeech
+            browserSpeakInternal(textForSpeech); 
           };
           await audio.play();
           return; 
@@ -347,7 +338,7 @@ export default function HomePage() {
         toast({ title: "ElevenLabs Connection Error", description: "Could not connect to ElevenLabs. Falling back to browser TTS.", variant: "destructive" });
       }
     }
-    browserSpeakInternal(textForSpeech); // Fallback or primary browser TTS with textForSpeech
+    browserSpeakInternal(textForSpeech); 
   }, [
       elevenLabsApiKey,
       elevenLabsVoiceId,
@@ -575,24 +566,6 @@ export default function HomePage() {
     setShowSplashScreen(true);
   };
 
-
-  const handleChangeCommunicationMode = () => {
-    resetConversation(); 
-    setCommunicationMode(prevMode => {
-      const newMode = prevMode === 'audio-text' ? 'text-only' : (prevMode === 'text-only' ? 'audio-only' : 'audio-text');
-      if ((newMode === 'audio-text' || newMode === 'audio-only') && !recognitionRef.current) {
-        recognitionRef.current = initializeSpeechRecognition(); 
-      }
-      return newMode;
-    });
-  };
-
-  const modeButtonText = () => {
-    if (communicationMode === 'audio-text') return "Switch to Text-Only";
-    if (communicationMode === 'text-only') return "Switch to Audio-Only";
-    return "Switch to Audio & Text"; 
-  };
-
   useEffect(() => {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
       setIsSendingMessage(true);
@@ -717,6 +690,17 @@ export default function HomePage() {
       setIsSplashImageLoaded(true); 
     }
   }, [splashImageSrc]);
+
+  useEffect(() => {
+    const handleNavigateToSplash = () => {
+      resetConversation();
+      setShowSplashScreen(true);
+    };
+    window.addEventListener('navigateToSplashScreen', handleNavigateToSplash);
+    return () => {
+      window.removeEventListener('navigateToSplashScreen', handleNavigateToSplash);
+    };
+  }, [resetConversation]);
 
 
   if (showSplashScreen) {
@@ -914,15 +898,7 @@ export default function HomePage() {
       <div className="flex-grow">
         {mainContent()}
       </div>
-      {!showSplashScreen && !isLoadingKnowledge &&(
-        <div className="py-4 text-center border-t mt-auto">
-          <Button onClick={handleChangeCommunicationMode} variant="outline">
-            <RotateCcw size={16} className="mr-2" /> {modeButtonText()}
-          </Button>
-        </div>
-      )}
+      {/* Button removed from here */}
     </div>
   );
 }
-    
-
