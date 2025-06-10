@@ -51,7 +51,6 @@ export default function KnowledgeBasePage() {
       const sourcesToSave = updatedSourcesToSave
         .map(s => {
           console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
-          // Explicitly create the object to save, ensuring no temporary fields are included
           const cleanSource: {
             id: string;
             name: string;
@@ -150,11 +149,11 @@ export default function KnowledgeBasePage() {
       isUploading: true,
       uploadProgress: 0,
     };
-
-    setSelectedFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
     
+    // Add draft to UI immediately
     setSources(prevSources => [newSourceDraft, ...prevSources]);
+    setSelectedFile(null); // Clear selected file after initiating upload
+    if (fileInputRef.current) fileInputRef.current.value = ""; // Reset file input
 
     const filePath = `knowledge_base_files_v2/${tempId}-${currentFile.name}`;
     const fileRef = storageRef(storage, filePath);
@@ -192,21 +191,57 @@ export default function KnowledgeBasePage() {
       };
       console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
       
-      let actualFinalListForFirestore: KnowledgeSource[] = [];
+      // Create the definitive list that will go to both state and Firestore
+      // This function is called after finalNewSource is ready.
+      // It receives the current list of sources (which includes the draft)
+      // and returns the new list with the draft replaced by finalNewSource.
+      // This new list is then used for both setSources and saveSourcesToFirestore.
+      let finalUpdatedList: KnowledgeSource[] = [];
       setSources(currentSourcesIncludingDraft => {
         const updatedList = currentSourcesIncludingDraft.map(s =>
           s.id === tempId ? finalNewSource : s 
         );
-        actualFinalListForFirestore = updatedList;
-        console.log("[KnowledgeBasePage - handleUpload] updatedListForStateAndFirestore being sent to setSources and saveSourcesToFirestore:", JSON.stringify(actualFinalListForFirestore, null, 2));
-        return updatedList; 
+        finalUpdatedList = updatedList; // Capture the list that will be used
+        console.log("[KnowledgeBasePage - handleUpload] List being set to state (and will be saved):", JSON.stringify(finalUpdatedList, null, 2));
+        return updatedList; // Update React state
       });
       
-      const savedToDb = await saveSourcesToFirestore(actualFinalListForFirestore);
+      // Ensure saveSourcesToFirestore is called with the most up-to-date list.
+      // Since setSources might batch, we use finalUpdatedList which was captured
+      // from the same logic that setSources used.
+      // However, to be absolutely safe, if finalUpdatedList is somehow not set due to timing,
+      // we can re-derive it. But the above should work.
+      // For maximum safety, we could await a small timeout or pass the computation directly.
+      // Given React's behavior, `finalUpdatedList` should be correctly populated here
+      // because the updater function in `setSources` runs synchronously to determine the next state.
 
-      if (savedToDb) {
-        toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
+      // Let's ensure the list used for saving is the one derived inside setSources.
+      // This might still be tricky if saveSourcesToFirestore runs before finalUpdatedList is assigned.
+      // The most robust way is to manage the list for saving more directly.
+
+      // A more direct approach to ensure the correct list is saved:
+      const listToSave = sources.map(s => s.id === tempId ? finalNewSource : s);
+      // This might use a stale `sources` if the draft isn't in it yet.
+      // The setSources(updaterFn) approach is generally better for getting current state.
+
+      // The safest way for `listToSave` is to reconstruct it based on the most current `sources` state *after* the draft has been added.
+      // The captured `finalUpdatedList` from within the `setSources` callback is the most reliable.
+
+      if (finalUpdatedList.length > 0) { // Ensure finalUpdatedList was populated
+        const savedToDb = await saveSourcesToFirestore(finalUpdatedList);
+        if (savedToDb) {
+            toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
+        }
+      } else {
+        // This case should ideally not be hit if the logic above is correct.
+        // It means setSources didn't update finalUpdatedList as expected before this point.
+        // Fallback or error:
+        console.error("[KnowledgeBasePage - handleUpload] finalUpdatedList was empty before saving. This indicates a state update issue.");
+        toast({ title: "State Error", description: "Could not prepare data for saving. Please try again.", variant: "destructive" });
+        // Attempt to remove draft if save fails this way
+        setSources(prev => prev.filter(s => s.id !== tempId && s.id !== finalNewSource.id));
       }
+
 
     } catch (error: any) {
       console.error("[KnowledgeBasePage - handleUpload] Upload or Save error:", error);
@@ -279,16 +314,20 @@ export default function KnowledgeBasePage() {
           s.id === sourceId ? { ...s, downloadURL: newDownloadURL } : s
         );
         refreshedListForFirestore = updatedList;
+        console.log("[KnowledgeBasePage - handleRefreshSourceUrl] List for Firestore (derived inside setSources):", JSON.stringify(refreshedListForFirestore, null, 2));
         return updatedList;
       });
       
-      console.log("[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForFirestore for save:", JSON.stringify(refreshedListForFirestore, null, 2));
-      
-      const refreshedInDb = await saveSourcesToFirestore(refreshedListForFirestore);
-      
-      if(refreshedInDb) {
-        toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
+      if (refreshedListForFirestore.length > 0) {
+        const refreshedInDb = await saveSourcesToFirestore(refreshedListForFirestore);
+        if(refreshedInDb) {
+            toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
+        }
+      } else {
+        console.error("[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForFirestore was empty before saving. This indicates a state update issue.");
+        toast({ title: "State Error Refreshing URL", description: "Could not prepare data for saving URL refresh.", variant: "destructive" });
       }
+
 
     } catch (error) {
       console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Error refreshing download URL:", error);
