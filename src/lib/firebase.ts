@@ -1,6 +1,7 @@
 
 import { initializeApp, getApp, getApps, type FirebaseOptions } from "firebase/app";
 import { getStorage } from "firebase/storage";
+import { getFirestore } from "firebase/firestore";
 
 // TODO: Replace with your actual Firebase project configuration
 const firebaseConfig: FirebaseOptions = {
@@ -21,5 +22,6 @@ if (getApps().length === 0) {
 }
 
 const storage = getStorage(app);
+const db = getFirestore(app);
 
-export { app, storage };
+export { app, storage, db };

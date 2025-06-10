@@ -24,6 +24,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 
 export interface Message {
@@ -52,12 +54,12 @@ Focuses on rarity, condition, and provenance as key factors in pricing.
 `;
 
 const AVATAR_STORAGE_KEY = "aiBlairAvatar";
-const DEFAULT_AVATAR_SRC = "https://placehold.co/300x300.png"; // This is a placeholder, actual default is from persona page.
+const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=Avatar";
 const PERSONA_STORAGE_KEY = "aiBlairPersona";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
-const API_KEYS_STORAGE_KEY = "aiBlairApiKeys";
 const SPLASH_IMAGE_STORAGE_KEY = "aiBlairSplashScreenImage";
 const DEFAULT_SPLASH_IMAGE_SRC = "https://i.imgur.com/U50t4xR.jpeg";
+const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -72,7 +74,7 @@ export default function HomePage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_SRC); // Will be updated from localStorage
+  const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER_URL);
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
@@ -111,7 +113,6 @@ export default function HomePage() {
       { id: Date.now().toString() + Math.random(), text, sender, timestamp: Date.now() },
     ]);
   }, []);
-
 
   const resetConversation = useCallback(() => {
     setMessages([]);
@@ -188,7 +189,6 @@ export default function HomePage() {
     setIsSpeaking(true);
     setIsSendingMessage(false); 
   }, []);
-
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
@@ -371,7 +371,7 @@ export default function HomePage() {
       console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       await speakTextRef.current(errorMessage);
-      setIsSendingMessage(false); // Ensure sending state is reset on error
+      setIsSendingMessage(false); 
     } 
   }, [addMessage, messages, personaTraits]); 
 
@@ -412,7 +412,7 @@ export default function HomePage() {
         if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
           setConsecutiveSilencePrompts(currentPrompts => {
             const newPromptCount = currentPrompts + 1;
-            if (!isSpeakingRef.current && !isEndingSessionRef.current) { // Double check state before speaking
+            if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                     isEndingSessionRef.current = true; 
                     speakTextRef.current("It seems no one is here. Ending the session.");
@@ -581,7 +581,7 @@ export default function HomePage() {
           console.error("Failed to get initial AI greeting:", error);
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           await speakTextRef.current(errMsg);
-          setIsSendingMessage(false); // Reset on error
+          setIsSendingMessage(false); 
         }
       };
       initGreeting();
@@ -589,21 +589,26 @@ export default function HomePage() {
   }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage]); 
 
   useEffect(() => {
-    // Load avatar from localStorage or use default placeholder from Persona page
     const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
-    setAvatarSrc(storedAvatar || "https://placehold.co/150x150.png?text=Avatar"); // Use persona's default if nothing
+    setAvatarSrc(storedAvatar || DEFAULT_AVATAR_PLACEHOLDER_URL);
     
     const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
     setPersonaTraits(storedPersona || DEFAULT_PERSONA_TRAITS);
     
-    const storedApiKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    if (storedApiKeys) {
+    const fetchApiKeys = async () => {
       try {
-        const keys = JSON.parse(storedApiKeys);
-        setElevenLabsApiKey(keys.tts || null);
-        setElevenLabsVoiceId(keys.voiceId || null);
-      } catch (e) { console.error("Failed to parse API keys", e); }
-    }
+        const docRef = doc(db, FIRESTORE_API_KEYS_PATH);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const keys = docSnap.data();
+          setElevenLabsApiKey(keys.tts || null);
+          setElevenLabsVoiceId(keys.voiceId || null);
+        }
+      } catch (e) {
+        console.error("Failed to parse API keys from Firestore", e);
+      }
+    };
+    fetchApiKeys();
     
     const storedSplashImage = localStorage.getItem(SPLASH_IMAGE_STORAGE_KEY);
     setSplashImageSrc(storedSplashImage || DEFAULT_SPLASH_IMAGE_SRC); 
@@ -638,7 +643,7 @@ export default function HomePage() {
               height={267} 
               className="rounded-lg shadow-md object-cover"
               priority 
-              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? "man microphone computer" : "custom splash image"}
+              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? "man microphone computer" : undefined}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
             <RadioGroup
@@ -669,12 +674,8 @@ export default function HomePage() {
     );
   }
 
-  const placeholderAvatar = "https://placehold.co/150x150.png?text=Avatar"; // Default from Persona page
-  const currentAvatar = avatarSrc && avatarSrc !== DEFAULT_AVATAR_SRC ? avatarSrc : placeholderAvatar;
-
-
   const imageProps: React.ComponentProps<typeof Image> & { 'data-ai-hint'?: string } = {
-    src: currentAvatar, // Use currentAvatar which respects localStorage or placeholder
+    src: avatarSrc,
     alt: "AI Blair Avatar",
     width: communicationMode === 'audio-only' ? 200 : 120,
     height: communicationMode === 'audio-only' ? 200 : 120,
@@ -684,12 +685,11 @@ export default function HomePage() {
     ),
     priority: true,
   };
-
-  if (currentAvatar === placeholderAvatar) {
+  
+  if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL) {
     imageProps['data-ai-hint'] = "professional woman";
   }
-  // If currentAvatar is a Firebase URL (starts with https://firebasestorage.googleapis.com), no hint needed.
-  // If currentAvatar is a data URI (from local selection before upload), also no hint needed.
+
 
   const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messages.length === 0;
 
@@ -706,7 +706,7 @@ export default function HomePage() {
           )}
           {(messages.length > 0 && showLogForSaveConfirmation) && (
             <div className="w-full max-w-md mt-6">
-                 <ConversationLog messages={messages} isLoadingAiResponse={false} avatarSrc={currentAvatar} />
+                 <ConversationLog messages={messages} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
             </div>
           )}
           {isListening && (
@@ -730,8 +730,8 @@ export default function HomePage() {
             </Button>
           )}
            <AlertDialog open={showSaveDialog} onOpenChange={(open) => {
-             if (!open) { // If dialog is closing
-                handleCloseSaveDialog(false); // Assume don't save if closed via X or overlay
+             if (!open) { 
+                handleCloseSaveDialog(false); 
              }
              setShowSaveDialog(open);
            }}>
@@ -767,7 +767,7 @@ export default function HomePage() {
           </Card>
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
-          <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation} avatarSrc={currentAvatar} />
+          <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation} avatarSrc={avatarSrc} />
           <MessageInput
             onSendMessage={handleSendMessageRef.current}
             isSending={isSendingMessage}

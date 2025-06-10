@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -7,15 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { Save, AlertTriangle } from 'lucide-react';
-
-// These would be securely stored or managed in a real app.
-// For testing, if localStorage is empty, these will be used.
-const FALLBACK_API_KEYS = {
-  gemini: "TEST_GEMINI_API_KEY_12345",
-  tts: "TEST_TTS_API_KEY_67890",
-  stt: "TEST_STT_API_KEY_ABCDE",
-  voiceId: "TEST_VOICE_ID_XYZ",
-};
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface ApiKeys {
   gemini: string;
@@ -24,40 +18,64 @@ interface ApiKeys {
   voiceId: string;
 }
 
-const API_KEYS_STORAGE_KEY = "aiBlairApiKeys";
+const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({ gemini: '', tts: '', stt: '', voiceId: '' });
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedKeys = localStorage.getItem(API_KEYS_STORAGE_KEY);
-    if (storedKeys) {
-      setApiKeys(JSON.parse(storedKeys));
-      setUsingFallback(false);
-    } else {
-      // No stored keys, use fallback for testing
-      setApiKeys(FALLBACK_API_KEYS);
-      setUsingFallback(true);
-       toast({
-        title: "Using Fallback Keys",
-        description: "No API keys found in local storage. Using test keys.",
-        variant: "default",
-        duration: 5000,
-      });
-    }
+    const fetchKeys = async () => {
+      setIsLoading(true);
+      try {
+        const docRef = doc(db, FIRESTORE_KEYS_PATH);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setApiKeys(docSnap.data() as ApiKeys);
+        } else {
+          // No keys found in Firestore, initialize with empty strings
+          setApiKeys({ gemini: '', tts: '', stt: '', voiceId: '' });
+           toast({
+            title: "No Keys Found in Database",
+            description: "Please enter and save your API keys.",
+            variant: "default",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching API keys from Firestore:", error);
+        toast({
+          title: "Error Loading Keys",
+          description: "Could not fetch API keys from the database. Please try again.",
+          variant: "destructive",
+        });
+        // Fallback to empty strings on error
+        setApiKeys({ gemini: '', tts: '', stt: '', voiceId: '' });
+      }
+      setIsLoading(false);
+    };
+    fetchKeys();
   }, [toast]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setApiKeys({ ...apiKeys, [e.target.name]: e.target.value });
-    if (usingFallback) setUsingFallback(false); // User is now editing, so not using pure fallback
   };
 
-  const handleSave = () => {
-    localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(apiKeys));
-    setUsingFallback(false); // Keys are now explicitly saved
-    toast({ title: "API Keys Saved", description: "Your API keys have been updated." });
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      const docRef = doc(db, FIRESTORE_KEYS_PATH);
+      await setDoc(docRef, apiKeys);
+      toast({ title: "API Keys Saved", description: "Your API keys have been saved to the database." });
+    } catch (error) {
+      console.error("Error saving API keys to Firestore:", error);
+      toast({
+        title: "Error Saving Keys",
+        description: "Could not save API keys to the database. Please try again.",
+        variant: "destructive",
+      });
+    }
+    setIsLoading(false);
   };
 
   return (
@@ -66,40 +84,40 @@ export default function ApiKeysPage() {
         <CardTitle className="font-headline">API Key Management</CardTitle>
         <CardDescription>
           Manage API keys for Gemini (AI Model), Text-to-Speech (TTS), Speech-to-Text (STT), and the TTS Voice ID.
-          These keys are stored in your browser's local storage for this demo.
+          These keys are stored in Firestore.
+          <span className="block mt-2 font-semibold text-destructive/80 flex items-start">
+            <AlertTriangle className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
+            <span>Security Warning: Storing API keys in a client-accessible database is not recommended for production. For optimal security, manage sensitive keys server-side using environment variables or a dedicated secrets manager.</span>
+          </span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {usingFallback && (
-          <div className="p-3 rounded-md bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700">
-            <div className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2" />
-              <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                You are currently using fallback API keys for testing. Please enter your actual keys and save.
-              </p>
+        {isLoading ? (
+          <p>Loading API keys...</p>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="geminiKey" className="font-medium">Gemini API Key</Label>
+              <Input id="geminiKey" name="gemini" type="password" value={apiKeys.gemini} onChange={handleChange} placeholder="Enter Gemini API Key" />
             </div>
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="ttsKey" className="font-medium">TTS API Key (e.g., Elevenlabs)</Label>
+              <Input id="ttsKey" name="tts" type="password" value={apiKeys.tts} onChange={handleChange} placeholder="Enter TTS API Key" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="voiceId" className="font-medium">TTS Voice ID</Label>
+              <Input id="voiceId" name="voiceId" value={apiKeys.voiceId} onChange={handleChange} placeholder="Enter Voice ID for TTS" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sttKey" className="font-medium">STT API Key</Label>
+              <Input id="sttKey" name="stt" type="password" value={apiKeys.stt} onChange={handleChange} placeholder="Enter STT API Key" />
+            </div>
+          </>
         )}
-        <div className="space-y-2">
-          <Label htmlFor="geminiKey" className="font-medium">Gemini API Key</Label>
-          <Input id="geminiKey" name="gemini" type="password" value={apiKeys.gemini} onChange={handleChange} placeholder="Enter Gemini API Key" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="ttsKey" className="font-medium">TTS API Key (e.g., Elevenlabs)</Label>
-          <Input id="ttsKey" name="tts" type="password" value={apiKeys.tts} onChange={handleChange} placeholder="Enter TTS API Key" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="voiceId" className="font-medium">TTS Voice ID</Label>
-          <Input id="voiceId" name="voiceId" value={apiKeys.voiceId} onChange={handleChange} placeholder="Enter Voice ID for TTS" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="sttKey" className="font-medium">STT API Key</Label>
-          <Input id="sttKey" name="stt" type="password" value={apiKeys.stt} onChange={handleChange} placeholder="Enter STT API Key" />
-        </div>
       </CardContent>
       <CardFooter>
-        <Button onClick={handleSave}>
-          <Save className="mr-2 h-4 w-4" /> Save API Keys
+        <Button onClick={handleSave} disabled={isLoading}>
+          <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save API Keys'}
         </Button>
       </CardFooter>
     </Card>
