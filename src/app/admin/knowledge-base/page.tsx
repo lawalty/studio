@@ -46,6 +46,34 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const saveSourcesToFirestore = async (updatedSources: KnowledgeSource[]): Promise<boolean> => {
+    try {
+      const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
+      const sourcesToSave = updatedSources
+        .filter(s => !s.isUploading) 
+        .map(s => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const {uploadProgress, isUploading, ...rest} = s; 
+          return rest;
+        });
+      
+      console.log(`[KnowledgeBasePage] Attempting to save ${sourcesToSave.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesToSave, null, 2));
+      
+      await setDoc(docRef, { sources: sourcesToSave });
+      console.log(`[KnowledgeBasePage] Successfully saved ${sourcesToSave.length} sources to Firestore.`);
+      return true;
+    } catch (error: any) {
+      console.error("[KnowledgeBasePage] Error saving sources to Firestore:", error.message, error.code, error.stack, error);
+      toast({ 
+        title: "Firestore Save Error", 
+        description: `Failed to save knowledge base to database: ${error.message || 'Unknown error'}. Data may be out of sync.`, 
+        variant: "destructive",
+        duration: 7000 
+      });
+      return false;
+    }
+  };
+
   useEffect(() => {
     const fetchSources = async () => {
       setIsLoadingSources(true);
@@ -54,37 +82,19 @@ export default function KnowledgeBasePage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists() && docSnap.data()?.sources) {
           const firestoreSources = docSnap.data().sources as KnowledgeSource[];
-          setSources(firestoreSources); // Display all sources as saved in Firestore
+          setSources(firestoreSources); 
         } else {
           setSources([]); 
         }
-      } catch (e) {
-        console.error("Failed to fetch sources from Firestore", e);
-        toast({ title: "Error Loading Sources", description: "Could not fetch knowledge sources. Please try again.", variant: "destructive" });
+      } catch (e: any) {
+        console.error("Failed to fetch sources from Firestore", e.message, e);
+        toast({ title: "Error Loading Sources", description: `Could not fetch knowledge sources: ${e.message}. Please try again.`, variant: "destructive" });
         setSources([]);
       }
       setIsLoadingSources(false);
     };
     fetchSources();
   }, [toast]);
-
-  const saveSourcesToFirestore = async (updatedSources: KnowledgeSource[]) => {
-    try {
-      const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
-      // Filter out temporary upload states and fields before saving
-      const sourcesToSave = updatedSources
-        .filter(s => !s.isUploading) // Ensure only completed items are considered for saving
-        .map(s => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const {uploadProgress, isUploading, ...rest} = s; 
-          return rest;
-        });
-      await setDoc(docRef, { sources: sourcesToSave });
-    } catch (error) {
-      console.error("Error saving sources to Firestore:", error);
-      toast({ title: "Error Saving Sources", description: "Could not update knowledge base in the database.", variant: "destructive" });
-    }
-  };
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +109,7 @@ export default function KnowledgeBasePage() {
       return;
     }
 
-    const currentFile = selectedFile; // Capture selectedFile before it's reset
+    const currentFile = selectedFile;
     const tempId = `uploading-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     let fileType: KnowledgeSource['type'] = 'other';
     const mimeType = currentFile.type;
@@ -121,13 +131,11 @@ export default function KnowledgeBasePage() {
       uploadProgress: 0,
     };
     
-    setSelectedFile(null); // Reset file input selection early
+    setSelectedFile(null); 
     if (fileInputRef.current) fileInputRef.current.value = "";
-
-    // Add draft to local state for immediate UI feedback
     setSources(prevSources => [newSourceDraft, ...prevSources]);
 
-    const filePath = `knowledge_base_files/${tempId}-${currentFile.name}`; // Use tempId in path for uniqueness during upload
+    const filePath = `knowledge_base_files/${tempId}-${currentFile.name}`;
     const fileRef = storageRef(storage, filePath);
 
     try {
@@ -141,9 +149,9 @@ export default function KnowledgeBasePage() {
 
       const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const finalNewSource: KnowledgeSource = {
-        ...newSourceDraft, // contains original name, type, size, uploadedAt
-        id: permanentId,    // new permanent ID for Firestore
-        storagePath: filePath, // save the path used for storage
+        ...newSourceDraft,
+        id: permanentId,   
+        storagePath: filePath, 
         downloadURL,
         isUploading: false, 
         uploadProgress: 100,
@@ -155,19 +163,18 @@ export default function KnowledgeBasePage() {
           return listToSaveAfterUpload;
       });
       
-      await saveSourcesToFirestore(listToSaveAfterUpload);
-
-      toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded.` });
+      const savedToDb = await saveSourcesToFirestore(listToSaveAfterUpload);
+      if (savedToDb) {
+        toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
+      }
+      // If savedToDb is false, saveSourcesToFirestore already showed an error toast.
 
     } catch (error: any) {
       console.error("Upload error:", error);
       let description = `Could not upload ${currentFile.name}.`;
       if (error.code) description += ` (Error: ${error.code})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      
-      // Remove the draft from local state if upload failed
       setSources(prev => prev.filter(s => s.id !== tempId)); 
-      // No need to save to Firestore here as the failed upload was never fully added
     }
   };
 
@@ -175,27 +182,37 @@ export default function KnowledgeBasePage() {
     const sourceToDelete = sources.find(s => s.id === id);
     if (!sourceToDelete) return;
 
-    // Optimistic UI update
+    const originalSources = [...sources]; // Keep a copy in case of failure
     const updatedSources = sources.filter(source => source.id !== id);
     setSources(updatedSources); 
 
+    let dbUpdated = false;
     if (sourceToDelete.storagePath) {
       const fileRef = storageRef(storage, sourceToDelete.storagePath);
       try {
         await deleteObject(fileRef);
-        await saveSourcesToFirestore(updatedSources); // Save the filtered list to Firestore
-        toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
+        dbUpdated = await saveSourcesToFirestore(updatedSources);
+        if (dbUpdated) {
+          toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
+        } else {
+          toast({ title: "Storage OK, DB Error", description: `${sourceToDelete.name} removed from Storage, but failed to update database list. List may be out of sync.`, variant: "destructive" });
+          setSources(originalSources); // Revert local state
+        }
       } catch (error) {
         console.error("Firebase deletion error:", error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
-        // Consider reverting UI or adding sourceToDelete back if Firestore save fails critically.
-        // For now, the list remains locally updated, and saveSourcesToFirestore was attempted.
+        // If storage deletion fails, we don't update Firestore either.
+        setSources(originalSources); // Revert local state
       }
     } else {
       // If no storagePath, it was likely an item that failed to upload completely or an old schema item.
-      // Just save the filtered list to Firestore.
-      await saveSourcesToFirestore(updatedSources);
-      toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from the list.` });
+      dbUpdated = await saveSourcesToFirestore(updatedSources);
+      if (dbUpdated) {
+        toast({ title: "Local Source Removed", description: `${sourceToDelete.name} has been removed from the list.` });
+      } else {
+        toast({ title: "Local Removal, DB Error", description: `Failed to update database after removing ${sourceToDelete.name} from list. List may be out of sync.`, variant: "destructive" });
+        setSources(originalSources); // Revert local state
+      }
     }
   };
   
@@ -216,8 +233,11 @@ export default function KnowledgeBasePage() {
         return listToSaveAfterRefresh;
       });
 
-      await saveSourcesToFirestore(listToSaveAfterRefresh);
-      toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated.`});
+      const refreshedInDb = await saveSourcesToFirestore(listToSaveAfterRefresh);
+      if(refreshedInDb) {
+        toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
+      }
+      // Error toast handled by saveSourcesToFirestore if it fails
     } catch (error) {
       console.error("Error refreshing download URL:", error);
       toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name}.`, variant: "destructive"});
