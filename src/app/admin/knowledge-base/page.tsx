@@ -46,10 +46,9 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const saveSourcesToFirestore = async (updatedSources: KnowledgeSource[]): Promise<boolean> => {
+  const saveSourcesToFirestore = async (updatedSourcesToSave: KnowledgeSource[]): Promise<boolean> => {
     try {
-      console.log("[KnowledgeBasePage - saveSourcesToFirestore] Received updatedSources to process: ", JSON.stringify(updatedSources, null, 2));
-      const sourcesToSave = updatedSources
+      const sourcesToSave = updatedSourcesToSave
         .filter(s => !s.isUploading) 
         .map(s => {
           console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
@@ -154,7 +153,7 @@ export default function KnowledgeBasePage() {
 
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    setSources(prevSources => [newSourceDraft, ...prevSources]);
+    setSources(prevSources => [newSourceDraft, ...prevSources]); // Add draft to UI
 
     const filePath = `knowledge_base_files/${tempId}-${currentFile.name}`;
     const fileRef = storageRef(storage, filePath);
@@ -186,7 +185,7 @@ export default function KnowledgeBasePage() {
       const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const finalNewSource: KnowledgeSource = {
         ...newSourceDraft,
-        id: permanentId,
+        id: permanentId, // Use permanent ID now
         storagePath: filePath,
         downloadURL: downloadURL,
         isUploading: false,
@@ -194,22 +193,24 @@ export default function KnowledgeBasePage() {
       };
       console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
 
-
-      let listToSaveAfterUpload: KnowledgeSource[] = [];
-      setSources(prevSources => {
-          listToSaveAfterUpload = prevSources.map(s => s.id === tempId ? finalNewSource : s);
-          console.log("[KnowledgeBasePage - handleUpload] listToSaveAfterUpload (inside setSources):", JSON.stringify(listToSaveAfterUpload, null, 2));
-          return listToSaveAfterUpload;
-      });
+      // Construct the definitive list that should be in the state and saved to Firestore.
+      // This uses the 'sources' state variable, which at this point includes 'newSourceDraft'.
+      const updatedListForStateAndFirestore = sources.map(s => 
+        s.id === tempId ? finalNewSource : s
+      );
       
-      // Ensure listToSaveAfterUpload is the most up-to-date version after state update.
-      // This might involve a slight delay or re-accessing state if setSources is fully async.
-      // For now, relying on the assignment within setSources. If issues persist, this is an area to check.
+      console.log("[KnowledgeBasePage - handleUpload] updatedListForStateAndFirestore being sent to setSources and saveSourcesToFirestore:", JSON.stringify(updatedListForStateAndFirestore, null, 2));
 
-      const savedToDb = await saveSourcesToFirestore(listToSaveAfterUpload);
+      // Update the React state for the UI
+      setSources(updatedListForStateAndFirestore);
+      
+      // Save this exact list to Firestore
+      const savedToDb = await saveSourcesToFirestore(updatedListForStateAndFirestore);
+
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
       }
+      // If !savedToDb, saveSourcesToFirestore would have already shown an error toast.
 
     } catch (error: any) {
       console.error("[KnowledgeBasePage - handleUpload] Upload or Save error:", error);
@@ -217,7 +218,7 @@ export default function KnowledgeBasePage() {
       if (error.code) description += ` (Error: ${error.code})`;
       else if (error.message) description += ` (Message: ${error.message})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      setSources(prev => prev.filter(s => s.id !== tempId)); 
+      setSources(prev => prev.filter(s => s.id !== tempId)); // Clean up draft item on any failure
     }
   };
 
@@ -226,31 +227,35 @@ export default function KnowledgeBasePage() {
     if (!sourceToDelete) return;
 
     const originalSources = [...sources]; 
-    const updatedSources = sources.filter(source => source.id !== id);
-    setSources(updatedSources);
+    const updatedSourcesAfterDelete = sources.filter(source => source.id !== id);
+    setSources(updatedSourcesAfterDelete); // Optimistic UI update
 
     let dbUpdated = false;
     if (sourceToDelete.storagePath) {
       const fileRef = storageRef(storage, sourceToDelete.storagePath);
       try {
         await deleteObject(fileRef);
-        dbUpdated = await saveSourcesToFirestore(updatedSources);
+        dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete); // Save the already updated list
         if (dbUpdated) {
           toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
         } else {
-          setSources(originalSources); 
+          setSources(originalSources); // Revert UI if DB save failed
         }
       } catch (error) {
         console.error("[KnowledgeBasePage - handleDelete] Firebase deletion error:", error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
+        // Don't revert UI if only storage deletion failed but DB was (or would be) updated.
+        // However, if saveSourcesToFirestore failed, we already reverted.
+        // If storage delete failed but DB save would have worked, the list is still locally updated.
+        // This situation is tricky. For now, if storage delete fails, we assume DB didn't update or will be out of sync.
         setSources(originalSources); 
       }
-    } else {
-      dbUpdated = await saveSourcesToFirestore(updatedSources);
+    } else { // No storage path, just remove from list in DB
+      dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete);
       if (dbUpdated) {
         toast({ title: "List Item Removed", description: `${sourceToDelete.name} has been removed from the list.` });
       } else {
-        setSources(originalSources); 
+        setSources(originalSources); // Revert UI if DB save failed
       }
     }
   };
@@ -276,16 +281,21 @@ export default function KnowledgeBasePage() {
           return;
       }
 
-      let listToSaveAfterRefresh: KnowledgeSource[] = [];
-      setSources(prevSources => {
-        listToSaveAfterRefresh = prevSources.map(s => s.id === sourceId ? {...s, downloadURL: newDownloadURL } : s);
-        return listToSaveAfterRefresh;
-      });
+      const refreshedListForStateAndFirestore = sources.map(s => 
+        s.id === sourceId ? { ...s, downloadURL: newDownloadURL } : s
+      );
+      
+      console.log("[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForStateAndFirestore for save:", JSON.stringify(refreshedListForStateAndFirestore, null, 2));
 
-      const refreshedInDb = await saveSourcesToFirestore(listToSaveAfterRefresh);
+      setSources(refreshedListForStateAndFirestore); // Update UI state
+      
+      const refreshedInDb = await saveSourcesToFirestore(refreshedListForStateAndFirestore); // Save the same list
+      
       if(refreshedInDb) {
         toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
       }
+      // If !refreshedInDb, saveSourcesToFirestore already toasted the error.
+
     } catch (error) {
       console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Error refreshing download URL:", error);
       toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name}.`, variant: "destructive"});
@@ -408,3 +418,5 @@ export default function KnowledgeBasePage() {
   );
 }
 
+
+    
