@@ -635,31 +635,37 @@ export default function HomePage() {
           for (const source of sources) {
             if (source.type === 'text') {
               if (source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
+                console.log(`[HomePage] Attempting to fetch content for ${source.name} from URL: ${source.downloadURL}`);
                 try {
                   const response = await fetch(source.downloadURL);
                   if (response.ok) {
                     const textContent = await response.text();
                     textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
                   } else {
-                    console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Status: ${response.status} ${response.statusText}`);
-                    toast({title: "Knowledge File Error", description: `Could not load content for ${source.name}. Status: ${response.status}. Check console.`, variant: "destructive", duration: 5000});
+                    console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
+                    toast({
+                        title: `Server Error for ${source.name}`,
+                        description: `Could not load content. Server status: ${response.status}. Check console for the URL and try opening it in your browser.`,
+                        variant: "destructive",
+                        duration: 8000
+                    });
                   }
                 } catch (fetchError: any) {
-                  console.error(`[HomePage] Error fetching content for ${source.name} from URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
+                  console.error(`[HomePage] Network or fetch error for ${source.name} from URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
                   toast({
-                    title: "Knowledge File Fetch Error",
-                    description: `Network error loading content for ${source.name}. Check console for URL: ${source.downloadURL} and details.`,
+                    title: `Fetch Error for ${source.name}`,
+                    description: `Failed to fetch content. Check your network and console for the URL: ${source.downloadURL}. Try opening this URL directly in your browser.`,
                     variant: "destructive",
-                    duration: 7000
+                    duration: 10000 
                   });
                 }
               } else {
                 console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (ID: ${source.id}). URL: '${source.downloadURL}'. Skipping fetch.`);
                 toast({
-                  title: "Invalid File URL",
-                  description: `Skipping .txt file '${source.name}' due to missing or invalid download URL. Please re-upload it.`,
+                  title: `Invalid URL for ${source.name}`,
+                  description: `Skipping .txt file '${source.name}' due to missing/invalid download URL in database. Please re-upload it or check Firestore.`,
                   variant: "destructive",
-                  duration: 6000
+                  duration: 8000
                 });
               }
             }
