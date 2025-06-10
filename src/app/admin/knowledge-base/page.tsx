@@ -48,11 +48,11 @@ export default function KnowledgeBasePage() {
 
   const saveSourcesToFirestore = async (updatedSources: KnowledgeSource[]): Promise<boolean> => {
     try {
-      const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
+      console.log("[KnowledgeBasePage - saveSourcesToFirestore] Received updatedSources to process: ", JSON.stringify(updatedSources, null, 2));
       const sourcesToSave = updatedSources
-        .filter(s => !s.isUploading) // Ensure we only save items that are not in an "uploading" state
+        .filter(s => !s.isUploading) 
         .map(s => {
-          // Explicitly construct the object to save, ensuring all desired fields are included
+          console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
           const cleanSource: {
             id: string;
             name: string;
@@ -77,13 +77,14 @@ export default function KnowledgeBasePage() {
           return cleanSource;
         });
 
-      console.log(`[KnowledgeBasePage] Attempting to save ${sourcesToSave.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesToSave, null, 2));
+      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Attempting to save ${sourcesToSave.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesToSave, null, 2));
 
+      const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
       await setDoc(docRef, { sources: sourcesToSave });
-      console.log(`[KnowledgeBasePage] Successfully saved ${sourcesToSave.length} sources to Firestore.`);
+      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Successfully saved ${sourcesToSave.length} sources to Firestore.`);
       return true;
     } catch (error: any) {
-      console.error("[KnowledgeBasePage] Error saving sources to Firestore:", error.message, error.code, error.stack, error);
+      console.error("[KnowledgeBasePage - saveSourcesToFirestore] Error saving sources to Firestore:", error.message, error.code, error.stack, error);
       toast({
         title: "Firestore Save Error",
         description: `Failed to save knowledge base to database: ${error.message || 'Unknown error'}. Data may be out of sync.`,
@@ -107,14 +108,14 @@ export default function KnowledgeBasePage() {
           setSources([]);
         }
       } catch (e: any) {
-        console.error("Failed to fetch sources from Firestore", e.message, e);
+        console.error("[KnowledgeBasePage - fetchSources] Failed to fetch sources from Firestore", e.message, e);
         toast({ title: "Error Loading Sources", description: `Could not fetch knowledge sources: ${e.message}. Please try again.`, variant: "destructive" });
         setSources([]);
       }
       setIsLoadingSources(false);
     };
     fetchSources();
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -166,10 +167,10 @@ export default function KnowledgeBasePage() {
       setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 70 } : s));
 
       const downloadURL = await getDownloadURL(fileRef);
-      console.log(`[KnowledgeBasePage] Retrieved downloadURL: ${downloadURL} for filePath: ${filePath}`);
+      console.log(`[KnowledgeBasePage - handleUpload] Retrieved downloadURL: ${downloadURL} for filePath: ${filePath}`);
 
       if (!downloadURL) {
-        console.error(`[KnowledgeBasePage] CRITICAL: downloadURL is null or undefined for ${currentFile.name} after getDownloadURL.`);
+        console.error(`[KnowledgeBasePage - handleUpload] CRITICAL: downloadURL is null or undefined for ${currentFile.name} after getDownloadURL.`);
         toast({
           title: "URL Retrieval Failed",
           description: `Could not get download URL for ${currentFile.name}. Upload metadata not saved. Check Storage permissions or object status.`,
@@ -187,29 +188,31 @@ export default function KnowledgeBasePage() {
         ...newSourceDraft,
         id: permanentId,
         storagePath: filePath,
-        downloadURL: downloadURL, // Ensure downloadURL is assigned here
+        downloadURL: downloadURL,
         isUploading: false,
         uploadProgress: 100,
       };
-      console.log("[KnowledgeBasePage] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
+      console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
 
 
       let listToSaveAfterUpload: KnowledgeSource[] = [];
       setSources(prevSources => {
           listToSaveAfterUpload = prevSources.map(s => s.id === tempId ? finalNewSource : s);
+          console.log("[KnowledgeBasePage - handleUpload] listToSaveAfterUpload (inside setSources):", JSON.stringify(listToSaveAfterUpload, null, 2));
           return listToSaveAfterUpload;
       });
-      console.log("[KnowledgeBasePage] In handleUpload, listToSaveAfterUpload BEFORE save:", JSON.stringify(listToSaveAfterUpload, null, 2));
-
+      
+      // Ensure listToSaveAfterUpload is the most up-to-date version after state update.
+      // This might involve a slight delay or re-accessing state if setSources is fully async.
+      // For now, relying on the assignment within setSources. If issues persist, this is an area to check.
 
       const savedToDb = await saveSourcesToFirestore(listToSaveAfterUpload);
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
       }
-      // If savedToDb is false, saveSourcesToFirestore already showed an error toast.
 
     } catch (error: any) {
-      console.error("[KnowledgeBasePage] Upload or Save error:", error);
+      console.error("[KnowledgeBasePage - handleUpload] Upload or Save error:", error);
       let description = `Could not upload or save ${currentFile.name}.`;
       if (error.code) description += ` (Error: ${error.code})`;
       else if (error.message) description += ` (Message: ${error.message})`;
@@ -235,21 +238,18 @@ export default function KnowledgeBasePage() {
         if (dbUpdated) {
           toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
         } else {
-          // saveSourcesToFirestore already showed a toast
           setSources(originalSources); 
         }
       } catch (error) {
-        console.error("Firebase deletion error:", error);
+        console.error("[KnowledgeBasePage - handleDelete] Firebase deletion error:", error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
         setSources(originalSources); 
       }
     } else {
-      // If no storagePath, assume it's a local-only item or an item whose storage link failed
       dbUpdated = await saveSourcesToFirestore(updatedSources);
       if (dbUpdated) {
         toast({ title: "List Item Removed", description: `${sourceToDelete.name} has been removed from the list.` });
       } else {
-        // saveSourcesToFirestore already showed a toast
         setSources(originalSources); 
       }
     }
@@ -267,7 +267,7 @@ export default function KnowledgeBasePage() {
       const newDownloadURL = await getDownloadURL(fileRef);
       
       if (!newDownloadURL) {
-          console.error(`[KnowledgeBasePage] CRITICAL: newDownloadURL is null or undefined for ${sourceToRefresh.name} during refresh.`);
+          console.error(`[KnowledgeBasePage - handleRefreshSourceUrl] CRITICAL: newDownloadURL is null or undefined for ${sourceToRefresh.name} during refresh.`);
           toast({
             title: "URL Refresh Failed",
             description: `Could not get a new download URL for ${sourceToRefresh.name}.`,
@@ -286,9 +286,8 @@ export default function KnowledgeBasePage() {
       if(refreshedInDb) {
         toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
       }
-      // Error toast handled by saveSourcesToFirestore if it fails
     } catch (error) {
-      console.error("Error refreshing download URL:", error);
+      console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Error refreshing download URL:", error);
       toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name}.`, variant: "destructive"});
     }
   };
