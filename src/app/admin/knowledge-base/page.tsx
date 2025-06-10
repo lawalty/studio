@@ -50,11 +50,31 @@ export default function KnowledgeBasePage() {
     try {
       const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
       const sourcesToSave = updatedSources
-        .filter(s => !s.isUploading)
+        .filter(s => !s.isUploading) // Ensure we only save items that are not in an "uploading" state
         .map(s => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const {uploadProgress, isUploading, ...rest} = s;
-          return rest;
+          // Explicitly construct the object to save, ensuring all desired fields are included
+          const cleanSource: {
+            id: string;
+            name: string;
+            type: KnowledgeSource['type'];
+            size: string;
+            uploadedAt: string;
+            storagePath?: string;
+            downloadURL?: string;
+          } = {
+            id: s.id,
+            name: s.name,
+            type: s.type,
+            size: s.size,
+            uploadedAt: s.uploadedAt,
+          };
+          if (s.storagePath) {
+            cleanSource.storagePath = s.storagePath;
+          }
+          if (s.downloadURL) {
+            cleanSource.downloadURL = s.downloadURL;
+          }
+          return cleanSource;
         });
 
       console.log(`[KnowledgeBasePage] Attempting to save ${sourcesToSave.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesToSave, null, 2));
@@ -94,7 +114,7 @@ export default function KnowledgeBasePage() {
       setIsLoadingSources(false);
     };
     fetchSources();
-  }, []); 
+  }, []); // Empty dependency array ensures this runs only once on mount
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,8 +176,8 @@ export default function KnowledgeBasePage() {
           variant: "destructive",
           duration: 9000,
         });
-        setSources(prev => prev.filter(s => s.id !== tempId)); // Remove temporary item
-        return; 
+        setSources(prev => prev.filter(s => s.id !== tempId)); 
+        return;
       }
       
       setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 90 } : s));
@@ -167,10 +187,12 @@ export default function KnowledgeBasePage() {
         ...newSourceDraft,
         id: permanentId,
         storagePath: filePath,
-        downloadURL,
+        downloadURL: downloadURL, // Ensure downloadURL is assigned here
         isUploading: false,
         uploadProgress: 100,
       };
+      console.log("[KnowledgeBasePage] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
+
 
       let listToSaveAfterUpload: KnowledgeSource[] = [];
       setSources(prevSources => {
@@ -192,7 +214,7 @@ export default function KnowledgeBasePage() {
       if (error.code) description += ` (Error: ${error.code})`;
       else if (error.message) description += ` (Message: ${error.message})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      setSources(prev => prev.filter(s => s.id !== tempId)); // Clean up UI item on any failure in try block
+      setSources(prev => prev.filter(s => s.id !== tempId)); 
     }
   };
 
@@ -213,7 +235,7 @@ export default function KnowledgeBasePage() {
         if (dbUpdated) {
           toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
         } else {
-          toast({ title: "Storage OK, DB Error", description: `${sourceToDelete.name} removed from Storage, but failed to update database list. List may be out of sync.`, variant: "destructive" });
+          // saveSourcesToFirestore already showed a toast
           setSources(originalSources); 
         }
       } catch (error) {
@@ -222,11 +244,12 @@ export default function KnowledgeBasePage() {
         setSources(originalSources); 
       }
     } else {
+      // If no storagePath, assume it's a local-only item or an item whose storage link failed
       dbUpdated = await saveSourcesToFirestore(updatedSources);
       if (dbUpdated) {
-        toast({ title: "Local Source Removed", description: `${sourceToDelete.name} has been removed from the list.` });
+        toast({ title: "List Item Removed", description: `${sourceToDelete.name} has been removed from the list.` });
       } else {
-        toast({ title: "Local Removal, DB Error", description: `Failed to update database after removing ${sourceToDelete.name} from list. List may be out of sync.`, variant: "destructive" });
+        // saveSourcesToFirestore already showed a toast
         setSources(originalSources); 
       }
     }
@@ -252,7 +275,6 @@ export default function KnowledgeBasePage() {
           });
           return;
       }
-
 
       let listToSaveAfterRefresh: KnowledgeSource[] = [];
       setSources(prevSources => {
