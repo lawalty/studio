@@ -94,7 +94,7 @@ export default function KnowledgeBasePage() {
       setIsLoadingSources(false);
     };
     fetchSources();
-  }, []); // Changed dependency array from [toast] to []
+  }, []); 
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -146,6 +146,21 @@ export default function KnowledgeBasePage() {
       setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 70 } : s));
 
       const downloadURL = await getDownloadURL(fileRef);
+      console.log(`[KnowledgeBasePage] Retrieved downloadURL: ${downloadURL} for filePath: ${filePath}`);
+
+      if (!downloadURL) {
+        console.error(`[KnowledgeBasePage] CRITICAL: downloadURL is null or undefined for ${currentFile.name} after getDownloadURL.`);
+        toast({
+          title: "URL Retrieval Failed",
+          description: `Could not get download URL for ${currentFile.name}. Upload metadata not saved. Check Storage permissions or object status.`,
+          variant: "destructive",
+          duration: 9000,
+        });
+        setSources(prev => prev.filter(s => s.id !== tempId)); // Remove temporary item
+        return; 
+      }
+      
+      setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 90 } : s));
 
       const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const finalNewSource: KnowledgeSource = {
@@ -162,6 +177,8 @@ export default function KnowledgeBasePage() {
           listToSaveAfterUpload = prevSources.map(s => s.id === tempId ? finalNewSource : s);
           return listToSaveAfterUpload;
       });
+      console.log("[KnowledgeBasePage] In handleUpload, listToSaveAfterUpload BEFORE save:", JSON.stringify(listToSaveAfterUpload, null, 2));
+
 
       const savedToDb = await saveSourcesToFirestore(listToSaveAfterUpload);
       if (savedToDb) {
@@ -170,11 +187,12 @@ export default function KnowledgeBasePage() {
       // If savedToDb is false, saveSourcesToFirestore already showed an error toast.
 
     } catch (error: any) {
-      console.error("Upload error:", error);
-      let description = `Could not upload ${currentFile.name}.`;
+      console.error("[KnowledgeBasePage] Upload or Save error:", error);
+      let description = `Could not upload or save ${currentFile.name}.`;
       if (error.code) description += ` (Error: ${error.code})`;
+      else if (error.message) description += ` (Message: ${error.message})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      setSources(prev => prev.filter(s => s.id !== tempId));
+      setSources(prev => prev.filter(s => s.id !== tempId)); // Clean up UI item on any failure in try block
     }
   };
 
@@ -182,7 +200,7 @@ export default function KnowledgeBasePage() {
     const sourceToDelete = sources.find(s => s.id === id);
     if (!sourceToDelete) return;
 
-    const originalSources = [...sources]; // Keep a copy in case of failure
+    const originalSources = [...sources]; 
     const updatedSources = sources.filter(source => source.id !== id);
     setSources(updatedSources);
 
@@ -196,22 +214,20 @@ export default function KnowledgeBasePage() {
           toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
         } else {
           toast({ title: "Storage OK, DB Error", description: `${sourceToDelete.name} removed from Storage, but failed to update database list. List may be out of sync.`, variant: "destructive" });
-          setSources(originalSources); // Revert local state
+          setSources(originalSources); 
         }
       } catch (error) {
         console.error("Firebase deletion error:", error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
-        // If storage deletion fails, we don't update Firestore either.
-        setSources(originalSources); // Revert local state
+        setSources(originalSources); 
       }
     } else {
-      // If no storagePath, it was likely an item that failed to upload completely or an old schema item.
       dbUpdated = await saveSourcesToFirestore(updatedSources);
       if (dbUpdated) {
         toast({ title: "Local Source Removed", description: `${sourceToDelete.name} has been removed from the list.` });
       } else {
         toast({ title: "Local Removal, DB Error", description: `Failed to update database after removing ${sourceToDelete.name} from list. List may be out of sync.`, variant: "destructive" });
-        setSources(originalSources); // Revert local state
+        setSources(originalSources); 
       }
     }
   };
@@ -226,6 +242,17 @@ export default function KnowledgeBasePage() {
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
       const newDownloadURL = await getDownloadURL(fileRef);
+      
+      if (!newDownloadURL) {
+          console.error(`[KnowledgeBasePage] CRITICAL: newDownloadURL is null or undefined for ${sourceToRefresh.name} during refresh.`);
+          toast({
+            title: "URL Refresh Failed",
+            description: `Could not get a new download URL for ${sourceToRefresh.name}.`,
+            variant: "destructive",
+          });
+          return;
+      }
+
 
       let listToSaveAfterRefresh: KnowledgeSource[] = [];
       setSources(prevSources => {
