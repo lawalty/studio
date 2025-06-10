@@ -34,12 +34,11 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           setApiKeys(docSnap.data() as ApiKeys);
         } else {
-          // No keys found in Firestore, initialize with empty strings
           setApiKeys({ gemini: '', tts: '', stt: '', voiceId: '' });
            toast({
-            title: "No Keys Found in Database",
-            description: "Please enter and save your API keys.",
-            variant: "default",
+            title: "API Keys Not Configured",
+            description: "Please enter and save your API keys. They will be stored in Firestore.",
+            variant: "default", 
           });
         }
       } catch (error) {
@@ -49,7 +48,6 @@ export default function ApiKeysPage() {
           description: "Could not fetch API keys from the database. Please try again.",
           variant: "destructive",
         });
-        // Fallback to empty strings on error
         setApiKeys({ gemini: '', tts: '', stt: '', voiceId: '' });
       }
       setIsLoading(false);
@@ -123,3 +121,4 @@ export default function ApiKeysPage() {
     </Card>
   );
 }
+

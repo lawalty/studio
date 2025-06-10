@@ -10,7 +10,7 @@ import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileT
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Progress } from "@/components/ui/progress";
 
 export interface KnowledgeSource {
@@ -54,9 +54,9 @@ export default function KnowledgeBasePage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists() && docSnap.data()?.sources) {
           const firestoreSources = docSnap.data().sources as KnowledgeSource[];
-          setSources(firestoreSources.filter(s => !s.isUploading)); // Remove any stuck uploads from previous sessions
+          setSources(firestoreSources); // Display all sources as saved in Firestore
         } else {
-          setSources([]); // No sources found in Firestore
+          setSources([]); 
         }
       } catch (e) {
         console.error("Failed to fetch sources from Firestore", e);
@@ -71,11 +71,14 @@ export default function KnowledgeBasePage() {
   const saveSourcesToFirestore = async (updatedSources: KnowledgeSource[]) => {
     try {
       const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
-      // Filter out temporary upload states before saving
-      const sourcesToSave = updatedSources.filter(s => !s.isUploading).map(s => {
-        const {uploadProgress, isUploading, ...rest} = s; // eslint-disable-line @typescript-eslint/no-unused-vars
-        return rest;
-      });
+      // Filter out temporary upload states and fields before saving
+      const sourcesToSave = updatedSources
+        .filter(s => !s.isUploading) // Ensure only completed items are considered for saving
+        .map(s => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const {uploadProgress, isUploading, ...rest} = s; 
+          return rest;
+        });
       await setDoc(docRef, { sources: sourcesToSave });
     } catch (error) {
       console.error("Error saving sources to Firestore:", error);
@@ -96,10 +99,11 @@ export default function KnowledgeBasePage() {
       return;
     }
 
+    const currentFile = selectedFile; // Capture selectedFile before it's reset
     const tempId = `uploading-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     let fileType: KnowledgeSource['type'] = 'other';
-    const mimeType = selectedFile.type;
-    const fileNameLower = selectedFile.name.toLowerCase();
+    const mimeType = currentFile.type;
+    const fileNameLower = currentFile.name.toLowerCase();
 
     if (mimeType.startsWith('audio/')) fileType = 'audio';
     else if (mimeType.startsWith('image/')) fileType = 'image';
@@ -109,55 +113,49 @@ export default function KnowledgeBasePage() {
 
     const newSourceDraft: KnowledgeSource = {
       id: tempId,
-      name: selectedFile.name,
+      name: currentFile.name,
       type: fileType,
-      size: `${(selectedFile.size / (1024 * 1024)).toFixed(2)}MB`,
+      size: `${(currentFile.size / (1024 * 1024)).toFixed(2)}MB`,
       uploadedAt: new Date().toISOString().split('T')[0],
       isUploading: true,
       uploadProgress: 0,
     };
+    
+    setSelectedFile(null); // Reset file input selection early
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
-    const currentSources = [...sources];
-    setSources(prev => [newSourceDraft, ...prev]);
-    const currentFile = selectedFile;
-    setSelectedFile(null);
-    if(fileInputRef.current) fileInputRef.current.value = "";
+    // Add draft to local state for immediate UI feedback
+    setSources(prevSources => [newSourceDraft, ...prevSources]);
 
-    const filePath = `knowledge_base_files/${tempId}-${currentFile.name}`;
+    const filePath = `knowledge_base_files/${tempId}-${currentFile.name}`; // Use tempId in path for uniqueness during upload
     const fileRef = storageRef(storage, filePath);
 
     try {
       toast({ title: "Upload Started", description: `Uploading ${currentFile.name}...` });
+      setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 30 } : s));
+      
       await uploadBytes(fileRef, currentFile);
+      setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 70 } : s));
+      
       const downloadURL = await getDownloadURL(fileRef);
 
       const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const finalNewSource: KnowledgeSource = {
-        ...newSourceDraft,
-        id: permanentId,
-        storagePath: filePath,
+        ...newSourceDraft, // contains original name, type, size, uploadedAt
+        id: permanentId,    // new permanent ID for Firestore
+        storagePath: filePath, // save the path used for storage
         downloadURL,
-        isUploading: false,
+        isUploading: false, 
         uploadProgress: 100,
       };
       
-      const updatedSources = sources.map(s => s.id === tempId ? finalNewSource : s);
-      // If the tempId item wasn't found (e.g., state updated too quickly), add finalNewSource to the start
-      if (!updatedSources.find(s => s.id === permanentId)) {
-        const existingIndex = currentSources.findIndex(s => s.id === tempId);
-        if (existingIndex !== -1) {
-          currentSources.splice(existingIndex, 1, finalNewSource);
-           setSources(currentSources);
-           await saveSourcesToFirestore(currentSources);
-        } else {
-           const newSourceList = [finalNewSource, ...currentSources];
-           setSources(newSourceList);
-           await saveSourcesToFirestore(newSourceList);
-        }
-      } else {
-        setSources(updatedSources);
-        await saveSourcesToFirestore(updatedSources);
-      }
+      let listToSaveAfterUpload: KnowledgeSource[] = [];
+      setSources(prevSources => {
+          listToSaveAfterUpload = prevSources.map(s => s.id === tempId ? finalNewSource : s);
+          return listToSaveAfterUpload;
+      });
+      
+      await saveSourcesToFirestore(listToSaveAfterUpload);
 
       toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded.` });
 
@@ -166,6 +164,8 @@ export default function KnowledgeBasePage() {
       let description = `Could not upload ${currentFile.name}.`;
       if (error.code) description += ` (Error: ${error.code})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
+      
+      // Remove the draft from local state if upload failed
       setSources(prev => prev.filter(s => s.id !== tempId)); 
       // No need to save to Firestore here as the failed upload was never fully added
     }
@@ -175,24 +175,25 @@ export default function KnowledgeBasePage() {
     const sourceToDelete = sources.find(s => s.id === id);
     if (!sourceToDelete) return;
 
+    // Optimistic UI update
     const updatedSources = sources.filter(source => source.id !== id);
-    setSources(updatedSources); // Optimistic UI update
+    setSources(updatedSources); 
 
     if (sourceToDelete.storagePath) {
       const fileRef = storageRef(storage, sourceToDelete.storagePath);
       try {
         await deleteObject(fileRef);
-        await saveSourcesToFirestore(updatedSources);
+        await saveSourcesToFirestore(updatedSources); // Save the filtered list to Firestore
         toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
       } catch (error) {
         console.error("Firebase deletion error:", error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
-        // Revert UI if critical, or allow manual refresh. For now, list is updated.
-        // Consider re-fetching or adding sourceToDelete back if Firestore save fails significantly.
+        // Consider reverting UI or adding sourceToDelete back if Firestore save fails critically.
+        // For now, the list remains locally updated, and saveSourcesToFirestore was attempted.
       }
     } else {
-      // If no storagePath, it was a local/placeholder item (should not happen if placeholders are removed)
-      // or an item whose storage path was never set. Just save the filtered list.
+      // If no storagePath, it was likely an item that failed to upload completely or an old schema item.
+      // Just save the filtered list to Firestore.
       await saveSourcesToFirestore(updatedSources);
       toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from the list.` });
     }
@@ -208,9 +209,14 @@ export default function KnowledgeBasePage() {
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
       const newDownloadURL = await getDownloadURL(fileRef);
-      const updatedSources = sources.map(s => s.id === sourceId ? {...s, downloadURL: newDownloadURL } : s);
-      setSources(updatedSources);
-      await saveSourcesToFirestore(updatedSources);
+      
+      let listToSaveAfterRefresh: KnowledgeSource[] = [];
+      setSources(prevSources => {
+        listToSaveAfterRefresh = prevSources.map(s => s.id === sourceId ? {...s, downloadURL: newDownloadURL } : s);
+        return listToSaveAfterRefresh;
+      });
+
+      await saveSourcesToFirestore(listToSaveAfterRefresh);
       toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated.`});
     } catch (error) {
       console.error("Error refreshing download URL:", error);
@@ -249,9 +255,9 @@ export default function KnowledgeBasePage() {
           )}
         </CardContent>
         <CardFooter>
-          <Button onClick={handleUpload} disabled={!selectedFile || sources.some(s => s.isUploading) || isLoadingSources}>
+          <Button onClick={handleUpload} disabled={!selectedFile || sources.some(s => !!s.isUploading) || isLoadingSources}>
             <UploadCloud className="mr-2 h-4 w-4" /> 
-            {sources.some(s => s.isUploading) ? 'Uploading...' : (isLoadingSources ? 'Loading sources...' : 'Upload Source')}
+            {sources.some(s => !!s.isUploading) ? 'Uploading...' : (isLoadingSources ? 'Loading sources...' : 'Upload Source')}
           </Button>
         </CardFooter>
       </Card>
@@ -303,10 +309,10 @@ export default function KnowledgeBasePage() {
                     )}
                     {!source.isUploading && source.downloadURL && (
                       <div className="flex items-center gap-1">
-                        <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
+                        <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
                           View File
                         </a>
-                        <Button variant="ghost" size="icon" onClick={() => handleRefreshSourceUrl(source.id)} aria-label="Refresh URL" className="h-6 w-6">
+                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id)} aria-label="Refresh URL" className="h-6 w-6 p-0">
                             <RefreshCw className="h-3 w-3" />
                         </Button>
                       </div>
@@ -319,7 +325,7 @@ export default function KnowledgeBasePage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id)} aria-label="Delete source" disabled={source.isUploading || isLoadingSources}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id)} aria-label="Delete source" disabled={!!source.isUploading || isLoadingSources}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>
@@ -333,3 +339,4 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
