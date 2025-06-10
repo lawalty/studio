@@ -640,12 +640,17 @@ export default function HomePage() {
                   const textContent = await response.text();
                   textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
                 } else {
-                  console.warn(`Failed to fetch content for ${source.name}: ${response.status}`);
-                  toast({title: "Knowledge File Error", description: `Could not load content for ${source.name}.`, variant: "destructive", duration: 4000});
+                  console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Status: ${response.status} ${response.statusText}`);
+                  toast({title: "Knowledge File Error", description: `Could not load content for ${source.name}. Status: ${response.status}. Check console.`, variant: "destructive", duration: 5000});
                 }
-              } catch (fetchError) {
-                console.error(`Error fetching content for ${source.name}:`, fetchError);
-                toast({title: "Knowledge File Fetch Error", description: `Network error loading ${source.name}.`, variant: "destructive", duration: 4000});
+              } catch (fetchError: any) {
+                console.error(`[HomePage] Error fetching content for ${source.name} from URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
+                toast({
+                  title: "Knowledge File Fetch Error",
+                  description: `Network error loading content for ${source.name}. Check console for details and the URL.`,
+                  variant: "destructive",
+                  duration: 5000
+                });
               }
             }
           }
