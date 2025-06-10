@@ -226,7 +226,7 @@ export default function HomePage() {
           // console.log("Audio-only mode: AI is still speaking (or started again), deferring auto-listen trigger.");
           return;
         }
-        if (!isEndingSessionRef.current) { 
+        if (!isEndingSessionRef.current && !isListeningRef.current) { 
             toggleListeningRef.current(true);
         }
       }, 1500); 
@@ -411,7 +411,7 @@ export default function HomePage() {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setIsListening(false); 
-      console.log("SpeechRecognition.onerror fired. Error:", event.error, "Mode:", communicationModeRef.current);
+      // console.log("SpeechRecognition.onerror fired. Error:", event.error, "Mode:", communicationModeRef.current);
 
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
         if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
@@ -431,7 +431,7 @@ export default function HomePage() {
             // console.log("SpeechRecognition 'no-speech': Skipped 'Hello/Ending' prompt because AI is already speaking or session is ending.");
         }
       } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
-        console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', 'network', 'interrupted', or 'AbortError'.`);
+        // console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', 'network', 'interrupted', or 'AbortError'.`);
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       } else {
         // console.log(`Error "${event.error}" occurred, but no toast will be shown due to specific handling or benign nature.`);
@@ -486,7 +486,7 @@ export default function HomePage() {
       try {
         try { 
           // console.log("EFFECT: Attempting to stop recognition before starting (if active).");
-          recInstance.stop(); 
+          recInstance.abort(); // Changed from stop() to abort()
         } catch (stopError: any) {
           if (stopError.name !== 'InvalidStateError') {
             // console.warn('EFFECT: Non-critical error stopping recognition before start:', stopError);
@@ -534,21 +534,28 @@ export default function HomePage() {
 
   const handleEndChatManually = () => {
     if (communicationMode === 'audio-only') {
-      setShowLogForSaveConfirmation(true);
-      setShowSaveDialog(true);
-      if (isListening) {
-        toggleListeningRef.current(false);
-      }
-      if (isSpeakingRef.current && elevenLabsAudioRef.current) {
-         elevenLabsAudioRef.current.pause();
-         if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-         elevenLabsAudioRef.current.src = '';
-      }
-      if (typeof window !== 'undefined' && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-      }
-      setIsSpeaking(false);
+        // Stop listening immediately if active
+        if (isListeningRef.current) {
+            toggleListeningRef.current(false); 
+        }
 
+        // Stop speaking immediately if active
+        if (isSpeakingRef.current) {
+            if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
+                elevenLabsAudioRef.current.pause();
+                if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+                }
+                elevenLabsAudioRef.current.src = ''; 
+            }
+            if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel();
+            }
+            setIsSpeaking(false); 
+        }
+        
+        setShowLogForSaveConfirmation(true);
+        setShowSaveDialog(true);
     } else {
       resetConversation();
       setShowSplashScreen(true);
@@ -631,12 +638,17 @@ export default function HomePage() {
     }
   }, []);
 
+  const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => {
-    const performResetOnUnmount = resetConversation;
+    performResetOnUnmountRef.current = resetConversation;
+  }, [resetConversation]);
+
+  useEffect(() => {
+    const performResetOnUnmount = performResetOnUnmountRef.current;
     return () => {
       performResetOnUnmount();
     };
-  }, [resetConversation]); 
+  }, []); 
 
 
   if (showSplashScreen) {
