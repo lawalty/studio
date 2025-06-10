@@ -49,9 +49,8 @@ export default function KnowledgeBasePage() {
   const saveSourcesToFirestore = async (updatedSourcesToSave: KnowledgeSource[]): Promise<boolean> => {
     try {
       const sourcesToSave = updatedSourcesToSave
-        .filter(s => !s.isUploading) 
         .map(s => {
-          console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
+          // Explicitly create the object to save, ensuring no temporary fields are included
           const cleanSource: {
             id: string;
             name: string;
@@ -73,6 +72,7 @@ export default function KnowledgeBasePage() {
           if (s.downloadURL) {
             cleanSource.downloadURL = s.downloadURL;
           }
+          console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
           return cleanSource;
         });
 
@@ -114,7 +114,7 @@ export default function KnowledgeBasePage() {
       setIsLoadingSources(false);
     };
     fetchSources();
-  }, []);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,7 +153,9 @@ export default function KnowledgeBasePage() {
 
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    setSources(prevSources => [newSourceDraft, ...prevSources]); // Add draft to UI
+    
+    // Add draft to UI immediately for responsiveness
+    setSources(prevSources => [newSourceDraft, ...prevSources]);
 
     const filePath = `knowledge_base_files/${tempId}-${currentFile.name}`;
     const fileRef = storageRef(storage, filePath);
@@ -164,7 +166,7 @@ export default function KnowledgeBasePage() {
 
       await uploadBytes(fileRef, currentFile);
       setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 70 } : s));
-
+      
       const downloadURL = await getDownloadURL(fileRef);
       console.log(`[KnowledgeBasePage - handleUpload] Retrieved downloadURL: ${downloadURL} for filePath: ${filePath}`);
 
@@ -180,32 +182,31 @@ export default function KnowledgeBasePage() {
         return;
       }
       
-      setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 90 } : s));
-
       const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const finalNewSource: KnowledgeSource = {
         ...newSourceDraft,
-        id: permanentId, // Use permanent ID now
+        id: permanentId, 
         storagePath: filePath,
         downloadURL: downloadURL,
         isUploading: false,
         uploadProgress: 100,
       };
       console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
-
-      // Construct the definitive list that should be in the state and saved to Firestore.
-      // This uses the 'sources' state variable, which at this point includes 'newSourceDraft'.
-      const updatedListForStateAndFirestore = sources.map(s => 
-        s.id === tempId ? finalNewSource : s
-      );
       
-      console.log("[KnowledgeBasePage - handleUpload] updatedListForStateAndFirestore being sent to setSources and saveSourcesToFirestore:", JSON.stringify(updatedListForStateAndFirestore, null, 2));
-
-      // Update the React state for the UI
-      setSources(updatedListForStateAndFirestore);
+      // Update the state to replace the draft with the final version.
+      // This is the list that will also be saved to Firestore.
+      let actualFinalListForFirestore: KnowledgeSource[] = [];
+      setSources(currentSourcesIncludingDraft => {
+        const updatedList = currentSourcesIncludingDraft.map(s =>
+          s.id === tempId ? finalNewSource : s // tempId is from newSourceDraft
+        );
+        actualFinalListForFirestore = updatedList;
+        return updatedList; // Update React state for UI
+      });
       
-      // Save this exact list to Firestore
-      const savedToDb = await saveSourcesToFirestore(updatedListForStateAndFirestore);
+      console.log("[KnowledgeBasePage - handleUpload] actualFinalListForFirestore for save:", JSON.stringify(actualFinalListForFirestore, null, 2));
+      
+      const savedToDb = await saveSourcesToFirestore(actualFinalListForFirestore);
 
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
@@ -228,34 +229,30 @@ export default function KnowledgeBasePage() {
 
     const originalSources = [...sources]; 
     const updatedSourcesAfterDelete = sources.filter(source => source.id !== id);
-    setSources(updatedSourcesAfterDelete); // Optimistic UI update
+    setSources(updatedSourcesAfterDelete); 
 
     let dbUpdated = false;
     if (sourceToDelete.storagePath) {
       const fileRef = storageRef(storage, sourceToDelete.storagePath);
       try {
         await deleteObject(fileRef);
-        dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete); // Save the already updated list
+        dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete); 
         if (dbUpdated) {
           toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
         } else {
-          setSources(originalSources); // Revert UI if DB save failed
+          setSources(originalSources); 
         }
       } catch (error) {
         console.error("[KnowledgeBasePage - handleDelete] Firebase deletion error:", error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
-        // Don't revert UI if only storage deletion failed but DB was (or would be) updated.
-        // However, if saveSourcesToFirestore failed, we already reverted.
-        // If storage delete failed but DB save would have worked, the list is still locally updated.
-        // This situation is tricky. For now, if storage delete fails, we assume DB didn't update or will be out of sync.
         setSources(originalSources); 
       }
-    } else { // No storage path, just remove from list in DB
+    } else { 
       dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete);
       if (dbUpdated) {
         toast({ title: "List Item Removed", description: `${sourceToDelete.name} has been removed from the list.` });
       } else {
-        setSources(originalSources); // Revert UI if DB save failed
+        setSources(originalSources); 
       }
     }
   };
@@ -280,21 +277,23 @@ export default function KnowledgeBasePage() {
           });
           return;
       }
-
-      const refreshedListForStateAndFirestore = sources.map(s => 
-        s.id === sourceId ? { ...s, downloadURL: newDownloadURL } : s
-      );
       
-      console.log("[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForStateAndFirestore for save:", JSON.stringify(refreshedListForStateAndFirestore, null, 2));
-
-      setSources(refreshedListForStateAndFirestore); // Update UI state
+      let refreshedListForFirestore: KnowledgeSource[] = [];
+      setSources(currentSources => {
+        const updatedList = currentSources.map(s => 
+          s.id === sourceId ? { ...s, downloadURL: newDownloadURL } : s
+        );
+        refreshedListForFirestore = updatedList;
+        return updatedList;
+      });
       
-      const refreshedInDb = await saveSourcesToFirestore(refreshedListForStateAndFirestore); // Save the same list
+      console.log("[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForFirestore for save:", JSON.stringify(refreshedListForFirestore, null, 2));
+      
+      const refreshedInDb = await saveSourcesToFirestore(refreshedListForFirestore);
       
       if(refreshedInDb) {
         toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
       }
-      // If !refreshedInDb, saveSourcesToFirestore already toasted the error.
 
     } catch (error) {
       console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Error refreshing download URL:", error);
@@ -417,6 +416,4 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-
     
