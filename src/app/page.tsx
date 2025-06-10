@@ -91,7 +91,7 @@ export default function HomePage() {
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentAiResponseTextRef = useRef<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const { toast } = useToast();
+  const { toast, dismiss: dismissAllToasts } = useToast();
 
   const isSpeakingRef = useRef(isSpeaking);
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
@@ -148,8 +148,9 @@ export default function HomePage() {
     if (recognitionRef.current) {
       recognitionRef.current.abort(); 
     }
-    setIsListening(false); 
-  }, []);
+    setIsListening(false);
+    dismissAllToasts();
+  }, [setMessages, setIsSendingMessage, setAiHasInitiatedConversation, setInputValue, setConsecutiveSilencePrompts, dismissAllToasts, setIsSpeaking, setIsListening, setShowLogForSaveConfirmation, setShowSaveDialog]);
 
 
   const toggleListening = useCallback((forceState?: boolean) => {
@@ -189,7 +190,7 @@ export default function HomePage() {
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
     setIsSendingMessage(false); 
-  }, []);
+  }, [setIsSpeaking, setIsSendingMessage]);
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
@@ -338,6 +339,8 @@ export default function HomePage() {
       messages, 
       browserSpeakInternal,
       handleAudioProcessStart,
+      setIsSendingMessage,
+      setIsSpeaking
     ]);
 
   const speakTextRef = useRef(speakText);
@@ -374,7 +377,7 @@ export default function HomePage() {
       await speakTextRef.current(errorMessage);
       setIsSendingMessage(false); 
     } 
-  }, [addMessage, messages, personaTraits]); 
+  }, [addMessage, messages, personaTraits, setIsSendingMessage, setConsecutiveSilencePrompts]); 
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => {
@@ -438,7 +441,7 @@ export default function HomePage() {
       setIsListening(false); 
     };
     return recognition;
-  }, [toast]); 
+  }, [toast, setInputValue, setIsListening, setConsecutiveSilencePrompts]); 
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -497,7 +500,7 @@ export default function HomePage() {
         }
       }
     }
-  }, [isListening, toast, setInputValue]); 
+  }, [isListening, toast, setInputValue, setIsListening]); 
 
 
   const handleModeSelectionSubmit = () => {
@@ -587,7 +590,7 @@ export default function HomePage() {
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage]); 
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, setIsSendingMessage, setAiHasInitiatedConversation]); 
 
   useEffect(() => {
     const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
@@ -620,7 +623,7 @@ export default function HomePage() {
       }
     };
     fetchFirestoreData();
-  }, []);
+  }, [setPersonaTraits, setElevenLabsApiKey, setElevenLabsVoiceId, setAvatarSrc, setSplashImageSrc]);
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => {
@@ -694,7 +697,7 @@ export default function HomePage() {
       isSpeaking && "animate-pulse-speak"
     ),
     priority: true,
-    unoptimized: avatarSrc.startsWith('data:image/') || !avatarSrc.startsWith('https'),
+    unoptimized: avatarSrc.startsWith('data:image/') || !avatarSrc.startsWith('https') || avatarSrc.includes("placehold.co"),
     onError: () => setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL)
   };
   
@@ -811,3 +814,4 @@ export default function HomePage() {
   );
 }
     
+
