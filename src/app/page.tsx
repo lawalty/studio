@@ -61,7 +61,7 @@ export default function HomePage() {
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text'); // Will be set by splash screen
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -103,7 +103,7 @@ export default function HomePage() {
           return false;
         }
         if (isSpeakingRef.current) {
-           if (forceState !== false) { // Allow forcing off even if speaking
+           if (forceState !== false) { 
             toast({ title: "Please Wait", description: "AI Blair is currently speaking.", variant: "default" });
             return false;
            }
@@ -127,27 +127,22 @@ export default function HomePage() {
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
-    if (currentAiResponseTextRef.current) {
-      if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
-          addMessage(currentAiResponseTextRef.current, 'ai');
-      }
-    }
+    // Message is now added in speakText, not here.
     setIsSendingMessage(false); 
-  }, [addMessage, messages]);
+  }, [setIsSpeaking, setIsSendingMessage]);
 
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
 
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
+       // Fallback: if audio failed, but we had text, and it's not yet in messages, add it.
        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
        }
-    } else if (audioPlayedSuccessfully && currentAiResponseTextRef.current) {
-        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
-            addMessage(currentAiResponseTextRef.current, 'ai');
-        }
     }
+    // If audioPlayedSuccessfully, message was already added in speakText.
+
     currentAiResponseTextRef.current = null; 
     setIsSendingMessage(false); 
 
@@ -167,11 +162,10 @@ export default function HomePage() {
           console.log("Audio-only mode: AI is still speaking, deferring auto-listen trigger.");
           return; 
         }
-        console.log("Audio-only mode: AI finished, attempting to auto-listen after delay.");
         toggleListeningRef.current(true); 
       }, 1500); 
     }
-  }, [addMessage, messages]); 
+  }, [addMessage, messages, communicationModeRef, toggleListeningRef, isSpeakingRef, setIsSpeaking, setIsSendingMessage]);
 
 
   const browserSpeakInternal = useCallback((text: string) => {
@@ -198,20 +192,25 @@ export default function HomePage() {
 
   const speakText = useCallback(async (text: string) => {
     const processedText = text.replace(/EZCORP/gi, "E. Z. Corp");
-    handleAudioProcessStart(processedText); 
+    handleAudioProcessStart(processedText); // Sets currentAiResponseTextRef.current
+
+    // Add message to log immediately if not already there.
+    // This covers text-only mode and prepares for audio modes by adding the message upfront.
+    if (processedText.trim() !== "" && currentAiResponseTextRef.current) {
+        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
+            addMessage(currentAiResponseTextRef.current, 'ai');
+        }
+    }
 
     if (communicationModeRef.current === 'text-only' || processedText.trim() === "") {
-      if (currentAiResponseTextRef.current) { 
-           if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
-             addMessage(currentAiResponseTextRef.current, 'ai');
-           }
-      }
+      // Message already added. Just finalize state for text-only or empty text.
       currentAiResponseTextRef.current = null;
       setIsSendingMessage(false);
       setIsSpeaking(false); 
       return;
     }
 
+    // Stop any currently playing audio
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
        elevenLabsAudioRef.current.pause();
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -277,10 +276,13 @@ export default function HomePage() {
       toast,
       handleActualAudioStart,
       handleAudioProcessEnd,
-      addMessage,
+      addMessage, // Added addMessage
+      messages, // Added messages
       browserSpeakInternal,
       handleAudioProcessStart,
-      messages
+      communicationModeRef, // Added communicationModeRef
+      setIsSendingMessage, // Added setIsSendingMessage
+      setIsSpeaking // Added setIsSpeaking
     ]);
   
   useEffect(() => {
@@ -354,8 +356,8 @@ export default function HomePage() {
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
         console.log("Condition met: 'no-speech' in 'audio-only'. Speaking prompt.");
         speakTextRef.current("Hello? Is someone there?");
-      } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network') {
-        console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', or 'network'.`);
+      } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted') {
+        console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', or 'network', 'interrupted'.`);
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       } else {
         console.log(`Error "${event.error}" occurred, but no toast will be shown due to specific handling or benign nature.`);
@@ -374,7 +376,7 @@ export default function HomePage() {
       inputValueRef.current = '';
     };
     return recognition;
-  }, [toast]);
+  }, [toast, communicationModeRef]);
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -433,7 +435,7 @@ export default function HomePage() {
         }
       }
     }
-  }, [isListening, toast]); 
+  }, [isListening, toast, communicationModeRef, isSpeakingRef]);
 
 
   const resetConversation = useCallback(() => {
@@ -670,3 +672,4 @@ export default function HomePage() {
     </div>
   );
 }
+
