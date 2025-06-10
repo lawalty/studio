@@ -54,7 +54,6 @@ Focuses on rarity, condition, and provenance as key factors in pricing.
 `;
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
-const PERSONA_STORAGE_KEY = "aiBlairPersona"; // Persona traits remain in localStorage for now
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Transparent 1x1 GIF
 
@@ -117,6 +116,7 @@ export default function HomePage() {
   }, []);
 
   const resetConversation = useCallback(() => {
+    dismissAllToasts();
     setMessages([]);
     setIsSendingMessage(false);
     setAiHasInitiatedConversation(false);
@@ -126,7 +126,7 @@ export default function HomePage() {
     isEndingSessionRef.current = false;
     setShowLogForSaveConfirmation(false);
     setShowSaveDialog(false);
-    dismissAllToasts();
+    
 
 
     if (elevenLabsAudioRef.current) {
@@ -152,7 +152,7 @@ export default function HomePage() {
       recognitionRef.current.abort(); 
     }
     setIsListening(false);
-  }, [dismissAllToasts]);
+  }, [dismissAllToasts, setIsSpeaking, setIsListening]);
 
 
   const toggleListening = useCallback((forceState?: boolean) => {
@@ -415,20 +415,20 @@ export default function HomePage() {
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setIsListening(false); 
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
-          setConsecutiveSilencePrompts(currentPrompts => {
-            const newPromptCount = currentPrompts + 1;
-            if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
-                if (newPromptCount >= MAX_SILENCE_PROMPTS) {
-                    isEndingSessionRef.current = true; 
-                    speakTextRef.current("It seems no one is here. Ending the session.");
-                } else {
-                    speakTextRef.current("Hello? Is someone there?");
+         if (!isSpeakingRef.current && !isEndingSessionRef.current) {
+            setConsecutiveSilencePrompts(currentPrompts => {
+                const newPromptCount = currentPrompts + 1;
+                if (!isSpeakingRef.current && !isEndingSessionRef.current) {
+                    if (newPromptCount >= MAX_SILENCE_PROMPTS) {
+                        isEndingSessionRef.current = true; 
+                        speakTextRef.current("It seems no one is here. Ending the session.");
+                    } else {
+                        speakTextRef.current("Hello? Is someone there?");
+                    }
                 }
-            }
-            return newPromptCount;
-          });
-        }
+                return newPromptCount;
+            });
+         }
       } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       }
@@ -512,9 +512,9 @@ export default function HomePage() {
   };
 
   const handleEndChatManually = () => {
-    if (communicationMode === 'audio-only') {
+     if (communicationMode === 'audio-only') {
         if (isListeningRef.current) {
-            toggleListeningRef.current(false); 
+            toggleListeningRef.current(false); // This will set isListening to false & abort recognition
         }
         if (isSpeakingRef.current) {
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
@@ -527,7 +527,7 @@ export default function HomePage() {
             if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
             }
-            setIsSpeaking(false); 
+            setIsSpeaking(false); // Update state immediately
         }
         
         setShowLogForSaveConfirmation(true);
@@ -594,10 +594,7 @@ export default function HomePage() {
     }
   }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, setIsSendingMessage, setAiHasInitiatedConversation]); 
 
-  useEffect(() => {
-    const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
-    setPersonaTraits(storedPersona || DEFAULT_PERSONA_TRAITS);
-    
+  useEffect(() => {    
     const fetchFirestoreData = async () => {
       try {
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
@@ -614,18 +611,21 @@ export default function HomePage() {
           const assets = siteAssetsDocSnap.data();
           setAvatarSrc(assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
+          setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS); // Load persona traits
         } else {
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+          setPersonaTraits(DEFAULT_PERSONA_TRAITS); // Fallback persona traits
         }
       } catch (e) {
         console.error("Failed to parse API keys or site assets from Firestore", e);
         setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL); 
         setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); 
+        setPersonaTraits(DEFAULT_PERSONA_TRAITS);
       }
     };
     fetchFirestoreData();
-  }, [setPersonaTraits, setElevenLabsApiKey, setElevenLabsVoiceId, setAvatarSrc, setSplashImageSrc]);
+  }, [setElevenLabsApiKey, setElevenLabsVoiceId, setAvatarSrc, setSplashImageSrc, setPersonaTraits]);
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => {
@@ -671,7 +671,7 @@ export default function HomePage() {
               onLoad={() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(true); }}
               onError={() => {
                 setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-                setIsSplashImageLoaded(true); // The transparent default is considered "loaded"
+                setIsSplashImageLoaded(true);
               }}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
@@ -713,8 +713,8 @@ export default function HomePage() {
       isSpeaking && "animate-pulse-speak"
     ),
     priority: true,
-    unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.includes("placehold.co"),
-    onError: () => setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL)
+    unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.includes("placehold.co") || avatarSrc.startsWith('blob:'),
+    onError: () => { console.warn("Custom avatar failed to load on main page, falling back."); setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);}
   };
   
   if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) {
@@ -830,4 +830,3 @@ export default function HomePage() {
   );
 }
     
-
