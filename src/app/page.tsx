@@ -645,27 +645,27 @@ export default function HomePage() {
                     console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
                     toast({
                         title: `Server Error for ${source.name}`,
-                        description: `Could not load content. Server status: ${response.status}. Check console for the URL and try opening it in your browser.`,
+                        description: `Could not load. Server status: ${response.status}. Test URL in browser (see console). If it works, check CORS.`,
                         variant: "destructive",
-                        duration: 8000
+                        duration: 12000
                     });
                   }
                 } catch (fetchError: any) {
-                  console.error(`[HomePage] Network or fetch error for ${source.name} from URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
+                  console.error(`[HomePage] Network or fetch error for ${source.name}. URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
                   toast({
                     title: `Fetch Error for ${source.name}`,
-                    description: `Failed to fetch content. Check your network and console for the URL: ${source.downloadURL}. Try opening this URL directly in your browser.`,
+                    description: `Failed to fetch content. 1. Test URL in browser (see console). 2. If URL works, check CORS settings in Firebase Storage. 3. Refresh URL in admin. Original error: ${fetchError.message}.`,
                     variant: "destructive",
-                    duration: 10000 
+                    duration: 15000 
                   });
                 }
               } else {
                 console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (ID: ${source.id}). URL: '${source.downloadURL}'. Skipping fetch.`);
                 toast({
-                  title: `Invalid URL for ${source.name}`,
-                  description: `Skipping .txt file '${source.name}' due to missing/invalid download URL in database. Please re-upload it or check Firestore.`,
+                  title: `Invalid File URL for ${source.name}`,
+                  description: `Skipping '${source.name}' due to missing/invalid download URL in database. Re-upload or refresh URL in admin.`,
                   variant: "destructive",
-                  duration: 8000
+                  duration: 10000
                 });
               }
             }
