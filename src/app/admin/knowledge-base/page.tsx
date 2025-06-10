@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -20,6 +21,7 @@ export interface KnowledgeSource {
   uploadedAt: string;
   storagePath: string;
   downloadURL: string;
+  priority: 'High' | 'Medium' | 'Low';
 }
 
 const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v2_meta";
@@ -53,6 +55,7 @@ export default function KnowledgeBasePage() {
         uploadedAt: s.uploadedAt,
         storagePath: s.storagePath,
         downloadURL: s.downloadURL,
+        priority: s.priority || 'Medium', // Ensure priority is always included
       }));
 
       if (sourcesForDb.some(s => !s.id || !s.downloadURL || !s.storagePath)) {
@@ -91,7 +94,11 @@ export default function KnowledgeBasePage() {
         const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists() && docSnap.data()?.sources) {
-          setSources(docSnap.data().sources as KnowledgeSource[]);
+          const fetchedSources = (docSnap.data().sources as any[]).map(s => ({
+            ...s,
+            priority: s.priority || 'Medium', // Default priority if missing
+          }));
+          setSources(fetchedSources as KnowledgeSource[]);
         } else {
           setSources([]);
         }
@@ -168,20 +175,18 @@ export default function KnowledgeBasePage() {
         uploadedAt: new Date().toISOString().split('T')[0],
         storagePath: filePath,
         downloadURL: downloadURL,
+        priority: 'Medium', // Default priority for new uploads
       };
       console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
 
       const listToSaveToFirestore = [finalNewSource, ...sources];
-      setSources(listToSaveToFirestore); // Update React state
+      setSources(listToSaveToFirestore); 
 
-      // Save this explicitly constructed list to Firestore
       const savedToDb = await saveSourcesToFirestore(listToSaveToFirestore);
 
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
       } else {
-        // saveSourcesToFirestore handles its own error toast
-        // Revert UI state if save failed
         console.error("[KnowledgeBasePage - handleUpload] Firestore save failed after successful upload. Reverting UI for item:", permanentId);
         setSources(prev => prev.filter(s => s.id !== permanentId));
       }
@@ -191,7 +196,6 @@ export default function KnowledgeBasePage() {
       if (error.code) description += ` (Error: ${error.code})`;
       else if (error.message) description += ` (Message: ${error.message})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      // If finalNewSource was created and added to state via listToSaveToFirestore, try to remove it
       if (permanentId) {
         setSources(prev => prev.filter(s => s.id !== permanentId));
       }
@@ -219,20 +223,19 @@ export default function KnowledgeBasePage() {
         if (dbUpdated) {
           toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
         } else {
-          setSources(originalSources); // Revert UI if DB save failed
+          setSources(originalSources); 
         }
       } catch (error) {
         console.error("[KnowledgeBasePage - handleDelete] Firebase deletion error:", error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. Database may be out of sync.`, variant: "destructive" });
-        setSources(originalSources); // Revert UI on storage deletion error
+        setSources(originalSources); 
       }
     } else {
-      // If no storagePath, it's an item that somehow only exists in the list, update Firestore
       dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete);
       if (dbUpdated) {
         toast({ title: "List Item Removed", description: `${sourceToDelete.name} has been removed from the list.` });
       } else {
-        setSources(originalSources); // Revert UI if DB save failed
+        setSources(originalSources); 
       }
     }
   };
@@ -245,7 +248,7 @@ export default function KnowledgeBasePage() {
     }
 
     let refreshedSourceItem: KnowledgeSource | null = null;
-    const originalSourcesSnapshot = [...sources]; // Snapshot for potential revert
+    const originalSourcesSnapshot = [...sources]; 
 
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
@@ -269,13 +272,12 @@ export default function KnowledgeBasePage() {
       const listWithRefreshedUrl = sources.map(s =>
         s.id === sourceId ? refreshedSourceItem! : s
       );
-      setSources(listWithRefreshedUrl); // Update UI
+      setSources(listWithRefreshedUrl);
 
-      const refreshedInDb = await saveSourcesToFirestore(listWithRefreshedUrl); // Save
+      const refreshedInDb = await saveSourcesToFirestore(listWithRefreshedUrl); 
       if(refreshedInDb) {
           toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
       } else {
-          // Revert UI if save failed
           console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Firestore save failed after URL refresh. Reverting UI for item:", sourceId);
           setSources(originalSourcesSnapshot);
       }
@@ -283,7 +285,23 @@ export default function KnowledgeBasePage() {
     } catch (error) {
       console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Error refreshing download URL:", error);
       toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name}.`, variant: "destructive"});
-      setSources(originalSourcesSnapshot); // Revert UI on any error during refresh
+      setSources(originalSourcesSnapshot); 
+    }
+  };
+
+  const handlePriorityChange = async (sourceId: string, newPriority: KnowledgeSource['priority']) => {
+    const originalSources = [...sources];
+    const updatedSources = sources.map(s => 
+      s.id === sourceId ? { ...s, priority: newPriority } : s
+    );
+    setSources(updatedSources);
+
+    const saved = await saveSourcesToFirestore(updatedSources);
+    if (saved) {
+      toast({ title: "Priority Updated", description: `Priority for source set to ${newPriority}.` });
+    } else {
+      toast({ title: "Priority Update Failed", description: "Could not save priority change.", variant: "destructive" });
+      setSources(originalSources); // Revert UI if save failed
     }
   };
 
@@ -293,7 +311,7 @@ export default function KnowledgeBasePage() {
         <CardHeader>
           <CardTitle className="font-headline">Upload New Source</CardTitle>
           <CardDescription>
-            Add new documents, audio files, or other content to AI Blair's knowledge base. Files are uploaded to Firebase Storage, and their metadata is stored in Firestore.
+            Add new documents, audio files, or other content to AI Blair's knowledge base. Files are uploaded to Firebase Storage, and their metadata is stored in Firestore. Default priority is 'Medium'.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -328,7 +346,7 @@ export default function KnowledgeBasePage() {
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Manage Knowledge Base Sources</CardTitle>
-          <CardDescription>View and remove sources. Uploaded files are in Firebase Storage, metadata in Firestore.</CardDescription>
+          <CardDescription>View, prioritize, and remove sources. Uploaded files are in Firebase Storage, metadata in Firestore.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingSources ? (
@@ -351,6 +369,7 @@ export default function KnowledgeBasePage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded At</TableHead>
+                <TableHead>Priority</TableHead>
                 <TableHead>Status/Link</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -363,6 +382,24 @@ export default function KnowledgeBasePage() {
                   <TableCell className="capitalize">{source.type}</TableCell>
                   <TableCell>{source.size}</TableCell>
                   <TableCell>{source.uploadedAt}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={source.priority}
+                      onValueChange={(newPriority: KnowledgeSource['priority']) =>
+                        handlePriorityChange(source.id, newPriority)
+                      }
+                      disabled={isCurrentlyUploading || isLoadingSources}
+                    >
+                      <SelectTrigger className="w-[110px] h-8 text-xs">
+                        <SelectValue placeholder="Priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="Low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   <TableCell>
                     {source.downloadURL ? (
                       <div className="flex items-center gap-1">
