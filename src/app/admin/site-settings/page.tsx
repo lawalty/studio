@@ -48,26 +48,21 @@ export default function SiteSettingsPage() {
         await uploadBytes(fileRef, selectedSplashFile);
         const downloadURL = await getDownloadURL(fileRef);
         localStorage.setItem(SPLASH_IMAGE_STORAGE_KEY, downloadURL);
-        setSplashImagePreview(downloadURL); // Update preview to the new Firebase URL
+        setSplashImagePreview(downloadURL); 
         setSelectedSplashFile(null);
         toast({ title: "Splash Image Saved", description: "New splash screen image has been uploaded and saved." });
-      } catch (uploadError) {
-        console.error("Splash image upload error:", uploadError);
-        toast({ title: "Upload Error", description: "Could not upload new splash image. Please try again.", variant: "destructive" });
+      } catch (uploadError: any) {
+        console.error("Splash image upload error:", uploadError.code, uploadError.message, uploadError);
+        let description = "Could not upload new splash image. Please try again.";
+        if (uploadError.code) {
+          description += ` (Error: ${uploadError.code})`;
+        }
+        toast({ title: "Upload Error", description, variant: "destructive", duration: 7000 });
       }
     } else if (splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC && localStorage.getItem(SPLASH_IMAGE_STORAGE_KEY)) {
-      // If preview is default AND a custom image was stored, remove it
       localStorage.removeItem(SPLASH_IMAGE_STORAGE_KEY);
-      // Optionally, delete from Firebase Storage
-      // const fileRef = storageRef(storage, SPLASH_IMAGE_FIREBASE_PATH);
-      // try { await deleteObject(fileRef); } catch (e) { console.warn("Could not delete old splash image from storage, or it didn't exist", e); }
       toast({ title: "Splash Image Reset", description: "Splash screen image has been reset to default." });
     } else {
-      // No new file and preview isn't default, so current (possibly Firebase) URL is fine or nothing was stored.
-      // Or, it's a data URI preview that wasn't from a file selection - this case should be rare if UI guides to 'Choose Image' then 'Save'.
-      // If splashImagePreview is a data URI (meaning it was set via file picker but not uploaded yet),
-      // this path means user clicked save without selecting a new file this session.
-      // We don't re-save data URIs to localStorage. Only Firebase URLs or remove the key.
       if (!selectedSplashFile && splashImagePreview && !splashImagePreview.startsWith('https://') && splashImagePreview !== DEFAULT_SPLASH_IMAGE_SRC) {
          toast({ title: "No Change", description: "Choose a new image file to upload or reset to default.", variant: "default"});
       } else if (!selectedSplashFile) {
@@ -83,6 +78,7 @@ export default function SiteSettingsPage() {
         <CardTitle className="font-headline flex items-center gap-2"><ImageIcon /> Splash Screen Image</CardTitle>
         <CardDescription>
           Upload the image to be displayed on the initial splash screen.
+          If uploads fail, please check your Firebase Storage security rules for the path '{SPLASH_IMAGE_FIREBASE_PATH}'.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -95,8 +91,8 @@ export default function SiteSettingsPage() {
               width={400}
               height={267} 
               className="rounded-lg border-2 border-primary shadow-md object-cover"
-              data-ai-hint={splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC ? "technology abstract welcome" : undefined}
-              unoptimized={splashImagePreview.startsWith('data:image/')} // For local data URIs during selection
+              data-ai-hint={splashImagePreview.includes("imgur.com") || splashImagePreview.includes("placehold.co") ? "technology abstract welcome" : undefined}
+              unoptimized={splashImagePreview.startsWith('data:image/')} 
             />
           )}
            {!splashImagePreview && (
@@ -119,7 +115,7 @@ export default function SiteSettingsPage() {
            <p className="text-xs text-muted-foreground">Recommended: Image with good visibility for text overlay.</p>
            <Button variant="link" size="sm" onClick={() => {
              setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
-             setSelectedSplashFile(null); // Clear any selected file if resetting
+             setSelectedSplashFile(null); 
            }} className="text-xs">Reset to default</Button>
         </div>
       </CardContent>
@@ -131,3 +127,5 @@ export default function SiteSettingsPage() {
     </Card>
   );
 }
+
+    

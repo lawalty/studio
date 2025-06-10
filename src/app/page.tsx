@@ -54,7 +54,7 @@ Focuses on rarity, condition, and provenance as key factors in pricing.
 `;
 
 const AVATAR_STORAGE_KEY = "aiBlairAvatar";
-const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=Avatar";
+const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const PERSONA_STORAGE_KEY = "aiBlairPersona";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const SPLASH_IMAGE_STORAGE_KEY = "aiBlairSplashScreenImage";
@@ -219,7 +219,7 @@ export default function HomePage() {
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
       setTimeout(() => {
-        if (isSpeakingRef.current) {
+        if (isSpeakingRef.current) { // Check if AI started speaking again in the meantime
           return;
         }
         if (!isEndingSessionRef.current && !isListeningRef.current) { 
@@ -643,7 +643,8 @@ export default function HomePage() {
               height={267} 
               className="rounded-lg shadow-md object-cover"
               priority 
-              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? "man microphone computer" : undefined}
+              data-ai-hint={splashImageSrc.includes("imgur.com") || splashImageSrc.includes("placehold.co") ? "man microphone computer" : undefined}
+              unoptimized={splashImageSrc.startsWith('data:image/')}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
             <RadioGroup
@@ -684,9 +685,10 @@ export default function HomePage() {
       isSpeaking && "animate-pulse-speak"
     ),
     priority: true,
+    unoptimized: avatarSrc.startsWith('data:image/')
   };
   
-  if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL) {
+  if (avatarSrc.includes("placehold.co")) {
     imageProps['data-ai-hint'] = "professional woman";
   }
 
@@ -798,3 +800,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    

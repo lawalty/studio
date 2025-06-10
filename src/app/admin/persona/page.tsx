@@ -16,7 +16,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "fi
 
 const PERSONA_STORAGE_KEY = "aiBlairPersona";
 const AVATAR_STORAGE_KEY = "aiBlairAvatar";
-const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?text=Avatar";
+const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
 const AVATAR_FIREBASE_PATH = "site_assets/avatar_image"; // Fixed path
 
 export default function PersonaPage() {
@@ -78,21 +78,23 @@ export default function PersonaPage() {
         setAvatarPreview(downloadURL);
         setSelectedAvatarFile(null);
         toast({ title: "Avatar Uploaded", description: "New avatar image has been saved." });
-      } catch (uploadError) {
-        console.error("Avatar upload error:", uploadError);
-        toast({ title: "Avatar Upload Failed", description: "Could not upload new avatar image. Please try again.", variant: "destructive" });
+      } catch (uploadError: any) {
+        console.error("Avatar upload error:", uploadError.code, uploadError.message, uploadError);
+        let description = "Could not upload new avatar image. Please try again.";
+        if (uploadError.code) {
+          description += ` (Error: ${uploadError.code})`;
+        }
+        toast({ title: "Avatar Upload Failed", description, variant: "destructive", duration: 7000 });
       }
     } else if (avatarPreview === DEFAULT_AVATAR_PLACEHOLDER && localStorage.getItem(AVATAR_STORAGE_KEY)) {
       // If preview is the placeholder AND a custom avatar was stored, it means user wants to reset
       localStorage.removeItem(AVATAR_STORAGE_KEY);
-      // Optionally, delete from Firebase Storage if a fixed path was used and no longer needed by other users
-      // For simplicity, we'll just remove from LS. New upload will overwrite.
+      // Optionally, delete from Firebase Storage if a fixed path was used
       // const fileRef = storageRef(storage, AVATAR_FIREBASE_PATH);
       // try { await deleteObject(fileRef); } catch (e) { console.warn("Could not delete old avatar from storage, or it didn't exist", e); }
       toast({ title: "Avatar Reset", description: "Avatar has been reset to the default placeholder." });
     }
-    // If no new file selected and preview is not placeholder, it's an existing (likely Firebase) URL. No action needed.
-
+    
     setIsSaving(false);
   };
 
@@ -129,7 +131,10 @@ export default function PersonaPage() {
       <Card className="md:col-span-1">
         <CardHeader>
           <CardTitle className="font-headline">Avatar Image</CardTitle>
-          <CardDescription>Upload the image for AI Blair's talking head. Optimal: Square (e.g., 300x300px).</CardDescription>
+          <CardDescription>
+            Upload the image for AI Blair's talking head. Optimal: Square (e.g., 300x300px).
+            If uploads fail, please check your Firebase Storage security rules for the path '{AVATAR_FIREBASE_PATH}'.
+            </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-4">
           {avatarPreview && (
@@ -139,9 +144,8 @@ export default function PersonaPage() {
               width={150}
               height={150}
               className="rounded-full border-2 border-primary shadow-md object-cover"
-              // data-ai-hint only makes sense for placeholders, not custom uploads
-              data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER ? "professional woman" : undefined}
-              unoptimized={avatarPreview.startsWith('data:image/')} // For local data URIs during selection
+              data-ai-hint={avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
+              unoptimized={avatarPreview.startsWith('data:image/')} 
             />
           )}
           <Input
@@ -158,10 +162,12 @@ export default function PersonaPage() {
            {selectedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAvatarFile.name}</p>}
            <Button variant="link" size="sm" onClick={() => {
              setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
-             setSelectedAvatarFile(null); // Clear any selected file if resetting
+             setSelectedAvatarFile(null); 
            }} className="text-xs">Reset to default</Button>
         </CardContent>
       </Card>
     </div>
   );
 }
+
+    
