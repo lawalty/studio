@@ -9,11 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { Save, UploadCloud, Image as ImageIcon } from 'lucide-react';
-import { storage, db } from '@/lib/firebase'; // Import db
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'; // Import Firestore functions
+import { storage, db } from '@/lib/firebase'; 
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'; 
 
-const DEFAULT_SPLASH_IMAGE_SRC = "https://i.imgur.com/U50t4xR.jpeg";
+const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Transparent 1x1 GIF
 const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
@@ -84,7 +84,6 @@ export default function SiteSettingsPage() {
         toast({ title: "Upload Error", description, variant: "destructive", duration: 7000 });
       }
     } else if (splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC) {
-      // User reset to default, ensure Firestore reflects this
       try {
         const docSnap = await getDoc(siteAssetsDocRef);
         if (docSnap.exists() && docSnap.data()?.splashImageUrl !== DEFAULT_SPLASH_IMAGE_SRC) {
@@ -94,7 +93,6 @@ export default function SiteSettingsPage() {
              await setDoc(siteAssetsDocRef, { splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC }, { merge: true });
              toast({ title: "Splash Image Set to Default", description: "Splash image set to default in Firebase." });
         } else {
-           // Already default or no change needed if local preview was just reset
            toast({ title: "Settings Checked", description: "Splash image settings reviewed." });
         }
       } catch (error) {
@@ -102,10 +100,6 @@ export default function SiteSettingsPage() {
           toast({ title: "Splash Image Reset Error", description: "Could not update splash image in Firebase. It's reset locally.", variant: "destructive" });
       }
     } else {
-      // No file selected, but preview might be a data URI or an old Firebase URL not matching default.
-      // This case means "no change was explicitly made to the file input, and it's not the default placeholder"
-      // We assume if preview is not default and no new file, it's an existing custom URL.
-      // Firestore update not needed unless new file or reset.
       toast({ title: "Settings Checked", description: "Splash image settings reviewed. No new file selected." });
     }
     setIsSaving(false);
@@ -140,9 +134,9 @@ export default function SiteSettingsPage() {
               width={400}
               height={267} 
               className="rounded-lg border-2 border-primary shadow-md object-cover"
-              data-ai-hint={(splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC || splashImagePreview.includes("imgur.com") || splashImagePreview.includes("placehold.co")) ? "technology abstract welcome" : undefined}
-              unoptimized={splashImagePreview.startsWith('data:image/') || !splashImagePreview.startsWith('https')}
-              onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)} // Fallback on error
+              data-ai-hint={(splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC || splashImagePreview.includes("placehold.co")) ? "technology abstract welcome" : undefined}
+              unoptimized={splashImagePreview.startsWith('data:image/')}
+              onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)} 
             />
           ) : (
              <div className="w-[400px] h-[267px] bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center">
@@ -174,3 +168,4 @@ export default function SiteSettingsPage() {
   );
 }
     
+

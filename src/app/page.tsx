@@ -56,7 +56,7 @@ Focuses on rarity, condition, and provenance as key factors in pricing.
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const PERSONA_STORAGE_KEY = "aiBlairPersona"; // Persona traits remain in localStorage for now
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
-const DEFAULT_SPLASH_IMAGE_SRC = "https://i.imgur.com/U50t4xR.jpeg";
+const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Transparent 1x1 GIF
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
@@ -71,6 +71,8 @@ export default function HomePage() {
   const [showSplashScreen, setShowSplashScreen] = useState(true);
   const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text');
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
+  const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
+
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -124,6 +126,7 @@ export default function HomePage() {
     isEndingSessionRef.current = false;
     setShowLogForSaveConfirmation(false);
     setShowSaveDialog(false);
+    dismissAllToasts();
 
 
     if (elevenLabsAudioRef.current) {
@@ -149,8 +152,7 @@ export default function HomePage() {
       recognitionRef.current.abort(); 
     }
     setIsListening(false);
-    dismissAllToasts();
-  }, [setMessages, setIsSendingMessage, setAiHasInitiatedConversation, setInputValue, setConsecutiveSilencePrompts, dismissAllToasts, setIsSpeaking, setIsListening, setShowLogForSaveConfirmation, setShowSaveDialog]);
+  }, [dismissAllToasts]);
 
 
   const toggleListening = useCallback((forceState?: boolean) => {
@@ -219,7 +221,7 @@ export default function HomePage() {
       elevenLabsAudioRef.current = null; 
     }
 
-    if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
+    if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isListeningRef.current) {
       setTimeout(() => {
         if (isSpeakingRef.current) { 
           return;
@@ -433,12 +435,12 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
+      setIsListening(false); 
       const finalTranscript = inputValueRef.current; 
       if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) {
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
       setInputValue(''); 
-      setIsListening(false); 
     };
     return recognition;
   }, [toast, setInputValue, setIsListening, setConsecutiveSilencePrompts]); 
@@ -618,8 +620,8 @@ export default function HomePage() {
         }
       } catch (e) {
         console.error("Failed to parse API keys or site assets from Firestore", e);
-        setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL); // Fallback
-        setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); // Fallback
+        setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL); 
+        setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); 
       }
     };
     fetchFirestoreData();
@@ -637,6 +639,14 @@ export default function HomePage() {
     };
   }, []); 
 
+  useEffect(() => {
+    if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) {
+      setIsSplashImageLoaded(false); 
+    } else {
+      setIsSplashImageLoaded(true); 
+    }
+  }, [splashImageSrc]);
+
 
   if (showSplashScreen) {
     return (
@@ -652,11 +662,17 @@ export default function HomePage() {
               alt="AI Blair Splash"
               width={400}
               height={267} 
-              className="rounded-lg shadow-md object-cover"
+              className={cn(
+                "rounded-lg shadow-md object-cover transition-opacity duration-700 ease-in-out",
+                (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC && !isSplashImageLoaded) ? "opacity-0" : "opacity-100"
+              )}
               priority 
-              data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("imgur.com") || splashImageSrc.includes("placehold.co")) ? "man microphone computer" : undefined}
-              unoptimized={splashImageSrc.startsWith('data:image/') || !splashImageSrc.startsWith('https')}
-              onError={() => setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC)}
+              unoptimized={splashImageSrc.startsWith('data:image/')}
+              onLoad={() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(true); }}
+              onError={() => {
+                setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+                setIsSplashImageLoaded(true); // The transparent default is considered "loaded"
+              }}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
             <RadioGroup
@@ -697,7 +713,7 @@ export default function HomePage() {
       isSpeaking && "animate-pulse-speak"
     ),
     priority: true,
-    unoptimized: avatarSrc.startsWith('data:image/') || !avatarSrc.startsWith('https') || avatarSrc.includes("placehold.co"),
+    unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.includes("placehold.co"),
     onError: () => setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL)
   };
   
