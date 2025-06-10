@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Bot, Undo2 } from 'lucide-react'; // Changed Settings to Undo2
+import { Bot, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -10,8 +10,26 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import React, { useState, useEffect } from 'react';
 
 export default function Header() {
+  const [isSplashScreenCurrentlyActive, setIsSplashScreenCurrentlyActive] = useState(true);
+
+  useEffect(() => {
+    const handleSplashScreenActive = () => setIsSplashScreenCurrentlyActive(true);
+    const handleSplashScreenInactive = () => setIsSplashScreenCurrentlyActive(false);
+
+    window.addEventListener('splashScreenActive', handleSplashScreenActive);
+    window.addEventListener('splashScreenInactive', handleSplashScreenInactive);
+
+    // Initial dispatch from page.tsx should set this correctly soon after mount.
+    // If page.tsx starts with showSplashScreen = true, it will dispatch 'splashScreenActive'.
+    
+    return () => {
+      window.removeEventListener('splashScreenActive', handleSplashScreenActive);
+      window.removeEventListener('splashScreenInactive', handleSplashScreenInactive);
+    };
+  }, []);
 
   const handleNavigateToSplash = () => {
     window.dispatchEvent(new CustomEvent('navigateToSplashScreen'));
@@ -25,20 +43,21 @@ export default function Header() {
           <h1 className="text-2xl font-bold font-headline">AI Blair</h1>
         </Link>
         
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={handleNavigateToSplash} aria-label="Change Interaction Mode">
-                <Undo2 size={20} /> {/* Changed Settings to Undo2 */}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Change Interaction Mode</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {!isSplashScreenCurrentlyActive && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleNavigateToSplash} aria-label="Change Interaction Mode">
+                  <Undo2 size={20} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Change Interaction Mode</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
     </header>
   );
 }
-

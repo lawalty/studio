@@ -114,6 +114,14 @@ export default function HomePage() {
   
   const isEndingSessionRef = useRef(false);
 
+  useEffect(() => {
+    if (showSplashScreen) {
+      window.dispatchEvent(new CustomEvent('splashScreenActive'));
+    } else {
+      window.dispatchEvent(new CustomEvent('splashScreenInactive'));
+    }
+  }, [showSplashScreen]);
+
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
     setMessages((prevMessages) => [
       ...prevMessages,
@@ -796,7 +804,7 @@ export default function HomePage() {
       !isSendingMessage &&
       !isSpeaking &&
       !showSaveDialog &&
-      !(messages.length === 1 && messages[0]?.sender === 'ai');
+      !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation);
 
 
   const mainContent = () => {
@@ -906,3 +914,4 @@ export default function HomePage() {
     </div>
   );
 }
+
