@@ -25,7 +25,7 @@ export interface KnowledgeSource {
   isUploading?: boolean;
 }
 
-const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_meta";
+const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v2_meta";
 
 
 const getFileIcon = (type: KnowledgeSource['type']) => {
@@ -50,6 +50,7 @@ export default function KnowledgeBasePage() {
     try {
       const sourcesToSave = updatedSourcesToSave
         .map(s => {
+          console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
           // Explicitly create the object to save, ensuring no temporary fields are included
           const cleanSource: {
             id: string;
@@ -72,7 +73,6 @@ export default function KnowledgeBasePage() {
           if (s.downloadURL) {
             cleanSource.downloadURL = s.downloadURL;
           }
-          console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
           return cleanSource;
         });
 
@@ -114,7 +114,7 @@ export default function KnowledgeBasePage() {
       setIsLoadingSources(false);
     };
     fetchSources();
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []); 
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -154,10 +154,9 @@ export default function KnowledgeBasePage() {
     setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     
-    // Add draft to UI immediately for responsiveness
     setSources(prevSources => [newSourceDraft, ...prevSources]);
 
-    const filePath = `knowledge_base_files/${tempId}-${currentFile.name}`;
+    const filePath = `knowledge_base_files_v2/${tempId}-${currentFile.name}`;
     const fileRef = storageRef(storage, filePath);
 
     try {
@@ -193,25 +192,21 @@ export default function KnowledgeBasePage() {
       };
       console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
       
-      // Update the state to replace the draft with the final version.
-      // This is the list that will also be saved to Firestore.
       let actualFinalListForFirestore: KnowledgeSource[] = [];
       setSources(currentSourcesIncludingDraft => {
         const updatedList = currentSourcesIncludingDraft.map(s =>
-          s.id === tempId ? finalNewSource : s // tempId is from newSourceDraft
+          s.id === tempId ? finalNewSource : s 
         );
         actualFinalListForFirestore = updatedList;
-        return updatedList; // Update React state for UI
+        console.log("[KnowledgeBasePage - handleUpload] updatedListForStateAndFirestore being sent to setSources and saveSourcesToFirestore:", JSON.stringify(actualFinalListForFirestore, null, 2));
+        return updatedList; 
       });
-      
-      console.log("[KnowledgeBasePage - handleUpload] actualFinalListForFirestore for save:", JSON.stringify(actualFinalListForFirestore, null, 2));
       
       const savedToDb = await saveSourcesToFirestore(actualFinalListForFirestore);
 
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
       }
-      // If !savedToDb, saveSourcesToFirestore would have already shown an error toast.
 
     } catch (error: any) {
       console.error("[KnowledgeBasePage - handleUpload] Upload or Save error:", error);
@@ -219,7 +214,7 @@ export default function KnowledgeBasePage() {
       if (error.code) description += ` (Error: ${error.code})`;
       else if (error.message) description += ` (Message: ${error.message})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      setSources(prev => prev.filter(s => s.id !== tempId)); // Clean up draft item on any failure
+      setSources(prev => prev.filter(s => s.id !== tempId)); 
     }
   };
 

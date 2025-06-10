@@ -60,7 +60,7 @@ const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP//
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_meta";
+const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v2_meta";
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -799,13 +799,13 @@ export default function HomePage() {
   const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messages.length === 0;
 
   const showSpeakButtonAudioOnly =
-      communicationMode === 'audio-only' && // Only relevant for audio-only
+      communicationMode === 'audio-only' && 
       aiHasInitiatedConversation &&
       !isListening &&
       !isSendingMessage &&
       !isSpeaking &&
       !showSaveDialog &&
-      !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation); // Hide if only greeting is present
+      !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation); 
 
 
   const mainContent = () => {
