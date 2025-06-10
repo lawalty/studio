@@ -12,8 +12,8 @@ import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { RotateCcw, Mic, Square as SquareIcon, CheckCircle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { RotateCcw, Mic, Square as SquareIcon, CheckCircle, Power } from 'lucide-react';
 
 export interface Message {
   id: string;
@@ -52,6 +52,7 @@ const DEFAULT_SPLASH_IMAGE_SRC = "https://i.imgur.com/U50t4xR.jpeg";
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
 const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechRecognition || (window as any).webkitSpeechRecognition : null;
+const MAX_SILENCE_PROMPTS = 3;
 
 export default function HomePage() {
   const [showSplashScreen, setShowSplashScreen] = useState(true);
@@ -69,6 +70,7 @@ export default function HomePage() {
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [consecutiveSilencePrompts, setConsecutiveSilencePrompts] = useState(0);
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentAiResponseTextRef = useRef<string | null>(null);
@@ -87,6 +89,7 @@ export default function HomePage() {
   const toggleListeningRef = useRef<(forceState?: boolean) => void>(() => {});
   const speakTextRef = useRef<(text: string) => Promise<void>>(async () => {});
   const handleSendMessageRef = useRef<(text: string, method: 'text' | 'voice') => Promise<void>>(async () => {});
+  const isEndingSessionRef = useRef(false);
 
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
@@ -137,6 +140,13 @@ export default function HomePage() {
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
 
+    if (isEndingSessionRef.current) {
+      isEndingSessionRef.current = false; // Reset flag
+      resetConversation(); // This will also reset consecutiveSilencePrompts
+      setShowSplashScreen(true);
+      return; 
+    }
+
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
@@ -174,10 +184,10 @@ export default function HomePage() {
       utterance.pitch = 1; utterance.rate = 1;
       utterance.onstart = handleActualAudioStart; 
       utterance.onend = () => handleAudioProcessEnd(true);
-      utterance.onerror = (event) => {
-        console.error("Browser Speech Synthesis error:", event.error);
-         if (event.error !== 'interrupted') { 
-            toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}.`, variant: "destructive" });
+      utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+        console.error("Browser Speech Synthesis error:", event.error, event);
+        if (event.error !== 'interrupted') {
+          toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}. Check console.`, variant: "destructive" });
         }
         handleAudioProcessEnd(false); 
       };
@@ -286,6 +296,7 @@ export default function HomePage() {
     addMessage(text, 'user');
     setIsSendingMessage(true);
     currentAiResponseTextRef.current = null; 
+    setConsecutiveSilencePrompts(0); // Reset silence counter on user message
 
     const genkitChatHistory = messages 
         .filter(msg => msg.text && msg.text.trim() !== "") 
@@ -342,13 +353,22 @@ export default function HomePage() {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.log(`SpeechRecognition.onerror fired. Error: "${event.error}", Mode: "${communicationModeRef.current}"`);
-      setIsListening(false);
+      setIsListening(false); // Ensure listening state is false first
 
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        console.log("Condition met: 'no-speech' in 'audio-only'. Speaking prompt.");
-        speakTextRef.current("Hello? Is someone there?");
-      } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted') {
-        console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', 'network', or 'interrupted'.`);
+        console.log("Condition met: 'no-speech' in 'audio-only'.");
+        setConsecutiveSilencePrompts(currentPrompts => {
+          const newPromptCount = currentPrompts + 1;
+          if (newPromptCount >= MAX_SILENCE_PROMPTS) {
+            speakTextRef.current("It seems no one is here. Ending the session.");
+            isEndingSessionRef.current = true;
+          } else {
+            speakTextRef.current("Hello? Is someone there?");
+          }
+          return newPromptCount;
+        });
+      } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
+        console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', 'network', 'interrupted', or 'AbortError'.`);
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       } else {
         console.log(`Error "${event.error}" occurred, but no toast will be shown due to specific handling or benign nature.`);
@@ -358,9 +378,10 @@ export default function HomePage() {
     recognition.onend = () => {
       console.log("SpeechRecognition.onend fired.");
       const finalTranscript = inputValueRef.current; 
-      setIsListening(false); 
+      // isListening is already set by onerror or by toggleListening if stopped manually.
+      // Avoid calling setIsListening(false) here again as it might conflict.
 
-      if (finalTranscript && finalTranscript.trim()) {
+      if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) { // Don't send if session is ending
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
       setInputValue(''); 
@@ -433,6 +454,8 @@ export default function HomePage() {
     setAiHasInitiatedConversation(false);
     setInputValue('');
     currentAiResponseTextRef.current = null;
+    setConsecutiveSilencePrompts(0);
+    isEndingSessionRef.current = false;
 
     if (elevenLabsAudioRef.current) {
       if (elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
@@ -464,6 +487,12 @@ export default function HomePage() {
     setCommunicationMode(selectedInitialMode);
     setShowSplashScreen(false);
   };
+  
+  const handleEndChatManually = () => {
+    resetConversation();
+    setShowSplashScreen(true);
+  };
+
 
   const handleChangeCommunicationMode = () => {
     resetConversation(); 
@@ -618,6 +647,16 @@ export default function HomePage() {
                 <Mic size={24} className="mr-2"/> Speak
             </Button>
           )}
+          {aiHasInitiatedConversation && (
+            <Button 
+              onClick={handleEndChatManually} 
+              variant="destructive" 
+              size="lg" 
+              className="mt-8"
+            >
+              <Power className="mr-2 h-5 w-5" /> End Chat
+            </Button>
+          )}
         </div>
       );
     }
@@ -666,3 +705,4 @@ export default function HomePage() {
     </div>
   );
 }
+
