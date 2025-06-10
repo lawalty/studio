@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Bot, Settings } from 'lucide-react';
+import { Bot, Undo2 } from 'lucide-react'; // Changed Settings to Undo2
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -29,7 +29,7 @@ export default function Header() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" onClick={handleNavigateToSplash} aria-label="Change Interaction Mode">
-                <Settings size={20} />
+                <Undo2 size={20} /> {/* Changed Settings to Undo2 */}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -41,3 +41,4 @@ export default function Header() {
     </header>
   );
 }
+
