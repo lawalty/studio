@@ -9,24 +9,46 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
 import { Save, UploadCloud, Image as ImageIcon } from 'lucide-react';
-import { storage } from '@/lib/firebase';
+import { storage, db } from '@/lib/firebase'; // Import db
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'; // Import Firestore functions
 
-const SPLASH_IMAGE_STORAGE_KEY = "aiBlairSplashScreenImage";
 const DEFAULT_SPLASH_IMAGE_SRC = "https://i.imgur.com/U50t4xR.jpeg";
-const SPLASH_IMAGE_FIREBASE_PATH = "site_assets/splash_image"; // Fixed path
+const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 export default function SiteSettingsPage() {
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingSplash, setIsLoadingSplash] = useState(true);
   const splashImageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    const storedSplashImage = localStorage.getItem(SPLASH_IMAGE_STORAGE_KEY);
-    setSplashImagePreview(storedSplashImage || DEFAULT_SPLASH_IMAGE_SRC);
-  }, []);
+    const fetchSplashImageUrl = async () => {
+      setIsLoadingSplash(true);
+      try {
+        const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data()?.splashImageUrl) {
+          setSplashImagePreview(docSnap.data().splashImageUrl);
+        } else {
+          setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
+        }
+      } catch (error) {
+        console.error("Error fetching splash image URL from Firestore:", error);
+        setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
+        toast({
+          title: "Error Loading Splash Image",
+          description: "Could not fetch splash image from the database. Using default.",
+          variant: "destructive",
+        });
+      }
+      setIsLoadingSplash(false);
+    };
+    fetchSplashImageUrl();
+  }, [toast]);
 
   const handleSplashImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -34,7 +56,7 @@ export default function SiteSettingsPage() {
       setSelectedSplashFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setSplashImagePreview(reader.result as string); // Show local data URI preview
+        setSplashImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -42,34 +64,57 @@ export default function SiteSettingsPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
+    const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+
     if (selectedSplashFile) {
-      const fileRef = storageRef(storage, SPLASH_IMAGE_FIREBASE_PATH);
+      const fileRef = storageRef(storage, SPLASH_IMAGE_FIREBASE_STORAGE_PATH);
       try {
         await uploadBytes(fileRef, selectedSplashFile);
         const downloadURL = await getDownloadURL(fileRef);
-        localStorage.setItem(SPLASH_IMAGE_STORAGE_KEY, downloadURL);
+        await setDoc(siteAssetsDocRef, { splashImageUrl: downloadURL }, { merge: true });
         setSplashImagePreview(downloadURL); 
         setSelectedSplashFile(null);
-        toast({ title: "Splash Image Saved", description: "New splash screen image has been uploaded and saved." });
+        toast({ title: "Splash Image Saved", description: "New splash screen image has been uploaded and saved to Firebase." });
       } catch (uploadError: any) {
-        console.error("Splash image upload error:", uploadError.code, uploadError.message, uploadError);
+        console.error("Splash image upload error:", uploadError);
         let description = "Could not upload new splash image. Please try again.";
         if (uploadError.code) {
           description += ` (Error: ${uploadError.code})`;
         }
         toast({ title: "Upload Error", description, variant: "destructive", duration: 7000 });
       }
-    } else if (splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC && localStorage.getItem(SPLASH_IMAGE_STORAGE_KEY)) {
-      localStorage.removeItem(SPLASH_IMAGE_STORAGE_KEY);
-      toast({ title: "Splash Image Reset", description: "Splash screen image has been reset to default." });
-    } else {
-      if (!selectedSplashFile && splashImagePreview && !splashImagePreview.startsWith('https://') && splashImagePreview !== DEFAULT_SPLASH_IMAGE_SRC) {
-         toast({ title: "No Change", description: "Choose a new image file to upload or reset to default.", variant: "default"});
-      } else if (!selectedSplashFile) {
-         toast({ title: "Settings Checked", description: "Splash image settings reviewed." });
+    } else if (splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC) {
+      // User reset to default, ensure Firestore reflects this
+      try {
+        const docSnap = await getDoc(siteAssetsDocRef);
+        if (docSnap.exists() && docSnap.data()?.splashImageUrl !== DEFAULT_SPLASH_IMAGE_SRC) {
+           await updateDoc(siteAssetsDocRef, { splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC });
+            toast({ title: "Splash Image Reset", description: "Splash screen image has been reset to default in Firebase." });
+        } else if (!docSnap.exists()) {
+             await setDoc(siteAssetsDocRef, { splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC }, { merge: true });
+             toast({ title: "Splash Image Set to Default", description: "Splash image set to default in Firebase." });
+        } else {
+           // Already default or no change needed if local preview was just reset
+           toast({ title: "Settings Checked", description: "Splash image settings reviewed." });
+        }
+      } catch (error) {
+          console.error("Error resetting splash image in Firestore:", error);
+          toast({ title: "Splash Image Reset Error", description: "Could not update splash image in Firebase. It's reset locally.", variant: "destructive" });
       }
+    } else {
+      // No file selected, but preview might be a data URI or an old Firebase URL not matching default.
+      // This case means "no change was explicitly made to the file input, and it's not the default placeholder"
+      // We assume if preview is not default and no new file, it's an existing custom URL.
+      // Firestore update not needed unless new file or reset.
+      toast({ title: "Settings Checked", description: "Splash image settings reviewed. No new file selected." });
     }
     setIsSaving(false);
+  };
+  
+  const handleResetSplash = async () => {
+    setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
+    setSelectedSplashFile(null);
+    toast({ title: "Splash Image Preview Reset", description: "Preview reset to default. Click 'Save Splash Image' to make it permanent."});
   };
 
   return (
@@ -77,27 +122,31 @@ export default function SiteSettingsPage() {
       <CardHeader>
         <CardTitle className="font-headline flex items-center gap-2"><ImageIcon /> Splash Screen Image</CardTitle>
         <CardDescription>
-          Upload the image to be displayed on the initial splash screen.
-          If uploads fail, please check your Firebase Storage security rules for the path '{SPLASH_IMAGE_FIREBASE_PATH}'.
+          Upload the image to be displayed on the initial splash screen. Images are stored in Firebase Storage.
+          If uploads fail, check Storage security rules for '{SPLASH_IMAGE_FIREBASE_STORAGE_PATH}'.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="flex flex-col items-center space-y-4">
           <Label htmlFor="splash-image-upload" className="font-medium self-start">Splash Image Preview & Upload</Label>
-          {splashImagePreview && (
+          {isLoadingSplash ? (
+             <div className="w-[400px] h-[267px] bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center">
+                <p className="text-muted-foreground">Loading...</p>
+             </div>
+          ) : splashImagePreview ? (
             <Image
               src={splashImagePreview}
               alt="Splash Screen Preview"
               width={400}
               height={267} 
               className="rounded-lg border-2 border-primary shadow-md object-cover"
-              data-ai-hint={splashImagePreview.includes("imgur.com") || splashImagePreview.includes("placehold.co") ? "technology abstract welcome" : undefined}
-              unoptimized={splashImagePreview.startsWith('data:image/')} 
+              data-ai-hint={(splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC || splashImagePreview.includes("imgur.com") || splashImagePreview.includes("placehold.co")) ? "technology abstract welcome" : undefined}
+              unoptimized={splashImagePreview.startsWith('data:image/') || !splashImagePreview.startsWith('https')}
+              onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)} // Fallback on error
             />
-          )}
-           {!splashImagePreview && (
+          ) : (
              <div className="w-[400px] h-[267px] bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center">
-                <p className="text-muted-foreground">No image selected</p>
+                <p className="text-muted-foreground">No image selected or available</p>
              </div>
            )}
           <Input
@@ -108,24 +157,20 @@ export default function SiteSettingsPage() {
             className="hidden"
             id="splash-image-upload"
           />
-          <Button variant="outline" onClick={() => splashImageInputRef.current?.click()} className="w-full max-w-xs">
+          <Button variant="outline" onClick={() => splashImageInputRef.current?.click()} className="w-full max-w-xs" disabled={isLoadingSplash}>
             <UploadCloud className="mr-2 h-4 w-4" /> Choose Image
           </Button>
           {selectedSplashFile && <p className="text-xs text-muted-foreground">New: {selectedSplashFile.name}</p>}
            <p className="text-xs text-muted-foreground">Recommended: Image with good visibility for text overlay.</p>
-           <Button variant="link" size="sm" onClick={() => {
-             setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
-             setSelectedSplashFile(null); 
-           }} className="text-xs">Reset to default</Button>
+           <Button variant="link" size="sm" onClick={handleResetSplash} className="text-xs" disabled={isLoadingSplash}>Reset to default</Button>
         </div>
       </CardContent>
       <CardFooter>
-        <Button onClick={handleSave} disabled={isSaving}>
-          <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : 'Save Splash Image'}
+        <Button onClick={handleSave} disabled={isSaving || isLoadingSplash}>
+          <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : (isLoadingSplash ? 'Loading Splash...' : 'Save Splash Image')}
         </Button>
       </CardFooter>
     </Card>
   );
 }
-
     

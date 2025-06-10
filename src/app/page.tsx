@@ -53,13 +53,13 @@ Information on valuing antique items, collectibles, and memorabilia commonly fou
 Focuses on rarity, condition, and provenance as key factors in pricing.
 `;
 
-const AVATAR_STORAGE_KEY = "aiBlairAvatar";
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
-const PERSONA_STORAGE_KEY = "aiBlairPersona";
+const PERSONA_STORAGE_KEY = "aiBlairPersona"; // Persona traits remain in localStorage for now
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
-const SPLASH_IMAGE_STORAGE_KEY = "aiBlairSplashScreenImage";
 const DEFAULT_SPLASH_IMAGE_SRC = "https://i.imgur.com/U50t4xR.jpeg";
+
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -159,7 +159,8 @@ export default function HomePage() {
       if (targetState === true) { 
         if (!recognitionRef.current) {
           if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-            toast({ title: "Mic Not Supported", description: "Speech recognition is not initialized.", variant: "destructive" });
+            // toast({ title: "Mic Not Supported", description: "Speech recognition is not initialized.", variant: "destructive" });
+            console.warn("Speech recognition not initialized on toggleListening(true)");
           }
           return false;
         }
@@ -219,7 +220,7 @@ export default function HomePage() {
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
       setTimeout(() => {
-        if (isSpeakingRef.current) { // Check if AI started speaking again in the meantime
+        if (isSpeakingRef.current) { 
           return;
         }
         if (!isEndingSessionRef.current && !isListeningRef.current) { 
@@ -589,29 +590,36 @@ export default function HomePage() {
   }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage]); 
 
   useEffect(() => {
-    const storedAvatar = localStorage.getItem(AVATAR_STORAGE_KEY);
-    setAvatarSrc(storedAvatar || DEFAULT_AVATAR_PLACEHOLDER_URL);
-    
     const storedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
     setPersonaTraits(storedPersona || DEFAULT_PERSONA_TRAITS);
     
-    const fetchApiKeys = async () => {
+    const fetchFirestoreData = async () => {
       try {
-        const docRef = doc(db, FIRESTORE_API_KEYS_PATH);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const keys = docSnap.data();
+        const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
+        const apiKeysDocSnap = await getDoc(apiKeysDocRef);
+        if (apiKeysDocSnap.exists()) {
+          const keys = apiKeysDocSnap.data();
           setElevenLabsApiKey(keys.tts || null);
           setElevenLabsVoiceId(keys.voiceId || null);
         }
+
+        const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+        const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
+        if (siteAssetsDocSnap.exists()) {
+          const assets = siteAssetsDocSnap.data();
+          setAvatarSrc(assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL);
+          setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
+        } else {
+          setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
+          setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+        }
       } catch (e) {
-        console.error("Failed to parse API keys from Firestore", e);
+        console.error("Failed to parse API keys or site assets from Firestore", e);
+        setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL); // Fallback
+        setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); // Fallback
       }
     };
-    fetchApiKeys();
-    
-    const storedSplashImage = localStorage.getItem(SPLASH_IMAGE_STORAGE_KEY);
-    setSplashImageSrc(storedSplashImage || DEFAULT_SPLASH_IMAGE_SRC); 
+    fetchFirestoreData();
   }, []);
 
   const performResetOnUnmountRef = useRef(resetConversation);
@@ -643,8 +651,9 @@ export default function HomePage() {
               height={267} 
               className="rounded-lg shadow-md object-cover"
               priority 
-              data-ai-hint={splashImageSrc.includes("imgur.com") || splashImageSrc.includes("placehold.co") ? "man microphone computer" : undefined}
-              unoptimized={splashImageSrc.startsWith('data:image/')}
+              data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("imgur.com") || splashImageSrc.includes("placehold.co")) ? "man microphone computer" : undefined}
+              unoptimized={splashImageSrc.startsWith('data:image/') || !splashImageSrc.startsWith('https')}
+              onError={() => setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC)}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
             <RadioGroup
@@ -675,7 +684,7 @@ export default function HomePage() {
     );
   }
 
-  const imageProps: React.ComponentProps<typeof Image> & { 'data-ai-hint'?: string } = {
+  const imageProps: React.ComponentProps<typeof Image> = {
     src: avatarSrc,
     alt: "AI Blair Avatar",
     width: communicationMode === 'audio-only' ? 200 : 120,
@@ -685,11 +694,12 @@ export default function HomePage() {
       isSpeaking && "animate-pulse-speak"
     ),
     priority: true,
-    unoptimized: avatarSrc.startsWith('data:image/')
+    unoptimized: avatarSrc.startsWith('data:image/') || !avatarSrc.startsWith('https'),
+    onError: () => setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL)
   };
   
-  if (avatarSrc.includes("placehold.co")) {
-    imageProps['data-ai-hint'] = "professional woman";
+  if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) {
+    (imageProps as any)['data-ai-hint'] = "professional woman";
   }
 
 
@@ -800,5 +810,4 @@ export default function HomePage() {
     </div>
   );
 }
-
     
