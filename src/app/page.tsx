@@ -110,6 +110,7 @@ export default function HomePage() {
           }
           return false;
         }
+        // Allow forcing off even if speaking (e.g. user clicks stop while AI speaks)
         if (isSpeakingRef.current && forceState !== false) { 
             toast({ title: "Please Wait", description: "AI Blair is currently speaking.", variant: "default" });
             return false;
@@ -152,7 +153,7 @@ export default function HomePage() {
             addMessage(currentAiResponseTextRef.current, 'ai');
        }
     }
-    currentAiResponseTextRef.current = null; 
+    // currentAiResponseTextRef.current = null; // AI message is added in speakText now
     setIsSendingMessage(false); 
 
     if (elevenLabsAudioRef.current) {
@@ -203,14 +204,14 @@ export default function HomePage() {
     const processedText = text.replace(/EZCORP/gi, "E. Z. Corp");
     handleAudioProcessStart(processedText); 
 
-    if (processedText.trim() !== "" && currentAiResponseTextRef.current) {
+    if (processedText.trim() !== "" && currentAiResponseTextRef.current) { // currentAiResponseTextRef is set by handleAudioProcessStart
         if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
         }
     }
 
     if (communicationModeRef.current === 'text-only' || processedText.trim() === "") {
-      currentAiResponseTextRef.current = null;
+      // currentAiResponseTextRef.current = null; // No longer needed here
       setIsSendingMessage(false);
       setIsSpeaking(false); 
       return;
@@ -282,7 +283,7 @@ export default function HomePage() {
       handleActualAudioStart,
       handleAudioProcessEnd,
       addMessage, 
-      messages, 
+      messages, // Keep messages here if addMessage depends on it, or make addMessage not depend on messages
       browserSpeakInternal,
       handleAudioProcessStart,
     ]);
@@ -295,8 +296,9 @@ export default function HomePage() {
     if (text.trim() === '') return;
     addMessage(text, 'user');
     setIsSendingMessage(true);
-    currentAiResponseTextRef.current = null; 
+    // currentAiResponseTextRef.current = null; // This is handled in speakText/handleAudioProcessStart
     setConsecutiveSilencePrompts(0); // Reset silence counter on user message
+    isEndingSessionRef.current = false; // Reset ending session flag if user speaks
 
     const genkitChatHistory = messages 
         .filter(msg => msg.text && msg.text.trim() !== "") 
@@ -352,11 +354,10 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.log(`SpeechRecognition.onerror fired. Error: "${event.error}", Mode: "${communicationModeRef.current}"`);
-      setIsListening(false); // Ensure listening state is false first
+      console.log("SpeechRecognition.onerror fired. Error:", event.error, "Mode:", communicationModeRef.current);
+      setIsListening(false); 
 
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        console.log("Condition met: 'no-speech' in 'audio-only'.");
         setConsecutiveSilencePrompts(currentPrompts => {
           const newPromptCount = currentPrompts + 1;
           if (newPromptCount >= MAX_SILENCE_PROMPTS) {
@@ -378,16 +379,14 @@ export default function HomePage() {
     recognition.onend = () => {
       console.log("SpeechRecognition.onend fired.");
       const finalTranscript = inputValueRef.current; 
-      // isListening is already set by onerror or by toggleListening if stopped manually.
-      // Avoid calling setIsListening(false) here again as it might conflict.
-
-      if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) { // Don't send if session is ending
+      
+      if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) { 
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
       setInputValue(''); 
     };
     return recognition;
-  }, [toast]);
+  }, [toast]); // Dependencies: toast. inputValueRef, handleSendMessageRef, speakTextRef, communicationModeRef, isEndingSessionRef are refs.
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -416,28 +415,40 @@ export default function HomePage() {
 
       setInputValue(''); 
       try {
+        // Explicitly stop before starting, to try and reset any stuck state
+        try {
+          console.log("EFFECT: Attempting to stop recognition before starting (if active).");
+          recInstance.stop();
+        } catch (stopError: any) {
+          if (stopError.name !== 'InvalidStateError') { 
+            console.warn('EFFECT: Non-critical error stopping recognition before start:', stopError);
+          }
+        }
+        
         console.log("EFFECT: Attempting to start speech recognition.");
         recInstance.start();
         console.log("EFFECT: Speech recognition started successfully.");
-      } catch (error: any) {
-        console.error('EFFECT: Error starting speech recognition:', error);
-        console.error('EFFECT: Error name:', error.name);
-        console.error('EFFECT: Error message:', error.message);
-        if (error.name !== 'InvalidStateError' && error.name !== 'NoMicPermissionError' && error.name !== 'AbortError') {
+      } catch (startError: any) {
+        console.error('EFFECT: Error starting speech recognition:', startError);
+        console.error('EFFECT: Error name:', startError.name);
+        console.error('EFFECT: Error message:', startError.message);
+        if (startError.name !== 'InvalidStateError' && startError.name !== 'NoMicPermissionError' && startError.name !== 'AbortError') {
           toast({
             variant: 'destructive',
             title: 'Microphone Start Error',
-            description: `${error.name}: ${error.message || 'Could not start microphone. Check permissions.'}`,
+            description: `${startError.name}: ${startError.message || 'Could not start microphone. Check permissions.'}`,
           });
         } else {
-          console.log(`EFFECT: Suppressed toast for error: ${error.name}`);
+          console.log(`EFFECT: Suppressed toast for mic start error: ${startError.name}`);
         }
         setIsListening(false); 
       }
     } else { 
       if (recInstance) {
         try {
+          // console.log("EFFECT: Attempting to stop speech recognition due to isListening=false.");
           recInstance.stop();
+          // console.log("EFFECT: Speech recognition stopped via isListening=false effect.");
         } catch (e: any) {
           if (e.name !== 'InvalidStateError') {
              // console.warn("EFFECT: Error stopping speech recognition (but not InvalidStateError):", e);
@@ -651,7 +662,7 @@ export default function HomePage() {
             <Button 
               onClick={handleEndChatManually} 
               variant="destructive" 
-              size="lg" 
+              size="default" 
               className="mt-8"
             >
               <Power className="mr-2 h-5 w-5" /> End Chat
