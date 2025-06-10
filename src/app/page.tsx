@@ -209,7 +209,7 @@ export default function HomePage() {
         addMessage(currentAiResponseTextRef.current, 'ai');
       }
     }
-  }, [setIsSpeaking, setIsSendingMessage, addMessage, messages]);
+  }, [addMessage, messages]);
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
@@ -275,7 +275,7 @@ export default function HomePage() {
     handleAudioProcessStart(text); 
     const textForSpeech = text.replace(/EZCORP/gi, "E. Z. Corp");
 
-    if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "") {
+    if (communicationModeRef.current === 'text-only' || text.trim() === "") {
       if (text.trim() !== "" && currentAiResponseTextRef.current) {
         if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
@@ -799,12 +799,13 @@ export default function HomePage() {
   const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messages.length === 0;
 
   const showSpeakButtonAudioOnly =
+      communicationMode === 'audio-only' && // Only relevant for audio-only
       aiHasInitiatedConversation &&
       !isListening &&
       !isSendingMessage &&
       !isSpeaking &&
       !showSaveDialog &&
-      !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation);
+      !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation); // Hide if only greeting is present
 
 
   const mainContent = () => {
