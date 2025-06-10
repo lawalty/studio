@@ -19,11 +19,17 @@ export interface KnowledgeSource {
   type: 'text' | 'pdf' | 'document' | 'audio' | 'image' | 'other';
   size: string;
   uploadedAt: string;
+  storagePath: string; 
+  downloadURL: string; 
+  uploadProgress?: number; 
+  isUploading?: boolean;  
+}
+
+interface KnowledgeSourceDraft extends Omit<KnowledgeSource, 'storagePath' | 'downloadURL'> {
   storagePath?: string;
   downloadURL?: string;
-  uploadProgress?: number;
-  isUploading?: boolean;
 }
+
 
 const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v2_meta";
 
@@ -40,46 +46,46 @@ const getFileIcon = (type: KnowledgeSource['type']) => {
 };
 
 export default function KnowledgeBasePage() {
-  const [sources, setSources] = useState<KnowledgeSource[]>([]);
+  const [sources, setSources] = useState<KnowledgeSourceDraft[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoadingSources, setIsLoadingSources] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const saveSourcesToFirestore = async (updatedSourcesToSave: KnowledgeSource[]): Promise<boolean> => {
+  const saveSourcesToFirestore = async (updatedSourcesToSave: KnowledgeSourceDraft[]): Promise<boolean> => {
     try {
-      const sourcesToSave = updatedSourcesToSave
+      const sourcesForDb = updatedSourcesToSave
+        .filter(s => !s.isUploading && s.downloadURL && s.storagePath) 
         .map(s => {
-          console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
-          const cleanSource: {
-            id: string;
-            name: string;
-            type: KnowledgeSource['type'];
-            size: string;
-            uploadedAt: string;
-            storagePath?: string;
-            downloadURL?: string;
-          } = {
-            id: s.id,
-            name: s.name,
-            type: s.type,
-            size: s.size,
-            uploadedAt: s.uploadedAt,
-          };
-          if (s.storagePath) {
-            cleanSource.storagePath = s.storagePath;
-          }
-          if (s.downloadURL) {
-            cleanSource.downloadURL = s.downloadURL;
-          }
-          return cleanSource;
+          // console.log(`[KnowledgeBasePage - saveSourcesToFirestore MAP] Processing source ID: ${s.id}, Name: ${s.name}, downloadURL: ${s.downloadURL}, storagePath: ${s.storagePath}`);
+          const { uploadProgress, isUploading, ...cleanSource } = s;
+          return {
+            id: cleanSource.id,
+            name: cleanSource.name,
+            type: cleanSource.type,
+            size: cleanSource.size,
+            uploadedAt: cleanSource.uploadedAt,
+            storagePath: cleanSource.storagePath!, 
+            downloadURL: cleanSource.downloadURL!, 
+          } as KnowledgeSource;
         });
 
-      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Attempting to save ${sourcesToSave.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesToSave, null, 2));
+      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Attempting to save ${sourcesForDb.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesForDb, null, 2));
+
+      if (sourcesForDb.some(s => !s.downloadURL || !s.storagePath)) {
+        console.error("[KnowledgeBasePage - saveSourcesToFirestore] Attempted to save sources with missing URL or Path. Aborting save.", sourcesForDb.filter(s=>!s.downloadURL || !s.storagePath));
+        toast({
+            title: "Internal Save Error",
+            description: "Attempted to save incomplete source metadata. Please report this.",
+            variant: "destructive",
+            duration: 7000
+        });
+        return false;
+      }
 
       const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
-      await setDoc(docRef, { sources: sourcesToSave });
-      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Successfully saved ${sourcesToSave.length} sources to Firestore.`);
+      await setDoc(docRef, { sources: sourcesForDb });
+      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Successfully saved ${sourcesForDb.length} sources to Firestore.`);
       return true;
     } catch (error: any) {
       console.error("[KnowledgeBasePage - saveSourcesToFirestore] Error saving sources to Firestore:", error.message, error.code, error.stack, error);
@@ -100,7 +106,7 @@ export default function KnowledgeBasePage() {
         const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists() && docSnap.data()?.sources) {
-          const firestoreSources = docSnap.data().sources as KnowledgeSource[];
+          const firestoreSources = docSnap.data().sources as KnowledgeSourceDraft[];
           setSources(firestoreSources);
         } else {
           setSources([]);
@@ -113,7 +119,7 @@ export default function KnowledgeBasePage() {
       setIsLoadingSources(false);
     };
     fetchSources();
-  }, []); 
+  }, []);
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,7 +146,7 @@ export default function KnowledgeBasePage() {
     else if (mimeType.startsWith('text/plain') || fileNameLower.endsWith('.txt')) fileType = 'text';
     else if (mimeType === 'application/msword' || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.doc') || fileNameLower.endsWith('.docx')) fileType = 'document';
 
-    const newSourceDraft: KnowledgeSource = {
+    const newSourceDraft: KnowledgeSourceDraft = {
       id: tempId,
       name: currentFile.name,
       type: fileType,
@@ -149,23 +155,22 @@ export default function KnowledgeBasePage() {
       isUploading: true,
       uploadProgress: 0,
     };
-    
+
     setSources(prevSources => [newSourceDraft, ...prevSources]);
-    setSelectedFile(null); 
-    if (fileInputRef.current) fileInputRef.current.value = ""; 
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
     const filePath = `knowledge_base_files_v2/${tempId}-${currentFile.name}`;
     const fileRef = storageRef(storage, filePath);
     let finalNewSource: KnowledgeSource | null = null;
 
-
     try {
       toast({ title: "Upload Started", description: `Uploading ${currentFile.name}...` });
-      setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 30 } : s));
+      setSources(prev => prev.map(s => s.id === tempId ? { ...s, uploadProgress: 30 } : s));
 
       await uploadBytes(fileRef, currentFile);
-      setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 70 } : s));
-      
+      setSources(prev => prev.map(s => s.id === tempId ? { ...s, uploadProgress: 70 } : s));
+
       const downloadURL = await getDownloadURL(fileRef);
       console.log(`[KnowledgeBasePage - handleUpload] Retrieved downloadURL: ${downloadURL} for filePath: ${filePath}`);
 
@@ -177,42 +182,49 @@ export default function KnowledgeBasePage() {
           variant: "destructive",
           duration: 9000,
         });
-        setSources(prev => prev.filter(s => s.id !== tempId)); 
+        setSources(prev => prev.filter(s => s.id !== tempId));
         return;
       }
-      
+
       const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      finalNewSource = { // Assign to outer scope finalNewSource
-        ...newSourceDraft,
-        id: permanentId, 
+      finalNewSource = { 
+        id: permanentId,
+        name: currentFile.name,
+        type: fileType,
+        size: `${(currentFile.size / (1024 * 1024)).toFixed(2)}MB`,
+        uploadedAt: new Date().toISOString().split('T')[0],
         storagePath: filePath,
         downloadURL: downloadURL,
-        isUploading: false,
-        uploadProgress: 100,
       };
       console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
       
       let finalUpdatedList: KnowledgeSource[] = [];
       setSources(currentSourcesIncludingDraft => {
         const updatedList = currentSourcesIncludingDraft.map(s =>
-          s.id === tempId ? finalNewSource! : s // Use finalNewSource directly, assert non-null
+          s.id === tempId ? finalNewSource! : s 
         );
-        finalUpdatedList = updatedList; 
-        console.log("[KnowledgeBasePage - handleUpload] List being set to state (and will be saved):", JSON.stringify(finalUpdatedList, null, 2));
-        return updatedList; 
+        console.log(`[KnowledgeBasePage - handleUpload] List being set to state (and will be saved): ${updatedList.length} items. New item ID if finalNewSource exists: ${finalNewSource?.id}`);
+        finalUpdatedList = updatedList as KnowledgeSource[]; 
+        return updatedList;
       });
-      
-      await new Promise(resolve => setTimeout(resolve, 0)); // Allow state to settle
+
+      await new Promise(resolve => setTimeout(resolve, 0)); // Micro-delay
+      console.log(`[KnowledgeBasePage - handleUpload] finalUpdatedList after micro-delay: ${finalUpdatedList.length} items. First item ID (if any): ${finalUpdatedList[0]?.id}`);
+
 
       if (finalUpdatedList.length > 0) {
         const savedToDb = await saveSourcesToFirestore(finalUpdatedList);
         if (savedToDb) {
-            toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
+          toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
         }
       } else {
-        console.error("[KnowledgeBasePage - handleUpload] finalUpdatedList was empty before saving. This indicates a state update issue.");
-        toast({ title: "State Error", description: "Could not prepare data for saving. Please try again.", variant: "destructive" });
-        setSources(prev => prev.filter(s => s.id !== tempId && (finalNewSource ? s.id !== finalNewSource.id : true)));
+        console.error("[KnowledgeBasePage - handleUpload] finalUpdatedList was empty after state update and micro-delay. This is unexpected. Draft ID:", tempId, "FinalNewSource:", finalNewSource);
+        toast({ title: "State Error", description: "Could not prepare data for saving (list empty or error during processing). Please report this.", variant: "destructive" });
+        if (finalNewSource) {
+            setSources(prev => prev.filter(s => s.id !== finalNewSource!.id && s.id !== tempId));
+        } else {
+            setSources(prev => prev.filter(s => s.id !== tempId));
+        }
       }
 
     } catch (error: any) {
@@ -221,7 +233,8 @@ export default function KnowledgeBasePage() {
       if (error.code) description += ` (Error: ${error.code})`;
       else if (error.message) description += ` (Message: ${error.message})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      setSources(prev => prev.filter(s => s.id !== tempId)); 
+      // Ensure temp item is removed on any error
+      setSources(prev => prev.filter(s => s.id !== tempId));
     }
   };
 
@@ -229,32 +242,35 @@ export default function KnowledgeBasePage() {
     const sourceToDelete = sources.find(s => s.id === id);
     if (!sourceToDelete) return;
 
-    const originalSources = [...sources]; 
+    const originalSources = [...sources];
     const updatedSourcesAfterDelete = sources.filter(source => source.id !== id);
-    setSources(updatedSourcesAfterDelete); 
+    setSources(updatedSourcesAfterDelete);
 
     let dbUpdated = false;
     if (sourceToDelete.storagePath) {
       const fileRef = storageRef(storage, sourceToDelete.storagePath);
       try {
         await deleteObject(fileRef);
-        dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete); 
+        dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete);
         if (dbUpdated) {
           toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
         } else {
-          setSources(originalSources); 
+          // saveSourcesToFirestore already showed toast
+          setSources(originalSources); // Revert UI if DB save failed
         }
       } catch (error) {
         console.error("[KnowledgeBasePage - handleDelete] Firebase deletion error:", error);
-        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. It has been removed from the list. Database may be out of sync.`, variant: "destructive" });
-        setSources(originalSources); 
+        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. Database may be out of sync.`, variant: "destructive" });
+        setSources(originalSources); // Revert UI
       }
-    } else { 
+    } else {
+      // If no storagePath, it's likely a draft or errored item, just update Firestore
       dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete);
       if (dbUpdated) {
         toast({ title: "List Item Removed", description: `${sourceToDelete.name} has been removed from the list.` });
       } else {
-        setSources(originalSources); 
+        // saveSourcesToFirestore already showed toast
+        setSources(originalSources); // Revert UI if DB save failed
       }
     }
   };
@@ -266,10 +282,12 @@ export default function KnowledgeBasePage() {
       return;
     }
 
+    let refreshedSourceItem: KnowledgeSource | null = null;
+
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
       const newDownloadURL = await getDownloadURL(fileRef);
-      
+
       if (!newDownloadURL) {
           console.error(`[KnowledgeBasePage - handleRefreshSourceUrl] CRITICAL: newDownloadURL is null or undefined for ${sourceToRefresh.name} during refresh.`);
           toast({
@@ -280,26 +298,33 @@ export default function KnowledgeBasePage() {
           return;
       }
       
+      refreshedSourceItem = {
+        ...(sourceToRefresh as KnowledgeSource), // Assume it's a full KnowledgeSource if it has storagePath
+        downloadURL: newDownloadURL,
+      };
+      
       let refreshedListForFirestore: KnowledgeSource[] = [];
       setSources(currentSources => {
-        const updatedList = currentSources.map(s => 
-          s.id === sourceId ? { ...s, downloadURL: newDownloadURL } : s
+        const updatedList = currentSources.map(s =>
+          s.id === sourceId ? refreshedSourceItem! : s
         );
-        refreshedListForFirestore = updatedList;
-        console.log("[KnowledgeBasePage - handleRefreshSourceUrl] List for Firestore (derived inside setSources):", JSON.stringify(refreshedListForFirestore, null, 2));
+        console.log(`[KnowledgeBasePage - handleRefreshSourceUrl] List being set to state (and will be saved): ${updatedList.length} items. Refreshed item ID: ${sourceId}`);
+        refreshedListForFirestore = updatedList as KnowledgeSource[];
         return updatedList;
       });
-      
-      await new Promise(resolve => setTimeout(resolve, 0)); // Allow state to settle
+
+      await new Promise(resolve => setTimeout(resolve, 0)); // Micro-delay
+      console.log(`[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForFirestore after micro-delay: ${refreshedListForFirestore.length} items.`);
 
       if (refreshedListForFirestore.length > 0) {
-        const refreshedInDb = await saveSourcesToFirestore(refreshedListForFirestore);
-        if(refreshedInDb) {
-            toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
-        }
+          const refreshedInDb = await saveSourcesToFirestore(refreshedListForFirestore);
+          if(refreshedInDb) {
+              toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
+          }
+          // If not refreshedInDb, saveSourcesToFirestore already showed toast
       } else {
-        console.error("[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForFirestore was empty before saving. This indicates a state update issue.");
-        toast({ title: "State Error Refreshing URL", description: "Could not prepare data for saving URL refresh.", variant: "destructive" });
+          console.error("[KnowledgeBasePage - handleRefreshSourceUrl] refreshedListForFirestore was empty after micro-delay. This is unexpected.");
+          toast({ title: "State Error Refreshing URL", description: "Could not prepare data for saving URL refresh. List was empty.", variant: "destructive" });
       }
 
     } catch (error) {
