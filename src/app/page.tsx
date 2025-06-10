@@ -633,23 +633,33 @@ export default function HomePage() {
 
           const textFileContents: string[] = [];
           for (const source of sources) {
-            if (source.type === 'text' && source.downloadURL) {
-              try {
-                const response = await fetch(source.downloadURL);
-                if (response.ok) {
-                  const textContent = await response.text();
-                  textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
-                } else {
-                  console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Status: ${response.status} ${response.statusText}`);
-                  toast({title: "Knowledge File Error", description: `Could not load content for ${source.name}. Status: ${response.status}. Check console.`, variant: "destructive", duration: 5000});
+            if (source.type === 'text') {
+              if (source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
+                try {
+                  const response = await fetch(source.downloadURL);
+                  if (response.ok) {
+                    const textContent = await response.text();
+                    textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
+                  } else {
+                    console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Status: ${response.status} ${response.statusText}`);
+                    toast({title: "Knowledge File Error", description: `Could not load content for ${source.name}. Status: ${response.status}. Check console.`, variant: "destructive", duration: 5000});
+                  }
+                } catch (fetchError: any) {
+                  console.error(`[HomePage] Error fetching content for ${source.name} from URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
+                  toast({
+                    title: "Knowledge File Fetch Error",
+                    description: `Network error loading content for ${source.name}. Check console for URL: ${source.downloadURL} and details.`,
+                    variant: "destructive",
+                    duration: 7000
+                  });
                 }
-              } catch (fetchError: any) {
-                console.error(`[HomePage] Error fetching content for ${source.name} from URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
+              } else {
+                console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (ID: ${source.id}). URL: '${source.downloadURL}'. Skipping fetch.`);
                 toast({
-                  title: "Knowledge File Fetch Error",
-                  description: `Network error loading content for ${source.name}. Check console for details and the URL.`,
+                  title: "Invalid File URL",
+                  description: `Skipping .txt file '${source.name}' due to missing or invalid download URL. Please re-upload it.`,
                   variant: "destructive",
-                  duration: 5000
+                  duration: 6000
                 });
               }
             }
