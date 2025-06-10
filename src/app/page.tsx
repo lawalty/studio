@@ -156,7 +156,7 @@ export default function HomePage() {
       recognitionRef.current.abort(); 
     }
     setIsListening(false);
-  }, [dismissAllToasts, setIsSpeaking, setIsListening]);
+  }, [dismissAllToasts]);
 
 
   const toggleListening = useCallback((forceState?: boolean) => {
@@ -232,15 +232,13 @@ export default function HomePage() {
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isListeningRef.current) {
       setTimeout(() => {
-        if (isSpeakingRef.current) { 
+        if (isSpeakingRef.current || isEndingSessionRef.current || isListeningRef.current) { 
           return;
         }
-        if (!isEndingSessionRef.current && !isListeningRef.current) { 
-            toggleListeningRef.current(true);
-        }
-      }, 1500); 
+        toggleListeningRef.current(true);
+      }, 50); 
     }
-  }, [addMessage, messages, resetConversation, setShowSplashScreen, setIsSpeaking, setIsSendingMessage, toggleListeningRef]);
+  }, [addMessage, messages, resetConversation, setShowSplashScreen]);
 
 
   const browserSpeakInternal = useCallback((textForSpeech: string) => {
@@ -349,8 +347,6 @@ export default function HomePage() {
       handleAudioProcessStart,
       handleActualAudioStart,
       handleAudioProcessEnd,
-      setIsSendingMessage,
-      setIsSpeaking
     ]);
 
   const speakTextRef = useRef(speakText);
@@ -392,7 +388,7 @@ export default function HomePage() {
       await speakTextRef.current(errorMessage);
       setIsSendingMessage(false); 
     } 
-  }, [addMessage, messages, personaTraits, knowledgeFileSummary, dynamicKnowledgeContent, setIsSendingMessage, setConsecutiveSilencePrompts]); 
+  }, [addMessage, messages, personaTraits, knowledgeFileSummary, dynamicKnowledgeContent]); 
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => {
@@ -456,7 +452,7 @@ export default function HomePage() {
       setInputValue(''); 
     };
     return recognition;
-  }, [toast, setInputValue, setIsListening, setConsecutiveSilencePrompts]); 
+  }, [toast]); 
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -511,7 +507,7 @@ export default function HomePage() {
         // Non-critical
       }
     }
-  }, [isListening, toast, setInputValue, setIsListening]); 
+  }, [isListening, toast]); 
 
 
   const handleModeSelectionSubmit = () => {
@@ -583,7 +579,7 @@ export default function HomePage() {
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge, setIsSendingMessage, setAiHasInitiatedConversation]); 
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge]); 
 
   useEffect(() => {    
     const fetchFirestoreData = async () => {
@@ -794,6 +790,15 @@ export default function HomePage() {
 
   const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messages.length === 0;
 
+  const showSpeakButtonAudioOnly =
+      aiHasInitiatedConversation &&
+      !isListening &&
+      !isSendingMessage &&
+      !isSpeaking &&
+      !showSaveDialog &&
+      !(messages.length === 1 && messages[0]?.sender === 'ai');
+
+
   const mainContent = () => {
     if (isLoadingKnowledge) {
         return (
@@ -824,7 +829,7 @@ export default function HomePage() {
                 <Mic size={20} className="mr-2"/> Listening...
             </div>
           )}
-          {aiHasInitiatedConversation && !isListening && !isSendingMessage && !isSpeaking && messages.length > 0 && !showSaveDialog && (
+          {showSpeakButtonAudioOnly && (
              <Button onClick={() => toggleListeningRef.current(true)} variant="outline" size="lg" className="mt-6">
                 <Mic size={24} className="mr-2"/> Speak
             </Button>
@@ -898,7 +903,6 @@ export default function HomePage() {
       <div className="flex-grow">
         {mainContent()}
       </div>
-      {/* Button removed from here */}
     </div>
   );
 }
