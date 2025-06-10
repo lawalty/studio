@@ -1,10 +1,9 @@
 
 import { initializeApp, getApp, getApps, type FirebaseOptions } from "firebase/app";
 import { getStorage } from "firebase/storage";
-import { initializeApp } from "firebase/app";
 
 // TODO: Replace with your actual Firebase project configuration
-const firebaseConfig = {
+const firebaseConfig: FirebaseOptions = {
   apiKey: "AIzaSyBz0edyk760wi-cssGZ7l0ipTpeDr9G9eQ",
   authDomain: "ai-blair-7fb8o.firebaseapp.com",
   projectId: "ai-blair-7fb8o",
@@ -14,9 +13,8 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
 let app;
-if (!getApps().length) {
+if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
 } else {
   app = getApp();
