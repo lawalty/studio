@@ -50,25 +50,25 @@ export default function KnowledgeBasePage() {
     try {
       const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
       const sourcesToSave = updatedSources
-        .filter(s => !s.isUploading) 
+        .filter(s => !s.isUploading)
         .map(s => {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const {uploadProgress, isUploading, ...rest} = s; 
+          const {uploadProgress, isUploading, ...rest} = s;
           return rest;
         });
-      
+
       console.log(`[KnowledgeBasePage] Attempting to save ${sourcesToSave.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesToSave, null, 2));
-      
+
       await setDoc(docRef, { sources: sourcesToSave });
       console.log(`[KnowledgeBasePage] Successfully saved ${sourcesToSave.length} sources to Firestore.`);
       return true;
     } catch (error: any) {
       console.error("[KnowledgeBasePage] Error saving sources to Firestore:", error.message, error.code, error.stack, error);
-      toast({ 
-        title: "Firestore Save Error", 
-        description: `Failed to save knowledge base to database: ${error.message || 'Unknown error'}. Data may be out of sync.`, 
+      toast({
+        title: "Firestore Save Error",
+        description: `Failed to save knowledge base to database: ${error.message || 'Unknown error'}. Data may be out of sync.`,
         variant: "destructive",
-        duration: 7000 
+        duration: 7000
       });
       return false;
     }
@@ -82,9 +82,9 @@ export default function KnowledgeBasePage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists() && docSnap.data()?.sources) {
           const firestoreSources = docSnap.data().sources as KnowledgeSource[];
-          setSources(firestoreSources); 
+          setSources(firestoreSources);
         } else {
-          setSources([]); 
+          setSources([]);
         }
       } catch (e: any) {
         console.error("Failed to fetch sources from Firestore", e.message, e);
@@ -94,7 +94,7 @@ export default function KnowledgeBasePage() {
       setIsLoadingSources(false);
     };
     fetchSources();
-  }, [toast]);
+  }, []); // Changed dependency array from [toast] to []
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -130,8 +130,8 @@ export default function KnowledgeBasePage() {
       isUploading: true,
       uploadProgress: 0,
     };
-    
-    setSelectedFile(null); 
+
+    setSelectedFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setSources(prevSources => [newSourceDraft, ...prevSources]);
 
@@ -141,28 +141,28 @@ export default function KnowledgeBasePage() {
     try {
       toast({ title: "Upload Started", description: `Uploading ${currentFile.name}...` });
       setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 30 } : s));
-      
+
       await uploadBytes(fileRef, currentFile);
       setSources(prev => prev.map(s => s.id === tempId ? {...s, uploadProgress: 70 } : s));
-      
+
       const downloadURL = await getDownloadURL(fileRef);
 
       const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       const finalNewSource: KnowledgeSource = {
         ...newSourceDraft,
-        id: permanentId,   
-        storagePath: filePath, 
+        id: permanentId,
+        storagePath: filePath,
         downloadURL,
-        isUploading: false, 
+        isUploading: false,
         uploadProgress: 100,
       };
-      
+
       let listToSaveAfterUpload: KnowledgeSource[] = [];
       setSources(prevSources => {
           listToSaveAfterUpload = prevSources.map(s => s.id === tempId ? finalNewSource : s);
           return listToSaveAfterUpload;
       });
-      
+
       const savedToDb = await saveSourcesToFirestore(listToSaveAfterUpload);
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
@@ -174,7 +174,7 @@ export default function KnowledgeBasePage() {
       let description = `Could not upload ${currentFile.name}.`;
       if (error.code) description += ` (Error: ${error.code})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      setSources(prev => prev.filter(s => s.id !== tempId)); 
+      setSources(prev => prev.filter(s => s.id !== tempId));
     }
   };
 
@@ -184,7 +184,7 @@ export default function KnowledgeBasePage() {
 
     const originalSources = [...sources]; // Keep a copy in case of failure
     const updatedSources = sources.filter(source => source.id !== id);
-    setSources(updatedSources); 
+    setSources(updatedSources);
 
     let dbUpdated = false;
     if (sourceToDelete.storagePath) {
@@ -215,7 +215,7 @@ export default function KnowledgeBasePage() {
       }
     }
   };
-  
+
   const handleRefreshSourceUrl = async (sourceId: string) => {
     const sourceToRefresh = sources.find(s => s.id === sourceId);
     if (!sourceToRefresh || !sourceToRefresh.storagePath) {
@@ -226,7 +226,7 @@ export default function KnowledgeBasePage() {
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
       const newDownloadURL = await getDownloadURL(fileRef);
-      
+
       let listToSaveAfterRefresh: KnowledgeSource[] = [];
       setSources(prevSources => {
         listToSaveAfterRefresh = prevSources.map(s => s.id === sourceId ? {...s, downloadURL: newDownloadURL } : s);
@@ -276,7 +276,7 @@ export default function KnowledgeBasePage() {
         </CardContent>
         <CardFooter>
           <Button onClick={handleUpload} disabled={!selectedFile || sources.some(s => !!s.isUploading) || isLoadingSources}>
-            <UploadCloud className="mr-2 h-4 w-4" /> 
+            <UploadCloud className="mr-2 h-4 w-4" />
             {sources.some(s => !!s.isUploading) ? 'Uploading...' : (isLoadingSources ? 'Loading sources...' : 'Upload Source')}
           </Button>
         </CardFooter>
