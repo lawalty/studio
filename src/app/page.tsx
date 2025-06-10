@@ -45,6 +45,9 @@ const DEFAULT_AVATAR_SRC = "https://placehold.co/300x300.png";
 const PERSONA_STORAGE_KEY = "aiBlairPersona";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const API_KEYS_STORAGE_KEY = "aiBlairApiKeys";
+const SPLASH_IMAGE_STORAGE_KEY = "aiBlairSplashScreenImage";
+const DEFAULT_SPLASH_IMAGE_SRC = "https://i.imgur.com/U50t4xR.jpeg";
+
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
@@ -53,6 +56,7 @@ const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechReco
 export default function HomePage() {
   const [showSplashScreen, setShowSplashScreen] = useState(true);
   const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text');
+  const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -73,15 +77,16 @@ export default function HomePage() {
 
   const isSpeakingRef = useRef(isSpeaking);
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
-
+  
   const communicationModeRef = useRef(communicationMode);
   useEffect(() => { communicationModeRef.current = communicationMode; }, [communicationMode]);
-  
+
+  const inputValueRef = useRef(inputValue);
+  useEffect(() => { inputValueRef.current = inputValue; }, [inputValue]);
+
   const toggleListeningRef = useRef<(forceState?: boolean) => void>(() => {});
   const speakTextRef = useRef<(text: string) => Promise<void>>(async () => {});
   const handleSendMessageRef = useRef<(text: string, method: 'text' | 'voice') => Promise<void>>(async () => {});
-  const inputValueRef = useRef(inputValue);
-  useEffect(() => { inputValueRef.current = inputValue; }, [inputValue]);
 
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
@@ -102,11 +107,9 @@ export default function HomePage() {
           }
           return false;
         }
-        if (isSpeakingRef.current) {
-           if (forceState !== false) { 
+        if (isSpeakingRef.current && forceState !== false) { 
             toast({ title: "Please Wait", description: "AI Blair is currently speaking.", variant: "default" });
             return false;
-           }
         }
         if (communicationModeRef.current === 'text-only') {
            return false; 
@@ -127,22 +130,18 @@ export default function HomePage() {
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
-    // Message is now added in speakText, not here.
     setIsSendingMessage(false); 
-  }, [setIsSpeaking, setIsSendingMessage]);
+  }, []);
 
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
 
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
-       // Fallback: if audio failed, but we had text, and it's not yet in messages, add it.
        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
        }
     }
-    // If audioPlayedSuccessfully, message was already added in speakText.
-
     currentAiResponseTextRef.current = null; 
     setIsSendingMessage(false); 
 
@@ -165,7 +164,7 @@ export default function HomePage() {
         toggleListeningRef.current(true); 
       }, 1500); 
     }
-  }, [addMessage, messages, communicationModeRef, toggleListeningRef, isSpeakingRef, setIsSpeaking, setIsSendingMessage]);
+  }, [addMessage, messages]);
 
 
   const browserSpeakInternal = useCallback((text: string) => {
@@ -175,7 +174,7 @@ export default function HomePage() {
       utterance.pitch = 1; utterance.rate = 1;
       utterance.onstart = handleActualAudioStart; 
       utterance.onend = () => handleAudioProcessEnd(true);
-      utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+      utterance.onerror = (event) => {
         console.error("Browser Speech Synthesis error:", event.error);
          if (event.error !== 'interrupted') { 
             toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}.`, variant: "destructive" });
@@ -192,10 +191,8 @@ export default function HomePage() {
 
   const speakText = useCallback(async (text: string) => {
     const processedText = text.replace(/EZCORP/gi, "E. Z. Corp");
-    handleAudioProcessStart(processedText); // Sets currentAiResponseTextRef.current
+    handleAudioProcessStart(processedText); 
 
-    // Add message to log immediately if not already there.
-    // This covers text-only mode and prepares for audio modes by adding the message upfront.
     if (processedText.trim() !== "" && currentAiResponseTextRef.current) {
         if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
@@ -203,14 +200,12 @@ export default function HomePage() {
     }
 
     if (communicationModeRef.current === 'text-only' || processedText.trim() === "") {
-      // Message already added. Just finalize state for text-only or empty text.
       currentAiResponseTextRef.current = null;
       setIsSendingMessage(false);
       setIsSpeaking(false); 
       return;
     }
 
-    // Stop any currently playing audio
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
        elevenLabsAudioRef.current.pause();
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -276,13 +271,10 @@ export default function HomePage() {
       toast,
       handleActualAudioStart,
       handleAudioProcessEnd,
-      addMessage, // Added addMessage
-      messages, // Added messages
+      addMessage, 
+      messages, 
       browserSpeakInternal,
       handleAudioProcessStart,
-      communicationModeRef, // Added communicationModeRef
-      setIsSendingMessage, // Added setIsSendingMessage
-      setIsSpeaking // Added setIsSpeaking
     ]);
   
   useEffect(() => {
@@ -345,7 +337,6 @@ export default function HomePage() {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      inputValueRef.current = finalTranscript || interimTranscript;
       setInputValue(finalTranscript || interimTranscript); 
     };
 
@@ -357,7 +348,7 @@ export default function HomePage() {
         console.log("Condition met: 'no-speech' in 'audio-only'. Speaking prompt.");
         speakTextRef.current("Hello? Is someone there?");
       } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted') {
-        console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', or 'network', 'interrupted'.`);
+        console.log(`Condition met for toast. Error: "${event.error}" is not 'no-speech', 'aborted', 'network', or 'interrupted'.`);
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       } else {
         console.log(`Error "${event.error}" occurred, but no toast will be shown due to specific handling or benign nature.`);
@@ -373,10 +364,9 @@ export default function HomePage() {
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
       setInputValue(''); 
-      inputValueRef.current = '';
     };
     return recognition;
-  }, [toast, communicationModeRef]);
+  }, [toast]);
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -404,7 +394,6 @@ export default function HomePage() {
       }
 
       setInputValue(''); 
-      inputValueRef.current = '';
       try {
         console.log("EFFECT: Attempting to start speech recognition.");
         recInstance.start();
@@ -435,7 +424,7 @@ export default function HomePage() {
         }
       }
     }
-  }, [isListening, toast, communicationModeRef, isSpeakingRef]);
+  }, [isListening, toast]);
 
 
   const resetConversation = useCallback(() => {
@@ -443,7 +432,6 @@ export default function HomePage() {
     setIsSendingMessage(false);
     setAiHasInitiatedConversation(false);
     setInputValue('');
-    inputValueRef.current = '';
     currentAiResponseTextRef.current = null;
 
     if (elevenLabsAudioRef.current) {
@@ -522,6 +510,12 @@ export default function HomePage() {
         setElevenLabsVoiceId(keys.voiceId || null);
       } catch (e) { console.error("Failed to parse API keys", e); }
     }
+    const storedSplashImage = localStorage.getItem(SPLASH_IMAGE_STORAGE_KEY);
+    if (storedSplashImage) {
+        setSplashImageSrc(storedSplashImage);
+    } else {
+        setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+    }
     
     const performResetOnUnmount = resetConversation;
     return () => {
@@ -540,13 +534,13 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
             <Image
-              src="https://i.imgur.com/U50t4xR.jpeg"
+              src={splashImageSrc}
               alt="AI Blair Splash"
               width={400}
               height={267}
               className="rounded-lg shadow-md object-cover"
               priority
-              data-ai-hint="man microphone computer"
+              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? "man microphone computer" : "custom splash image"}
             />
             <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
             <RadioGroup 
@@ -672,4 +666,3 @@ export default function HomePage() {
     </div>
   );
 }
-

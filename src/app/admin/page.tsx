@@ -1,5 +1,6 @@
+
 import AdminNavLinkCard from '@/components/admin/AdminNavLinkCard';
-import { BookOpenText, KeyRound, Smile, Image as ImageIcon } from 'lucide-react'; // Use ImageIcon for avatar
+import { BookOpenText, KeyRound, Smile, Settings } from 'lucide-react'; // Use ImageIcon for avatar
 
 export default function AdminDashboardPage() {
   return (
@@ -22,13 +23,12 @@ export default function AdminDashboardPage() {
         href="/admin/persona"
         Icon={Smile}
       />
-       {/* Placeholder for a dedicated Avatar page if complex, or keep integrated with Persona */}
-       {/* <AdminNavLinkCard
-        title="Avatar Management"
-        description="Upload and manage AI Blair's avatar image."
-        href="/admin/avatar"
-        Icon={ImageIcon}
-      /> */}
+      <AdminNavLinkCard
+        title="Site Settings"
+        description="Manage site-wide settings like the splash screen image."
+        href="/admin/site-settings"
+        Icon={Settings}
+      />
     </div>
   );
 }
