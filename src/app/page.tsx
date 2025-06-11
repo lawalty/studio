@@ -761,8 +761,8 @@ export default function HomePage() {
           
           <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
           <ul className="list-disc list-inside space-y-1 text-xs pl-4">
-              <li>The issue is almost certainly with the Firebase Studio origin: <code>https://YOUR_STUDIO_ID.cloudworkstation.dev</code>.</li>
-              <li>Ensure the <strong>exact current Firebase Studio origin</strong> (copy it from the browser console error when running in Studio) is present in your <code>cors-config.json</code> file.</li>
+              <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked.</li>
+              <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
               <li>Verify with <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code> that the active policy on the bucket includes this exact Studio origin.</li>
           </ul>
 
@@ -771,32 +771,39 @@ export default function HomePage() {
             <li>
               <strong>Identify ALL Your App's Origins:</strong>
               <ul className="list-disc list-inside ml-4">
-                <li>Firebase Studio: In your Studio browser's developer console (F12), find the CORS error. Copy the "origin" (e.g., <code>https://6000-firebase-studio-YOUR_ID.cloudworkstation.dev</code>).</li>
-                <li>Deployed App: e.g., <code>https://YOUR_PROJECT_ID.web.app</code> or custom domain.</li>
-                <li>Local Development: e.g., <code>http://localhost:9002</code>.</li>
+                <li>Firebase Studio: In your Studio browser's developer console (F12, Console tab), find the CORS error. Copy the **exact "origin"** shown (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
+                <li>Deployed App: e.g., <code>https://studio--ai-blair-7fb8o.us-central1.hosted.app</code> (or your custom domain).</li>
+                <li>Local Development: e.g., <code>http://localhost:9002</code>, <code>http://localhost:3000</code>.</li>
               </ul>
             </li>
             <li>
-              <strong>Create/Update <code>cors-config.json</code> file:</strong>
+              <strong>Create/Update <code>cors-config.json</code> file with this exact content (replace placeholders if necessary, but the Studio origin below should match your screenshot):</strong>
               <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
 {`[
   {
     "origin": [
-      "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR_IN_STUDIO",
-      "MUST_REPLACE_WITH_YOUR_DEPLOYED_APP_ORIGIN",
-      "http://localhost:9002" 
+      "https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev",
+      "https://studio--ai-blair-7fb8o.us-central1.hosted.app",
+      "http://localhost:3000",
+      "http://localhost:9002"
     ],
-    "method": ["GET", "HEAD", "OPTIONS"],
-    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "method": [
+      "GET",
+      "HEAD",
+      "OPTIONS"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "Access-Control-Allow-Origin"
+    ],
     "maxAgeSeconds": 3600
   }
 ]`}
               </pre>
-              Replace placeholders with your actual origins. Add more if needed.
             </li>
             <li>
               <strong>Identify Your GCS Bucket ID:</strong>
-              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>).
+              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>ai-blair-7fb8o.appspot.com</code> or <code>ai-blair-7fb8o.firebasestorage.app</code>). Use the one that works with `gsutil`. You previously confirmed <code>ai-blair-7fb8o.firebasestorage.app</code> was correct for `gsutil`.
             </li>
             <li>
               <strong>Use `gsutil` (Google Cloud SDK command-line):</strong>
@@ -804,17 +811,16 @@ export default function HomePage() {
                 <li>Open terminal/shell with `gsutil` configured.</li>
                 <li>Navigate to where `cors-config.json` is saved.</li>
                 <li>
-                  Set policy: <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code>
-                  <br />(Replace <code>YOUR_CORRECT_BUCKET_ID</code>. If one bucket ID format gives a 404 error, try the other format, e.g., ending with <code>.appspot.com</code> or <code>.firebasestorage.app</code>).
+                  Set policy: <code>gsutil cors set cors-config.json gs://ai-blair-7fb8o.firebasestorage.app</code>
                 </li>
                 <li>
-                  Verify: <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code>
-                  <br />The output must match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
+                  Verify: <code>gsutil cors get gs://ai-blair-7fb8o.firebasestorage.app</code>
+                  <br />The output **MUST** match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
                 </li>
               </ul>
             </li>
             <li>
-              <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. Clear browser cache thoroughly. Test in Incognito/Private window.
+              <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. **Clear browser cache AND cookies thoroughly.** Test in a new Incognito/Private window.
             </li>
           </ol>
           <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved.</p>
@@ -1035,5 +1041,4 @@ export default function HomePage() {
     </div>
   );
 }
-
 
