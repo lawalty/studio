@@ -17,11 +17,22 @@ const ChatMessageSchema = z.object({
   parts: z.array(z.object({ text: z.string() })),
 });
 
+const KBContentSchema = z.object({
+  summary: z.string().optional().describe('Summary of non-text files (e.g., PDF, DOC, audio).'),
+  textContent: z.string().optional().describe('Full text content from .txt files.'),
+});
+
 const GenerateChatResponseInputSchema = z.object({
   userMessage: z.string().describe('The latest message from the user.'),
-  knowledgeBaseContent: z
-    .string()
-    .describe('The combined knowledge base content AI Blair should use. This includes general information, a summary of uploaded files (like PDFs, Word docs, audio files), and the full text content of any .txt files.'),
+  knowledgeBaseHigh: KBContentSchema.describe(
+    'High priority knowledge base content. This is the most recent and important information AI Blair has learned, typically from the last few interactions or critical updates.'
+  ),
+  knowledgeBaseMedium: KBContentSchema.describe(
+    'Medium priority knowledge base content. This information was typically learned or updated 6 months to a year ago.'
+  ),
+  knowledgeBaseLow: KBContentSchema.describe(
+    'Low priority knowledge base content. This is foundational or older information, learned over a year ago. It may include general handbooks or less frequently updated topics.'
+  ),
   personaTraits: z
     .string()
     .describe("The persona traits that define AI Blair's conversational style."),
@@ -42,24 +53,45 @@ export async function generateChatResponse(
 
 const prompt = ai.definePrompt({
   name: 'generateChatResponsePrompt',
-  input: {schema: GenerateChatResponseInputSchema}, 
+  input: {schema: GenerateChatResponseInputSchema},
   output: {schema: GenerateChatResponseOutputSchema},
   prompt: `You are AI Blair. Your personality and style are defined by the following traits:
 {{{personaTraits}}}
 
-You must answer user questions based on the following knowledge base content. This content is structured:
-1.  General information.
-2.  A "File Summary" listing uploaded documents (e.g., PDFs, Word files, audio files) that are part of your knowledge.
-3.  "Extracted Content from .txt files" which contains the full text from any .txt documents.
+You must answer user questions based on the following knowledge bases, ordered by priority. High Priority is the most recent and important, then Medium Priority, then Low Priority (foundational/older).
 
-<knowledge_base>
-{{{knowledgeBaseContent}}}
-</knowledge_base>
+{{#if knowledgeBaseHigh.summary}}
+High Priority File Summary (Most Recent - Learned Lately):
+{{{knowledgeBaseHigh.summary}}}
+{{/if}}
+{{#if knowledgeBaseHigh.textContent}}
+Extracted Content from High Priority .txt files (Most Recent - Learned Lately):
+{{{knowledgeBaseHigh.textContent}}}
+{{/if}}
+
+{{#if knowledgeBaseMedium.summary}}
+Medium Priority File Summary (Learned 6 months to a year ago):
+{{{knowledgeBaseMedium.summary}}}
+{{/if}}
+{{#if knowledgeBaseMedium.textContent}}
+Extracted Content from Medium Priority .txt files (Learned 6 months to a year ago):
+{{{knowledgeBaseMedium.textContent}}}
+{{/if}}
+
+{{#if knowledgeBaseLow.summary}}
+Low Priority File Summary (Foundational - Learned over a year ago):
+{{{knowledgeBaseLow.summary}}}
+{{/if}}
+{{#if knowledgeBaseLow.textContent}}
+Extracted Content from Low Priority .txt files (Foundational - Learned over a year ago, may include General Handbooks):
+{{{knowledgeBaseLow.textContent}}}
+{{/if}}
 
 When answering:
-- Prioritize information from "Extracted Content from .txt files" if it's relevant to the user's query. You can quote or summarize directly from this text.
-- For files mentioned in the "File Summary" (like PDFs, Word documents, audio files) that are *not* .txt files, you are aware of their existence and the topics they likely cover (based on their names). State that you have information related to these topics and can discuss them generally. However, in this version, you cannot access their specific internal contents for direct quoting or detailed analysis. Politely inform the user of this limitation if they ask for very specific details from these non-.txt files.
-- If the query cannot be answered from any part of the knowledge base (including inferring from file names), politely state that you don't have information on that topic.
+- ALWAYS prioritize information from High Priority .txt files if relevant and available. If not found or not relevant, check Medium Priority .txt files, then Low Priority .txt files. You can quote or summarize directly from this text.
+- If the answer is found in a higher priority KB's .txt files, you generally do not need to search lower priority KBs for the same information unless the user specifically asks for older/foundational details or context.
+- For files mentioned in any File Summary (like PDFs, Word documents, audio files) that are *not* .txt files, you are aware of their existence and the topics they likely cover based on their names and their priority level (High, Medium, Low). State that you have information related to these topics and can discuss them generally according to their recency/priority. However, you cannot access their specific internal contents for direct quoting or detailed analysis. Politely inform the user of this limitation if they ask for very specific details from these non-.txt files.
+- If the query cannot be answered from any part of the knowledge bases (including inferring from file names across all priority levels), politely state that you don't have information on that topic.
 
 {{#if chatHistory.length}}
 Conversation History:
@@ -104,7 +136,9 @@ const generateChatResponseFlow = ai.defineFlow(
 
     const promptInput = {
         userMessage: input.userMessage,
-        knowledgeBaseContent: input.knowledgeBaseContent,
+        knowledgeBaseHigh: input.knowledgeBaseHigh,
+        knowledgeBaseMedium: input.knowledgeBaseMedium,
+        knowledgeBaseLow: input.knowledgeBaseLow,
         personaTraits: input.personaTraits,
         chatHistory: processedChatHistory,
     };
@@ -113,4 +147,3 @@ const generateChatResponseFlow = ai.defineFlow(
     return output!;
   }
 );
-

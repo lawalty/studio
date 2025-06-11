@@ -394,20 +394,23 @@ export default function HomePage() {
             parts: [{ text: msg.text }],
         }));
     
-    const combinedKnowledgeBase = 
-      MOCK_KNOWLEDGE_BASE_CONTENT +
-      (knowledgeFileSummaryHigh ? `\n\nHigh Priority File Summary:\n${knowledgeFileSummaryHigh}` : '') +
-      (dynamicKnowledgeContentHigh ? `\n\nExtracted Content from High Priority .txt files:\n${dynamicKnowledgeContentHigh}` : '') +
-      (knowledgeFileSummaryMedium ? `\n\nMedium Priority File Summary:\n${knowledgeFileSummaryMedium}` : '') +
-      (dynamicKnowledgeContentMedium ? `\n\nExtracted Content from Medium Priority .txt files:\n${dynamicKnowledgeContentMedium}` : '') +
-      (knowledgeFileSummaryLow ? `\n\nLow Priority File Summary:\n${knowledgeFileSummaryLow}` : '') +
-      (dynamicKnowledgeContentLow ? `\n\nExtracted Content from Low Priority .txt files:\n${dynamicKnowledgeContentLow}` : '');
-
+    const combinedLowPriorityText = [MOCK_KNOWLEDGE_BASE_CONTENT, dynamicKnowledgeContentLow].filter(Boolean).join('\n\n');
 
     try {
       const flowInput: GenerateChatResponseInput = {
         userMessage: text,
-        knowledgeBaseContent: combinedKnowledgeBase,
+        knowledgeBaseHigh: {
+            summary: knowledgeFileSummaryHigh || undefined,
+            textContent: dynamicKnowledgeContentHigh || undefined,
+        },
+        knowledgeBaseMedium: {
+            summary: knowledgeFileSummaryMedium || undefined,
+            textContent: dynamicKnowledgeContentMedium || undefined,
+        },
+        knowledgeBaseLow: {
+            summary: knowledgeFileSummaryLow || undefined,
+            textContent: combinedLowPriorityText || undefined,
+        },
         personaTraits: personaTraits,
         chatHistory: genkitChatHistory, 
       };
@@ -1041,4 +1044,3 @@ export default function HomePage() {
     </div>
   );
 }
-
