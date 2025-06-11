@@ -764,7 +764,7 @@ export default function HomePage() {
           
           <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
           <ul className="list-disc list-inside space-y-1 text-xs pl-4">
-              <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked.</li>
+              <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
               <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
               <li>Verify with <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code> that the active policy on the bucket includes this exact Studio origin.</li>
           </ul>
@@ -780,7 +780,7 @@ export default function HomePage() {
               </ul>
             </li>
             <li>
-              <strong>Create/Update <code>cors-config.json</code> file with this exact content (replace placeholders if necessary, but the Studio origin below should match your screenshot):</strong>
+              <strong>Create/Update <code>cors-config.json</code> file with this exact content:</strong>
               <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
 {`[
   {
