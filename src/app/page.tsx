@@ -27,8 +27,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-// KnowledgeSource is defined in admin page, no need to redefine here if not used directly for typing complex objects
-// import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
 
 
 export interface Message {
@@ -68,11 +66,11 @@ const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
 const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
 const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
 
-// Simplified KnowledgeSource type for page.tsx as we only care about name, type, downloadURL
+
 interface PageKnowledgeSource {
     name: string;
     type: string;
-    downloadURL?: string; // downloadURL can be undefined
+    downloadURL?: string; 
 }
 
 
@@ -110,7 +108,7 @@ export default function HomePage() {
   const [dynamicKnowledgeContentMedium, setDynamicKnowledgeContentMedium] = useState<string>('');
   const [dynamicKnowledgeContentLow, setDynamicKnowledgeContentLow] = useState<string>('');
   
-  const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true); // Global loading state
+  const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true); 
   const [corsErrorEncountered, setCorsErrorEncountered] = useState(false);
 
 
@@ -649,20 +647,10 @@ export default function HomePage() {
               } else {
                 levelCorsError = true;
                 console.warn(`[HomePage] Failed to fetch ${source.name} (${levelName}) from ${source.downloadURL}. Status: ${response.status}. Likely CORS. Details in Network tab.`);
-                toast({
-                    title: `Fetch Error: ${source.name} (${levelName})`,
-                    description: `Status ${response.status}. Check browser console & Network tab for CORS details. Verify Storage CORS settings.`,
-                    variant: "destructive", duration: 20000
-                });
               }
             } catch (fetchError: any) {
               levelCorsError = true;
               console.error(`[HomePage] Fetch error for ${source.name} (${levelName}). URL: ${source.downloadURL}. Error: ${fetchError.message}. Likely CORS.`, fetchError);
-              toast({
-                  title: `Network Error: ${source.name} (${levelName})`,
-                  description: `Fetch failed: ${fetchError.message}. Check browser console & Network tab for CORS. Verify Storage CORS settings.`,
-                  variant: "destructive", duration: 20000
-              });
             }
           } else if (source.type === 'text' && (!source.downloadURL || typeof source.downloadURL !== 'string' || source.downloadURL.trim() === '')) {
             console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (${levelName}). URL: '${source.downloadURL}'. Skipping.`);
@@ -678,7 +666,7 @@ export default function HomePage() {
         setSummary('');
         setContent('');
         toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge.`, variant: "destructive"});
-        levelCorsError = true; // Assume potential CORS if metadata fails too
+        levelCorsError = true; 
     }
     return levelCorsError;
   }, [toast]);
@@ -688,8 +676,8 @@ export default function HomePage() {
     const fetchAllData = async () => {
       setIsLoadingKnowledge(true);
       setCorsErrorEncountered(false);
+      let anyCorsError = false;
 
-      // Fetch API Keys and Site Assets (common)
       try {
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
@@ -716,12 +704,14 @@ export default function HomePage() {
         toast({ title: "Config Error", description: "Could not load app settings.", variant: "destructive"});
       }
 
-      // Fetch knowledge bases in order
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh);
+      if (highError) anyCorsError = true;
       const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium);
+      if (mediumError) anyCorsError = true;
       const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setKnowledgeFileSummaryLow, setDynamicKnowledgeContentLow);
+      if (lowError) anyCorsError = true;
       
-      if (highError || mediumError || lowError) {
+      if (anyCorsError) {
         setCorsErrorEncountered(true);
       }
 
@@ -760,6 +750,77 @@ export default function HomePage() {
       window.removeEventListener('navigateToSplashScreen', handleNavigateToSplash);
     };
   }, [resetConversation]);
+
+
+  const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
+      <Alert variant="destructive" className="my-4">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Critical: Knowledge Base Access Issue (CORS)</AlertTitle>
+        <AlertDescription className="space-y-2 text-left">
+          <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
+          
+          <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
+          <ul className="list-disc list-inside space-y-1 text-xs pl-4">
+              <li>The issue is almost certainly with the Firebase Studio origin: <code>https://YOUR_STUDIO_ID.cloudworkstation.dev</code>.</li>
+              <li>Ensure the <strong>exact current Firebase Studio origin</strong> (copy it from the browser console error when running in Studio) is present in your <code>cors-config.json</code> file.</li>
+              <li>Verify with <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code> that the active policy on the bucket includes this exact Studio origin.</li>
+          </ul>
+
+          <p className="font-semibold mt-2">General CORS Troubleshooting for Firebase Storage:</p>
+          <ol className="list-decimal list-inside space-y-1 text-xs">
+            <li>
+              <strong>Identify ALL Your App's Origins:</strong>
+              <ul className="list-disc list-inside ml-4">
+                <li>Firebase Studio: In your Studio browser's developer console (F12), find the CORS error. Copy the "origin" (e.g., <code>https://6000-firebase-studio-YOUR_ID.cloudworkstation.dev</code>).</li>
+                <li>Deployed App: e.g., <code>https://YOUR_PROJECT_ID.web.app</code> or custom domain.</li>
+                <li>Local Development: e.g., <code>http://localhost:9002</code>.</li>
+              </ul>
+            </li>
+            <li>
+              <strong>Create/Update <code>cors-config.json</code> file:</strong>
+              <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
+{`[
+  {
+    "origin": [
+      "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR_IN_STUDIO",
+      "MUST_REPLACE_WITH_YOUR_DEPLOYED_APP_ORIGIN",
+      "http://localhost:9002" 
+    ],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "maxAgeSeconds": 3600
+  }
+]`}
+              </pre>
+              Replace placeholders with your actual origins. Add more if needed.
+            </li>
+            <li>
+              <strong>Identify Your GCS Bucket ID:</strong>
+              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>).
+            </li>
+            <li>
+              <strong>Use `gsutil` (Google Cloud SDK command-line):</strong>
+              <ul className="list-disc list-inside ml-4">
+                <li>Open terminal/shell with `gsutil` configured.</li>
+                <li>Navigate to where `cors-config.json` is saved.</li>
+                <li>
+                  Set policy: <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code>
+                  <br />(Replace <code>YOUR_CORRECT_BUCKET_ID</code>. If one bucket ID format gives a 404 error, try the other format, e.g., ending with <code>.appspot.com</code> or <code>.firebasestorage.app</code>).
+                </li>
+                <li>
+                  Verify: <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code>
+                  <br />The output must match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
+                </li>
+              </ul>
+            </li>
+            <li>
+              <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. Clear browser cache thoroughly. Test in Incognito/Private window.
+            </li>
+          </ol>
+          <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved.</p>
+        </AlertDescription>
+      </Alert>
+  );
 
 
   if (showSplashScreen) {
@@ -823,60 +884,7 @@ export default function HomePage() {
                     <span>Voice features (ElevenLabs TTS) may be limited. API key not configured. Using browser default TTS.</span>
                 </div>
             )}
-            {corsErrorEncountered && !isLoadingKnowledge && (
-                <Alert variant="destructive" className="mt-4">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Critical: Knowledge Base Access Issue (CORS)</AlertTitle>
-                    <AlertDescription className="space-y-2 text-left">
-                      <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
-                      <p><strong>This must be fixed in your Google Cloud project for Firebase Storage:</strong></p>
-                      <ol className="list-decimal list-inside space-y-1 text-xs">
-                        <li>
-                          <strong>Identify Your App's Origin:</strong> In your browser's developer console (F12), find the CORS error message. It will state the exact "origin" that was blocked (e.g., <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code>). Copy this entire origin URL.
-                        </li>
-                        <li>
-                          <strong>Create/Update `cors-config.json` file:</strong>
-                          <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
-{`[
-  {
-    "origin": [
-      "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR"
-    ],
-    "method": ["GET", "HEAD", "OPTIONS"],
-    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
-    "maxAgeSeconds": 3600
-  }
-]`}
-                          </pre>
-                          Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied (e.g., <code>https://6000-firebase-studio-your-id.cloudworkstation.dev</code>). You can add multiple origins (like <code>http://localhost:9002</code>, deployed app URL).
-                        </li>
-                        <li>
-                          <strong>Identify Your GCS Bucket ID:</strong>
-                          In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>). Copy the ID.
-                        </li>
-                        <li>
-                          <strong>Use `gsutil` (Google Cloud SDK command-line):</strong>
-                          <ul className="list-disc list-inside ml-4">
-                            <li>Open terminal/shell with `gsutil` configured.</li>
-                            <li>Navigate to where `cors-config.json` is saved.</li>
-                            <li>
-                              Set policy: <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code>
-                              <br />(Replace <code>YOUR_CORRECT_BUCKET_ID</code> with the ID from Step 3. Test BOTH <code>.appspot.com</code> and <code>.firebasestorage.app</code> suffixed versions if one gives a 404 error.)
-                            </li>
-                            <li>
-                              Verify: <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code>
-                              <br />The output must match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
-                            </li>
-                          </ul>
-                        </li>
-                        <li>
-                          <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. Clear browser cache thoroughly. Test in Incognito/Private window.
-                        </li>
-                      </ol>
-                      <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved. Check browser's Network tab for detailed fetch error codes if issues persist after correct `gsutil` configuration.</p>
-                    </AlertDescription>
-                </Alert>
-            )}
+            {corsTroubleshootingAlert}
           </CardContent>
         </Card>
       </div>
@@ -927,62 +935,6 @@ export default function HomePage() {
             </div>
         );
     }
-
-    const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
-      <Alert variant="destructive" className="my-4">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Critical: Knowledge Base Access Issue (CORS)</AlertTitle>
-        <AlertDescription className="space-y-2 text-left">
-            <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
-            <p><strong>This must be fixed in your Google Cloud project for Firebase Storage:</strong></p>
-            <ol className="list-decimal list-inside space-y-1 text-xs">
-            <li>
-                <strong>Identify Your App's Origin:</strong> In your browser's developer console (F12), find the CORS error message. It will state the exact "origin" that was blocked (e.g., <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code>). Copy this entire origin URL.
-            </li>
-            <li>
-                <strong>Create/Update `cors-config.json` file:</strong>
-                <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
-{`[
-{
-    "origin": [
-    "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR"
-    ],
-    "method": ["GET", "HEAD", "OPTIONS"],
-    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
-    "maxAgeSeconds": 3600
-}
-]`}
-                </pre>
-                Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied (e.g., <code>https://6000-firebase-studio-your-id.cloudworkstation.dev</code>). You can add multiple origins (like <code>http://localhost:9002</code>, deployed app URL).
-            </li>
-            <li>
-                <strong>Identify Your GCS Bucket ID:</strong>
-                In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>). Copy the ID.
-            </li>
-            <li>
-                <strong>Use `gsutil` (Google Cloud SDK command-line):</strong>
-                <ul className="list-disc list-inside ml-4">
-                <li>Open terminal/shell with `gsutil` configured.</li>
-                <li>Navigate to where `cors-config.json` is saved.</li>
-                <li>
-                    Set policy: <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code>
-                    <br />(Replace <code>YOUR_CORRECT_BUCKET_ID</code> with the ID from Step 3. Test BOTH <code>.appspot.com</code> and <code>.firebasestorage.app</code> suffixed versions if one gives a 404 error.)
-                </li>
-                <li>
-                    Verify: <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code>
-                    <br />The output must match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
-                </li>
-                </ul>
-            </li>
-            <li>
-                <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. Clear browser cache thoroughly. Test in Incognito/Private window.
-            </li>
-            </ol>
-            <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved. Check browser's Network tab for detailed fetch error codes if issues persist after correct `gsutil` configuration.</p>
-        </AlertDescription>
-      </Alert>
-    );
-
 
     if (communicationMode === 'audio-only') {
       return (
@@ -1083,4 +1035,5 @@ export default function HomePage() {
     </div>
   );
 }
+
 
