@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle } from 'lucide-react';
+import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle, Info } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,6 +94,7 @@ export default function HomePage() {
   const [knowledgeFileSummary, setKnowledgeFileSummary] = useState<string>('');
   const [dynamicKnowledgeContent, setDynamicKnowledgeContent] = useState<string>('');
   const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
+  const [corsErrorEncountered, setCorsErrorEncountered] = useState(false);
 
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -140,6 +142,7 @@ export default function HomePage() {
     isEndingSessionRef.current = false;
     setShowLogForSaveConfirmation(false);
     setShowSaveDialog(false);
+    setCorsErrorEncountered(false); 
     
     if (elevenLabsAudioRef.current) {
       if (elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
@@ -592,6 +595,7 @@ export default function HomePage() {
   useEffect(() => {    
     const fetchFirestoreData = async () => {
       setIsLoadingKnowledge(true);
+      setCorsErrorEncountered(false);
       setKnowledgeFileSummary('');
       setDynamicKnowledgeContent('');
       try {
@@ -632,9 +636,10 @@ export default function HomePage() {
           setKnowledgeFileSummary(summary);
 
           const textFileContents: string[] = [];
+          let fetchFailedForAnyTextFile = false;
+
           for (const source of sources) {
             if (source.type === 'text') {
-              // Enhanced URL validation
               if (source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
                 console.log(`[HomePage] Attempting to fetch content for ${source.name} from URL: ${source.downloadURL}`);
                 try {
@@ -643,58 +648,23 @@ export default function HomePage() {
                     const textContent = await response.text();
                     textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
                   } else {
-                    console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
+                    fetchFailedForAnyTextFile = true;
+                    setCorsErrorEncountered(true);
+                    console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}. This is very likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket. The browser is blocking the request.`);
                      toast({
                       title: `CORS Issue Likely: Failed to Fetch ${source.name} (${response.status})`,
-                      description: `This is likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket. The browser is blocking the request.
-
-Troubleshooting Steps:
-1.  **Verify Your Origin in cors-config.json**:
-    The "origin" in your \`cors-config.json\` MUST EXACTLY MATCH your app's current origin (e.g., the one from the browser console error, like 'https://6000-firebase-studio-....cloudworkstation.dev'). Double-check for typos (http vs https, extra slashes, correct port).
-
-2.  **Correct Bucket ID with gsutil**:
-    Use the bucket ID found in Firebase Console (Storage > Files tab, usually looks like \`gs://your-project-id.appspot.com\` OR \`gs://your-project-id.firebasestorage.app\`).
-    Command: \`gsutil cors set cors-config.json gs://[YOUR_CORRECT_BUCKET_ID]\`
-
-3.  **Verify Applied CORS Configuration**:
-    After running 'set', immediately run:
-    \`gsutil cors get gs://[YOUR_CORRECT_BUCKET_ID]\`
-    Confirm the output matches your \`cors-config.json\`, especially the "origin" list.
-
-4.  **Wait & Clear Cache**: Allow 5-10 minutes for changes to propagate. Clear your browser's cache thoroughly or use an Incognito/Private window.
-
-5.  **Test URL Directly**: Copy the URL logged above for '${source.name}' and open it in your browser. If it fails, the URL itself is bad (re-upload file / refresh URL in admin).
-
-This is a server-side Firebase Storage configuration. The app code cannot bypass this browser security feature.`,
+                      description: `The browser blocked fetching '${source.name}' due to CORS. This is a Firebase Storage configuration issue. Please see the on-page alert for detailed troubleshooting steps.`,
                       variant: "destructive",
                       duration: 120000 
                     });
                   }
                 } catch (fetchError: any) {
+                  fetchFailedForAnyTextFile = true;
+                  setCorsErrorEncountered(true);
                   console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}`, fetchError);
                   toast({
                     title: `CORS Issue Likely: Failed to Fetch ${source.name}`,
-                    description: `Fetch failed for URL (see console): ${source.downloadURL}. This is likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket.
-
-Troubleshooting Steps:
-1.  **Verify Your Origin in cors-config.json**:
-    The "origin" in your \`cors-config.json\` MUST EXACTLY MATCH your app's current origin (e.g., the one from the browser console error, like 'https://6000-firebase-studio-....cloudworkstation.dev'). Double-check for typos (http vs https, extra slashes, correct port).
-
-2.  **Correct Bucket ID with gsutil**:
-    Use the bucket ID found in Firebase Console (Storage > Files tab, usually looks like \`gs://your-project-id.appspot.com\` OR \`gs://your-project-id.firebasestorage.app\`).
-    Command: \`gsutil cors set cors-config.json gs://[YOUR_CORRECT_BUCKET_ID]\`
-
-3.  **Verify Applied CORS Configuration**:
-    After running 'set', immediately run:
-    \`gsutil cors get gs://[YOUR_CORRECT_BUCKET_ID]\`
-    Confirm the output matches your \`cors-config.json\`, especially the "origin" list.
-
-4.  **Wait & Clear Cache**: Allow 5-10 minutes for changes to propagate. Clear your browser's cache thoroughly or use an Incognito/Private window.
-
-5.  **Test URL Directly**: Copy the URL logged for '${source.name}' and open it in your browser. If it fails, the URL itself is bad (re-upload file / refresh URL in admin).
-
-This is a server-side Firebase Storage configuration. The app code cannot bypass this browser security feature.
-Error: ${fetchError.message || 'Unknown fetch error'}.`,
+                    description: `Fetch failed for '${source.name}' (URL in console). This is likely a CORS configuration issue. Please see the on-page alert for detailed troubleshooting steps. Error: ${fetchError.message || 'Unknown fetch error'}.`,
                     variant: "destructive",
                     duration: 120000 
                   });
@@ -711,6 +681,9 @@ Error: ${fetchError.message || 'Unknown fetch error'}.`,
             }
           }
           setDynamicKnowledgeContent(textFileContents.join('\n\n'));
+          if (fetchFailedForAnyTextFile) {
+            setCorsErrorEncountered(true); // Ensure it's set if any fetch fails
+          }
         } else {
             setKnowledgeFileSummary('');
             setDynamicKnowledgeContent('');
@@ -829,6 +802,18 @@ Error: ${fetchError.message || 'Unknown fetch error'}.`,
                     <span>Voice features (ElevenLabs TTS) may be limited. API key not configured. Using browser default TTS.</span>
                 </div>
             )}
+             {corsErrorEncountered && !isLoadingKnowledge && (
+                <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Knowledge Base Access Issue (CORS)</AlertTitle>
+                    <AlertDescription>
+                        AI Blair could not load some text files from the knowledge base due to a CORS (Cross-Origin Resource Sharing) configuration error on your Firebase Storage bucket. 
+                        This is a security setting that needs to be adjusted in your Google Cloud project.
+                        Please follow the troubleshooting steps from previous toast messages or consult the Firebase/Google Cloud documentation for setting up CORS on your storage bucket.
+                        The key is to allow your app's origin (likely starting with 'https://6000-firebase-studio...') to make GET requests to 'firebasestorage.googleapis.com'.
+                    </AlertDescription>
+                </Alert>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -879,9 +864,48 @@ Error: ${fetchError.message || 'Unknown fetch error'}.`,
             </div>
         );
     }
+
+    const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
+      <Alert variant="destructive" className="my-4">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertTitle>Critical: Knowledge Base Access Issue (CORS)</AlertTitle>
+        <AlertDescription className="space-y-2">
+          <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application to fetch files.</p>
+          <p><strong>This must be fixed in your Google Cloud project:</strong></p>
+          <ol className="list-decimal list-inside space-y-1 text-xs">
+            <li><strong>Identify Origins:</strong> Your app origin (from browser console CORS error, e.g., <code>https://6000-firebase-studio-....cloudworkstation.dev</code>) and <code>https://firebasestorage.googleapis.com</code>.</li>
+            <li><strong>Create `cors-config.json` file:</strong>
+              <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
+{`[
+  {
+    "origin": ["PASTE_YOUR_APP_ORIGIN_HERE"],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
+    "maxAgeSeconds": 3600
+  }
+]`}
+              </pre>
+              Replace <code>PASTE_YOUR_APP_ORIGIN_HERE</code> with the actual origin. You can add multiple origins if needed.
+            </li>
+            <li><strong>Find Bucket ID:</strong> Go to Firebase Console -> Storage -> Files tab. Your bucket ID is usually <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>.</li>
+            <li><strong>Use `gsutil` (Google Cloud SDK):</strong>
+              <ul className="list-disc list-inside ml-4">
+                <li>Set config: <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code></li>
+                <li>Verify: <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code> (ensure output matches your file).</li>
+              </ul>
+            </li>
+            <li><strong>Wait & Clear Cache:</strong> Allow 5-10 mins for changes. Clear browser cache or use Incognito.</li>
+          </ol>
+          <p className="mt-2">If issues persist, double-check each step, especially the exact origin string and bucket ID. AI Blair's knowledge will be incomplete until this is resolved.</p>
+        </AlertDescription>
+      </Alert>
+    );
+
+
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
+          {corsTroubleshootingAlert}
           <Image {...imageProps} />
           <h2 className="mt-6 text-3xl font-bold font-headline text-primary">AI Blair</h2>
           {showPreparingGreeting && (
@@ -950,6 +974,7 @@ Error: ${fetchError.message || 'Unknown fetch error'}.`,
               )}
             </CardContent>
           </Card>
+           {corsTroubleshootingAlert}
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation} avatarSrc={avatarSrc} />
