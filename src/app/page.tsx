@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle, Info } from 'lucide-react';
+import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -110,12 +110,15 @@ export default function HomePage() {
   
   const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true); 
   const [corsErrorEncountered, setCorsErrorEncountered] = useState(false);
+  const [showPreparingAudioResponseIndicator, setShowPreparingAudioResponseIndicator] = useState(false);
 
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const currentAiResponseTextRef = useRef<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
+  const preparingIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
   const isSpeakingRef = useRef(isSpeaking);
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
@@ -158,6 +161,11 @@ export default function HomePage() {
     setShowLogForSaveConfirmation(false);
     setShowSaveDialog(false);
     setCorsErrorEncountered(false); 
+    setShowPreparingAudioResponseIndicator(false);
+    if (preparingIndicatorTimeoutRef.current) {
+      clearTimeout(preparingIndicatorTimeoutRef.current);
+      preparingIndicatorTimeoutRef.current = null;
+    }
     
     if (elevenLabsAudioRef.current) {
       if (elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
@@ -221,6 +229,11 @@ export default function HomePage() {
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
     setIsSendingMessage(false); 
+    setShowPreparingAudioResponseIndicator(false);
+    if (preparingIndicatorTimeoutRef.current) {
+        clearTimeout(preparingIndicatorTimeoutRef.current);
+        preparingIndicatorTimeoutRef.current = null;
+    }
 
     if (currentAiResponseTextRef.current) {
       if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
@@ -231,6 +244,11 @@ export default function HomePage() {
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
+    setShowPreparingAudioResponseIndicator(false);
+    if (preparingIndicatorTimeoutRef.current) {
+        clearTimeout(preparingIndicatorTimeoutRef.current);
+        preparingIndicatorTimeoutRef.current = null;
+    }
 
     if (isEndingSessionRef.current) {
       isEndingSessionRef.current = false; 
@@ -301,6 +319,11 @@ export default function HomePage() {
       }
       setIsSendingMessage(false); 
       setIsSpeaking(false); 
+      setShowPreparingAudioResponseIndicator(false);
+      if (preparingIndicatorTimeoutRef.current) {
+          clearTimeout(preparingIndicatorTimeoutRef.current);
+          preparingIndicatorTimeoutRef.current = null;
+      }
       return;
     }
 
@@ -386,9 +409,13 @@ export default function HomePage() {
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0); 
     isEndingSessionRef.current = false; 
+    setShowPreparingAudioResponseIndicator(false); // Hide indicator when new message sent
+    if (preparingIndicatorTimeoutRef.current) {
+        clearTimeout(preparingIndicatorTimeoutRef.current);
+        preparingIndicatorTimeoutRef.current = null;
+    }
 
-    const genkitChatHistory = messages // Use current messages state before adding the new user message for history
-        .filter(msg => msg.text && msg.text.trim() !== "") 
+    const genkitChatHistory = messages
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }],
@@ -546,6 +573,33 @@ export default function HomePage() {
     }
   }, [isListening, toast]); 
 
+  useEffect(() => {
+    if (preparingIndicatorTimeoutRef.current) {
+        clearTimeout(preparingIndicatorTimeoutRef.current);
+        preparingIndicatorTimeoutRef.current = null;
+    }
+    setShowPreparingAudioResponseIndicator(false);
+
+    if (
+        communicationMode === 'audio-only' &&
+        isSendingMessage &&
+        !isSpeaking &&
+        !isListening
+    ) {
+        preparingIndicatorTimeoutRef.current = setTimeout(() => {
+            if (isSendingMessage && !isSpeaking && !isListening && communicationMode === 'audio-only') {
+                 setShowPreparingAudioResponseIndicator(true);
+            }
+        }, 1200);
+    }
+
+    return () => {
+        if (preparingIndicatorTimeoutRef.current) {
+            clearTimeout(preparingIndicatorTimeoutRef.current);
+        }
+    };
+  }, [isSendingMessage, isSpeaking, isListening, communicationMode]);
+
 
   const handleModeSelectionSubmit = () => {
     resetConversation(); 
@@ -603,6 +657,11 @@ export default function HomePage() {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
       setIsSendingMessage(true);
       setAiHasInitiatedConversation(true); 
+      setShowPreparingAudioResponseIndicator(false); // Ensure no preparing indicator before initial greeting
+      if (preparingIndicatorTimeoutRef.current) {
+        clearTimeout(preparingIndicatorTimeoutRef.current);
+        preparingIndicatorTimeoutRef.current = null;
+      }
       const initGreeting = async () => {
         try {
           const greetingInput: GenerateInitialGreetingInput = {
@@ -767,7 +826,7 @@ export default function HomePage() {
         <AlertDescription className="space-y-2 text-left">
           <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
           
-          <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
+           <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
           <ul className="list-disc list-inside space-y-1 text-xs pl-4">
               <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
               <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
@@ -936,6 +995,7 @@ export default function HomePage() {
       !isSendingMessage &&
       !isSpeaking &&
       !showSaveDialog &&
+      !showPreparingAudioResponseIndicator && // Don't show speak button if preparing indicator is shown
       !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation); 
 
 
@@ -969,6 +1029,11 @@ export default function HomePage() {
           {isListening && (
              <div className="mt-4 flex items-center justify-center p-3 rounded-lg bg-accent text-accent-foreground shadow animate-pulse">
                 <Mic size={20} className="mr-2"/> Listening...
+            </div>
+          )}
+          {showPreparingAudioResponseIndicator && !isSpeaking && !isListening && (
+             <div className="mt-4 flex items-center justify-center p-3 rounded-lg bg-secondary text-secondary-foreground shadow animate-pulse">
+                <Loader2 size={20} className="mr-2 animate-spin"/> Preparing response...
             </div>
           )}
           {showSpeakButtonAudioOnly && (
