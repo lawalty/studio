@@ -60,7 +60,7 @@ const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP//
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v2_meta";
+const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v3_meta"; // Changed to v3
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -628,7 +628,7 @@ export default function HomePage() {
 
         if (sources.length > 0) {
           const summary = "The knowledge base includes information from the following uploaded files: " +
-                          sources.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
+                          sources.map(s => `${s.name} (Type: ${s.type}, Priority: ${s.priority || 'N/A'})`).join(', ') + ".";
           setKnowledgeFileSummary(summary);
 
           const textFileContents: string[] = [];
@@ -645,18 +645,18 @@ export default function HomePage() {
                     console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
                     toast({
                         title: `Server Error for ${source.name}`,
-                        description: `Could not load. Server status: ${response.status}. Test URL in browser (see console). If it works, check CORS.`,
+                        description: `Could not load. Server status: ${response.status}. 1. Test URL in browser (see console). 2. If it works, check CORS. 3. Re-upload file / refresh URL in admin.`,
                         variant: "destructive",
-                        duration: 12000
+                        duration: 15000
                     });
                   }
                 } catch (fetchError: any) {
                   console.error(`[HomePage] Network or fetch error for ${source.name}. URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
                   toast({
                     title: `Fetch Error for ${source.name}`,
-                    description: `Failed to fetch content. 1. Test URL in browser (see console). 2. If URL works, check CORS settings in Firebase Storage. 3. Refresh URL in admin. Original error: ${fetchError.message}.`,
+                    description: `Failed to fetch content. 1. Test URL in browser (see console). 2. If URL works, check CORS settings in Firebase Storage. 3. Re-upload file / refresh URL in admin. Original error: ${fetchError.message}. Check browser dev console for more details.`,
                     variant: "destructive",
-                    duration: 15000 
+                    duration: 20000 
                   });
                 }
               } else {
@@ -758,7 +758,7 @@ export default function HomePage() {
              {isLoadingKnowledge && (
                 <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
                     <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" />
-                    Connecting to knowledge base...
+                    Connecting to knowledge base (v3)...
                 </div>
             )}
             <RadioGroup
@@ -834,7 +834,7 @@ export default function HomePage() {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center py-8">
                 <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
-                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Base</h2>
+                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Base (v3)</h2>
                 <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p>
             </div>
         );
@@ -937,3 +937,5 @@ export default function HomePage() {
   );
 }
 
+
+    

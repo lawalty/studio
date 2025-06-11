@@ -24,7 +24,7 @@ export interface KnowledgeSource {
   priority: 'High' | 'Medium' | 'Low';
 }
 
-const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v2_meta";
+const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v3_meta"; // Changed to v3
 
 const getFileIcon = (type: KnowledgeSource['type']) => {
   switch (type) {
@@ -55,7 +55,7 @@ export default function KnowledgeBasePage() {
         uploadedAt: s.uploadedAt,
         storagePath: s.storagePath,
         downloadURL: s.downloadURL,
-        priority: s.priority || 'Medium', // Ensure priority is always included
+        priority: s.priority || 'Medium',
       }));
 
       if (sourcesForDb.some(s => !s.id || !s.downloadURL || !s.storagePath)) {
@@ -96,7 +96,7 @@ export default function KnowledgeBasePage() {
         if (docSnap.exists() && docSnap.data()?.sources) {
           const fetchedSources = (docSnap.data().sources as any[]).map(s => ({
             ...s,
-            priority: s.priority || 'Medium', // Default priority if missing
+            priority: s.priority || 'Medium',
           }));
           setSources(fetchedSources as KnowledgeSource[]);
         } else {
@@ -131,7 +131,7 @@ export default function KnowledgeBasePage() {
 
     setIsCurrentlyUploading(true);
     const currentFile = selectedFile;
-    const filePath = `knowledge_base_files_v2/${Date.now()}-${currentFile.name.replace(/\s+/g, '_')}`;
+    const filePath = `knowledge_base_files_v3/${Date.now()}-${currentFile.name.replace(/\s+/g, '_')}`; // Changed to v3
     const fileRef = storageRef(storage, filePath);
     let finalNewSource: KnowledgeSource | null = null;
     const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -175,20 +175,21 @@ export default function KnowledgeBasePage() {
         uploadedAt: new Date().toISOString().split('T')[0],
         storagePath: filePath,
         downloadURL: downloadURL,
-        priority: 'Medium', // Default priority for new uploads
+        priority: 'Medium',
       };
       console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
 
-      const listToSaveToFirestore = [finalNewSource, ...sources];
-      setSources(listToSaveToFirestore); 
+      const newListForStateAndFirestore = [finalNewSource, ...sources];
+      setSources(newListForStateAndFirestore);
 
-      const savedToDb = await saveSourcesToFirestore(listToSaveToFirestore);
+      const savedToDb = await saveSourcesToFirestore(newListForStateAndFirestore);
 
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
       } else {
         console.error("[KnowledgeBasePage - handleUpload] Firestore save failed after successful upload. Reverting UI for item:", permanentId);
-        setSources(prev => prev.filter(s => s.id !== permanentId));
+        toast({ title: "Database Save Failed", description: `File ${currentFile.name} uploaded but failed to save to DB. Reverting UI. Check logs.`, variant: "destructive"});
+        setSources(prev => prev.filter(s => s.id !== permanentId)); // Revert UI
       }
     } catch (error: any) {
       console.error("[KnowledgeBasePage - handleUpload] Upload or Save error:", error);
@@ -196,7 +197,7 @@ export default function KnowledgeBasePage() {
       if (error.code) description += ` (Error: ${error.code})`;
       else if (error.message) description += ` (Message: ${error.message})`;
       toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      if (permanentId) {
+      if (permanentId) { // If an ID was generated, try to remove any optimistic UI update
         setSources(prev => prev.filter(s => s.id !== permanentId));
       }
     } finally {
@@ -247,8 +248,8 @@ export default function KnowledgeBasePage() {
       return;
     }
 
-    let refreshedSourceItem: KnowledgeSource | null = null;
     const originalSourcesSnapshot = [...sources]; 
+    let refreshedSourceItem: KnowledgeSource | null = null;
 
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
@@ -279,6 +280,7 @@ export default function KnowledgeBasePage() {
           toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
       } else {
           console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Firestore save failed after URL refresh. Reverting UI for item:", sourceId);
+          toast({title: "Refresh Save Error", description: "URL refreshed, but DB save failed. Reverting.", variant: "destructive"});
           setSources(originalSourcesSnapshot);
       }
 
@@ -301,7 +303,7 @@ export default function KnowledgeBasePage() {
       toast({ title: "Priority Updated", description: `Priority for source set to ${newPriority}.` });
     } else {
       toast({ title: "Priority Update Failed", description: "Could not save priority change.", variant: "destructive" });
-      setSources(originalSources); // Revert UI if save failed
+      setSources(originalSources);
     }
   };
 
@@ -309,9 +311,9 @@ export default function KnowledgeBasePage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Upload New Source</CardTitle>
+          <CardTitle className="font-headline">Upload New Source (Knowledge Base v3)</CardTitle>
           <CardDescription>
-            Add new documents, audio files, or other content to AI Blair's knowledge base. Files are uploaded to Firebase Storage, and their metadata is stored in Firestore. Default priority is 'Medium'.
+            Add new documents, audio files, or other content to AI Blair's knowledge base. Files are uploaded to Firebase Storage (v3 folder), and their metadata is stored in Firestore. Default priority is 'Medium'.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -345,7 +347,7 @@ export default function KnowledgeBasePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Manage Knowledge Base Sources</CardTitle>
+          <CardTitle className="font-headline">Manage Knowledge Base Sources (v3)</CardTitle>
           <CardDescription>View, prioritize, and remove sources. Uploaded files are in Firebase Storage, metadata in Firestore.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -357,8 +359,8 @@ export default function KnowledgeBasePage() {
           ) : sources.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
               <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No sources found.</p>
-              <p className="text-sm text-muted-foreground">Upload a source to get started.</p>
+              <p className="text-muted-foreground">No sources found for v3.</p>
+              <p className="text-sm text-muted-foreground">Upload a source to get started with the v3 knowledge base.</p>
             </div>
           ) : (
           <Table>
@@ -431,4 +433,6 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+    
+
     
