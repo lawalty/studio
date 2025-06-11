@@ -6,14 +6,24 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 
 export interface KnowledgeSource {
@@ -26,7 +36,8 @@ export interface KnowledgeSource {
   downloadURL: string;
 }
 
-type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low';
+export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low';
+const KB_LEVELS: KnowledgeBaseLevel[] = ['High', 'Medium', 'Low'];
 
 const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFolder: string; title: string }> = {
   High: {
@@ -72,6 +83,11 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [sourceToMoveDetails, setSourceToMoveDetails] = useState<{ source: KnowledgeSource; currentLevel: KnowledgeBaseLevel } | null>(null);
+  const [selectedTargetMoveLevel, setSelectedTargetMoveLevel] = useState<KnowledgeBaseLevel | null>(null);
+  const [isMovingSource, setIsMovingSource] = useState(false);
+
   const getSourcesSetter = (level: KnowledgeBaseLevel) => {
     if (level === 'High') return setSourcesHigh;
     if (level === 'Medium') return setSourcesMedium;
@@ -105,10 +121,8 @@ export default function KnowledgeBasePage() {
         return false;
       }
       
-      console.log(`[KBPage - saveSources - ${level}] Saving ${sourcesForDb.length} sources to Firestore. Path: ${config.firestorePath}`);
       const docRef = doc(db, config.firestorePath);
       await setDoc(docRef, { sources: sourcesForDb });
-      console.log(`[KBPage - saveSources - ${level}] Successfully saved to Firestore.`);
       return true;
     } catch (error: any) {
       console.error(`[KBPage - saveSources - ${level}] Error saving to Firestore:`, error);
@@ -158,8 +172,8 @@ export default function KnowledgeBasePage() {
       toast({ title: "No file selected", variant: "destructive" });
       return;
     }
-    if (isCurrentlyUploading) {
-      toast({ title: "Upload in Progress", variant: "default" });
+    if (isCurrentlyUploading || isMovingSource) {
+      toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
       return;
     }
 
@@ -180,7 +194,6 @@ export default function KnowledgeBasePage() {
       const downloadURL = await getDownloadURL(fileRef);
 
       if (!downloadURL) {
-        console.error(`[KBPage - handleUpload - ${targetLevel}] CRITICAL: downloadURL is null for ${currentFile.name}.`);
         toast({ title: "URL Retrieval Failed", description: `Could not get URL for ${currentFile.name}. Metadata not saved.`, variant: "destructive"});
         setIsCurrentlyUploading(false);
         setSelectedFile(null);
@@ -204,20 +217,19 @@ export default function KnowledgeBasePage() {
       };
 
       const newListForStateAndFirestore = [newSource, ...currentSources];
-      setSources(newListForStateAndFirestore);
+      
 
       const savedToDb = await saveSourcesToFirestore(newListForStateAndFirestore, targetLevel);
       if (savedToDb) {
+        setSources(newListForStateAndFirestore);
         toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
       } else {
-        console.error(`[KBPage - handleUpload - ${targetLevel}] Firestore save failed. Reverting UI for item:`, permanentId);
         toast({ title: "Database Save Failed", description: `File uploaded but DB save failed for ${targetLevel} KB. Reverting.`, variant: "destructive"});
-        setSources(prev => prev.filter(s => s.id !== permanentId));
+        // Attempt to delete the uploaded file if DB save failed
+        try { await deleteObject(fileRef); } catch (delError) { console.warn("Failed to clean up orphaned file after DB save error:", delError); }
       }
     } catch (error: any) {
-      console.error(`[KBPage - handleUpload - ${targetLevel}] Upload/Save error:`, error);
       toast({ title: "Upload Failed", description: `Could not upload/save to ${targetLevel} KB: ${error.message || 'Unknown'}.`, variant: "destructive"});
-      if (permanentId) setSources(prev => prev.filter(s => s.id !== permanentId));
     } finally {
       setIsCurrentlyUploading(false);
       setSelectedFile(null);
@@ -226,6 +238,10 @@ export default function KnowledgeBasePage() {
   };
 
   const handleDelete = async (id: string, level: KnowledgeBaseLevel) => {
+    if (isCurrentlyUploading || isMovingSource) {
+      toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
+      return;
+    }
     const currentSources = getSourcesState(level);
     const setSources = getSourcesSetter(level);
     const sourceToDelete = currentSources.find(s => s.id === id);
@@ -233,35 +249,33 @@ export default function KnowledgeBasePage() {
 
     const originalSources = [...currentSources];
     const updatedSourcesAfterDelete = currentSources.filter(source => source.id !== id);
-    setSources(updatedSourcesAfterDelete);
-
+    
     let dbUpdated = false;
-    if (sourceToDelete.storagePath) {
-      const fileRef = storageRef(storage, sourceToDelete.storagePath);
-      try {
-        await deleteObject(fileRef);
+    try {
+        if (sourceToDelete.storagePath) {
+            const fileRef = storageRef(storage, sourceToDelete.storagePath);
+            await deleteObject(fileRef);
+        }
         dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete, level);
         if (dbUpdated) {
-          toast({ title: "Source Removed", description: `${sourceToDelete.name} removed from ${level} KB and Storage.` });
+            setSources(updatedSourcesAfterDelete);
+            toast({ title: "Source Removed", description: `${sourceToDelete.name} removed from ${level} KB and Storage.` });
         } else {
-          setSources(originalSources); 
+            toast({ title: "Deletion Error", description: `Failed to update DB for ${sourceToDelete.name} in ${level} KB. UI reverted.`, variant: "destructive" });
+            setSources(originalSources); 
         }
-      } catch (error) {
+    } catch (error) {
         console.error(`[KBPage - handleDelete - ${level}] Firebase deletion error:`, error);
-        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Storage for ${level} KB.`, variant: "destructive" });
+        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Storage or DB for ${level} KB.`, variant: "destructive" });
         setSources(originalSources); 
-      }
-    } else { 
-      dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete, level);
-      if (dbUpdated) {
-        toast({ title: "List Item Removed", description: `${sourceToDelete.name} removed from ${level} KB list.` });
-      } else {
-        setSources(originalSources); 
-      }
     }
   };
 
   const handleRefreshSourceUrl = async (sourceId: string, level: KnowledgeBaseLevel) => {
+    if (isCurrentlyUploading || isMovingSource) {
+        toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
+        return;
+    }
     const currentSources = getSourcesState(level);
     const setSources = getSourcesSetter(level);
     const sourceToRefresh = currentSources.find(s => s.id === sourceId);
@@ -277,29 +291,125 @@ export default function KnowledgeBasePage() {
       const newDownloadURL = await getDownloadURL(fileRef);
 
       if (!newDownloadURL) {
-          console.error(`[KBPage - handleRefreshUrl - ${level}] CRITICAL: newDownloadURL is null for ${sourceToRefresh.name}.`);
           toast({ title: "URL Refresh Failed", description: `Could not get new URL for ${sourceToRefresh.name} in ${level} KB.`, variant: "destructive"});
           return;
       }
       
       const refreshedSourceItem: KnowledgeSource = { ...sourceToRefresh, downloadURL: newDownloadURL };
       const listWithRefreshedUrl = currentSources.map(s => s.id === sourceId ? refreshedSourceItem : s);
-      setSources(listWithRefreshedUrl);
+      
 
       const refreshedInDb = await saveSourcesToFirestore(listWithRefreshedUrl, level); 
       if(refreshedInDb) {
+          setSources(listWithRefreshedUrl);
           toast({title: "URL Refreshed", description: `URL for ${sourceToRefresh.name} in ${level} KB updated.`});
       } else {
-          console.error(`[KBPage - handleRefreshUrl - ${level}] Firestore save failed. Reverting UI.`);
           toast({title: "Refresh Save Error", description: "URL refreshed, but DB save failed. Reverting.", variant: "destructive"});
           setSources(originalSourcesSnapshot);
       }
     } catch (error) {
-      console.error(`[KBPage - handleRefreshUrl - ${level}] Error refreshing URL:`, error);
       toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name} in ${level} KB.`, variant: "destructive"});
       setSources(originalSourcesSnapshot); 
     }
   };
+
+  const handleOpenMoveDialog = (source: KnowledgeSource, currentLevel: KnowledgeBaseLevel) => {
+    if (isCurrentlyUploading || isMovingSource) {
+      toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
+      return;
+    }
+    setSourceToMoveDetails({ source, currentLevel });
+    setSelectedTargetMoveLevel(null); // Reset selection
+    setShowMoveDialog(true);
+  };
+
+  const handleConfirmMoveSource = async () => {
+    if (!sourceToMoveDetails || !selectedTargetMoveLevel || isMovingSource) return;
+
+    const { source, currentLevel } = sourceToMoveDetails;
+    const targetLevel = selectedTargetMoveLevel;
+
+    if (currentLevel === targetLevel) {
+      toast({ title: "Invalid Move", description: "Source is already in the selected priority level.", variant: "default" });
+      return;
+    }
+
+    setIsMovingSource(true);
+    toast({ title: "Move Started", description: `Moving ${source.name} from ${currentLevel} to ${targetLevel}...` });
+
+    let newStoragePath = '';
+    let newDownloadURL = '';
+    let tempFileRef = null;
+
+    try {
+      // 1. Get original file blob
+      const originalFileRef = storageRef(storage, source.storagePath);
+      const blob = await getBlob(originalFileRef);
+
+      // 2. Upload to new storage location
+      newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${Date.now()}-${source.name.replace(/\s+/g, '_')}`;
+      tempFileRef = storageRef(storage, newStoragePath);
+      await uploadBytes(tempFileRef, blob, { contentType: blob.type });
+      newDownloadURL = await getDownloadURL(tempFileRef);
+
+      if (!newDownloadURL) {
+        throw new Error("Failed to get download URL for the copied file.");
+      }
+
+      const movedSource: KnowledgeSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL };
+
+      // 3. Add to target Firestore & UI
+      const targetSetSources = getSourcesSetter(targetLevel);
+      const targetCurrentSources = getSourcesState(targetLevel);
+      const newTargetList = [movedSource, ...targetCurrentSources];
+      const savedToTargetDb = await saveSourcesToFirestore(newTargetList, targetLevel);
+      if (!savedToTargetDb) {
+        throw new Error(`Failed to save metadata to ${targetLevel} Firestore.`);
+      }
+      targetSetSources(newTargetList);
+
+      // 4. Remove from original Firestore & UI
+      const originalSetSources = getSourcesSetter(currentLevel);
+      const originalCurrentSources = getSourcesState(currentLevel);
+      const newOriginalList = originalCurrentSources.filter(s => s.id !== source.id);
+      const removedFromOriginalDb = await saveSourcesToFirestore(newOriginalList, currentLevel);
+      if (!removedFromOriginalDb) {
+         // This is tricky. Destination has it. Source failed to remove.
+         // For now, UI reflects removal, but log error. User might need to manually check source DB.
+         console.error(`[KBPage - Move] CRITICAL: Failed to remove metadata from ${currentLevel} Firestore after successful copy and target save for ${source.name}. Manual check needed.`);
+         toast({title: "Move Partial Success", description: `Moved to ${targetLevel}, but failed to update ${currentLevel} DB. Please verify.`, variant: "destructive", duration: 10000});
+      }
+      originalSetSources(newOriginalList);
+
+
+      // 5. Delete original file from storage (only after DB updates are confirmed or handled)
+      await deleteObject(originalFileRef);
+
+      toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
+
+    } catch (error: any) {
+      console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
+      toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
+      // Attempt to clean up copied file if it exists and other steps failed before target DB update
+      if (tempFileRef && newDownloadURL && !(await getDoc(doc(db, KB_CONFIG[targetLevel].firestorePath))).data()?.sources.find((s: KnowledgeSource) => s.id === source.id)) {
+        try {
+          await deleteObject(tempFileRef);
+          console.log("[KBPage - Move] Cleaned up copied file after move failure.");
+        } catch (cleanupError) {
+          console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError);
+        }
+      }
+      // Re-fetch to ensure UI consistency if something went wrong mid-way
+      fetchSourcesForLevel(currentLevel);
+      fetchSourcesForLevel(targetLevel);
+    } finally {
+      setIsMovingSource(false);
+      setShowMoveDialog(false);
+      setSourceToMoveDetails(null);
+      setSelectedTargetMoveLevel(null);
+    }
+  };
+
 
   const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
     const sources = getSourcesState(level);
@@ -310,7 +420,7 @@ export default function KnowledgeBasePage() {
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="font-headline">{config.title}</CardTitle>
-          <CardDescription>View and remove sources. Uploaded files are in Firebase Storage (folder: {config.storageFolder}), metadata in Firestore (path: {config.firestorePath}).</CardDescription>
+          <CardDescription>View and manage sources. Uploaded files are in Firebase Storage (folder: {config.storageFolder}), metadata in Firestore (path: {config.firestorePath}).</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingSources ? (
@@ -340,7 +450,7 @@ export default function KnowledgeBasePage() {
               {sources.map((source) => (
                 <TableRow key={source.id}>
                   <TableCell>{getFileIcon(source.type)}</TableCell>
-                  <TableCell className="font-medium">{source.name}</TableCell>
+                  <TableCell className="font-medium break-all">{source.name}</TableCell>
                   <TableCell className="capitalize">{source.type}</TableCell>
                   <TableCell>{source.size}</TableCell>
                   <TableCell>{source.uploadedAt}</TableCell>
@@ -350,7 +460,7 @@ export default function KnowledgeBasePage() {
                         <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
                           View File
                         </a>
-                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources}>
                             <RefreshCw className="h-3 w-3" />
                         </Button>
                       </div>
@@ -360,8 +470,11 @@ export default function KnowledgeBasePage() {
                         <span className="text-xs text-gray-500">Error or pending</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={isCurrentlyUploading || isLoadingSources}>
+                  <TableCell className="text-right space-x-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources}>
+                      <ArrowRightLeft className="h-4 w-4 text-blue-600" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>
@@ -387,49 +500,49 @@ export default function KnowledgeBasePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
-            <Label htmlFor="file-upload" className="font-medium whitespace-nowrap">Step 1:</Label>
+            <Label htmlFor="file-upload" className="font-medium whitespace-nowrap shrink-0">Step 1:</Label>
             <Input
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
               id="file-upload"
-              disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}
+              disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource}
             />
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow} className="w-full sm:w-auto">
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource} className="w-full sm:w-auto">
               <UploadCloud className="mr-2 h-4 w-4" /> Choose File
             </Button>
             {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
           </div>
            {selectedFile && (
-            <p className="text-xs text-muted-foreground pl-12"> {/* Added padding to align with step 1 */}
+            <p className="text-xs text-muted-foreground pl-16"> {/* Adjusted padding */}
               Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
             </p>
           )}
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Label className="font-medium whitespace-nowrap">Step 2:</Label>
-              <Label className="font-medium">Select Knowledge Base Priority:</Label>
+          <div className="flex items-start gap-4"> {/* Changed to items-start for better alignment */}
+            <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2:</Label> {/* Added pt-2 for alignment */}
+            <div className="flex flex-col">
+              <Label className="font-medium mb-1">Select Knowledge Base Priority:</Label>
+              <RadioGroup
+                value={selectedKBTargetForUpload}
+                onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
+                className="flex flex-col sm:flex-row sm:space-x-4"
+              >
+                {KB_LEVELS.map(level => (
+                  <div key={level} className="flex items-center space-x-2">
+                    <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource}/>
+                    <Label htmlFor={`r-upload-${level.toLowerCase()}`}>{level}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
             </div>
-            <RadioGroup
-              value={selectedKBTargetForUpload}
-              onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
-              className="flex flex-col sm:flex-row sm:space-x-4 pl-12" /* Added padding to align with step 2 */
-            >
-              {(['High', 'Medium', 'Low'] as KnowledgeBaseLevel[]).map(level => (
-                <div key={level} className="flex items-center space-x-2">
-                  <RadioGroupItem value={level} id={`r-${level.toLowerCase()}`} />
-                  <Label htmlFor={`r-${level.toLowerCase()}`}>{level}</Label>
-                </div>
-              ))}
-            </RadioGroup>
           </div>
         </CardContent>
         <CardFooter>
           <div className="flex items-center gap-2">
-            <Label className="font-medium whitespace-nowrap">Step 3:</Label>
-            <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}>
+            <Label className="font-medium whitespace-nowrap shrink-0">Step 3:</Label>
+            <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource}>
               {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
               {isCurrentlyUploading ? 'Uploading...' : 'Upload to Selected KB'}
             </Button>
@@ -438,25 +551,47 @@ export default function KnowledgeBasePage() {
       </Card>
 
       <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb', 'low-kb']} className="w-full">
-        <AccordionItem value="high-kb">
-          <AccordionTrigger className="text-xl font-semibold hover:no-underline">High Priority Knowledge Base</AccordionTrigger>
-          <AccordionContent>
-            {renderKnowledgeBaseSection('High')}
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="medium-kb">
-          <AccordionTrigger className="text-xl font-semibold hover:no-underline">Medium Priority Knowledge Base</AccordionTrigger>
-          <AccordionContent>
-            {renderKnowledgeBaseSection('Medium')}
-          </AccordionContent>
-        </AccordionItem>
-        <AccordionItem value="low-kb">
-          <AccordionTrigger className="text-xl font-semibold hover:no-underline">Low Priority Knowledge Base</AccordionTrigger>
-          <AccordionContent>
-            {renderKnowledgeBaseSection('Low')}
-          </AccordionContent>
-        </AccordionItem>
+        {KB_LEVELS.map(level => (
+            <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
+            <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
+            <AccordionContent>
+                {renderKnowledgeBaseSection(level)}
+            </AccordionContent>
+            </AccordionItem>
+        ))}
       </Accordion>
+
+      {sourceToMoveDetails && (
+        <AlertDialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Move Knowledge Source</AlertDialogTitle>
+              <AlertDialogDescription>
+                Move &quot;{sourceToMoveDetails.source.name}&quot; from {sourceToMoveDetails.currentLevel} Priority to:
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <RadioGroup
+              value={selectedTargetMoveLevel ?? undefined}
+              onValueChange={(value) => setSelectedTargetMoveLevel(value as KnowledgeBaseLevel)}
+              className="my-4 space-y-2"
+            >
+              {KB_LEVELS.filter(level => level !== sourceToMoveDetails.currentLevel).map(level => (
+                <div key={`move-target-${level}`} className="flex items-center space-x-2">
+                  <RadioGroupItem value={level} id={`r-move-${level.toLowerCase()}`} />
+                  <Label htmlFor={`r-move-${level.toLowerCase()}`}>{level} Priority</Label>
+                </div>
+              ))}
+            </RadioGroup>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowMoveDialog(false)} disabled={isMovingSource}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmMoveSource} disabled={!selectedTargetMoveLevel || isMovingSource}>
+                {isMovingSource ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isMovingSource ? 'Moving...' : 'Confirm Move'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
