@@ -643,29 +643,31 @@ export default function HomePage() {
                     textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
                   } else {
                     console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
+                    let debugAdvice = `1. Test URL in browser (see console for URL). 
+2. If URL works, check DevTools (F12) > Network tab for this URL. Examine 'Status' & 'Response Headers' (esp. 'Access-Control-Allow-Origin') for CORS issues.
+3. If it's a CORS issue: Ensure your Storage bucket CORS config (via 'gsutil cors set cors-config.json gs://[YOUR_PROJECT_ID].appspot.com') includes your app's origin ('${window.location.origin}'). Verify with 'gsutil cors get ...'.
+4. If URL fails in browser or it's not CORS: Re-upload file / refresh URL in admin.`;
+                    
                     toast({
-                        title: `Server Error for ${source.name}`,
-                        description: `Could not load. Server status: ${response.status}. 
-1. Test URL in browser (see console). 
-2. Check Network tab in DevTools for this URL. 
-3. If it works, check CORS on Storage. 
-4. Re-upload file / refresh URL in admin.`,
+                        title: `Server Error for ${source.name} (${response.status})`,
+                        description: `Could not load. ${debugAdvice} Server status: ${response.statusText}.`,
                         variant: "destructive",
-                        duration: 25000 
+                        duration: 45000 
                     });
                   }
                 } catch (fetchError: any) {
                   console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}`, fetchError);
+                  let debugAdvice = `DEBUG STEPS for "${source.name}":
+1. Test URL directly in browser (URL in console).
+2. If URL works in browser: Open DevTools (F12) -> Network tab. Find the failing request for this URL. Check its 'Status' & 'Response Headers' (especially 'Access-Control-Allow-Origin'). This often reveals CORS issues.
+3. If it's a CORS issue: Ensure your Firebase Storage bucket's CORS config (via 'gsutil cors set cors-config.json gs://[YOUR_PROJECT_ID].appspot.com' - ensure bucket name ends with '.appspot.com') includes your app's origin ('${window.location.origin}'). Verify with 'gsutil cors get gs://[YOUR_PROJECT_ID].appspot.com'. Wait for propagation & clear browser cache.
+4. If URL fails in browser OR step 2 shows no CORS issue: Try 'Refresh URL' in Admin for this file, or re-upload it.
+Error: ${fetchError.message || 'Unknown fetch error'}`;
                   toast({
                     title: `Fetch Error for: ${source.name}`,
-                    description: `Failed to fetch (URL in console). 
-DEBUG STEPS:
-1. Test URL directly in browser.
-2. If URL works in browser: Open DevTools (F12) -> Network tab. Find the failing request for this URL. Check its 'Status' & 'Response Headers' (especially 'Access-Control-Allow-Origin'). This often reveals CORS issues.
-3. If URL fails in browser OR step 2 shows no CORS issue: Try 'Refresh URL' in Admin for this file, or re-upload it.
-Error: ${fetchError.message}`,
+                    description: debugAdvice,
                     variant: "destructive",
-                    duration: 30000 
+                    duration: 60000 
                   });
                 }
               } else {
@@ -674,7 +676,7 @@ Error: ${fetchError.message}`,
                   title: `Invalid File URL for ${source.name}`,
                   description: `Skipping '${source.name}' due to missing/invalid download URL in database. Re-upload or refresh URL in admin.`,
                   variant: "destructive",
-                  duration: 10000
+                  duration: 15000
                 });
               }
             }
