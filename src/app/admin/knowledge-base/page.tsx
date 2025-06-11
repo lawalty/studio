@@ -1,17 +1,20 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2 } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from '@/components/ui/label';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+
 
 export interface KnowledgeSource {
   id: string;
@@ -21,10 +24,28 @@ export interface KnowledgeSource {
   uploadedAt: string;
   storagePath: string;
   downloadURL: string;
-  priority: 'High' | 'Medium' | 'Low';
+  // Priority is now implicit by which KB it's in
 }
 
-const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v3_meta"; // Changed to v3
+type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low';
+
+const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFolder: string; title: string }> = {
+  High: {
+    firestorePath: "configurations/kb_high_meta_v1", // Using v1 to denote this new structure
+    storageFolder: "knowledge_base_files_high_v1/",
+    title: "High Priority Knowledge Base"
+  },
+  Medium: {
+    firestorePath: "configurations/kb_medium_meta_v1",
+    storageFolder: "knowledge_base_files_medium_v1/",
+    title: "Medium Priority Knowledge Base"
+  },
+  Low: {
+    firestorePath: "configurations/kb_low_meta_v1",
+    storageFolder: "knowledge_base_files_low_v1/",
+    title: "Low Priority Knowledge Base"
+  }
+};
 
 const getFileIcon = (type: KnowledgeSource['type']) => {
   switch (type) {
@@ -38,79 +59,93 @@ const getFileIcon = (type: KnowledgeSource['type']) => {
 };
 
 export default function KnowledgeBasePage() {
-  const [sources, setSources] = useState<KnowledgeSource[]>([]);
+  const [sourcesHigh, setSourcesHigh] = useState<KnowledgeSource[]>([]);
+  const [sourcesMedium, setSourcesMedium] = useState<KnowledgeSource[]>([]);
+  const [sourcesLow, setSourcesLow] = useState<KnowledgeSource[]>([]);
+
+  const [isLoadingHigh, setIsLoadingHigh] = useState(true);
+  const [isLoadingMedium, setIsLoadingMedium] = useState(true);
+  const [isLoadingLow, setIsLoadingLow] = useState(true);
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isLoadingSources, setIsLoadingSources] = useState(true);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
+  const [selectedKBTargetForUpload, setSelectedKBTargetForUpload] = useState<KnowledgeBaseLevel>('Medium');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const saveSourcesToFirestore = async (updatedSourcesToSave: KnowledgeSource[]): Promise<boolean> => {
+  const getSourcesSetter = (level: KnowledgeBaseLevel) => {
+    if (level === 'High') return setSourcesHigh;
+    if (level === 'Medium') return setSourcesMedium;
+    return setSourcesLow;
+  };
+
+  const getIsLoadingSetter = (level: KnowledgeBaseLevel) => {
+    if (level === 'High') return setIsLoadingHigh;
+    if (level === 'Medium') return setIsLoadingMedium;
+    return setIsLoadingLow;
+  };
+  
+  const getSourcesState = (level: KnowledgeBaseLevel): KnowledgeSource[] => {
+    if (level === 'High') return sourcesHigh;
+    if (level === 'Medium') return sourcesMedium;
+    return sourcesLow;
+  };
+
+
+  const saveSourcesToFirestore = useCallback(async (updatedSourcesToSave: KnowledgeSource[], level: KnowledgeBaseLevel): Promise<boolean> => {
     try {
+      const config = KB_CONFIG[level];
       const sourcesForDb = updatedSourcesToSave.map(s => ({
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        size: s.size,
-        uploadedAt: s.uploadedAt,
-        storagePath: s.storagePath,
-        downloadURL: s.downloadURL,
-        priority: s.priority || 'Medium',
+        id: s.id, name: s.name, type: s.type, size: s.size,
+        uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
       }));
 
       if (sourcesForDb.some(s => !s.id || !s.downloadURL || !s.storagePath)) {
-        console.error("[KnowledgeBasePage - saveSourcesToFirestore] Attempted to save sources with missing id, URL or Path. Aborting save.", sourcesForDb.filter(s=>!s.id || !s.downloadURL || !s.storagePath));
-        toast({
-            title: "Internal Save Error",
-            description: "Attempted to save incomplete source metadata (missing ID, URL, or Path). Please report this.",
-            variant: "destructive",
-            duration: 7000
-        });
+        console.error(`[KBPage - saveSources - ${level}] Attempted to save sources with missing id, URL or Path. Aborting.`, sourcesForDb.filter(s=>!s.id || !s.downloadURL || !s.storagePath));
+        toast({ title: "Internal Save Error", description: `Cannot save incomplete metadata for ${level} KB.`, variant: "destructive"});
         return false;
       }
       
-      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Attempting to save ${sourcesForDb.length} sources to Firestore. Document path: ${FIRESTORE_KNOWLEDGE_SOURCES_PATH}`, JSON.stringify(sourcesForDb, null, 2));
-      
-      const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
+      console.log(`[KBPage - saveSources - ${level}] Saving ${sourcesForDb.length} sources to Firestore. Path: ${config.firestorePath}`);
+      const docRef = doc(db, config.firestorePath);
       await setDoc(docRef, { sources: sourcesForDb });
-      console.log(`[KnowledgeBasePage - saveSourcesToFirestore] Successfully saved ${sourcesForDb.length} sources to Firestore.`);
+      console.log(`[KBPage - saveSources - ${level}] Successfully saved to Firestore.`);
       return true;
     } catch (error: any) {
-      console.error("[KnowledgeBasePage - saveSourcesToFirestore] Error saving sources to Firestore:", error.message, error.code, error.stack, error);
-      toast({
-        title: "Firestore Save Error",
-        description: `Failed to save knowledge base to database: ${error.message || 'Unknown error'}. Data may be out of sync.`,
-        variant: "destructive",
-        duration: 7000
-      });
+      console.error(`[KBPage - saveSources - ${level}] Error saving to Firestore:`, error);
+      toast({ title: "Firestore Save Error", description: `Failed to save ${level} KB: ${error.message || 'Unknown'}.`, variant: "destructive"});
       return false;
     }
-  };
+  }, [toast]);
 
-  useEffect(() => {
-    const fetchSources = async () => {
-      setIsLoadingSources(true);
-      try {
-        const docRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data()?.sources) {
-          const fetchedSources = (docSnap.data().sources as any[]).map(s => ({
-            ...s,
-            priority: s.priority || 'Medium',
-          }));
-          setSources(fetchedSources as KnowledgeSource[]);
-        } else {
-          setSources([]);
-        }
-      } catch (e: any) {
-        console.error("[KnowledgeBasePage - fetchSources] Failed to fetch sources from Firestore", e.message, e);
-        toast({ title: "Error Loading Sources", description: `Could not fetch knowledge sources: ${e.message}. Please try again.`, variant: "destructive" });
+
+  const fetchSourcesForLevel = useCallback(async (level: KnowledgeBaseLevel) => {
+    const setIsLoading = getIsLoadingSetter(level);
+    const setSources = getSourcesSetter(level);
+    const config = KB_CONFIG[level];
+
+    setIsLoading(true);
+    try {
+      const docRef = doc(db, config.firestorePath);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists() && docSnap.data()?.sources) {
+        setSources(docSnap.data().sources as KnowledgeSource[]);
+      } else {
         setSources([]);
       }
-      setIsLoadingSources(false);
-    };
-    fetchSources();
+    } catch (e: any) {
+      console.error(`[KBPage - fetchSources - ${level}] Failed:`, e.message);
+      toast({ title: `Error Loading ${level} KB`, description: `Could not fetch sources: ${e.message}.`, variant: "destructive" });
+      setSources([]);
+    }
+    setIsLoading(false);
   }, [toast]);
+
+  useEffect(() => {
+    fetchSourcesForLevel('High');
+    fetchSourcesForLevel('Medium');
+    fetchSourcesForLevel('Low');
+  }, [fetchSourcesForLevel]);
 
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,37 +156,33 @@ export default function KnowledgeBasePage() {
 
   const handleUpload = async () => {
     if (!selectedFile) {
-      toast({ title: "No file selected", description: "Please select a file to upload.", variant: "destructive" });
+      toast({ title: "No file selected", variant: "destructive" });
       return;
     }
     if (isCurrentlyUploading) {
-      toast({ title: "Upload in Progress", description: "Please wait for the current upload to complete.", variant: "default" });
+      toast({ title: "Upload in Progress", variant: "default" });
       return;
     }
 
     setIsCurrentlyUploading(true);
     const currentFile = selectedFile;
-    const filePath = `knowledge_base_files_v3/${Date.now()}-${currentFile.name.replace(/\s+/g, '_')}`; // Changed to v3
+    const targetLevel = selectedKBTargetForUpload;
+    const config = KB_CONFIG[targetLevel];
+    const setSources = getSourcesSetter(targetLevel);
+    const currentSources = getSourcesState(targetLevel);
+
+    const filePath = `${config.storageFolder}${Date.now()}-${currentFile.name.replace(/\s+/g, '_')}`;
     const fileRef = storageRef(storage, filePath);
-    let finalNewSource: KnowledgeSource | null = null;
     const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
-
     try {
-      toast({ title: "Upload Started", description: `Uploading ${currentFile.name}...` });
-      
+      toast({ title: "Upload Started", description: `Uploading ${currentFile.name} to ${targetLevel} KB...` });
       await uploadBytes(fileRef, currentFile);
       const downloadURL = await getDownloadURL(fileRef);
-      console.log(`[KnowledgeBasePage - handleUpload] Retrieved downloadURL: ${downloadURL} for filePath: ${filePath}`);
 
       if (!downloadURL) {
-        console.error(`[KnowledgeBasePage - handleUpload] CRITICAL: downloadURL is null or undefined for ${currentFile.name} after getDownloadURL.`);
-        toast({
-          title: "URL Retrieval Failed",
-          description: `Could not get download URL for ${currentFile.name}. Upload metadata not saved. Check Storage permissions or object status.`,
-          variant: "destructive",
-          duration: 9000,
-        });
+        console.error(`[KBPage - handleUpload - ${targetLevel}] CRITICAL: downloadURL is null for ${currentFile.name}.`);
+        toast({ title: "URL Retrieval Failed", description: `Could not get URL for ${currentFile.name}. Metadata not saved.`, variant: "destructive"});
         setIsCurrentlyUploading(false);
         setSelectedFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -160,46 +191,34 @@ export default function KnowledgeBasePage() {
 
       let fileType: KnowledgeSource['type'] = 'other';
       const mimeType = currentFile.type;
-      const fileNameLower = currentFile.name.toLowerCase();
       if (mimeType.startsWith('audio/')) fileType = 'audio';
       else if (mimeType.startsWith('image/')) fileType = 'image';
       else if (mimeType === 'application/pdf') fileType = 'pdf';
-      else if (mimeType.startsWith('text/plain') || fileNameLower.endsWith('.txt')) fileType = 'text';
-      else if (mimeType === 'application/msword' || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileNameLower.endsWith('.doc') || fileNameLower.endsWith('.docx')) fileType = 'document';
+      else if (mimeType.startsWith('text/plain') || currentFile.name.toLowerCase().endsWith('.txt')) fileType = 'text';
+      else if (mimeType === 'application/msword' || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') fileType = 'document';
 
-      finalNewSource = {
-        id: permanentId,
-        name: currentFile.name,
-        type: fileType,
+      const newSource: KnowledgeSource = {
+        id: permanentId, name: currentFile.name, type: fileType,
         size: `${(currentFile.size / (1024 * 1024)).toFixed(2)}MB`,
         uploadedAt: new Date().toISOString().split('T')[0],
-        storagePath: filePath,
-        downloadURL: downloadURL,
-        priority: 'Medium',
+        storagePath: filePath, downloadURL: downloadURL,
       };
-      console.log("[KnowledgeBasePage - handleUpload] finalNewSource created:", JSON.stringify(finalNewSource, null, 2));
 
-      const newListForStateAndFirestore = [finalNewSource, ...sources];
+      const newListForStateAndFirestore = [newSource, ...currentSources];
       setSources(newListForStateAndFirestore);
 
-      const savedToDb = await saveSourcesToFirestore(newListForStateAndFirestore);
-
+      const savedToDb = await saveSourcesToFirestore(newListForStateAndFirestore, targetLevel);
       if (savedToDb) {
-        toast({ title: "Upload Successful", description: `${currentFile.name} has been uploaded and saved to the database.` });
+        toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
       } else {
-        console.error("[KnowledgeBasePage - handleUpload] Firestore save failed after successful upload. Reverting UI for item:", permanentId);
-        toast({ title: "Database Save Failed", description: `File ${currentFile.name} uploaded but failed to save to DB. Reverting UI. Check logs.`, variant: "destructive"});
-        setSources(prev => prev.filter(s => s.id !== permanentId)); // Revert UI
-      }
-    } catch (error: any) {
-      console.error("[KnowledgeBasePage - handleUpload] Upload or Save error:", error);
-      let description = `Could not upload or save ${currentFile.name}.`;
-      if (error.code) description += ` (Error: ${error.code})`;
-      else if (error.message) description += ` (Message: ${error.message})`;
-      toast({ title: "Upload Failed", description, variant: "destructive", duration: 7000 });
-      if (permanentId) { // If an ID was generated, try to remove any optimistic UI update
+        console.error(`[KBPage - handleUpload - ${targetLevel}] Firestore save failed. Reverting UI for item:`, permanentId);
+        toast({ title: "Database Save Failed", description: `File uploaded but DB save failed for ${targetLevel} KB. Reverting.`, variant: "destructive"});
         setSources(prev => prev.filter(s => s.id !== permanentId));
       }
+    } catch (error: any) {
+      console.error(`[KBPage - handleUpload - ${targetLevel}] Upload/Save error:`, error);
+      toast({ title: "Upload Failed", description: `Could not upload/save to ${targetLevel} KB: ${error.message || 'Unknown'}.`, variant: "destructive"});
+      if (permanentId) setSources(prev => prev.filter(s => s.id !== permanentId));
     } finally {
       setIsCurrentlyUploading(false);
       setSelectedFile(null);
@@ -207,12 +226,14 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    const sourceToDelete = sources.find(s => s.id === id);
+  const handleDelete = async (id: string, level: KnowledgeBaseLevel) => {
+    const currentSources = getSourcesState(level);
+    const setSources = getSourcesSetter(level);
+    const sourceToDelete = currentSources.find(s => s.id === id);
     if (!sourceToDelete) return;
 
-    const originalSources = [...sources];
-    const updatedSourcesAfterDelete = sources.filter(source => source.id !== id);
+    const originalSources = [...currentSources];
+    const updatedSourcesAfterDelete = currentSources.filter(source => source.id !== id);
     setSources(updatedSourcesAfterDelete);
 
     let dbUpdated = false;
@@ -220,147 +241,88 @@ export default function KnowledgeBasePage() {
       const fileRef = storageRef(storage, sourceToDelete.storagePath);
       try {
         await deleteObject(fileRef);
-        dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete);
+        dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete, level);
         if (dbUpdated) {
-          toast({ title: "Source Removed", description: `${sourceToDelete.name} has been removed from Firebase and the list.` });
+          toast({ title: "Source Removed", description: `${sourceToDelete.name} removed from ${level} KB and Storage.` });
         } else {
           setSources(originalSources); 
         }
       } catch (error) {
-        console.error("[KnowledgeBasePage - handleDelete] Firebase deletion error:", error);
-        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Firebase Storage. Database may be out of sync.`, variant: "destructive" });
+        console.error(`[KBPage - handleDelete - ${level}] Firebase deletion error:`, error);
+        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Storage for ${level} KB.`, variant: "destructive" });
         setSources(originalSources); 
       }
-    } else {
-      dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete);
+    } else { // Should not happen if storagePath is always set
+      dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete, level);
       if (dbUpdated) {
-        toast({ title: "List Item Removed", description: `${sourceToDelete.name} has been removed from the list.` });
+        toast({ title: "List Item Removed", description: `${sourceToDelete.name} removed from ${level} KB list.` });
       } else {
         setSources(originalSources); 
       }
     }
   };
 
-  const handleRefreshSourceUrl = async (sourceId: string) => {
-    const sourceToRefresh = sources.find(s => s.id === sourceId);
+  const handleRefreshSourceUrl = async (sourceId: string, level: KnowledgeBaseLevel) => {
+    const currentSources = getSourcesState(level);
+    const setSources = getSourcesSetter(level);
+    const sourceToRefresh = currentSources.find(s => s.id === sourceId);
+
     if (!sourceToRefresh || !sourceToRefresh.storagePath) {
-      toast({title: "Cannot Refresh", description: "Source does not have a valid storage path.", variant: "destructive"});
+      toast({title: "Cannot Refresh", description: "Source missing storage path.", variant: "destructive"});
       return;
     }
 
-    const originalSourcesSnapshot = [...sources]; 
-    let refreshedSourceItem: KnowledgeSource | null = null;
-
+    const originalSourcesSnapshot = [...currentSources]; 
     try {
       const fileRef = storageRef(storage, sourceToRefresh.storagePath);
       const newDownloadURL = await getDownloadURL(fileRef);
 
       if (!newDownloadURL) {
-          console.error(`[KnowledgeBasePage - handleRefreshSourceUrl] CRITICAL: newDownloadURL is null or undefined for ${sourceToRefresh.name} during refresh.`);
-          toast({
-            title: "URL Refresh Failed",
-            description: `Could not get a new download URL for ${sourceToRefresh.name}.`,
-            variant: "destructive",
-          });
+          console.error(`[KBPage - handleRefreshUrl - ${level}] CRITICAL: newDownloadURL is null for ${sourceToRefresh.name}.`);
+          toast({ title: "URL Refresh Failed", description: `Could not get new URL for ${sourceToRefresh.name} in ${level} KB.`, variant: "destructive"});
           return;
       }
       
-      refreshedSourceItem = {
-        ...sourceToRefresh,
-        downloadURL: newDownloadURL,
-      };
-      
-      const listWithRefreshedUrl = sources.map(s =>
-        s.id === sourceId ? refreshedSourceItem! : s
-      );
+      const refreshedSourceItem: KnowledgeSource = { ...sourceToRefresh, downloadURL: newDownloadURL };
+      const listWithRefreshedUrl = currentSources.map(s => s.id === sourceId ? refreshedSourceItem : s);
       setSources(listWithRefreshedUrl);
 
-      const refreshedInDb = await saveSourcesToFirestore(listWithRefreshedUrl); 
+      const refreshedInDb = await saveSourcesToFirestore(listWithRefreshedUrl, level); 
       if(refreshedInDb) {
-          toast({title: "URL Refreshed", description: `Download URL for ${sourceToRefresh.name} updated in database.`});
+          toast({title: "URL Refreshed", description: `URL for ${sourceToRefresh.name} in ${level} KB updated.`});
       } else {
-          console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Firestore save failed after URL refresh. Reverting UI for item:", sourceId);
+          console.error(`[KBPage - handleRefreshUrl - ${level}] Firestore save failed. Reverting UI.`);
           toast({title: "Refresh Save Error", description: "URL refreshed, but DB save failed. Reverting.", variant: "destructive"});
           setSources(originalSourcesSnapshot);
       }
-
     } catch (error) {
-      console.error("[KnowledgeBasePage - handleRefreshSourceUrl] Error refreshing download URL:", error);
-      toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name}.`, variant: "destructive"});
+      console.error(`[KBPage - handleRefreshUrl - ${level}] Error refreshing URL:`, error);
+      toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name} in ${level} KB.`, variant: "destructive"});
       setSources(originalSourcesSnapshot); 
     }
   };
 
-  const handlePriorityChange = async (sourceId: string, newPriority: KnowledgeSource['priority']) => {
-    const originalSources = [...sources];
-    const updatedSources = sources.map(s => 
-      s.id === sourceId ? { ...s, priority: newPriority } : s
-    );
-    setSources(updatedSources);
+  const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
+    const sources = getSourcesState(level);
+    const isLoadingSources = level === 'High' ? isLoadingHigh : (level === 'Medium' ? isLoadingMedium : isLoadingLow);
+    const config = KB_CONFIG[level];
 
-    const saved = await saveSourcesToFirestore(updatedSources);
-    if (saved) {
-      toast({ title: "Priority Updated", description: `Priority for source set to ${newPriority}.` });
-    } else {
-      toast({ title: "Priority Update Failed", description: "Could not save priority change.", variant: "destructive" });
-      setSources(originalSources);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card>
+    return (
+      <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="font-headline">Upload New Source (Knowledge Base v3)</CardTitle>
-          <CardDescription>
-            Add new documents, audio files, or other content to AI Blair's knowledge base. Files are uploaded to Firebase Storage (v3 folder), and their metadata is stored in Firestore. Default priority is 'Medium'.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              id="file-upload"
-              disabled={isCurrentlyUploading || isLoadingSources}
-            />
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || isLoadingSources}>
-              <UploadCloud className="mr-2 h-4 w-4" /> Choose File
-            </Button>
-            {selectedFile && <span className="text-sm text-muted-foreground">{selectedFile.name}</span>}
-          </div>
-           {selectedFile && (
-            <p className="text-xs text-muted-foreground">
-              Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
-            </p>
-          )}
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || isLoadingSources}>
-            {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-            {isCurrentlyUploading ? 'Uploading...' : (isLoadingSources ? 'Loading sources...' : 'Upload Source')}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Manage Knowledge Base Sources (v3)</CardTitle>
-          <CardDescription>View, prioritize, and remove sources. Uploaded files are in Firebase Storage, metadata in Firestore.</CardDescription>
+          <CardTitle className="font-headline">{config.title}</CardTitle>
+          <CardDescription>View and remove sources. Uploaded files are in Firebase Storage (folder: {config.storageFolder}), metadata in Firestore (path: {config.firestorePath}).</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingSources ? (
              <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
                 <RefreshCw className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
-                <p className="text-muted-foreground">Loading knowledge sources...</p>
+                <p className="text-muted-foreground">Loading {level} priority sources...</p>
             </div>
           ) : sources.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
               <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No sources found for v3.</p>
-              <p className="text-sm text-muted-foreground">Upload a source to get started with the v3 knowledge base.</p>
+              <p className="text-muted-foreground">No sources found for {level} priority.</p>
             </div>
           ) : (
           <Table>
@@ -371,7 +333,6 @@ export default function KnowledgeBasePage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded At</TableHead>
-                <TableHead>Priority</TableHead>
                 <TableHead>Status/Link</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -385,41 +346,23 @@ export default function KnowledgeBasePage() {
                   <TableCell>{source.size}</TableCell>
                   <TableCell>{source.uploadedAt}</TableCell>
                   <TableCell>
-                    <Select
-                      value={source.priority}
-                      onValueChange={(newPriority: KnowledgeSource['priority']) =>
-                        handlePriorityChange(source.id, newPriority)
-                      }
-                      disabled={isCurrentlyUploading || isLoadingSources}
-                    >
-                      <SelectTrigger className="w-[110px] h-8 text-xs">
-                        <SelectValue placeholder="Priority" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="Low">Low</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
                     {source.downloadURL ? (
                       <div className="flex items-center gap-1">
                         <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
                           View File
                         </a>
-                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id)} aria-label="Refresh URL" className="h-6 w-6 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0">
                             <RefreshCw className="h-3 w-3" />
                         </Button>
                       </div>
                     ) : source.storagePath ? (
-                        <span className="text-xs text-yellow-600">Processing... (Refresh URL if stuck)</span>
+                        <span className="text-xs text-yellow-600">Processing...</span>
                     ) : (
                         <span className="text-xs text-gray-500">Error or pending</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id)} aria-label="Delete source" disabled={isCurrentlyUploading || isLoadingSources}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={isCurrentlyUploading || isLoadingSources}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>
@@ -430,9 +373,85 @@ export default function KnowledgeBasePage() {
           )}
         </CardContent>
       </Card>
+    );
+  };
+
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Upload New Source</CardTitle>
+          <CardDescription>
+            Add content to AI Blair's knowledge base. Select the priority level before uploading.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="font-medium">Select Knowledge Base Priority:</Label>
+            <RadioGroup
+              value={selectedKBTargetForUpload}
+              onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
+              className="flex space-x-4"
+            >
+              {(['High', 'Medium', 'Low'] as KnowledgeBaseLevel[]).map(level => (
+                <div key={level} className="flex items-center space-x-2">
+                  <RadioGroupItem value={level} id={`r-${level.toLowerCase()}`} />
+                  <Label htmlFor={`r-${level.toLowerCase()}`}>{level}</Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              id="file-upload"
+              disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}
+            />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}>
+              <UploadCloud className="mr-2 h-4 w-4" /> Choose File
+            </Button>
+            {selectedFile && <span className="text-sm text-muted-foreground">{selectedFile.name}</span>}
+          </div>
+           {selectedFile && (
+            <p className="text-xs text-muted-foreground">
+              Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
+            </p>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}>
+            {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+            {isCurrentlyUploading ? 'Uploading...' : 'Upload to Selected KB'}
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb', 'low-kb']} className="w-full">
+        <AccordionItem value="high-kb">
+          <AccordionTrigger className="text-xl font-semibold hover:no-underline">High Priority Knowledge Base</AccordionTrigger>
+          <AccordionContent>
+            {renderKnowledgeBaseSection('High')}
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="medium-kb">
+          <AccordionTrigger className="text-xl font-semibold hover:no-underline">Medium Priority Knowledge Base</AccordionTrigger>
+          <AccordionContent>
+            {renderKnowledgeBaseSection('Medium')}
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="low-kb">
+          <AccordionTrigger className="text-xl font-semibold hover:no-underline">Low Priority Knowledge Base</AccordionTrigger>
+          <AccordionContent>
+            {renderKnowledgeBaseSection('Low')}
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
-    
-
     

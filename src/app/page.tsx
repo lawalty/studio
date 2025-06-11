@@ -27,7 +27,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
+// KnowledgeSource is defined in admin page, no need to redefine here if not used directly for typing complex objects
+// import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
 
 
 export interface Message {
@@ -61,7 +62,18 @@ const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP//
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v3_meta";
+
+// New KB paths for High, Medium, Low priority
+const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
+const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
+const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
+
+// Simplified KnowledgeSource type for page.tsx as we only care about name, type, downloadURL
+interface PageKnowledgeSource {
+    name: string;
+    type: string;
+    downloadURL?: string; // downloadURL can be undefined
+}
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -91,9 +103,14 @@ export default function HomePage() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLogForSaveConfirmation, setShowLogForSaveConfirmation] = useState(false);
   
-  const [knowledgeFileSummary, setKnowledgeFileSummary] = useState<string>('');
-  const [dynamicKnowledgeContent, setDynamicKnowledgeContent] = useState<string>('');
-  const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
+  const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
+  const [knowledgeFileSummaryMedium, setKnowledgeFileSummaryMedium] = useState<string>('');
+  const [knowledgeFileSummaryLow, setKnowledgeFileSummaryLow] = useState<string>('');
+  const [dynamicKnowledgeContentHigh, setDynamicKnowledgeContentHigh] = useState<string>('');
+  const [dynamicKnowledgeContentMedium, setDynamicKnowledgeContentMedium] = useState<string>('');
+  const [dynamicKnowledgeContentLow, setDynamicKnowledgeContentLow] = useState<string>('');
+  
+  const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true); // Global loading state
   const [corsErrorEncountered, setCorsErrorEncountered] = useState(false);
 
 
@@ -379,9 +396,14 @@ export default function HomePage() {
             parts: [{ text: msg.text }],
         }));
     
-    const combinedKnowledgeBase = MOCK_KNOWLEDGE_BASE_CONTENT + 
-                                (knowledgeFileSummary ? `\n\nFile Summary:\n${knowledgeFileSummary}` : '') +
-                                (dynamicKnowledgeContent ? `\n\nExtracted Content from .txt files:\n${dynamicKnowledgeContent}` : '');
+    const combinedKnowledgeBase = 
+      MOCK_KNOWLEDGE_BASE_CONTENT +
+      (knowledgeFileSummaryHigh ? `\n\nHigh Priority File Summary:\n${knowledgeFileSummaryHigh}` : '') +
+      (dynamicKnowledgeContentHigh ? `\n\nExtracted Content from High Priority .txt files:\n${dynamicKnowledgeContentHigh}` : '') +
+      (knowledgeFileSummaryMedium ? `\n\nMedium Priority File Summary:\n${knowledgeFileSummaryMedium}` : '') +
+      (dynamicKnowledgeContentMedium ? `\n\nExtracted Content from Medium Priority .txt files:\n${dynamicKnowledgeContentMedium}` : '') +
+      (knowledgeFileSummaryLow ? `\n\nLow Priority File Summary:\n${knowledgeFileSummaryLow}` : '') +
+      (dynamicKnowledgeContentLow ? `\n\nExtracted Content from Low Priority .txt files:\n${dynamicKnowledgeContentLow}` : '');
 
 
     try {
@@ -399,7 +421,10 @@ export default function HomePage() {
       await speakTextRef.current(errorMessage);
       setIsSendingMessage(false); 
     } 
-  }, [addMessage, messages, personaTraits, knowledgeFileSummary, dynamicKnowledgeContent]); 
+  }, [addMessage, messages, personaTraits, 
+      knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
+      knowledgeFileSummaryMedium, dynamicKnowledgeContentMedium,
+      knowledgeFileSummaryLow, dynamicKnowledgeContentLow]); 
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => {
@@ -592,14 +617,80 @@ export default function HomePage() {
     }
   }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge]); 
 
+  const fetchAndProcessKnowledgeLevel = useCallback(async (
+    levelPath: string,
+    levelName: string,
+    setSummary: React.Dispatch<React.SetStateAction<string>>,
+    setContent: React.Dispatch<React.SetStateAction<string>>
+  ): Promise<boolean> => {
+    let levelCorsError = false;
+    try {
+      const kbMetaDocRef = doc(db, levelPath);
+      const kbMetaDocSnap = await getDoc(kbMetaDocRef);
+      let sources: PageKnowledgeSource[] = [];
+      if (kbMetaDocSnap.exists() && kbMetaDocSnap.data()?.sources) {
+        sources = kbMetaDocSnap.data().sources as PageKnowledgeSource[];
+      }
+
+      if (sources.length > 0) {
+        const summary = `The ${levelName.toLowerCase()} priority knowledge base includes: ` +
+                        sources.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
+        setSummary(summary);
+
+        const textFileContents: string[] = [];
+        for (const source of sources) {
+          if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
+            console.log(`[HomePage] Attempting to fetch content for ${source.name} (${levelName}) from URL: ${source.downloadURL}`);
+            try {
+              const response = await fetch(source.downloadURL);
+              if (response.ok) {
+                const textContent = await response.text();
+                textFileContents.push(`Content from ${source.name} (${levelName} Priority):\n${textContent}\n---`);
+              } else {
+                levelCorsError = true;
+                console.warn(`[HomePage] Failed to fetch ${source.name} (${levelName}) from ${source.downloadURL}. Status: ${response.status}. Likely CORS. Details in Network tab.`);
+                toast({
+                    title: `Fetch Error: ${source.name} (${levelName})`,
+                    description: `Status ${response.status}. Check browser console & Network tab for CORS details. Verify Storage CORS settings.`,
+                    variant: "destructive", duration: 20000
+                });
+              }
+            } catch (fetchError: any) {
+              levelCorsError = true;
+              console.error(`[HomePage] Fetch error for ${source.name} (${levelName}). URL: ${source.downloadURL}. Error: ${fetchError.message}. Likely CORS.`, fetchError);
+              toast({
+                  title: `Network Error: ${source.name} (${levelName})`,
+                  description: `Fetch failed: ${fetchError.message}. Check browser console & Network tab for CORS. Verify Storage CORS settings.`,
+                  variant: "destructive", duration: 20000
+              });
+            }
+          } else if (source.type === 'text' && (!source.downloadURL || typeof source.downloadURL !== 'string' || source.downloadURL.trim() === '')) {
+            console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (${levelName}). URL: '${source.downloadURL}'. Skipping.`);
+          }
+        }
+        setContent(textFileContents.join('\n\n'));
+      } else {
+        setSummary('');
+        setContent('');
+      }
+    } catch (e: any) {
+        console.error(`Error fetching ${levelName} KB metadata:`, e);
+        setSummary('');
+        setContent('');
+        toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge.`, variant: "destructive"});
+        levelCorsError = true; // Assume potential CORS if metadata fails too
+    }
+    return levelCorsError;
+  }, [toast]);
+
+
   useEffect(() => {    
-    const fetchFirestoreData = async () => {
+    const fetchAllData = async () => {
       setIsLoadingKnowledge(true);
       setCorsErrorEncountered(false);
-      setKnowledgeFileSummary('');
-      setDynamicKnowledgeContent('');
+
+      // Fetch API Keys and Site Assets (common)
       try {
-        // API Keys
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
         if (apiKeysDocSnap.exists()) {
@@ -608,7 +699,6 @@ export default function HomePage() {
           setElevenLabsVoiceId(keys.voiceId || null);
         }
 
-        // Site Assets (Avatar, Splash Image, Persona Traits)
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
         const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
         if (siteAssetsDocSnap.exists()) {
@@ -621,83 +711,24 @@ export default function HomePage() {
           setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS); 
         }
-
-        // Knowledge Base File Meta from Firestore
-        const kbMetaDocRef = doc(db, FIRESTORE_KNOWLEDGE_SOURCES_PATH);
-        const kbMetaDocSnap = await getDoc(kbMetaDocRef);
-        let sources: KnowledgeSource[] = [];
-        if (kbMetaDocSnap.exists() && kbMetaDocSnap.data()?.sources) {
-          sources = kbMetaDocSnap.data().sources as KnowledgeSource[];
-        }
-
-        if (sources.length > 0) {
-          const summary = "The knowledge base includes information from the following uploaded files: " +
-                          sources.map(s => `${s.name} (Type: ${s.type}, Priority: ${s.priority || 'N/A'})`).join(', ') + ".";
-          setKnowledgeFileSummary(summary);
-
-          const textFileContents: string[] = [];
-          let fetchFailedForAnyTextFile = false;
-
-          for (const source of sources) {
-            if (source.type === 'text') {
-              if (source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
-                console.log(`[HomePage] Attempting to fetch content for ${source.name} from URL: ${source.downloadURL}`);
-                try {
-                  const response = await fetch(source.downloadURL);
-                  if (response.ok) {
-                    const textContent = await response.text();
-                    textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
-                  } else {
-                    fetchFailedForAnyTextFile = true;
-                    // This will trigger the main CORS alert on the page
-                    setCorsErrorEncountered(true); 
-                    console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}. This is very likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket. The browser is blocking the request. Please see the on-page alert for detailed troubleshooting steps.`);
-                  }
-                } catch (fetchError: any) {
-                  fetchFailedForAnyTextFile = true;
-                  // This will trigger the main CORS alert on the page
-                  setCorsErrorEncountered(true); 
-                  console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}. This is very likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket. Please see the on-page alert for detailed troubleshooting steps.`, fetchError);
-                }
-              } else {
-                console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (ID: ${source.id}). URL: '${source.downloadURL}'. Skipping fetch.`);
-                toast({
-                  title: `Invalid File URL for ${source.name}`,
-                  description: `Skipping '${source.name}' due to missing/invalid download URL in database. Re-upload or refresh URL in admin.`,
-                  variant: "destructive",
-                  duration: 15000
-                });
-              }
-            }
-          }
-          setDynamicKnowledgeContent(textFileContents.join('\n\n'));
-           if (fetchFailedForAnyTextFile) {
-             setCorsErrorEncountered(true); 
-           }
-        } else {
-            setKnowledgeFileSummary('');
-            setDynamicKnowledgeContent('');
-        }
-
       } catch (e) {
-        console.error("Error fetching initial configuration data:", e);
-        setElevenLabsApiKey(null);
-        setElevenLabsVoiceId(null);
-        setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL); 
-        setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); 
-        setPersonaTraits(DEFAULT_PERSONA_TRAITS);
-        setKnowledgeFileSummary('');
-        setDynamicKnowledgeContent('');
-        toast({
-          title: "Configuration Error",
-          description: "Could not load initial app settings. Using defaults.",
-          variant: "destructive"
-        });
+        console.error("Error fetching common config data:", e);
+        toast({ title: "Config Error", description: "Could not load app settings.", variant: "destructive"});
       }
+
+      // Fetch knowledge bases in order
+      const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh);
+      const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium);
+      const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setKnowledgeFileSummaryLow, setDynamicKnowledgeContentLow);
+      
+      if (highError || mediumError || lowError) {
+        setCorsErrorEncountered(true);
+      }
+
       setIsLoadingKnowledge(false);
     };
-    fetchFirestoreData();
-  }, [toast]); 
+    fetchAllData();
+  }, [toast, fetchAndProcessKnowledgeLevel]); 
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => {
@@ -761,7 +792,7 @@ export default function HomePage() {
              {isLoadingKnowledge && (
                 <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
                     <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" />
-                    Connecting to knowledge base (v3)...
+                    Connecting to knowledge bases...
                 </div>
             )}
             <RadioGroup
@@ -801,7 +832,7 @@ export default function HomePage() {
                       <p><strong>This must be fixed in your Google Cloud project for Firebase Storage:</strong></p>
                       <ol className="list-decimal list-inside space-y-1 text-xs">
                         <li>
-                          <strong>Identify Your App's Origin:</strong> In your browser's developer console (F12), find the CORS error message. It will state the exact "origin" that was blocked. For Firebase Studio, it looks like: <code>https://6000-firebase-studio-....cloudworkstation.dev</code>. Copy this entire origin URL.
+                          <strong>Identify Your App's Origin:</strong> In your browser's developer console (F12), find the CORS error message. It will state the exact "origin" that was blocked (e.g., <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code>). Copy this entire origin URL.
                         </li>
                         <li>
                           <strong>Create/Update `cors-config.json` file:</strong>
@@ -817,39 +848,32 @@ export default function HomePage() {
   }
 ]`}
                           </pre>
-                          Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied in Step 1 (e.g., <code>https://6000-firebase-studio-your-unique-id.cloudworkstation.dev</code>). You can add multiple origins to the array if needed (e.g., for <code>http://localhost:9002</code> or your deployed app URL).
+                          Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied (e.g., <code>https://6000-firebase-studio-your-id.cloudworkstation.dev</code>). You can add multiple origins (like <code>http://localhost:9002</code>, deployed app URL).
                         </li>
                         <li>
                           <strong>Identify Your GCS Bucket ID:</strong>
-                          In the Firebase Console, go to Storage -> Files tab. Your bucket ID is displayed at the top of the file list, usually formatted as <code>gs://YOUR_PROJECT_ID.appspot.com</code> or <code>gs://YOUR_PROJECT_ID.firebasestorage.app</code>. Copy the bucket ID part (e.g., <code>YOUR_PROJECT_ID.appspot.com</code>).
+                          In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>). Copy the ID.
                         </li>
                         <li>
-                          <strong>Use `gsutil` (Google Cloud SDK command-line tool):</strong>
+                          <strong>Use `gsutil` (Google Cloud SDK command-line):</strong>
                           <ul className="list-disc list-inside ml-4">
-                            <li>Open your terminal/command shell where `gsutil` is configured.</li>
-                            <li>Navigate to the directory where you saved `cors-config.json`.</li>
+                            <li>Open terminal/shell with `gsutil` configured.</li>
+                            <li>Navigate to where `cors-config.json` is saved.</li>
                             <li>
-                              Set the CORS policy: <br />
-                              <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code><br />
-                              (Replace <code>YOUR_CORRECT_BUCKET_ID</code> with the ID from Step 3).
+                              Set policy: <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code>
+                              <br />(Replace <code>YOUR_CORRECT_BUCKET_ID</code> with the ID from Step 3. Test BOTH <code>.appspot.com</code> and <code>.firebasestorage.app</code> suffixed versions if one gives a 404 error.)
                             </li>
                             <li>
-                              Verify the policy: <br />
-                              <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code><br />
-                              The output should match your `cors-config.json` content. If it doesn't, the `set` command may not have worked as expected (check for typos or permission issues with `gsutil`). If `gsutil` reports "BucketNotFound" or similar, ensure you're using the exact bucket ID from the Firebase console.
+                              Verify: <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code>
+                              <br />The output must match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
                             </li>
                           </ul>
                         </li>
                         <li>
-                          <strong>Wait & Test:</strong>
-                          <ul className="list-disc list-inside ml-4">
-                            <li>Allow 5-10 minutes for the new CORS settings to propagate across Google's infrastructure.</li>
-                            <li>Clear your browser's cache thoroughly (for this site) or test in an Incognito/Private window.</li>
-                            <li>Refresh this application page.</li>
-                          </ul>
+                          <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. Clear browser cache thoroughly. Test in Incognito/Private window.
                         </li>
                       </ol>
-                      <p className="mt-2">If "Failed to fetch" errors persist, meticulously double-check each step, especially the <strong>exact origin string</strong> in `cors-config.json` and the <strong>exact bucket ID</strong> used with `gsutil`. AI Blair's knowledge base functionality will be limited until this is resolved.</p>
+                      <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved. Check browser's Network tab for detailed fetch error codes if issues persist after correct `gsutil` configuration.</p>
                     </AlertDescription>
                 </Alert>
             )}
@@ -898,7 +922,7 @@ export default function HomePage() {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center py-8">
                 <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
-                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Base (v3)</h2>
+                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Bases</h2>
                 <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p>
             </div>
         );
@@ -909,59 +933,52 @@ export default function HomePage() {
         <AlertTriangle className="h-4 w-4" />
         <AlertTitle>Critical: Knowledge Base Access Issue (CORS)</AlertTitle>
         <AlertDescription className="space-y-2 text-left">
-          <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
-          <p><strong>This must be fixed in your Google Cloud project for Firebase Storage:</strong></p>
-          <ol className="list-decimal list-inside space-y-1 text-xs">
+            <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
+            <p><strong>This must be fixed in your Google Cloud project for Firebase Storage:</strong></p>
+            <ol className="list-decimal list-inside space-y-1 text-xs">
             <li>
-              <strong>Identify Your App's Origin:</strong> In your browser's developer console (F12), find the CORS error message. It will state the exact "origin" that was blocked. For Firebase Studio, it looks like: <code>https://6000-firebase-studio-....cloudworkstation.dev</code>. Copy this entire origin URL.
+                <strong>Identify Your App's Origin:</strong> In your browser's developer console (F12), find the CORS error message. It will state the exact "origin" that was blocked (e.g., <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code>). Copy this entire origin URL.
             </li>
             <li>
-              <strong>Create/Update `cors-config.json` file:</strong>
-              <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
+                <strong>Create/Update `cors-config.json` file:</strong>
+                <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
 {`[
-  {
+{
     "origin": [
-      "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR"
+    "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR"
     ],
     "method": ["GET", "HEAD", "OPTIONS"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
     "maxAgeSeconds": 3600
-  }
+}
 ]`}
-              </pre>
-              Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied in Step 1 (e.g., <code>https://6000-firebase-studio-your-unique-id.cloudworkstation.dev</code>). You can add multiple origins to the array if needed (e.g., for <code>http://localhost:9002</code> or your deployed app URL).
+                </pre>
+                Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied (e.g., <code>https://6000-firebase-studio-your-id.cloudworkstation.dev</code>). You can add multiple origins (like <code>http://localhost:9002</code>, deployed app URL).
             </li>
             <li>
-              <strong>Identify Your GCS Bucket ID:</strong>
-              In the Firebase Console, go to Storage -> Files tab. Your bucket ID is displayed at the top of the file list, usually formatted as <code>gs://YOUR_PROJECT_ID.appspot.com</code> or <code>gs://YOUR_PROJECT_ID.firebasestorage.app</code>. Copy the bucket ID part (e.g., <code>YOUR_PROJECT_ID.appspot.com</code>).
+                <strong>Identify Your GCS Bucket ID:</strong>
+                In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>). Copy the ID.
             </li>
             <li>
-              <strong>Use `gsutil` (Google Cloud SDK command-line tool):</strong>
-              <ul className="list-disc list-inside ml-4">
-                <li>Open your terminal/command shell where `gsutil` is configured.</li>
-                <li>Navigate to the directory where you saved `cors-config.json`.</li>
+                <strong>Use `gsutil` (Google Cloud SDK command-line):</strong>
+                <ul className="list-disc list-inside ml-4">
+                <li>Open terminal/shell with `gsutil` configured.</li>
+                <li>Navigate to where `cors-config.json` is saved.</li>
                 <li>
-                  Set the CORS policy: <br />
-                  <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code><br />
-                  (Replace <code>YOUR_CORRECT_BUCKET_ID</code> with the ID from Step 3).
+                    Set policy: <code>gsutil cors set cors-config.json gs://YOUR_CORRECT_BUCKET_ID</code>
+                    <br />(Replace <code>YOUR_CORRECT_BUCKET_ID</code> with the ID from Step 3. Test BOTH <code>.appspot.com</code> and <code>.firebasestorage.app</code> suffixed versions if one gives a 404 error.)
                 </li>
                 <li>
-                  Verify the policy: <br />
-                  <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code><br />
-                  The output should match your `cors-config.json` content. If it doesn't, the `set` command may not have worked as expected (check for typos or permission issues with `gsutil`). If `gsutil` reports "BucketNotFound" or similar, ensure you're using the exact bucket ID from the Firebase console.
+                    Verify: <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code>
+                    <br />The output must match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
                 </li>
-              </ul>
+                </ul>
             </li>
             <li>
-              <strong>Wait & Test:</strong>
-              <ul className="list-disc list-inside ml-4">
-                <li>Allow 5-10 minutes for the new CORS settings to propagate across Google's infrastructure.</li>
-                <li>Clear your browser's cache thoroughly (for this site) or test in an Incognito/Private window.</li>
-                <li>Refresh this application page.</li>
-              </ul>
+                <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. Clear browser cache thoroughly. Test in Incognito/Private window.
             </li>
-          </ol>
-          <p className="mt-2">If "Failed to fetch" errors persist, meticulously double-check each step, especially the <strong>exact origin string</strong> in `cors-config.json` and the <strong>exact bucket ID</strong> used with `gsutil`. AI Blair's knowledge base functionality will be limited until this is resolved.</p>
+            </ol>
+            <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved. Check browser's Network tab for detailed fetch error codes if issues persist after correct `gsutil` configuration.</p>
         </AlertDescription>
       </Alert>
     );
