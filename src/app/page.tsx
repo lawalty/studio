@@ -60,7 +60,7 @@ const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP//
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v3_meta"; // Changed to v3
+const FIRESTORE_KNOWLEDGE_SOURCES_PATH = "configurations/knowledge_base_v3_meta";
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -645,18 +645,27 @@ export default function HomePage() {
                     console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
                     toast({
                         title: `Server Error for ${source.name}`,
-                        description: `Could not load. Server status: ${response.status}. 1. Test URL in browser (see console). 2. If it works, check CORS. 3. Re-upload file / refresh URL in admin.`,
+                        description: `Could not load. Server status: ${response.status}. 
+1. Test URL in browser (see console). 
+2. Check Network tab in DevTools for this URL. 
+3. If it works, check CORS on Storage. 
+4. Re-upload file / refresh URL in admin.`,
                         variant: "destructive",
-                        duration: 15000
+                        duration: 25000 
                     });
                   }
                 } catch (fetchError: any) {
-                  console.error(`[HomePage] Network or fetch error for ${source.name}. URL: ${source.downloadURL}. Error: ${fetchError.message}`, fetchError);
+                  console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}`, fetchError);
                   toast({
-                    title: `Fetch Error for ${source.name}`,
-                    description: `Failed to fetch content. 1. Test URL in browser (see console). 2. If URL works, check CORS settings in Firebase Storage. 3. Re-upload file / refresh URL in admin. Original error: ${fetchError.message}. Check browser dev console for more details.`,
+                    title: `Fetch Error for: ${source.name}`,
+                    description: `Failed to fetch (URL in console). 
+DEBUG STEPS:
+1. Test URL directly in browser.
+2. If URL works in browser: Open DevTools (F12) -> Network tab. Find the failing request for this URL. Check its 'Status' & 'Response Headers' (especially 'Access-Control-Allow-Origin'). This often reveals CORS issues.
+3. If URL fails in browser OR step 2 shows no CORS issue: Try 'Refresh URL' in Admin for this file, or re-upload it.
+Error: ${fetchError.message}`,
                     variant: "destructive",
-                    duration: 20000 
+                    duration: 30000 
                   });
                 }
               } else {
@@ -937,5 +946,3 @@ export default function HomePage() {
   );
 }
 
-
-    
