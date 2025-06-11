@@ -194,10 +194,16 @@ export default function HomePage() {
 
 
   const toggleListening = useCallback((forceState?: boolean) => {
+    if ((typeof forceState === 'boolean' && forceState === true) && isEndingSessionRef.current) {
+        return; // Don't start listening if an end session is in progress
+    }
+
     setIsListening(currentIsListening => {
       const targetState = typeof forceState === 'boolean' ? forceState : !currentIsListening;
 
       if (targetState === true) { 
+         if (isEndingSessionRef.current) return false; // Double check here too
+
         if (!recognitionRef.current) {
           if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
             console.warn("Speech recognition not initialized on toggleListening(true)");
@@ -251,9 +257,12 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current) {
-      isEndingSessionRef.current = false; 
-      resetConversation();
-      setShowSplashScreen(true);
+      // isEndingSessionRef.current = false; // This will be reset in resetConversation or handleCloseSaveDialog
+      // Let the save dialog logic handle the reset now
+      if (!showSaveDialog) { // If save dialog isn't already up from manual end chat
+         resetConversation();
+         setShowSplashScreen(true);
+      }
       return; 
     }
 
@@ -271,8 +280,11 @@ export default function HomePage() {
       elevenLabsAudioRef.current.onplay = null;
       elevenLabsAudioRef.current.onended = null;
       elevenLabsAudioRef.current.onerror = null;
-      elevenLabsAudioRef.current = null; 
+      // Don't nullify here if it could be reused, but resetConversation does nullify it.
+      // For safety, if we are done with this specific audio, clear src.
+      if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
     }
+
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isListeningRef.current) {
       setTimeout(() => {
@@ -282,7 +294,7 @@ export default function HomePage() {
         toggleListeningRef.current(true);
       }, 50); 
     }
-  }, [addMessage, messages, resetConversation, setShowSplashScreen]);
+  }, [addMessage, messages, resetConversation, setShowSplashScreen, showSaveDialog]);
 
 
   const browserSpeakInternal = useCallback((textForSpeech: string) => {
@@ -294,7 +306,7 @@ export default function HomePage() {
       utterance.onend = () => handleAudioProcessEnd(true);
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
         console.error("Browser Speech Synthesis error:", event.error, event);
-        if (event.error !== 'interrupted') { 
+        if (event.error !== 'interrupted' && event.error !== 'aborted') { 
           toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}. Check console.`, variant: "destructive" });
         }
         handleAudioProcessEnd(false); 
@@ -333,7 +345,7 @@ export default function HomePage() {
            URL.revokeObjectURL(elevenLabsAudioRef.current.src);
        }
        elevenLabsAudioRef.current.src = ''; 
-       elevenLabsAudioRef.current = null; 
+       // elevenLabsAudioRef.current = null; // Let resetConversation handle this
     }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
@@ -357,8 +369,14 @@ export default function HomePage() {
         if (response.ok) {
           const audioBlob = await response.blob();
           const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl); 
-          elevenLabsAudioRef.current = audio; 
+          
+          // Ensure we have a fresh audio object if the ref was somehow nulled or src cleared
+          if (!elevenLabsAudioRef.current) {
+            elevenLabsAudioRef.current = new Audio();
+          }
+          const audio = elevenLabsAudioRef.current;
+          audio.src = audioUrl;
+
           audio.onplay = handleActualAudioStart; 
           audio.onended = () => handleAudioProcessEnd(true); 
           audio.onerror = (e) => {
@@ -409,13 +427,16 @@ export default function HomePage() {
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0); 
     isEndingSessionRef.current = false; 
-    setShowPreparingAudioResponseIndicator(false); // Hide indicator when new message sent
+    setShowPreparingAudioResponseIndicator(false); 
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
         preparingIndicatorTimeoutRef.current = null;
     }
 
-    const genkitChatHistory = messages
+    // Prepare chat history for Genkit, excluding the current message being sent
+    // as it's passed separately in `userMessage`
+    const historyForGenkit = messages
+        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messages[messages.length -1]?.id)) // ensure not to include the one just added if logic changes
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }],
@@ -439,7 +460,7 @@ export default function HomePage() {
             textContent: combinedLowPriorityText || undefined,
         },
         personaTraits: personaTraits,
-        chatHistory: genkitChatHistory, 
+        chatHistory: historyForGenkit, 
       };
       const result = await generateChatResponse(flowInput);
       await speakTextRef.current(result.aiResponse);
@@ -609,26 +630,40 @@ export default function HomePage() {
 
   const handleEndChatManually = () => {
      if (communicationMode === 'audio-only') {
+        isEndingSessionRef.current = true; // Prevent auto-relisten or other race conditions
+
+        // Stop listening if active
         if (isListeningRef.current) {
-            toggleListeningRef.current(false); 
+            toggleListeningRef.current(false); // This calls recognition.abort() and setIsListening(false)
         }
+
+        // Stop speaking if active
         if (isSpeakingRef.current) {
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
                 elevenLabsAudioRef.current.pause();
                 if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
                     URL.revokeObjectURL(elevenLabsAudioRef.current.src);
                 }
-                elevenLabsAudioRef.current.src = ''; 
+                elevenLabsAudioRef.current.src = '';
             }
             if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
             }
-            setIsSpeaking(false); 
+            setIsSpeaking(false); // Update state
         }
-        
+
+        // Clear any "Preparing response" indicator immediately
+        if (preparingIndicatorTimeoutRef.current) {
+            clearTimeout(preparingIndicatorTimeoutRef.current);
+            preparingIndicatorTimeoutRef.current = null;
+        }
+        setShowPreparingAudioResponseIndicator(false);
+
+        // Proceed to save dialog
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
     } else {
+      // For text-only or audio-text, reset immediately
       resetConversation();
       setShowSplashScreen(true);
     }
@@ -649,7 +684,7 @@ export default function HomePage() {
       handleSaveConversationAsPdf();
     }
     setShowLogForSaveConfirmation(false); 
-    resetConversation();
+    resetConversation(); // This will also set isEndingSessionRef.current = false;
     setShowSplashScreen(true);
   };
 
@@ -657,7 +692,7 @@ export default function HomePage() {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
       setIsSendingMessage(true);
       setAiHasInitiatedConversation(true); 
-      setShowPreparingAudioResponseIndicator(false); // Ensure no preparing indicator before initial greeting
+      setShowPreparingAudioResponseIndicator(false); 
       if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
         preparingIndicatorTimeoutRef.current = null;
@@ -995,7 +1030,7 @@ export default function HomePage() {
       !isSendingMessage &&
       !isSpeaking &&
       !showSaveDialog &&
-      !showPreparingAudioResponseIndicator && // Don't show speak button if preparing indicator is shown
+      !showPreparingAudioResponseIndicator && 
       !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation); 
 
 
