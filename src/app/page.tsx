@@ -257,9 +257,7 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current) {
-      // isEndingSessionRef.current = false; // This will be reset in resetConversation or handleCloseSaveDialog
-      // Let the save dialog logic handle the reset now
-      if (!showSaveDialog) { // If save dialog isn't already up from manual end chat
+      if (!showSaveDialog) { 
          resetConversation();
          setShowSplashScreen(true);
       }
@@ -280,8 +278,6 @@ export default function HomePage() {
       elevenLabsAudioRef.current.onplay = null;
       elevenLabsAudioRef.current.onended = null;
       elevenLabsAudioRef.current.onerror = null;
-      // Don't nullify here if it could be reused, but resetConversation does nullify it.
-      // For safety, if we are done with this specific audio, clear src.
       if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
     }
 
@@ -345,7 +341,6 @@ export default function HomePage() {
            URL.revokeObjectURL(elevenLabsAudioRef.current.src);
        }
        elevenLabsAudioRef.current.src = ''; 
-       // elevenLabsAudioRef.current = null; // Let resetConversation handle this
     }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
@@ -368,14 +363,28 @@ export default function HomePage() {
         const response = await fetch(elevenLabsUrl, { method: "POST", headers, body });
         if (response.ok) {
           const audioBlob = await response.blob();
+
+          if (audioBlob.size === 0) {
+            console.warn("ElevenLabs API returned an empty audio blob. Falling back to browser TTS.");
+            toast({ title: "ElevenLabs Audio Issue", description: "Received empty audio data. Using browser TTS.", variant: "default" });
+            browserSpeakInternal(textForSpeech);
+            return;
+          }
+          if (!audioBlob.type.startsWith('audio/')) {
+            console.warn(`ElevenLabs API returned non-audio content-type: ${audioBlob.type}. Blob size: ${audioBlob.size}. Falling back to browser TTS.`);
+            toast({ title: "ElevenLabs Audio Issue", description: `Received unexpected content type: ${audioBlob.type}. Using browser TTS.`, variant: "default" });
+            browserSpeakInternal(textForSpeech);
+            return;
+          }
+
           const audioUrl = URL.createObjectURL(audioBlob);
           
-          // Ensure we have a fresh audio object if the ref was somehow nulled or src cleared
           if (!elevenLabsAudioRef.current) {
             elevenLabsAudioRef.current = new Audio();
           }
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
+          audio.load(); // Explicitly load the new audio source
 
           audio.onplay = handleActualAudioStart; 
           audio.onended = () => handleAudioProcessEnd(true); 
@@ -434,10 +443,8 @@ export default function HomePage() {
         preparingIndicatorTimeoutRef.current = null;
     }
 
-    // Prepare chat history for Genkit, excluding the current message being sent
-    // as it's passed separately in `userMessage`
     const historyForGenkit = messages
-        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messages[messages.length -1]?.id)) // ensure not to include the one just added if logic changes
+        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messages[messages.length -1]?.id)) 
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }],
@@ -631,14 +638,12 @@ export default function HomePage() {
 
   const handleEndChatManually = () => {
      if (communicationMode === 'audio-only') {
-        isEndingSessionRef.current = true; // Prevent auto-relisten or other race conditions
+        isEndingSessionRef.current = true;
 
-        // Stop listening if active
         if (isListeningRef.current) {
-            toggleListeningRef.current(false); // This calls recognition.abort() and setIsListening(false)
+            toggleListeningRef.current(false); 
         }
 
-        // Stop speaking if active
         if (isSpeakingRef.current) {
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
                 elevenLabsAudioRef.current.pause();
@@ -650,21 +655,18 @@ export default function HomePage() {
             if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
             }
-            setIsSpeaking(false); // Update state
+            setIsSpeaking(false); 
         }
 
-        // Clear any "Preparing response" indicator immediately
         if (preparingIndicatorTimeoutRef.current) {
             clearTimeout(preparingIndicatorTimeoutRef.current);
             preparingIndicatorTimeoutRef.current = null;
         }
         setShowPreparingAudioResponseIndicator(false);
 
-        // Proceed to save dialog
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
     } else {
-      // For text-only or audio-text, reset immediately
       resetConversation();
       setShowSplashScreen(true);
     }
@@ -685,7 +687,7 @@ export default function HomePage() {
       handleSaveConversationAsPdf();
     }
     setShowLogForSaveConfirmation(false); 
-    resetConversation(); // This will also set isEndingSessionRef.current = false;
+    resetConversation(); 
     setShowSplashScreen(true);
   };
 
