@@ -649,15 +649,15 @@ export default function HomePage() {
                     textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
                   } else {
                     fetchFailedForAnyTextFile = true;
-                    setCorsErrorEncountered(true); // Trigger the detailed CORS alert
+                    // This will trigger the main CORS alert on the page
+                    setCorsErrorEncountered(true); 
                     console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}. This is very likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket. The browser is blocking the request. Please see the on-page alert for detailed troubleshooting steps.`);
-                    // Toast is now replaced by the more persistent on-page Alert for CORS.
                   }
                 } catch (fetchError: any) {
                   fetchFailedForAnyTextFile = true;
-                  setCorsErrorEncountered(true); // Trigger the detailed CORS alert
-                  console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}`, fetchError);
-                  // Toast is now replaced by the more persistent on-page Alert for CORS.
+                  // This will trigger the main CORS alert on the page
+                  setCorsErrorEncountered(true); 
+                  console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}. This is very likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket. Please see the on-page alert for detailed troubleshooting steps.`, fetchError);
                 }
               } else {
                 console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (ID: ${source.id}). URL: '${source.downloadURL}'. Skipping fetch.`);
@@ -671,9 +671,9 @@ export default function HomePage() {
             }
           }
           setDynamicKnowledgeContent(textFileContents.join('\n\n'));
-          if (fetchFailedForAnyTextFile) {
-            setCorsErrorEncountered(true); 
-          }
+           if (fetchFailedForAnyTextFile) {
+             setCorsErrorEncountered(true); 
+           }
         } else {
             setKnowledgeFileSummary('');
             setDynamicKnowledgeContent('');
@@ -808,18 +808,20 @@ export default function HomePage() {
                           <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
 {`[
   {
-    "origin": ["YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR_HERE"],
+    "origin": [
+      "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR"
+    ],
     "method": ["GET", "HEAD", "OPTIONS"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
     "maxAgeSeconds": 3600
   }
 ]`}
                           </pre>
-                          Replace <code>YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR_HERE</code> with the actual origin you copied in Step 1. You can add multiple origins to the array if needed (e.g., for `http://localhost:9002` or your deployed app URL).
+                          Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied in Step 1 (e.g., <code>https://6000-firebase-studio-your-unique-id.cloudworkstation.dev</code>). You can add multiple origins to the array if needed (e.g., for <code>http://localhost:9002</code> or your deployed app URL).
                         </li>
                         <li>
                           <strong>Identify Your GCS Bucket ID:</strong>
-                          In the Firebase Console, go to Storage -> Files tab. Your bucket ID is displayed there, usually formatted as <code>YOUR_PROJECT_ID.appspot.com</code> or <code>YOUR_PROJECT_ID.firebasestorage.app</code>. Copy this exact bucket ID.
+                          In the Firebase Console, go to Storage -> Files tab. Your bucket ID is displayed at the top of the file list, usually formatted as <code>gs://YOUR_PROJECT_ID.appspot.com</code> or <code>gs://YOUR_PROJECT_ID.firebasestorage.app</code>. Copy the bucket ID part (e.g., <code>YOUR_PROJECT_ID.appspot.com</code>).
                         </li>
                         <li>
                           <strong>Use `gsutil` (Google Cloud SDK command-line tool):</strong>
@@ -834,7 +836,7 @@ export default function HomePage() {
                             <li>
                               Verify the policy: <br />
                               <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code><br />
-                              The output should match your `cors-config.json` content. If it doesn't, the `set` command may not have worked as expected (check for typos or permission issues with `gsutil`).
+                              The output should match your `cors-config.json` content. If it doesn't, the `set` command may not have worked as expected (check for typos or permission issues with `gsutil`). If `gsutil` reports "BucketNotFound" or similar, ensure you're using the exact bucket ID from the Firebase console.
                             </li>
                           </ul>
                         </li>
@@ -847,7 +849,7 @@ export default function HomePage() {
                           </ul>
                         </li>
                       </ol>
-                      <p className="mt-2">If "Failed to fetch" errors persist, double-check each step, especially the exact origin string in `cors-config.json` and the exact bucket ID used with `gsutil`. AI Blair's knowledge base functionality will be limited until this is resolved.</p>
+                      <p className="mt-2">If "Failed to fetch" errors persist, meticulously double-check each step, especially the <strong>exact origin string</strong> in `cors-config.json` and the <strong>exact bucket ID</strong> used with `gsutil`. AI Blair's knowledge base functionality will be limited until this is resolved.</p>
                     </AlertDescription>
                 </Alert>
             )}
@@ -918,18 +920,16 @@ export default function HomePage() {
               <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
 {`[
   {
-    "origin": ["YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR_HERE"],
+    "origin": [
+      "MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR"
+    ],
     "method": ["GET", "HEAD", "OPTIONS"],
     "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"],
     "maxAgeSeconds": 3600
   }
-]
-// IMPORTANT: Replace YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR_HERE
-// with the actual origin string from Step 1.
-// Example for Firebase Studio:
-// "origin": ["https://6000-firebase-studio-xxxxxxxxxxx.cloudworkstation.dev"],`}
+]`}
               </pre>
-              You can add multiple origins to the array if needed (e.g., for <code>http://localhost:9002</code> or your deployed app URL).
+              Replace <code>MUST_REPLACE_WITH_YOUR_APP_ORIGIN_FROM_CONSOLE_ERROR</code> with the actual origin you copied in Step 1 (e.g., <code>https://6000-firebase-studio-your-unique-id.cloudworkstation.dev</code>). You can add multiple origins to the array if needed (e.g., for <code>http://localhost:9002</code> or your deployed app URL).
             </li>
             <li>
               <strong>Identify Your GCS Bucket ID:</strong>
