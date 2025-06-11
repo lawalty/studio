@@ -443,6 +443,7 @@ export default function HomePage() {
         preparingIndicatorTimeoutRef.current = null;
     }
 
+    // Filter out the current user message being sent, to avoid duplicating it in history for the AI
     const historyForGenkit = messages
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messages[messages.length -1]?.id)) 
         .map(msg => ({
@@ -640,17 +641,17 @@ export default function HomePage() {
      if (communicationMode === 'audio-only') {
         isEndingSessionRef.current = true;
 
-        if (isListeningRef.current) {
+        if (isListeningRef.current) { // Stop listening first
             toggleListeningRef.current(false); 
         }
 
-        if (isSpeakingRef.current) {
+        if (isSpeakingRef.current) { // Then stop speaking
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
                 elevenLabsAudioRef.current.pause();
                 if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
                     URL.revokeObjectURL(elevenLabsAudioRef.current.src);
                 }
-                elevenLabsAudioRef.current.src = '';
+                elevenLabsAudioRef.current.src = ''; 
             }
             if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
@@ -1082,7 +1083,7 @@ export default function HomePage() {
           {aiHasInitiatedConversation && !showSaveDialog && ( 
             <Button
               onClick={handleEndChatManually}
-              variant="destructive"
+              variant="default" 
               size="default" 
               className="mt-8"
             >
