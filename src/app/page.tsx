@@ -634,6 +634,7 @@ export default function HomePage() {
           const textFileContents: string[] = [];
           for (const source of sources) {
             if (source.type === 'text') {
+              // Enhanced URL validation
               if (source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
                 console.log(`[HomePage] Attempting to fetch content for ${source.name} from URL: ${source.downloadURL}`);
                 try {
@@ -643,28 +644,59 @@ export default function HomePage() {
                     textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
                   } else {
                     console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
-                    let debugAdvice = `If URL (see console) works in browser: check DevTools (F12) > Network for CORS errors. If CORS: re-check 'gsutil cors set cors-config.json gs://YOUR_BUCKET_ID' (use .appspot.com or .firebasestorage.app - or exact ID from FB Console). Verify with 'gsutil cors get ...'. If URL fails in browser: Re-upload file / refresh URL in admin.`;
-                    
-                    toast({
-                        title: `Server Error for ${source.name} (${response.status})`,
-                        description: `Could not load. ${debugAdvice} Server status: ${response.statusText}.`,
-                        variant: "destructive",
-                        duration: 60000 
+                     toast({
+                      title: `CORS Issue Likely: Failed to Fetch ${source.name} (${response.status})`,
+                      description: `This is likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket. The browser is blocking the request.
+
+Troubleshooting Steps:
+1.  **Verify Your Origin in cors-config.json**:
+    The "origin" in your \`cors-config.json\` MUST EXACTLY MATCH your app's current origin (e.g., the one from the browser console error, like 'https://6000-firebase-studio-....cloudworkstation.dev'). Double-check for typos (http vs https, extra slashes, correct port).
+
+2.  **Correct Bucket ID with gsutil**:
+    Use the bucket ID found in Firebase Console (Storage > Files tab, usually looks like \`gs://your-project-id.appspot.com\` OR \`gs://your-project-id.firebasestorage.app\`).
+    Command: \`gsutil cors set cors-config.json gs://[YOUR_CORRECT_BUCKET_ID]\`
+
+3.  **Verify Applied CORS Configuration**:
+    After running 'set', immediately run:
+    \`gsutil cors get gs://[YOUR_CORRECT_BUCKET_ID]\`
+    Confirm the output matches your \`cors-config.json\`, especially the "origin" list.
+
+4.  **Wait & Clear Cache**: Allow 5-10 minutes for changes to propagate. Clear your browser's cache thoroughly or use an Incognito/Private window.
+
+5.  **Test URL Directly**: Copy the URL logged above for '${source.name}' and open it in your browser. If it fails, the URL itself is bad (re-upload file / refresh URL in admin).
+
+This is a server-side Firebase Storage configuration. The app code cannot bypass this browser security feature.`,
+                      variant: "destructive",
+                      duration: 120000 
                     });
                   }
                 } catch (fetchError: any) {
                   console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}`, fetchError);
-                  let debugAdvice = `FETCH ERROR for "${source.name}".
-1. Test URL in browser (URL in console).
-2. If URL works in browser: Open DevTools (F12) > Network tab. Find the failing request. Check 'Status' & 'Response Headers' for CORS issues.
-3. If CORS issue: Ensure your Firebase Storage bucket's CORS config (via 'gsutil cors set cors-config.json gs://[YOUR_BUCKET_ID]') is correct. Try both 'YOUR_PROJECT_ID.appspot.com' AND 'YOUR_PROJECT_ID.firebasestorage.app' for the bucket ID, or get exact ID from Firebase Console (Storage -> Files -> click bucket name). Then use 'gsutil cors get gs://[CORRECT_BUCKET_ID]' to verify. Wait for propagation & clear browser cache.
-4. If URL fails in browser OR step 2 shows no CORS issue: Try 'Refresh URL' in Admin for this file, or re-upload it.
-Error: ${fetchError.message || 'Unknown fetch error'}`;
                   toast({
-                    title: `Fetch Error for: ${source.name}`,
-                    description: debugAdvice,
+                    title: `CORS Issue Likely: Failed to Fetch ${source.name}`,
+                    description: `Fetch failed for URL (see console): ${source.downloadURL}. This is likely a CORS (Cross-Origin Resource Sharing) configuration issue on your Firebase Storage bucket.
+
+Troubleshooting Steps:
+1.  **Verify Your Origin in cors-config.json**:
+    The "origin" in your \`cors-config.json\` MUST EXACTLY MATCH your app's current origin (e.g., the one from the browser console error, like 'https://6000-firebase-studio-....cloudworkstation.dev'). Double-check for typos (http vs https, extra slashes, correct port).
+
+2.  **Correct Bucket ID with gsutil**:
+    Use the bucket ID found in Firebase Console (Storage > Files tab, usually looks like \`gs://your-project-id.appspot.com\` OR \`gs://your-project-id.firebasestorage.app\`).
+    Command: \`gsutil cors set cors-config.json gs://[YOUR_CORRECT_BUCKET_ID]\`
+
+3.  **Verify Applied CORS Configuration**:
+    After running 'set', immediately run:
+    \`gsutil cors get gs://[YOUR_CORRECT_BUCKET_ID]\`
+    Confirm the output matches your \`cors-config.json\`, especially the "origin" list.
+
+4.  **Wait & Clear Cache**: Allow 5-10 minutes for changes to propagate. Clear your browser's cache thoroughly or use an Incognito/Private window.
+
+5.  **Test URL Directly**: Copy the URL logged for '${source.name}' and open it in your browser. If it fails, the URL itself is bad (re-upload file / refresh URL in admin).
+
+This is a server-side Firebase Storage configuration. The app code cannot bypass this browser security feature.
+Error: ${fetchError.message || 'Unknown fetch error'}.`,
                     variant: "destructive",
-                    duration: 90000 
+                    duration: 120000 
                   });
                 }
               } else {
