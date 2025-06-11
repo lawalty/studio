@@ -24,14 +24,13 @@ export interface KnowledgeSource {
   uploadedAt: string;
   storagePath: string;
   downloadURL: string;
-  // Priority is now implicit by which KB it's in
 }
 
 type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low';
 
 const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFolder: string; title: string }> = {
   High: {
-    firestorePath: "configurations/kb_high_meta_v1", // Using v1 to denote this new structure
+    firestorePath: "configurations/kb_high_meta_v1",
     storageFolder: "knowledge_base_files_high_v1/",
     title: "High Priority Knowledge Base"
   },
@@ -252,7 +251,7 @@ export default function KnowledgeBasePage() {
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Storage for ${level} KB.`, variant: "destructive" });
         setSources(originalSources); 
       }
-    } else { // Should not happen if storagePath is always set
+    } else { 
       dbUpdated = await saveSourcesToFirestore(updatedSourcesAfterDelete, level);
       if (dbUpdated) {
         toast({ title: "List Item Removed", description: `${sourceToDelete.name} removed from ${level} KB list.` });
@@ -387,12 +386,36 @@ export default function KnowledgeBasePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Label htmlFor="file-upload" className="font-medium whitespace-nowrap">Step 1:</Label>
+            <Input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              id="file-upload"
+              disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}
+            />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow} className="w-full sm:w-auto">
+              <UploadCloud className="mr-2 h-4 w-4" /> Choose File
+            </Button>
+            {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
+          </div>
+           {selectedFile && (
+            <p className="text-xs text-muted-foreground pl-12"> {/* Added padding to align with step 1 */}
+              Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
+            </p>
+          )}
+
           <div className="space-y-2">
-            <Label className="font-medium">Select Knowledge Base Priority:</Label>
+            <div className="flex items-center gap-2">
+              <Label className="font-medium whitespace-nowrap">Step 2:</Label>
+              <Label className="font-medium">Select Knowledge Base Priority:</Label>
+            </div>
             <RadioGroup
               value={selectedKBTargetForUpload}
               onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
-              className="flex space-x-4"
+              className="flex flex-col sm:flex-row sm:space-x-4 pl-12" /* Added padding to align with step 2 */
             >
               {(['High', 'Medium', 'Low'] as KnowledgeBaseLevel[]).map(level => (
                 <div key={level} className="flex items-center space-x-2">
@@ -402,32 +425,15 @@ export default function KnowledgeBasePage() {
               ))}
             </RadioGroup>
           </div>
-
-          <div className="flex items-center gap-4">
-            <Input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              id="file-upload"
-              disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}
-            />
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}>
-              <UploadCloud className="mr-2 h-4 w-4" /> Choose File
-            </Button>
-            {selectedFile && <span className="text-sm text-muted-foreground">{selectedFile.name}</span>}
-          </div>
-           {selectedFile && (
-            <p className="text-xs text-muted-foreground">
-              Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
-            </p>
-          )}
         </CardContent>
         <CardFooter>
-          <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}>
-            {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-            {isCurrentlyUploading ? 'Uploading...' : 'Upload to Selected KB'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Label className="font-medium whitespace-nowrap">Step 3:</Label>
+            <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow}>
+              {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+              {isCurrentlyUploading ? 'Uploading...' : 'Upload to Selected KB'}
+            </Button>
+          </div>
         </CardFooter>
       </Card>
 
