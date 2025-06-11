@@ -643,31 +643,28 @@ export default function HomePage() {
                     textFileContents.push(`Content from ${source.name}:\n${textContent}\n---`);
                   } else {
                     console.warn(`[HomePage] Failed to fetch content for ${source.name} from ${source.downloadURL}. Server responded with ${response.status} ${response.statusText}.`);
-                    let debugAdvice = `1. Test URL in browser (see console for URL). 
-2. If URL works, check DevTools (F12) > Network tab for this URL. Examine 'Status' & 'Response Headers' (esp. 'Access-Control-Allow-Origin') for CORS issues.
-3. If it's a CORS issue: Ensure your Storage bucket CORS config (via 'gsutil cors set cors-config.json gs://[YOUR_PROJECT_ID].appspot.com') includes your app's origin ('${window.location.origin}'). Verify with 'gsutil cors get ...'.
-4. If URL fails in browser or it's not CORS: Re-upload file / refresh URL in admin.`;
+                    let debugAdvice = `If URL (see console) works in browser: check DevTools (F12) > Network for CORS errors. If CORS: re-check 'gsutil cors set cors-config.json gs://YOUR_BUCKET_ID' (use .appspot.com or .firebasestorage.app - or exact ID from FB Console). Verify with 'gsutil cors get ...'. If URL fails in browser: Re-upload file / refresh URL in admin.`;
                     
                     toast({
                         title: `Server Error for ${source.name} (${response.status})`,
                         description: `Could not load. ${debugAdvice} Server status: ${response.statusText}.`,
                         variant: "destructive",
-                        duration: 45000 
+                        duration: 60000 
                     });
                   }
                 } catch (fetchError: any) {
                   console.error(`[HomePage] Fetch error for ${source.name}. URL: ${source.downloadURL}. Error Type: ${fetchError.name}. Message: ${fetchError.message}`, fetchError);
-                  let debugAdvice = `DEBUG STEPS for "${source.name}":
-1. Test URL directly in browser (URL in console).
-2. If URL works in browser: Open DevTools (F12) -> Network tab. Find the failing request for this URL. Check its 'Status' & 'Response Headers' (especially 'Access-Control-Allow-Origin'). This often reveals CORS issues.
-3. If it's a CORS issue: Ensure your Firebase Storage bucket's CORS config (via 'gsutil cors set cors-config.json gs://[YOUR_PROJECT_ID].appspot.com' - ensure bucket name ends with '.appspot.com') includes your app's origin ('${window.location.origin}'). Verify with 'gsutil cors get gs://[YOUR_PROJECT_ID].appspot.com'. Wait for propagation & clear browser cache.
+                  let debugAdvice = `FETCH ERROR for "${source.name}".
+1. Test URL in browser (URL in console).
+2. If URL works in browser: Open DevTools (F12) > Network tab. Find the failing request. Check 'Status' & 'Response Headers' for CORS issues.
+3. If CORS issue: Ensure your Firebase Storage bucket's CORS config (via 'gsutil cors set cors-config.json gs://[YOUR_BUCKET_ID]') is correct. Try both 'YOUR_PROJECT_ID.appspot.com' AND 'YOUR_PROJECT_ID.firebasestorage.app' for the bucket ID, or get exact ID from Firebase Console (Storage -> Files -> click bucket name). Then use 'gsutil cors get gs://[CORRECT_BUCKET_ID]' to verify. Wait for propagation & clear browser cache.
 4. If URL fails in browser OR step 2 shows no CORS issue: Try 'Refresh URL' in Admin for this file, or re-upload it.
 Error: ${fetchError.message || 'Unknown fetch error'}`;
                   toast({
                     title: `Fetch Error for: ${source.name}`,
                     description: debugAdvice,
                     variant: "destructive",
-                    duration: 60000 
+                    duration: 90000 
                   });
                 }
               } else {
