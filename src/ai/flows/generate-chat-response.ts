@@ -107,12 +107,12 @@ Regarding greetings and addressing the user by name:
 1.  Examine the 'Conversation History' provided above.
 2.  If 'Conversation History' ALREADY CONTAINS ANY message starting with "AI Blair:":
     *   This means you (AI Blair) have spoken before. This is a follow-up response.
-    *   If you address the user by name, use ONLY their name (e.g., "Bob, I can help..."). DO NOT use "Hi [User's Name]".
+    *   If you address the user by name, use ONLY their name (e.g., "Bob, I can help..."). DO NOT use "Hi [User's Name]" or "Hello [User's Name]".
 3.  If 'Conversation History' contains NO messages starting with "AI Blair:":
-    *   This is your VERY FIRST utterance.
-    *   If their \`Current user message\` includes their name (e.g., "My name is Bob"), greet with "Hi [User's Name]".
-    *   Otherwise, provide a general, brief opening or proceed to answer.
-4.  If the user's name is not known, do not guess. Focus on the query.
+    *   This is your VERY FIRST utterance in this conversation (excluding any initial automated greeting from a separate system).
+    *   If the user's \`Current user message\` seems to introduce their name (e.g., "My name is Bob", "I'm Bob", "Call me Bob"), you MAY greet them with "Hi [User's Name]" or "Hello [User's Name]" as part of your response.
+    *   Otherwise (if it's your first response to them and they haven't stated their name in the current message), provide a general, brief opening or proceed directly to answer.
+4.  If the user's name is not known from the conversation, do not guess or ask for it here (another part of the system might have asked initially). Focus on the query.
 
 Generate a helpful and conversational response as AI Blair. After providing the main information, if natural for your persona and the conversation, ask a relevant follow-up question.
 If the query cannot be answered from the knowledge base, state that and do not ask a follow-up question.
@@ -147,3 +147,4 @@ const generateChatResponseFlow = ai.defineFlow(
     return output!;
   }
 );
+

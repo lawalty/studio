@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
 import { generateChatResponse, type GenerateChatResponseInput } from '@/ai/flows/generate-chat-response';
-import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
+import { generateInitialGreeting, type GenerateInitialGreetingInput } from '@/ai/flows/generate-initial-greeting';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -387,7 +387,7 @@ export default function HomePage() {
     setConsecutiveSilencePrompts(0); 
     isEndingSessionRef.current = false; 
 
-    const genkitChatHistory = messages
+    const genkitChatHistory = messages // Use current messages state before adding the new user message for history
         .filter(msg => msg.text && msg.text.trim() !== "") 
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
@@ -605,7 +605,12 @@ export default function HomePage() {
       setAiHasInitiatedConversation(true); 
       const initGreeting = async () => {
         try {
-          const result = await generateInitialGreeting({ personaTraits });
+          const greetingInput: GenerateInitialGreetingInput = {
+            personaTraits,
+            knowledgeBaseHighSummary: knowledgeFileSummaryHigh || undefined,
+            knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
+          };
+          const result = await generateInitialGreeting(greetingInput);
           await speakTextRef.current(result.greetingMessage);
         } catch (error) {
           console.error("Failed to get initial AI greeting:", error);
@@ -616,7 +621,7 @@ export default function HomePage() {
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge]); 
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh]); 
 
   const fetchAndProcessKnowledgeLevel = useCallback(async (
     levelPath: string,
@@ -780,7 +785,7 @@ export default function HomePage() {
               </ul>
             </li>
             <li>
-              <strong>Create/Update <code>cors-config.json</code> file with this exact content:</strong>
+              <strong>Create/Update <code>cors-config.json</code> file with this exact content (replace the Studio origin if yours is different):</strong>
               <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
 {`[
   {
@@ -1044,3 +1049,4 @@ export default function HomePage() {
     </div>
   );
 }
+
