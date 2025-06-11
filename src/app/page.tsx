@@ -379,9 +379,10 @@ export default function HomePage() {
 
           audio.onplay = handleActualAudioStart; 
           audio.onended = () => handleAudioProcessEnd(true); 
-          audio.onerror = (e) => {
-            console.error("Error playing ElevenLabs audio:", e);
-            toast({ title: "ElevenLabs Playback Error", description: "Could not play audio. Falling back to browser TTS.", variant: "destructive" });
+          audio.onerror = (e: Event) => {
+            const mediaError = (e.target as HTMLAudioElement)?.error;
+            console.error("Error playing ElevenLabs audio. MediaError code:", mediaError?.code, "MediaError message:", mediaError?.message, "Full event:", e);
+            toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${mediaError?.code || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
             browserSpeakInternal(textForSpeech); 
           };
           await audio.play();
@@ -865,7 +866,7 @@ export default function HomePage() {
           <ul className="list-disc list-inside space-y-1 text-xs pl-4">
               <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
               <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
-              <li>Verify with <code>gsutil cors get gs://YOUR_CORRECT_BUCKET_ID</code> that the active policy on the bucket includes this exact Studio origin.</li>
+              <li>Verify with <code>gsutil cors get gs://ai-blair-7fb8o.firebasestorage.app</code> that the active policy on the bucket includes this exact Studio origin.</li>
           </ul>
 
           <p className="font-semibold mt-2">General CORS Troubleshooting for Firebase Storage:</p>
