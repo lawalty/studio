@@ -1083,9 +1083,10 @@ export default function HomePage() {
           {aiHasInitiatedConversation && !showSaveDialog && ( 
             <Button
               onClick={handleEndChatManually}
-              variant="default" 
-              size="default" 
+              variant="default"
+              size="default"
               className="mt-8"
+              disabled={isSpeaking}
             >
               <Power className="mr-2 h-5 w-5" /> End Chat
             </Button>
