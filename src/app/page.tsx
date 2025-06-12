@@ -78,7 +78,32 @@ interface PageKnowledgeSource {
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
 const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechRecognition || (window as any).webkitSpeechRecognition : null;
-const MAX_SILENCE_PROMPTS = 3;
+const MAX_SILENCE_PROMPTS = 3; // AI asks "are you there" twice (prompts 1 & 2), ends on 3rd silence.
+
+const getUserNameFromHistory = (history: Message[]): string | null => {
+  for (let i = history.length - 1; i >= 0; i--) { // Check recent messages first
+    const message = history[i];
+    if (message.sender === 'user') {
+      const text = message.text; // Keep casing for proper noun extraction
+      const namePatterns = [
+        /my name is\s+([A-Za-z]+)/i,
+        /i'm\s+([A-Za-z]+)/i,
+        /i am\s+([A-Za-z]+)/i,
+        /call me\s+([A-Za-z]+)/i,
+      ];
+      for (const pattern of namePatterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          const name = match[1];
+          // Capitalize first letter
+          return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+        }
+      }
+    }
+  }
+  return null;
+};
+
 
 export default function HomePage() {
   const [showSplashScreen, setShowSplashScreen] = useState(true);
@@ -119,7 +144,6 @@ export default function HomePage() {
   const currentAiResponseTextRef = useRef<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
-  // const { cn } = require("@/lib/utils"); // cn is already imported globally
   const preparingIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -137,6 +161,9 @@ export default function HomePage() {
 
   const isEndingSessionRef = useRef(false);
   const isAboutToSpeakForSilenceRef = useRef(false);
+  
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
 
   useEffect(() => {
@@ -187,7 +214,6 @@ export default function HomePage() {
       elevenLabsAudioRef.current.onplay = null;
       elevenLabsAudioRef.current.onended = null;
       elevenLabsAudioRef.current.onerror = null;
-      // elevenLabsAudioRef.current = null; // Commented out to avoid re-creating audio element unnecessarily.
     }
 
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -251,7 +277,7 @@ export default function HomePage() {
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
-    isAboutToSpeakForSilenceRef.current = false; // Reset flag when speech actually starts
+    isAboutToSpeakForSilenceRef.current = false; 
     setIsSendingMessage(false);
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
@@ -260,16 +286,16 @@ export default function HomePage() {
     }
 
     if (currentAiResponseTextRef.current) {
-      if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
+      if (!messagesRef.current.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
         addMessage(currentAiResponseTextRef.current, 'ai');
       }
     }
-  }, [addMessage, messages]);
+  }, [addMessage]);
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
     isSpeakingRef.current = false;
-    isAboutToSpeakForSilenceRef.current = false; // Reset flag when speech ends
+    isAboutToSpeakForSilenceRef.current = false; 
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -285,7 +311,7 @@ export default function HomePage() {
     }
 
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
-       if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
+       if (!messagesRef.current.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
        }
     }
@@ -315,7 +341,7 @@ export default function HomePage() {
       console.log("[AudioOnly][handleAudioProcessEnd] Mic aborted. Calling toggleListening(true) to restart. isSpeakingRef.current is now:", isSpeakingRef.current);
       toggleListeningRef.current(true);
     }
-  }, [addMessage, messages, resetConversation, setShowSplashScreen, showSaveDialog]);
+  }, [addMessage, resetConversation, setShowSplashScreen, showSaveDialog]);
 
 
   const browserSpeakInternal = useCallback((textForSpeech: string) => {
@@ -346,14 +372,14 @@ export default function HomePage() {
 
     if (communicationModeRef.current === 'text-only' || text.trim() === "") {
       if (text.trim() !== "" && currentAiResponseTextRef.current) {
-        if (!messages.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
+        if (!messagesRef.current.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
             addMessage(currentAiResponseTextRef.current, 'ai');
         }
       }
       setIsSendingMessage(false);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
-      isAboutToSpeakForSilenceRef.current = false; // Ensure reset if text-only or empty
+      isAboutToSpeakForSilenceRef.current = false; 
       setShowPreparingAudioResponseIndicator(false);
       if (preparingIndicatorTimeoutRef.current) {
           clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -416,28 +442,29 @@ export default function HomePage() {
           }
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
-          // audio.load(); // Explicit load might not be needed if src assignment triggers it
 
           audio.onplay = handleActualAudioStart;
           audio.onended = () => handleAudioProcessEnd(true);
-          audio.onerror = (e: Event) => {
-            const mediaError = (e.target as HTMLAudioElement)?.error;
-            console.error("Error playing ElevenLabs audio. MediaError code:", mediaError?.code, "MediaError message:", mediaError?.message, "Full event:", e);
-            // Check if the error is due to interruption
-            if (mediaError && mediaError.code === mediaError.MEDIA_ERR_ABORTED) {
+          audio.onerror = (e: Event | string) => {
+            const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
+            const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
+            const errorCode = mediaError?.code;
+            console.error("Error playing ElevenLabs audio. MediaError code:", errorCode, "MediaError message:", errorMessage, "Full event:", e);
+            
+            if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request")) {
                 console.warn("ElevenLabs playback aborted, likely by a new load request. Not falling back to browser TTS for this specific interruption.");
-                handleAudioProcessEnd(false); // Indicate playback didn't complete successfully but don't trigger fallback for this specific error.
+                handleAudioProcessEnd(false); 
             } else {
-                toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${mediaError?.code || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
+                toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
                 browserSpeakInternal(textForSpeech);
             }
           };
           try {
             await audio.play();
           } catch (playError: any) {
-            if (playError.name === 'AbortError') {
+            if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request")) {
                 console.warn('ElevenLabs audio.play() was aborted. This is likely due to a new speakText call. Event:', playError);
-                handleAudioProcessEnd(false); // Playback was aborted.
+                handleAudioProcessEnd(false); 
             } else {
                 console.error('Error caught during ElevenLabs audio.play():', playError);
                 toast({ title: "ElevenLabs Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" });
@@ -472,7 +499,6 @@ export default function HomePage() {
       elevenLabsVoiceId,
       toast,
       addMessage,
-      messages,
       browserSpeakInternal,
       handleAudioProcessStart,
       handleActualAudioStart,
@@ -490,15 +516,15 @@ export default function HomePage() {
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
-    isAboutToSpeakForSilenceRef.current = false; // User message means we're not in a silence loop
+    isAboutToSpeakForSilenceRef.current = false; 
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
         preparingIndicatorTimeoutRef.current = null;
     }
 
-    const historyForGenkit = messages
-        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messages[messages.length -1]?.id))
+    const historyForGenkit = messagesRef.current
+        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) // Filter out the current user message if it's the last one
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }],
@@ -532,7 +558,7 @@ export default function HomePage() {
       await speakTextRef.current(errorMessage);
       setIsSendingMessage(false);
     }
-  }, [addMessage, messages, personaTraits,
+  }, [addMessage, personaTraits,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
       knowledgeFileSummaryMedium, dynamicKnowledgeContentMedium,
       knowledgeFileSummaryLow, dynamicKnowledgeContentLow]);
@@ -581,13 +607,13 @@ export default function HomePage() {
         isListeningRef.current = false;
 
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (isAboutToSpeakForSilenceRef.current) { // Check if already processing a silence
+            if (isAboutToSpeakForSilenceRef.current) { 
                 console.log(`[Recognition][no-speech][onerror] Already about to speak for silence. Bailing. currentPrompts: ${currentPrompts}`);
                 return currentPrompts;
             }
             console.log(`[Recognition][no-speech][onerror] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) {
-                isAboutToSpeakForSilenceRef.current = true; // Set flag before speaking
+                isAboutToSpeakForSilenceRef.current = true; 
                 const newPromptCount = currentPrompts + 1;
                 console.log(`[Recognition][no-speech][onerror] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
@@ -595,8 +621,10 @@ export default function HomePage() {
                     isEndingSessionRef.current = true;
                     speakTextRef.current("It seems no one is here. Ending the session.");
                 } else {
-                    console.log("[Recognition][no-speech][onerror] Prompting for silence: 'Hello? Is someone there?'");
-                    speakTextRef.current("Hello? Is someone there?");
+                    const userName = getUserNameFromHistory(messagesRef.current);
+                    const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
+                    console.log(`[Recognition][no-speech][onerror] Prompting for silence: '${promptMessage}'`);
+                    speakTextRef.current(promptMessage);
                 }
                 return newPromptCount;
             }
@@ -630,13 +658,13 @@ export default function HomePage() {
       } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && wasListening && !isEndingSessionRef.current && !isSpeakingRef.current ) {
         console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current, "wasListening:", wasListening);
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (isAboutToSpeakForSilenceRef.current) { // Check if already processing a silence
+            if (isAboutToSpeakForSilenceRef.current) { 
                 console.log(`[Recognition][onend][silence] Already about to speak for silence. Bailing. currentPrompts: ${currentPrompts}`);
                 return currentPrompts;
             }
             console.log(`[Recognition][onend][silence] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
-                isAboutToSpeakForSilenceRef.current = true; // Set flag before speaking
+                isAboutToSpeakForSilenceRef.current = true; 
                 const newPromptCount = currentPrompts + 1;
                 console.log(`[Recognition][onend][silence] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
@@ -644,8 +672,10 @@ export default function HomePage() {
                     isEndingSessionRef.current = true;
                     speakTextRef.current("It seems no one is here. Ending the session.");
                 } else {
-                    console.log("[Recognition][onend][silence] Prompting for silence: 'Hello? Is someone there?'");
-                    speakTextRef.current("Hello? Is someone there?");
+                    const userName = getUserNameFromHistory(messagesRef.current);
+                    const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
+                    console.log(`[Recognition][onend][silence] Prompting for silence: '${promptMessage}'`);
+                    speakTextRef.current(promptMessage);
                 }
                 return newPromptCount;
             }
@@ -761,7 +791,7 @@ export default function HomePage() {
   const handleEndChatManually = () => {
      if (communicationMode === 'audio-only') {
         isEndingSessionRef.current = true;
-        isAboutToSpeakForSilenceRef.current = false; // Clear this flag as well if ending manually
+        isAboutToSpeakForSilenceRef.current = false; 
         console.log("[EndChatManually][AudioOnly] Ending session initiated.");
 
         if (isListeningRef.current && recognitionRef.current) {
@@ -802,7 +832,7 @@ export default function HomePage() {
   };
 
   const handleSaveConversationAsPdf = () => {
-    console.log("Conversation Messages for PDF (placeholder):", messages);
+    console.log("Conversation Messages for PDF (placeholder):", messagesRef.current);
     toast({
       title: "PDF Export (Placeholder)",
       description: "PDF generation is a future feature. Conversation logged to console.",
@@ -821,10 +851,10 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
+    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
       setIsSendingMessage(true);
       setAiHasInitiatedConversation(true);
-      isAboutToSpeakForSilenceRef.current = false; // Initial greeting is not for silence
+      isAboutToSpeakForSilenceRef.current = false; 
       setShowPreparingAudioResponseIndicator(false);
 
       if (preparingIndicatorTimeoutRef.current) {
@@ -855,7 +885,7 @@ export default function HomePage() {
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh]);
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh]);
 
   const fetchAndProcessKnowledgeLevel = useCallback(async (
     levelPath: string,
@@ -1163,7 +1193,7 @@ export default function HomePage() {
   }
 
 
-  const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messages.length === 0;
+  const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messagesRef.current.length === 0;
 
   const showSpeakButtonAudioOnly =
       communicationMode === 'audio-only' &&
@@ -1173,7 +1203,7 @@ export default function HomePage() {
       !isSpeaking &&
       !showSaveDialog &&
       !showPreparingAudioResponseIndicator &&
-      !(messages.length === 1 && messages[0]?.sender === 'ai' && aiHasInitiatedConversation);
+      !(messagesRef.current.length === 1 && messagesRef.current[0]?.sender === 'ai' && aiHasInitiatedConversation);
 
 
   const mainContent = () => {
@@ -1211,9 +1241,9 @@ export default function HomePage() {
             ) : null }
           </div>
 
-          {(messages.length > 0 && showLogForSaveConfirmation) && (
+          {(messagesRef.current.length > 0 && showLogForSaveConfirmation) && (
             <div className="w-full max-w-md mt-6">
-                 <ConversationLog messages={messages} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
+                 <ConversationLog messages={messagesRef.current} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
             </div>
           )}
 
@@ -1272,7 +1302,7 @@ export default function HomePage() {
            {corsTroubleshootingAlert}
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
-          <ConversationLog messages={messages} isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation} avatarSrc={avatarSrc} />
+          <ConversationLog messages={messagesRef.current} isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation} avatarSrc={avatarSrc} />
           <MessageInput
             onSendMessage={handleSendMessageRef.current}
             isSending={isSendingMessage}
