@@ -377,7 +377,7 @@ export default function HomePage() {
 
   const speakText = useCallback(async (text: string) => {
     handleAudioProcessStart(text);
-    const textForSpeech = text.replace(/EZCORP/gi, "E. Z. Corp");
+    const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
     if (communicationModeRef.current === 'text-only' || text.trim() === "") {
       if (text.trim() !== "" && currentAiResponseTextRef.current) {
