@@ -194,33 +194,37 @@ export default function HomePage() {
 
 
   const toggleListening = useCallback((forceState?: boolean) => {
-    if ((typeof forceState === 'boolean' && forceState === true) && isEndingSessionRef.current) {
+    if (isEndingSessionRef.current && (typeof forceState === 'boolean' && forceState === true)) {
+        console.log("[toggleListening] Session is ending, preventing listen start.");
         return; 
     }
 
     setIsListening(currentIsListening => {
-      const targetState = typeof forceState === 'boolean' ? forceState : !currentIsListening;
+      const targetIsListeningState = typeof forceState === 'boolean' ? forceState : !currentIsListening;
 
-      if (targetState === true) { 
-         if (isEndingSessionRef.current) return false; 
-
+      if (targetIsListeningState === true) { // If we intend to START listening
+        if (isEndingSessionRef.current) {
+          console.log("[toggleListening] Tried to start listening, but session is ending.");
+          return false; 
+        }
         if (!recognitionRef.current) {
           if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-            console.warn("Speech recognition not initialized on toggleListening(true)");
+            console.warn("[toggleListening] Speech recognition not initialized.");
           }
-          return false;
-        }
-        if (isSpeakingRef.current && forceState !== false) { 
-            toast({ title: "Please Wait", description: "AI Blair is currently speaking.", variant: "default" });
-            return currentIsListening; 
+          return false; 
         }
         if (communicationModeRef.current === 'text-only') {
-           return false;
+           console.log("[toggleListening] Text-only mode, not starting listening.");
+           return false; 
         }
+        console.log("[toggleListening] Setting isListening to true.");
+        return true;
+      } else { // If we intend to STOP listening
+        console.log("[toggleListening] Setting isListening to false.");
+        return false;
       }
-      return targetState;
     });
-  }, [toast]);
+  }, [toast]); // Keep toast if it's actually used, otherwise remove
   
   const toggleListeningRef = useRef(toggleListening);
   useEffect(() => {
@@ -249,7 +253,7 @@ export default function HomePage() {
   }, [addMessage, messages]);
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
-    setIsSpeaking(false);
+    setIsSpeaking(false); // AI has finished speaking
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -283,13 +287,14 @@ export default function HomePage() {
 
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
-      console.log("[AudioOnly] AI finished speaking. Scheduling mic restart.");
+      console.log("[AudioOnly][handleAudioProcessEnd] AI finished speaking. Scheduling mic restart.");
       setTimeout(() => {
+        // By now, isSpeakingRef.current should be false due to setIsSpeaking(false) above and its useEffect.
         if (!isEndingSessionRef.current && !isSpeakingRef.current && !isListeningRef.current) { 
-            console.log("[AudioOnly] Timeout: Attempting to restart mic.");
+            console.log("[AudioOnly][handleAudioProcessEnd] Timeout: Calling toggleListening(true).");
             toggleListeningRef.current(true);
         } else {
-            console.log("[AudioOnly] Timeout: Conditions to restart mic not met.", {isEnding: isEndingSessionRef.current, isSpeaking: isSpeakingRef.current, isListening: isListeningRef.current });
+            console.log("[AudioOnly][handleAudioProcessEnd] Timeout: Conditions to restart mic not met.", {isEnding: isEndingSessionRef.current, isSpeaking: isSpeakingRef.current, isListening: isListeningRef.current });
         }
       }, 250); 
     }
@@ -518,19 +523,24 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.log("[Recognition] onError triggered:", event.error);
       setIsListening(false); 
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
         setConsecutiveSilencePrompts(currentPrompts => {
             if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
                 const newPromptCount = currentPrompts + 1;
+                console.log(`[Recognition] No-speech error. Prompt count: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
+                    console.log("[Recognition] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true; 
                     speakTextRef.current("It seems no one is here. Ending the session.");
                 } else {
+                    console.log("[Recognition] Prompting for silence.");
                     speakTextRef.current("Hello? Is someone there?");
                 }
                 return newPromptCount; 
             }
+            console.log("[Recognition] No-speech, but AI speaking or session ending. No action. Current prompts:", currentPrompts);
             return currentPrompts; 
         });
       } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
@@ -539,9 +549,11 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
+      console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current);
       setIsListening(false); 
       const finalTranscript = inputValueRef.current; 
       if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) {
+        console.log("[Recognition] onEnd: Sending transcript:", finalTranscript);
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
       setInputValue(''); 
@@ -567,25 +579,30 @@ export default function HomePage() {
  useEffect(() => {
     const recInstance = recognitionRef.current;
     if (!recInstance) {
+      console.log("[useEffect isListening] Recognition instance is null. Returning.");
       return;
     }
 
     if (isListening) {
-      if (communicationModeRef.current === 'text-only' || isSpeakingRef.current) {
-        if (isListening) setIsListening(false); 
+      console.log("[useEffect isListening] Target state: true (Listen). Checking conditions...");
+      if (communicationModeRef.current === 'text-only') {
+        console.warn("[useEffect isListening] Text-only mode. Setting isListening to false.");
+        setIsListening(false);
+        return;
+      }
+      if (isSpeakingRef.current) {
+        console.warn("[useEffect isListening] AI is speaking (isSpeakingRef.current is true). Setting isListening to false.");
+        setIsListening(false);
         return;
       }
 
-      setInputValue(''); 
+      console.log("[useEffect isListening] Conditions met. Clearing inputValue and attempting recognition.start().");
+      setInputValue('');
       try {
-        try { 
-          recInstance.abort(); 
-        } catch (stopError: any) {
-          // Non-critical
-        }
         recInstance.start();
+        console.log("[useEffect isListening] recognition.start() called successfully.");
       } catch (startError: any) {
-        console.error('EFFECT: Error starting speech recognition:', startError.name, startError.message);
+        console.error('[useEffect isListening] Error starting speech recognition:', startError.name, startError.message);
         if (startError.name !== 'InvalidStateError' && startError.name !== 'NoMicPermissionError' && startError.name !== 'AbortError') {
           toast({
             variant: 'destructive',
@@ -593,16 +610,18 @@ export default function HomePage() {
             description: `${startError.name}: ${startError.message || 'Could not start microphone. Check permissions.'}`,
           });
         }
-        setIsListening(false); 
+        setIsListening(false);
       }
-    } else { 
+    } else {
+      console.log("[useEffect isListening] Target state: false (Stop Listen). Attempting recognition.abort().");
       try {
-        recInstance.abort(); 
+        recInstance.abort();
+        console.log("[useEffect isListening] recognition.abort() called successfully.");
       } catch (e: any) {
-        // Non-critical
+        console.warn("[useEffect isListening] Non-critical error during recognition.abort():", e.message);
       }
     }
-  }, [isListening, toast]); 
+  }, [isListening, toast]);
 
   useEffect(() => {
     if (preparingIndicatorTimeoutRef.current) {
@@ -641,12 +660,15 @@ export default function HomePage() {
   const handleEndChatManually = () => {
      if (communicationMode === 'audio-only') {
         isEndingSessionRef.current = true;
+        console.log("[EndChatManually][AudioOnly] Ending session initiated.");
 
         if (isListeningRef.current) { 
+            console.log("[EndChatManually][AudioOnly] Currently listening, stopping mic.");
             toggleListeningRef.current(false); 
         }
 
         if (isSpeakingRef.current) { 
+            console.log("[EndChatManually][AudioOnly] AI is speaking, stopping audio.");
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
                 elevenLabsAudioRef.current.pause();
                 if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -657,7 +679,7 @@ export default function HomePage() {
             if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
                 window.speechSynthesis.cancel();
             }
-            setIsSpeaking(false); 
+            setIsSpeaking(false); // Directly set state
         }
 
         if (preparingIndicatorTimeoutRef.current) {
@@ -1071,7 +1093,7 @@ export default function HomePage() {
                 <Loader2 size={20} className="mr-2 animate-spin" /> Preparing
                 response...
               </div>
-            ) : null}
+            ) : null }
           </div>
 
           {(messages.length > 0 && showLogForSaveConfirmation) && (
