@@ -36,8 +36,8 @@ export interface KnowledgeSource {
   downloadURL: string;
 }
 
-export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low';
-const KB_LEVELS: KnowledgeBaseLevel[] = ['High', 'Medium', 'Low'];
+export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
+const KB_LEVELS: KnowledgeBaseLevel[] = ['High', 'Medium', 'Low', 'Archive'];
 
 const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFolder: string; title: string }> = {
   High: {
@@ -54,6 +54,11 @@ const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFold
     firestorePath: "configurations/kb_low_meta_v1",
     storageFolder: "knowledge_base_files_low_v1/",
     title: "Low Priority Knowledge Base"
+  },
+  Archive: {
+    firestorePath: "configurations/kb_archive_meta_v1",
+    storageFolder: "knowledge_base_files_archive_v1/",
+    title: "Archive Knowledge Base"
   }
 };
 
@@ -72,10 +77,12 @@ export default function KnowledgeBasePage() {
   const [sourcesHigh, setSourcesHigh] = useState<KnowledgeSource[]>([]);
   const [sourcesMedium, setSourcesMedium] = useState<KnowledgeSource[]>([]);
   const [sourcesLow, setSourcesLow] = useState<KnowledgeSource[]>([]);
+  const [sourcesArchive, setSourcesArchive] = useState<KnowledgeSource[]>([]);
 
   const [isLoadingHigh, setIsLoadingHigh] = useState(true);
   const [isLoadingMedium, setIsLoadingMedium] = useState(true);
   const [isLoadingLow, setIsLoadingLow] = useState(true);
+  const [isLoadingArchive, setIsLoadingArchive] = useState(true);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
@@ -91,19 +98,22 @@ export default function KnowledgeBasePage() {
   const getSourcesSetter = (level: KnowledgeBaseLevel) => {
     if (level === 'High') return setSourcesHigh;
     if (level === 'Medium') return setSourcesMedium;
-    return setSourcesLow;
+    if (level === 'Low') return setSourcesLow;
+    return setSourcesArchive;
   };
 
   const getIsLoadingSetter = (level: KnowledgeBaseLevel) => {
     if (level === 'High') return setIsLoadingHigh;
     if (level === 'Medium') return setIsLoadingMedium;
-    return setIsLoadingLow;
+    if (level === 'Low') return setIsLoadingLow;
+    return setIsLoadingArchive;
   };
   
   const getSourcesState = (level: KnowledgeBaseLevel): KnowledgeSource[] => {
     if (level === 'High') return sourcesHigh;
     if (level === 'Medium') return sourcesMedium;
-    return sourcesLow;
+    if (level === 'Low') return sourcesLow;
+    return sourcesArchive;
   };
 
 
@@ -158,6 +168,7 @@ export default function KnowledgeBasePage() {
     fetchSourcesForLevel('High');
     fetchSourcesForLevel('Medium');
     fetchSourcesForLevel('Low');
+    fetchSourcesForLevel('Archive');
   }, [fetchSourcesForLevel]);
 
 
@@ -374,8 +385,6 @@ export default function KnowledgeBasePage() {
       const newOriginalList = originalCurrentSources.filter(s => s.id !== source.id);
       const removedFromOriginalDb = await saveSourcesToFirestore(newOriginalList, currentLevel);
       if (!removedFromOriginalDb) {
-         // This is tricky. Destination has it. Source failed to remove.
-         // For now, UI reflects removal, but log error. User might need to manually check source DB.
          console.error(`[KBPage - Move] CRITICAL: Failed to remove metadata from ${currentLevel} Firestore after successful copy and target save for ${source.name}. Manual check needed.`);
          toast({title: "Move Partial Success", description: `Moved to ${targetLevel}, but failed to update ${currentLevel} DB. Please verify.`, variant: "destructive", duration: 10000});
       }
@@ -390,7 +399,6 @@ export default function KnowledgeBasePage() {
     } catch (error: any) {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
-      // Attempt to clean up copied file if it exists and other steps failed before target DB update
       if (tempFileRef && newDownloadURL && !(await getDoc(doc(db, KB_CONFIG[targetLevel].firestorePath))).data()?.sources.find((s: KnowledgeSource) => s.id === source.id)) {
         try {
           await deleteObject(tempFileRef);
@@ -399,7 +407,6 @@ export default function KnowledgeBasePage() {
           console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError);
         }
       }
-      // Re-fetch to ensure UI consistency if something went wrong mid-way
       fetchSourcesForLevel(currentLevel);
       fetchSourcesForLevel(targetLevel);
     } finally {
@@ -413,25 +420,33 @@ export default function KnowledgeBasePage() {
 
   const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
     const sources = getSourcesState(level);
-    const isLoadingSources = level === 'High' ? isLoadingHigh : (level === 'Medium' ? isLoadingMedium : isLoadingLow);
+    const isLoadingSources = 
+        level === 'High' ? isLoadingHigh :
+        level === 'Medium' ? isLoadingMedium :
+        level === 'Low' ? isLoadingLow :
+        isLoadingArchive;
     const config = KB_CONFIG[level];
+
+    const description = level === 'Archive'
+      ? "Archived sources. Files here are not used by AI Blair for responses but are kept for record-keeping."
+      : `View and manage sources. Uploaded files are in Firebase Storage (folder: ${config.storageFolder}), metadata in Firestore (path: ${config.firestorePath}).`;
 
     return (
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="font-headline">{config.title}</CardTitle>
-          <CardDescription>View and manage sources. Uploaded files are in Firebase Storage (folder: {config.storageFolder}), metadata in Firestore (path: {config.firestorePath}).</CardDescription>
+          <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingSources ? (
              <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
                 <RefreshCw className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
-                <p className="text-muted-foreground">Loading {level} priority sources...</p>
+                <p className="text-muted-foreground">Loading {level.toLowerCase()} priority sources...</p>
             </div>
           ) : sources.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
               <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No sources found for {level} priority.</p>
+              <p className="text-muted-foreground">No sources found for {level.toLowerCase()} priority.</p>
             </div>
           ) : (
           <Table>
@@ -488,6 +503,7 @@ export default function KnowledgeBasePage() {
     );
   };
 
+  const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
 
   return (
     <div className="space-y-6">
@@ -495,7 +511,7 @@ export default function KnowledgeBasePage() {
         <CardHeader>
           <CardTitle className="font-headline">Upload New Source</CardTitle>
           <CardDescription>
-            Add content to AI Blair's knowledge base. Select the priority level before uploading.
+            Add content to AI Blair's knowledge base or archive. Select the target level before uploading.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -507,23 +523,23 @@ export default function KnowledgeBasePage() {
               onChange={handleFileChange}
               className="hidden"
               id="file-upload"
-              disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource}
+              disabled={isCurrentlyUploading || anyKbLoading || isMovingSource}
             />
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource} className="w-full sm:w-auto">
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || anyKbLoading || isMovingSource} className="w-full sm:w-auto">
               <UploadCloud className="mr-2 h-4 w-4" /> Choose File
             </Button>
             {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
           </div>
            {selectedFile && (
-            <p className="text-xs text-muted-foreground pl-16"> {/* Adjusted padding */}
+            <p className="text-xs text-muted-foreground pl-16"> 
               Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
             </p>
           )}
 
-          <div className="flex items-start gap-4"> {/* Changed to items-start for better alignment */}
-            <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2:</Label> {/* Added pt-2 for alignment */}
+          <div className="flex items-start gap-4"> 
+            <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2:</Label> 
             <div className="flex flex-col">
-              <Label className="font-medium mb-1">Select Knowledge Base Priority:</Label>
+              <Label className="font-medium mb-1">Select Target Level:</Label>
               <RadioGroup
                 value={selectedKBTargetForUpload}
                 onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
@@ -531,8 +547,8 @@ export default function KnowledgeBasePage() {
               >
                 {KB_LEVELS.map(level => (
                   <div key={level} className="flex items-center space-x-2">
-                    <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource}/>
-                    <Label htmlFor={`r-upload-${level.toLowerCase()}`}>{level}</Label>
+                    <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={isCurrentlyUploading || anyKbLoading || isMovingSource}/>
+                    <Label htmlFor={`r-upload-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
                   </div>
                 ))}
               </RadioGroup>
@@ -542,15 +558,15 @@ export default function KnowledgeBasePage() {
         <CardFooter>
           <div className="flex items-center gap-2">
             <Label className="font-medium whitespace-nowrap shrink-0">Step 3:</Label>
-            <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || isLoadingHigh || isLoadingMedium || isLoadingLow || isMovingSource}>
+            <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || anyKbLoading || isMovingSource}>
               {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-              {isCurrentlyUploading ? 'Uploading...' : 'Upload to Selected KB'}
+              {isCurrentlyUploading ? 'Uploading...' : `Upload to ${selectedKBTargetForUpload === 'Archive' ? 'Archive' : selectedKBTargetForUpload + ' KB'}`}
             </Button>
           </div>
         </CardFooter>
       </Card>
 
-      <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb', 'low-kb']} className="w-full">
+      <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb', 'low-kb', 'archive-kb']} className="w-full">
         {KB_LEVELS.map(level => (
             <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
             <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
@@ -578,7 +594,7 @@ export default function KnowledgeBasePage() {
               {KB_LEVELS.filter(level => level !== sourceToMoveDetails.currentLevel).map(level => (
                 <div key={`move-target-${level}`} className="flex items-center space-x-2">
                   <RadioGroupItem value={level} id={`r-move-${level.toLowerCase()}`} />
-                  <Label htmlFor={`r-move-${level.toLowerCase()}`}>{level} Priority</Label>
+                  <Label htmlFor={`r-move-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
                 </div>
               ))}
             </RadioGroup>
