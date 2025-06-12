@@ -164,6 +164,8 @@ export default function HomePage() {
     setShowSaveDialog(false);
     setCorsErrorEncountered(false);
     setShowPreparingAudioResponseIndicator(false);
+    isSpeakingRef.current = false;
+    isListeningRef.current = false;
 
     if (preparingIndicatorTimeoutRef.current) {
       clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -188,13 +190,13 @@ export default function HomePage() {
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
-    isSpeakingRef.current = false;
+
 
     if (recognitionRef.current) {
       recognitionRef.current.abort();
     }
     setIsListening(false);
-    isListeningRef.current = false;
+
 
   }, [dismissAllToasts]);
 
@@ -297,12 +299,13 @@ export default function HomePage() {
       console.log("[AudioOnly][handleAudioProcessEnd] AI finished speaking. Aborting mic before attempting restart.");
       if (recognitionRef.current) {
         try {
-          recognitionRef.current.abort();
-        } catch (e) {
-          console.warn("[AudioOnly][handleAudioProcessEnd] Non-critical error aborting recognition before restart:", e);
+          recognitionRef.current.abort(); // Explicitly abort to reset state
+          console.log("[AudioOnly][handleAudioProcessEnd] Recognition aborted successfully.");
+        } catch (e: any) {
+          console.warn("[AudioOnly][handleAudioProcessEnd] Non-critical error aborting recognition before restart:", e.message);
         }
       }
-      isSpeakingRef.current = false;
+      isSpeakingRef.current = false; // Ensure ref is updated immediately
       console.log("[AudioOnly][handleAudioProcessEnd] Mic aborted. Calling toggleListening(true) to restart. isSpeakingRef.current is now:", isSpeakingRef.current);
       toggleListeningRef.current(true);
     }
@@ -362,7 +365,9 @@ export default function HomePage() {
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
     }
-    isSpeakingRef.current = false;
+    setIsSpeaking(false); // Reset speaking state before attempting to speak
+    isSpeakingRef.current = false; // Also reset the ref
+
 
     if (elevenLabsApiKey && elevenLabsVoiceId) {
       const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
@@ -564,7 +569,7 @@ export default function HomePage() {
         });
       } else if (event.error === 'aborted') {
         console.log("[Recognition][onerror] 'aborted'. This is often expected if we stop it manually. isListeningRef.current is now:", isListeningRef.current);
-        if (isListeningRef.current) {
+        if (isListeningRef.current) { // If it was aborted while it thought it should be listening
           setIsListening(false);
           isListeningRef.current = false;
         }
@@ -579,14 +584,18 @@ export default function HomePage() {
       const finalTranscript = inputValueRef.current;
       console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${finalTranscript}"`);
 
-      setIsListening(false);
+      const currentIsListening = isListeningRef.current; // Capture before setIsListening changes it
+      setIsListening(false); // Recognition has ended, so we are no longer listening
       isListeningRef.current = false;
+
 
       if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current) {
         console.log("[Recognition][onend] Sending transcript:", finalTranscript);
         handleSendMessageRef.current(finalTranscript, 'voice');
-      } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isSpeakingRef.current) {
-        console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current);
+      } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isSpeakingRef.current && currentIsListening) {
+        // This condition implies no speech was captured and it was expected to be listening.
+        // The 'currentIsListening' check ensures this logic only runs if we were trying to listen.
+        console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current, "wasListening:", currentIsListening);
         setConsecutiveSilencePrompts(currentPrompts => {
             console.log(`[Recognition][onend][silence] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) {
@@ -782,8 +791,11 @@ export default function HomePage() {
         clearTimeout(preparingIndicatorTimeoutRef.current);
         preparingIndicatorTimeoutRef.current = null;
       }
+      setIsSpeaking(false); // Ensure speaking state is false before greeting
       isSpeakingRef.current = false;
+      setIsListening(false); // Ensure listening state is false
       isListeningRef.current = false;
+
 
       const initGreeting = async () => {
         try {
@@ -1047,7 +1059,7 @@ export default function HomePage() {
               }}
               data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
             />
-            <p className="text-xl font-semibold text-foreground">Chat with AI Blair</p>
+            <p className="text-xl font-semibold text-foreground">Choose your preferred way to interact.</p>
              {isLoadingKnowledge && (
                 <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
                     <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" />
