@@ -369,6 +369,7 @@ export default function HomePage() {
           clearTimeout(preparingIndicatorTimeoutRef.current);
           preparingIndicatorTimeoutRef.current = null;
       }
+      // In text-only mode, message is already added by caller, so just return.
       return;
     }
 
@@ -497,9 +498,11 @@ export default function HomePage() {
     if (text.trim() === '') return;
     addMessage(text, 'user');
     
+    // Pushes setIsSendingMessage to a later tick, allowing user's message to render first.
+    // Increased delay slightly for more visual separation.
     setTimeout(() => {
-        setIsSendingMessage(true); // "AI is typing" starts after a micro-delay
-    }, 0);
+        setIsSendingMessage(true); // "AI is typing" starts after a slight delay
+    }, 50);
 
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
@@ -861,7 +864,7 @@ export default function HomePage() {
       isListeningRef.current = false;
 
       const initGreeting = async () => {
-        setIsSendingMessage(true); // Show "Preparing greeting..."
+        // Removed setIsSendingMessage(true) from here
         try {
           const greetingInput: GenerateInitialGreetingInput = {
             personaTraits,
@@ -871,7 +874,7 @@ export default function HomePage() {
           const result = await generateInitialGreeting(greetingInput);
           
           addMessage(result.greetingMessage, 'ai'); 
-          setIsSendingMessage(false); 
+          // Removed setIsSendingMessage(false) from here
           
           await speakTextRef.current(result.greetingMessage); 
         } catch (error) {
@@ -879,7 +882,7 @@ export default function HomePage() {
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           
           addMessage(errMsg, 'ai'); 
-          setIsSendingMessage(false); 
+          // Removed setIsSendingMessage(false) from here
           
           await speakTextRef.current(errMsg); 
         }
