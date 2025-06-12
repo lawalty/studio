@@ -533,46 +533,63 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.log("[Recognition] onError triggered. Error type:", event.error, "isListeningRef.current:", isListeningRef.current);
-      setIsListening(false);
-      isListeningRef.current = false;
+      console.log("[Recognition] onError triggered. Error type:", event.error, "isListeningRef.current:", isListeningRef.current, "Current inputValue:", inputValueRef.current);
        
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        console.log("[Recognition] 'no-speech' error in Audio Only mode. Attempting to update silence prompts.");
+        console.log("[Recognition][no-speech] 'no-speech' error detected in Audio Only mode.");
+        // It's crucial to set isListening to false here, as the recognition session has ended with an error.
+        setIsListening(false);
+        isListeningRef.current = false;
+
         setConsecutiveSilencePrompts(currentPrompts => {
-            console.log(`[Recognition][no-speech] setConsecutiveSilencePrompts. currentPrompts: ${currentPrompts}, isSpeakingRef: ${isSpeakingRef.current}, isEndingSessionRef: ${isEndingSessionRef.current}`);
+            console.log(`[Recognition][no-speech] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) {
                 const newPromptCount = currentPrompts + 1;
-                console.log(`[Recognition][no-speech] Conditions met. newPromptCount: ${newPromptCount}`);
+                console.log(`[Recognition][no-speech] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                     console.log("[Recognition][no-speech] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true; 
                     speakTextRef.current("It seems no one is here. Ending the session.");
                 } else {
-                    console.log("[Recognition][no-speech] Prompting for silence.");
+                    console.log("[Recognition][no-speech] Prompting for silence: 'Hello? Is someone there?'");
                     speakTextRef.current("Hello? Is someone there?");
                 }
                 return newPromptCount; 
             }
-            console.log(`[Recognition][no-speech] Conditions NOT met for silence prompt. AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
+            console.log(`[Recognition][no-speech] Conditions NOT met for silence prompt (AI Speaking or Session Ending). AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
             return currentPrompts; 
         });
-      } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
+      } else if (event.error === 'aborted') {
+        console.log("[Recognition] onError: 'aborted'. This is often expected if we stop it manually. isListeningRef.current is now:", isListeningRef.current);
+        // Ensure isListening is false if aborted.
+        if (isListeningRef.current) {
+          setIsListening(false);
+          isListeningRef.current = false;
+        }
+      } else if (event.error !== 'no-speech' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
+        setIsListening(false); // Also set to false on other significant errors
+        isListeningRef.current = false;
       }
     };
 
     recognition.onend = () => {
       console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${inputValueRef.current}"`);
-      const wasListening = isListeningRef.current; 
-      setIsListening(false); 
-      isListeningRef.current = false;
+      // isListening should ideally be false already if onEnd is called after an error or successful speech.
+      // If it was true, it means onEnd might have been called for other reasons (e.g. browser stopping it).
+      // This is a good place to ensure the state is consistent.
+      if (isListeningRef.current) {
+        setIsListening(false); 
+        isListeningRef.current = false;
+      }
       
       const finalTranscript = inputValueRef.current; 
       if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) {
         console.log("[Recognition] onEnd: Sending transcript:", finalTranscript);
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
+      // Do not automatically re-listen here from onEnd if it was due to no-speech.
+      // The onerror for no-speech should have triggered the AI to speak, and handleAudioProcessEnd will then re-listen.
       setInputValue(''); 
     };
     return recognition;
@@ -636,6 +653,9 @@ export default function HomePage() {
     } else {
       console.log("[useEffect isListening] Target state: false (Stop Listen). Attempting recognition.abort().");
       try {
+        // Only abort if recognition is actually running, to avoid errors if it's already stopped.
+        // However, the SpeechRecognition API doesn't have a direct 'isRunning' state.
+        // Aborting a stopped recognition might throw an InvalidStateError but is generally safe.
         recInstance.abort();
         console.log("[useEffect isListening] recognition.abort() called successfully.");
       } catch (e: any) {
