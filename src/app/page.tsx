@@ -870,6 +870,7 @@ export default function HomePage() {
           const result = await generateInitialGreeting(greetingInput);
           
           addMessage(result.greetingMessage, 'ai'); 
+          setIsSendingMessage(false);
           
           await speakTextRef.current(result.greetingMessage); 
         } catch (error) {
@@ -877,6 +878,7 @@ export default function HomePage() {
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           
           addMessage(errMsg, 'ai'); 
+          setIsSendingMessage(false);
           
           await speakTextRef.current(errMsg); 
         }
@@ -1108,7 +1110,7 @@ export default function HomePage() {
             <CardTitle className="text-3xl font-headline text-primary">
               {isLoadingKnowledge ? "" : splashScreenWelcomeMessage}
             </CardTitle>
-            <CardDescription>Let's have a conversation.</CardDescription>
+            <CardDescription className="text-base">Let's have a conversation.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
             <Image
@@ -1129,7 +1131,7 @@ export default function HomePage() {
               }}
               data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
             />
-            <p className="text-lg font-semibold text-foreground">Choose your preferred way to interact.</p>
+            <p className="text-base font-semibold text-foreground">Choose your preferred way to interact:</p>
              {isLoadingKnowledge && (
                 <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
                     <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" />
