@@ -518,20 +518,19 @@ export default function HomePage() {
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setIsListening(false); 
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-         if (!isSpeakingRef.current && !isEndingSessionRef.current) {
-            setConsecutiveSilencePrompts(currentPrompts => {
+        setConsecutiveSilencePrompts(currentPrompts => {
+            if (!isSpeakingRef.current && !isEndingSessionRef.current) {
                 const newPromptCount = currentPrompts + 1;
-                if (!isSpeakingRef.current && !isEndingSessionRef.current) {
-                    if (newPromptCount >= MAX_SILENCE_PROMPTS) {
-                        isEndingSessionRef.current = true; 
-                        speakTextRef.current("It seems no one is here. Ending the session.");
-                    } else {
-                        speakTextRef.current("Hello? Is someone there?");
-                    }
+                if (newPromptCount >= MAX_SILENCE_PROMPTS) {
+                    isEndingSessionRef.current = true; 
+                    speakTextRef.current("It seems no one is here. Ending the session.");
+                } else {
+                    speakTextRef.current("Hello? Is someone there?");
                 }
-                return newPromptCount;
-            });
-         }
+                return newPromptCount; // Increment count only if we acted
+            }
+            return currentPrompts; // Otherwise, don't change the count for this event
+        });
       } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       }
@@ -1158,3 +1157,4 @@ export default function HomePage() {
     </div>
   );
 }
+
