@@ -186,17 +186,19 @@ export default function HomePage() {
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
+    isSpeakingRef.current = false; 
 
     if (recognitionRef.current) {
       recognitionRef.current.abort(); 
     }
     setIsListening(false);
+    isListeningRef.current = false;
   }, [dismissAllToasts]);
 
 
   const toggleListening = useCallback((forceState?: boolean) => {
     if (isEndingSessionRef.current && (typeof forceState === 'boolean' && forceState === true)) {
-        // console.log("[toggleListening] Session is ending, preventing listen start.");
+        console.log("[toggleListening] Session is ending, preventing listen start.");
         return; 
     }
 
@@ -205,23 +207,23 @@ export default function HomePage() {
 
       if (targetIsListeningState === true) { 
         if (isEndingSessionRef.current) {
-          // console.log("[toggleListening] Tried to start listening, but session is ending.");
+          console.log("[toggleListening] Tried to start listening, but session is ending.");
           return false; 
         }
         if (!recognitionRef.current) {
           if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-            // console.warn("[toggleListening] Speech recognition not initialized.");
+            console.warn("[toggleListening] Speech recognition not initialized.");
           }
           return false; 
         }
         if (communicationModeRef.current === 'text-only') {
-           // console.log("[toggleListening] Text-only mode, not starting listening.");
+           console.log("[toggleListening] Text-only mode, not starting listening.");
            return false; 
         }
-        // console.log("[toggleListening] Setting isListening to true.");
+        console.log("[toggleListening] Setting isListening to true.");
         return true;
       } else { 
-        // console.log("[toggleListening] Setting isListening to false.");
+        console.log("[toggleListening] Setting isListening to false.");
         return false;
       }
     });
@@ -239,6 +241,7 @@ export default function HomePage() {
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
+    isSpeakingRef.current = true;
     setIsSendingMessage(false); 
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
@@ -255,6 +258,7 @@ export default function HomePage() {
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false); 
+    isSpeakingRef.current = false; 
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -295,7 +299,8 @@ export default function HomePage() {
           console.warn("[AudioOnly][handleAudioProcessEnd] Non-critical error aborting recognition before restart:", e);
         }
       }
-      console.log("[AudioOnly][handleAudioProcessEnd] Mic aborted. Calling toggleListening(true) to restart.");
+      isSpeakingRef.current = false; // Explicitly ensure ref is false before toggling listen
+      console.log("[AudioOnly][handleAudioProcessEnd] Mic aborted. Calling toggleListening(true) to restart. isSpeakingRef.current is now:", isSpeakingRef.current);
       toggleListeningRef.current(true);
     }
   }, [addMessage, messages, resetConversation, setShowSplashScreen, showSaveDialog]);
@@ -335,6 +340,7 @@ export default function HomePage() {
       }
       setIsSendingMessage(false); 
       setIsSpeaking(false); 
+      isSpeakingRef.current = false;
       setShowPreparingAudioResponseIndicator(false);
       if (preparingIndicatorTimeoutRef.current) {
           clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -527,24 +533,28 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.log("[Recognition] onError triggered:", event.error);
-      setIsListening(false); 
+      console.log("[Recognition] onError triggered. Error type:", event.error, "isListeningRef.current:", isListeningRef.current);
+      setIsListening(false);
+      isListeningRef.current = false;
+       
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
+        console.log("[Recognition] 'no-speech' error in Audio Only mode. Attempting to update silence prompts.");
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
+            console.log(`[Recognition][no-speech] setConsecutiveSilencePrompts. currentPrompts: ${currentPrompts}, isSpeakingRef: ${isSpeakingRef.current}, isEndingSessionRef: ${isEndingSessionRef.current}`);
+            if (!isSpeakingRef.current && !isEndingSessionRef.current) {
                 const newPromptCount = currentPrompts + 1;
-                console.log(`[Recognition] No-speech error. Prompt count: ${newPromptCount}`);
+                console.log(`[Recognition][no-speech] Conditions met. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
-                    console.log("[Recognition] Max silence prompts reached. Ending session.");
+                    console.log("[Recognition][no-speech] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true; 
                     speakTextRef.current("It seems no one is here. Ending the session.");
                 } else {
-                    console.log("[Recognition] Prompting for silence.");
+                    console.log("[Recognition][no-speech] Prompting for silence.");
                     speakTextRef.current("Hello? Is someone there?");
                 }
                 return newPromptCount; 
             }
-            console.log("[Recognition] No-speech, but AI speaking or session ending. No action. Current prompts:", currentPrompts);
+            console.log(`[Recognition][no-speech] Conditions NOT met for silence prompt. AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
             return currentPrompts; 
         });
       } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
@@ -556,6 +566,7 @@ export default function HomePage() {
       console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${inputValueRef.current}"`);
       const wasListening = isListeningRef.current; 
       setIsListening(false); 
+      isListeningRef.current = false;
       
       const finalTranscript = inputValueRef.current; 
       if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) {
@@ -563,8 +574,6 @@ export default function HomePage() {
         handleSendMessageRef.current(finalTranscript, 'voice');
       }
       setInputValue(''); 
-
-      // Removed requestMicRestartRef logic from here. Restart is handled by handleAudioProcessEnd now.
     };
     return recognition;
   }, [toast]); 
@@ -588,20 +597,22 @@ export default function HomePage() {
  useEffect(() => {
     const recInstance = recognitionRef.current;
     if (!recInstance) {
-      // console.log("[useEffect isListening] Recognition instance is null. Returning.");
+      console.log("[useEffect isListening] Recognition instance is null. Returning.");
       return;
     }
 
     if (isListening) {
-      // console.log("[useEffect isListening] Target state: true (Listen). Checking conditions...");
+      console.log("[useEffect isListening] Target state: true (Listen). Checking conditions...");
       if (communicationModeRef.current === 'text-only') {
-        // console.warn("[useEffect isListening] Text-only mode. Setting isListening to false.");
+        console.warn("[useEffect isListening] Text-only mode. Setting isListening to false.");
         setIsListening(false);
+        isListeningRef.current = false;
         return;
       }
       if (isSpeakingRef.current) {
         console.warn("[useEffect isListening] AI is speaking (isSpeakingRef.current is true). Aborting listen attempt by setting isListening to false.");
         setIsListening(false); 
+        isListeningRef.current = false;
         return;
       }
 
@@ -609,7 +620,7 @@ export default function HomePage() {
       setInputValue('');
       try {
         recInstance.start();
-        // console.log("[useEffect isListening] recognition.start() called successfully.");
+        console.log("[useEffect isListening] recognition.start() called successfully.");
       } catch (startError: any) {
         console.error('[useEffect isListening] Error starting speech recognition:', startError.name, startError.message);
         if (startError.name !== 'InvalidStateError' && startError.name !== 'NoMicPermissionError' && startError.name !== 'AbortError') {
@@ -620,14 +631,15 @@ export default function HomePage() {
           });
         }
         setIsListening(false);
+        isListeningRef.current = false;
       }
     } else {
-      // console.log("[useEffect isListening] Target state: false (Stop Listen). Attempting recognition.abort().");
+      console.log("[useEffect isListening] Target state: false (Stop Listen). Attempting recognition.abort().");
       try {
         recInstance.abort();
-        // console.log("[useEffect isListening] recognition.abort() called successfully.");
+        console.log("[useEffect isListening] recognition.abort() called successfully.");
       } catch (e: any) {
-        // console.warn("[useEffect isListening] Non-critical error during recognition.abort():", e.message);
+        console.warn("[useEffect isListening] Non-critical error during recognition.abort():", e.message);
       }
     }
   }, [isListening, toast]);
@@ -676,6 +688,7 @@ export default function HomePage() {
             recognitionRef.current.abort(); 
         }
         setIsListening(false); 
+        isListeningRef.current = false;
 
         if (isSpeakingRef.current) { 
             console.log("[EndChatManually][AudioOnly] AI is speaking, stopping audio.");
@@ -690,6 +703,7 @@ export default function HomePage() {
                 window.speechSynthesis.cancel();
             }
             setIsSpeaking(false); 
+            isSpeakingRef.current = false;
         }
 
         if (preparingIndicatorTimeoutRef.current) {
