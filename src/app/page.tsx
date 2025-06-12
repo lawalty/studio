@@ -369,7 +369,6 @@ export default function HomePage() {
           clearTimeout(preparingIndicatorTimeoutRef.current);
           preparingIndicatorTimeoutRef.current = null;
       }
-      // In text-only mode, message is already added by caller, so just return.
       return;
     }
 
@@ -498,10 +497,8 @@ export default function HomePage() {
     if (text.trim() === '') return;
     addMessage(text, 'user');
     
-    // Pushes setIsSendingMessage to a later tick, allowing user's message to render first.
-    // Increased delay slightly for more visual separation.
     setTimeout(() => {
-        setIsSendingMessage(true); // "AI is typing" starts after a slight delay
+        setIsSendingMessage(true); 
     }, 50);
 
     setConsecutiveSilencePrompts(0);
@@ -864,7 +861,6 @@ export default function HomePage() {
       isListeningRef.current = false;
 
       const initGreeting = async () => {
-        // Removed setIsSendingMessage(true) from here
         try {
           const greetingInput: GenerateInitialGreetingInput = {
             personaTraits,
@@ -874,7 +870,6 @@ export default function HomePage() {
           const result = await generateInitialGreeting(greetingInput);
           
           addMessage(result.greetingMessage, 'ai'); 
-          // Removed setIsSendingMessage(false) from here
           
           await speakTextRef.current(result.greetingMessage); 
         } catch (error) {
@@ -882,7 +877,6 @@ export default function HomePage() {
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           
           addMessage(errMsg, 'ai'); 
-          // Removed setIsSendingMessage(false) from here
           
           await speakTextRef.current(errMsg); 
         }
@@ -1111,7 +1105,9 @@ export default function HomePage() {
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-md shadow-2xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-headline text-primary">{splashScreenWelcomeMessage}</CardTitle>
+            <CardTitle className="text-3xl font-headline text-primary">
+              {isLoadingKnowledge ? "" : splashScreenWelcomeMessage}
+            </CardTitle>
             <CardDescription>Let's have a conversation.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
