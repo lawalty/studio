@@ -303,12 +303,21 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current) {
-      if (!showSaveDialog) {
-         resetConversation();
-         setShowSplashScreen(true);
+      if (communicationModeRef.current === 'audio-only' && !showSaveDialog) {
+        // This means session ended automatically (e.g., via silence) in audio-only mode
+        // and save dialog isn't already up.
+        setShowLogForSaveConfirmation(true);
+        setShowSaveDialog(true);
+        // We don't reset or go to splash screen here. The dialog handler will do that.
+      } else if (communicationModeRef.current !== 'audio-only' || showSaveDialog) {
+        // For text modes, or if dialog was already shown (e.g. manual end)
+        resetConversation();
+        setShowSplashScreen(true);
       }
+      // If audio-only and showSaveDialog was true (manual end), dialog is already handled by its own flow.
       return;
     }
+
 
     if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
        if (!messagesRef.current.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
@@ -619,7 +628,7 @@ export default function HomePage() {
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                     console.log("[Recognition][no-speech][onerror] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true;
-                    speakTextRef.current("It seems no one is here. Ending the session.");
+                    speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
                 } else {
                     const userName = getUserNameFromHistory(messagesRef.current);
                     const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
@@ -670,7 +679,7 @@ export default function HomePage() {
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                     console.log("[Recognition][onend][silence] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true;
-                    speakTextRef.current("It seems no one is here. Ending the session.");
+                    speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
                 } else {
                     const userName = getUserNameFromHistory(messagesRef.current);
                     const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
