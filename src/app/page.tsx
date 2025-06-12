@@ -384,7 +384,7 @@ export default function HomePage() {
           }
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
-          audio.load(); // Explicitly load the new audio source
+          audio.load(); 
 
           audio.onplay = handleActualAudioStart; 
           audio.onended = () => handleAudioProcessEnd(true); 
@@ -641,11 +641,11 @@ export default function HomePage() {
      if (communicationMode === 'audio-only') {
         isEndingSessionRef.current = true;
 
-        if (isListeningRef.current) { // Stop listening first
+        if (isListeningRef.current) { 
             toggleListeningRef.current(false); 
         }
 
-        if (isSpeakingRef.current) { // Then stop speaking
+        if (isSpeakingRef.current) { 
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
                 elevenLabsAudioRef.current.pause();
                 if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -1055,26 +1055,30 @@ export default function HomePage() {
           {corsTroubleshootingAlert}
           <Image {...imageProps} />
           <h2 className="mt-6 text-3xl font-bold font-headline text-primary">AI Blair</h2>
-          {showPreparingGreeting && (
-             <div className="mt-4 flex items-center justify-center p-3 rounded-lg bg-secondary text-secondary-foreground shadow animate-pulse">
+          
+          <div className="mt-4 flex h-12 w-full items-center justify-center">
+            {showPreparingGreeting ? (
+              <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse">
                 Preparing greeting...
-            </div>
-          )}
+              </div>
+            ) : isListening ? (
+              <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse">
+                <Mic size={20} className="mr-2" /> Listening...
+              </div>
+            ) : showPreparingAudioResponseIndicator && !isSpeaking && !isListening ? (
+              <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse">
+                <Loader2 size={20} className="mr-2 animate-spin" /> Preparing
+                response...
+              </div>
+            ) : null}
+          </div>
+
           {(messages.length > 0 && showLogForSaveConfirmation) && (
             <div className="w-full max-w-md mt-6">
                  <ConversationLog messages={messages} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
             </div>
           )}
-          {isListening && (
-             <div className="mt-4 flex items-center justify-center p-3 rounded-lg bg-accent text-accent-foreground shadow animate-pulse">
-                <Mic size={20} className="mr-2"/> Listening...
-            </div>
-          )}
-          {showPreparingAudioResponseIndicator && !isSpeaking && !isListening && (
-             <div className="mt-4 flex items-center justify-center p-3 rounded-lg bg-secondary text-secondary-foreground shadow animate-pulse">
-                <Loader2 size={20} className="mr-2 animate-spin"/> Preparing response...
-            </div>
-          )}
+          
           {showSpeakButtonAudioOnly && (
              <Button onClick={() => toggleListeningRef.current(true)} variant="outline" size="lg" className="mt-6">
                 <Mic size={24} className="mr-2"/> Speak
@@ -1154,4 +1158,3 @@ export default function HomePage() {
     </div>
   );
 }
-
