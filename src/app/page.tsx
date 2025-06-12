@@ -119,7 +119,7 @@ export default function HomePage() {
   const currentAiResponseTextRef = useRef<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
-  const { cn } = require("@/lib/utils");
+  // const { cn } = require("@/lib/utils"); // cn is already imported globally
   const preparingIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -136,6 +136,8 @@ export default function HomePage() {
   useEffect(() => { isListeningRef.current = isListening; }, [isListening]);
 
   const isEndingSessionRef = useRef(false);
+  const isAboutToSpeakForSilenceRef = useRef(false);
+
 
   useEffect(() => {
     if (showSplashScreen) {
@@ -161,6 +163,7 @@ export default function HomePage() {
     currentAiResponseTextRef.current = null;
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
+    isAboutToSpeakForSilenceRef.current = false; 
     setShowLogForSaveConfirmation(false);
     setShowSaveDialog(false);
     setCorsErrorEncountered(false);
@@ -184,7 +187,7 @@ export default function HomePage() {
       elevenLabsAudioRef.current.onplay = null;
       elevenLabsAudioRef.current.onended = null;
       elevenLabsAudioRef.current.onerror = null;
-      elevenLabsAudioRef.current = null;
+      // elevenLabsAudioRef.current = null; // Commented out to avoid re-creating audio element unnecessarily.
     }
 
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -248,6 +251,7 @@ export default function HomePage() {
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
+    isAboutToSpeakForSilenceRef.current = false; // Reset flag when speech actually starts
     setIsSendingMessage(false);
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
@@ -265,6 +269,7 @@ export default function HomePage() {
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
     isSpeakingRef.current = false;
+    isAboutToSpeakForSilenceRef.current = false; // Reset flag when speech ends
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -348,6 +353,7 @@ export default function HomePage() {
       setIsSendingMessage(false);
       setIsSpeaking(false);
       isSpeakingRef.current = false;
+      isAboutToSpeakForSilenceRef.current = false; // Ensure reset if text-only or empty
       setShowPreparingAudioResponseIndicator(false);
       if (preparingIndicatorTimeoutRef.current) {
           clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -357,6 +363,7 @@ export default function HomePage() {
     }
 
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
+       console.log("[speakText] Pausing existing ElevenLabs audio.");
        elevenLabsAudioRef.current.pause();
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
            URL.revokeObjectURL(elevenLabsAudioRef.current.src);
@@ -364,6 +371,7 @@ export default function HomePage() {
        elevenLabsAudioRef.current.src = '';
     }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+        console.log("[speakText] Cancelling existing browser synthesis.");
         window.speechSynthesis.cancel();
     }
     setIsSpeaking(false); 
@@ -408,17 +416,34 @@ export default function HomePage() {
           }
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
-          audio.load();
+          // audio.load(); // Explicit load might not be needed if src assignment triggers it
 
           audio.onplay = handleActualAudioStart;
           audio.onended = () => handleAudioProcessEnd(true);
           audio.onerror = (e: Event) => {
             const mediaError = (e.target as HTMLAudioElement)?.error;
             console.error("Error playing ElevenLabs audio. MediaError code:", mediaError?.code, "MediaError message:", mediaError?.message, "Full event:", e);
-            toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${mediaError?.code || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
-            browserSpeakInternal(textForSpeech);
+            // Check if the error is due to interruption
+            if (mediaError && mediaError.code === mediaError.MEDIA_ERR_ABORTED) {
+                console.warn("ElevenLabs playback aborted, likely by a new load request. Not falling back to browser TTS for this specific interruption.");
+                handleAudioProcessEnd(false); // Indicate playback didn't complete successfully but don't trigger fallback for this specific error.
+            } else {
+                toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${mediaError?.code || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
+                browserSpeakInternal(textForSpeech);
+            }
           };
-          await audio.play();
+          try {
+            await audio.play();
+          } catch (playError: any) {
+            if (playError.name === 'AbortError') {
+                console.warn('ElevenLabs audio.play() was aborted. This is likely due to a new speakText call. Event:', playError);
+                handleAudioProcessEnd(false); // Playback was aborted.
+            } else {
+                console.error('Error caught during ElevenLabs audio.play():', playError);
+                toast({ title: "ElevenLabs Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" });
+                browserSpeakInternal(textForSpeech);
+            }
+          }
           return;
         } else {
           let errorDetails = "Unknown error"; let specificAdvice = "Check console for details.";
@@ -432,9 +457,13 @@ export default function HomePage() {
           console.error("ElevenLabs API error:", response.status, errorDetails);
           toast({ title: "ElevenLabs TTS Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error calling ElevenLabs API:", error);
-        toast({ title: "ElevenLabs Connection Error", description: "Could not connect to ElevenLabs. Falling back to browser TTS.", variant: "destructive" });
+        if (error.name === 'AbortError') {
+            console.warn('Fetch to ElevenLabs was aborted.');
+        } else {
+            toast({ title: "ElevenLabs Connection Error", description: "Could not connect to ElevenLabs. Falling back to browser TTS.", variant: "destructive" });
+        }
       }
     }
     browserSpeakInternal(textForSpeech);
@@ -461,6 +490,7 @@ export default function HomePage() {
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
+    isAboutToSpeakForSilenceRef.current = false; // User message means we're not in a silence loop
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
@@ -551,8 +581,13 @@ export default function HomePage() {
         isListeningRef.current = false;
 
         setConsecutiveSilencePrompts(currentPrompts => {
+            if (isAboutToSpeakForSilenceRef.current) { // Check if already processing a silence
+                console.log(`[Recognition][no-speech][onerror] Already about to speak for silence. Bailing. currentPrompts: ${currentPrompts}`);
+                return currentPrompts;
+            }
             console.log(`[Recognition][no-speech][onerror] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) {
+                isAboutToSpeakForSilenceRef.current = true; // Set flag before speaking
                 const newPromptCount = currentPrompts + 1;
                 console.log(`[Recognition][no-speech][onerror] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
@@ -585,7 +620,7 @@ export default function HomePage() {
       const finalTranscript = inputValueRef.current;
       console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${finalTranscript}"`);
 
-      const wasListening = isListeningRef.current; // Capture state *before* setting it false
+      const wasListening = isListeningRef.current; 
       setIsListening(false); 
       isListeningRef.current = false;
 
@@ -595,8 +630,13 @@ export default function HomePage() {
       } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && wasListening && !isEndingSessionRef.current && !isSpeakingRef.current ) {
         console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current, "wasListening:", wasListening);
         setConsecutiveSilencePrompts(currentPrompts => {
+            if (isAboutToSpeakForSilenceRef.current) { // Check if already processing a silence
+                console.log(`[Recognition][onend][silence] Already about to speak for silence. Bailing. currentPrompts: ${currentPrompts}`);
+                return currentPrompts;
+            }
             console.log(`[Recognition][onend][silence] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
-            if (!isSpeakingRef.current && !isEndingSessionRef.current) { // Added check for !isSpeakingRef.current
+            if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
+                isAboutToSpeakForSilenceRef.current = true; // Set flag before speaking
                 const newPromptCount = currentPrompts + 1;
                 console.log(`[Recognition][onend][silence] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
@@ -721,6 +761,7 @@ export default function HomePage() {
   const handleEndChatManually = () => {
      if (communicationMode === 'audio-only') {
         isEndingSessionRef.current = true;
+        isAboutToSpeakForSilenceRef.current = false; // Clear this flag as well if ending manually
         console.log("[EndChatManually][AudioOnly] Ending session initiated.");
 
         if (isListeningRef.current && recognitionRef.current) {
@@ -783,6 +824,7 @@ export default function HomePage() {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
       setIsSendingMessage(true);
       setAiHasInitiatedConversation(true);
+      isAboutToSpeakForSilenceRef.current = false; // Initial greeting is not for silence
       setShowPreparingAudioResponseIndicator(false);
 
       if (preparingIndicatorTimeoutRef.current) {
