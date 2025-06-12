@@ -300,6 +300,7 @@ export default function HomePage() {
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
       } else if (communicationModeRef.current !== 'audio-only' || showSaveDialog) {
+        // If not audio-only, or if save dialog was already handled (e.g. manual end), proceed to reset
         resetConversation();
         setShowSplashScreen(true);
       }
@@ -355,13 +356,11 @@ export default function HomePage() {
     }
   }, [toast, handleActualAudioStart, handleAudioProcessEnd]);
 
-  const speakText = useCallback(async (text: string) => {
+ const speakText = useCallback(async (text: string) => {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
     if (communicationModeRef.current === 'text-only' || text.trim() === "") {
-      // For text-only or empty text, AI message & sending state are already handled by caller.
-      // We just ensure speaking-related states are reset.
       setIsSpeaking(false);
       isSpeakingRef.current = false;
       isAboutToSpeakForSilenceRef.current = false; 
@@ -436,8 +435,8 @@ export default function HomePage() {
             const errorCode = mediaError?.code;
             console.error("Error playing ElevenLabs audio. MediaError code:", errorCode, "MediaError message:", errorMessage, "Full event:", e);
             
-            if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request")) {
-                console.warn("ElevenLabs playback aborted, likely by a new load request. Not falling back to browser TTS for this specific interruption.");
+            if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request") || errorMessage.includes("The play() request was interrupted")) {
+                console.warn("ElevenLabs playback aborted, likely by a new load request or explicit stop. Not falling back to browser TTS for this specific interruption.");
                 handleAudioProcessEnd(false); 
             } else {
                 toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
@@ -447,7 +446,7 @@ export default function HomePage() {
           try {
             await audio.play();
           } catch (playError: any) {
-            if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request")) {
+            if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request") || playError.message.includes("The play() request was interrupted")) {
                 console.warn('ElevenLabs audio.play() was aborted. This is likely due to a new speakText call. Event:', playError);
                 handleAudioProcessEnd(false); 
             } else {
@@ -497,7 +496,11 @@ export default function HomePage() {
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     if (text.trim() === '') return;
     addMessage(text, 'user');
-    setIsSendingMessage(true); // "AI is typing" starts
+    
+    setTimeout(() => {
+        setIsSendingMessage(true); // "AI is typing" starts after a micro-delay
+    }, 0);
+
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
     isAboutToSpeakForSilenceRef.current = false; 
@@ -536,18 +539,18 @@ export default function HomePage() {
       };
       const result = await generateChatResponse(flowInput);
       
-      addMessage(result.aiResponse, 'ai'); // AI text bubble appears
-      setIsSendingMessage(false); // "AI is typing" stops
+      addMessage(result.aiResponse, 'ai'); 
+      setIsSendingMessage(false); 
 
-      await speakTextRef.current(result.aiResponse); // AI voice plays
+      await speakTextRef.current(result.aiResponse); 
     } catch (error) {
       console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       
-      addMessage(errorMessage, 'ai'); // Error text bubble appears
-      setIsSendingMessage(false); // "AI is typing" stops (if it was still true)
+      addMessage(errorMessage, 'ai'); 
+      setIsSendingMessage(false);
 
-      await speakTextRef.current(errorMessage); // Error voice plays
+      await speakTextRef.current(errorMessage); 
     }
   }, [addMessage, personaTraits,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
@@ -843,7 +846,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
-      setIsSendingMessage(true); // Show "Preparing greeting..."
+      
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false; 
       setShowPreparingAudioResponseIndicator(false);
@@ -857,8 +860,8 @@ export default function HomePage() {
       setIsListening(false); 
       isListeningRef.current = false;
 
-
       const initGreeting = async () => {
+        setIsSendingMessage(true); // Show "Preparing greeting..."
         try {
           const greetingInput: GenerateInitialGreetingInput = {
             personaTraits,
@@ -867,18 +870,18 @@ export default function HomePage() {
           };
           const result = await generateInitialGreeting(greetingInput);
           
-          addMessage(result.greetingMessage, 'ai'); // Add text first
-          setIsSendingMessage(false); // "Preparing greeting..." is done, text is shown
+          addMessage(result.greetingMessage, 'ai'); 
+          setIsSendingMessage(false); 
           
-          await speakTextRef.current(result.greetingMessage); // Then speak
+          await speakTextRef.current(result.greetingMessage); 
         } catch (error) {
           console.error("Failed to get initial AI greeting:", error);
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           
-          addMessage(errMsg, 'ai'); // Add error text
-          setIsSendingMessage(false); // "Preparing greeting..." is done
+          addMessage(errMsg, 'ai'); 
+          setIsSendingMessage(false); 
           
-          await speakTextRef.current(errMsg); // Then speak error
+          await speakTextRef.current(errMsg); 
         }
       };
       initGreeting();
