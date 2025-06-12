@@ -195,14 +195,14 @@ export default function HomePage() {
 
   const toggleListening = useCallback((forceState?: boolean) => {
     if ((typeof forceState === 'boolean' && forceState === true) && isEndingSessionRef.current) {
-        return; // Don't start listening if an end session is in progress
+        return; 
     }
 
     setIsListening(currentIsListening => {
       const targetState = typeof forceState === 'boolean' ? forceState : !currentIsListening;
 
       if (targetState === true) { 
-         if (isEndingSessionRef.current) return false; // Double check here too
+         if (isEndingSessionRef.current) return false; 
 
         if (!recognitionRef.current) {
           if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
@@ -282,13 +282,16 @@ export default function HomePage() {
     }
 
 
-    if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isListeningRef.current) {
+    if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
+      console.log("[AudioOnly] AI finished speaking. Scheduling mic restart.");
       setTimeout(() => {
-        if (isSpeakingRef.current || isEndingSessionRef.current || isListeningRef.current) { 
-          return;
+        if (!isEndingSessionRef.current && !isSpeakingRef.current && !isListeningRef.current) { 
+            console.log("[AudioOnly] Timeout: Attempting to restart mic.");
+            toggleListeningRef.current(true);
+        } else {
+            console.log("[AudioOnly] Timeout: Conditions to restart mic not met.", {isEnding: isEndingSessionRef.current, isSpeaking: isSpeakingRef.current, isListening: isListeningRef.current });
         }
-        toggleListeningRef.current(true);
-      }, 50); 
+      }, 250); 
     }
   }, [addMessage, messages, resetConversation, setShowSplashScreen, showSaveDialog]);
 
@@ -443,7 +446,6 @@ export default function HomePage() {
         preparingIndicatorTimeoutRef.current = null;
     }
 
-    // Filter out the current user message being sent, to avoid duplicating it in history for the AI
     const historyForGenkit = messages
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messages[messages.length -1]?.id)) 
         .map(msg => ({
@@ -519,7 +521,7 @@ export default function HomePage() {
       setIsListening(false); 
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (!isSpeakingRef.current && !isEndingSessionRef.current) {
+            if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
                 const newPromptCount = currentPrompts + 1;
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                     isEndingSessionRef.current = true; 
@@ -527,9 +529,9 @@ export default function HomePage() {
                 } else {
                     speakTextRef.current("Hello? Is someone there?");
                 }
-                return newPromptCount; // Increment count only if we acted
+                return newPromptCount; 
             }
-            return currentPrompts; // Otherwise, don't change the count for this event
+            return currentPrompts; 
         });
       } else if (event.error !== 'no-speech' && event.error !== 'aborted' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
