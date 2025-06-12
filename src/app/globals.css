@@ -26,8 +26,8 @@ body {
     --muted: 0 0% 90%; /* Light Gray - #E6E6E6 */
     --muted-foreground: 212 30% 40%; /* Muted Navy - #4D6279 */
 
-    --accent: 0 90% 65%; /* Reddish-Pink from image, adapted for light bg - #FF5C5C */
-    --accent-foreground: 0 0% 98%; /* Near White for text on pink */
+    --accent: 205 70% 70%; /* Light Blue for hover - (was Reddish-Pink #FF5C5C) */
+    --accent-foreground: 212 60% 25%; /* Dark Navy for text on light blue hover - (was Near White) */
 
     --destructive: 0 80% 60%; /* Standard Red - #F24848 */
     --destructive-foreground: 0 0% 98%;
@@ -42,8 +42,8 @@ body {
     --sidebar-foreground: 212 68% 15%; /* Dark Navy - #0F203B */
     --sidebar-primary: 203 75% 50%; /* Bright Blue - same as main primary */
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 0 0% 85%; /* Medium Gray for hover - #D9D9D9 */
-    --sidebar-accent-foreground: 212 68% 11%;
+    --sidebar-accent: 205 70% 70%; /* Light Blue for hover (match main accent) */
+    --sidebar-accent-foreground: 212 60% 25%; /* Dark Navy for text on hover (match main accent-foreground) */
     --sidebar-border: 0 0% 80%; /* Medium Gray Border - #CCCCCC */
     --sidebar-ring: 203 75% 55%;
 
@@ -73,8 +73,8 @@ body {
     --muted: 212 40% 22%; /* Muted Navy - #223957 */
     --muted-foreground: 210 30% 75%; /* Light Grayish Blue - #B3C2D1 */
 
-    --accent: 0 100% 71%; /* Reddish-Pink - #FF6B6B */
-    --accent-foreground: 0 0% 98%; /* Near White for text on pink */
+    --accent: 205 92% 80%; /* Light Blue for hover - (was Reddish-Pink #FF6B6B) */
+    --accent-foreground: 212 60% 15%; /* Dark Navy for text on light blue hover - (was Near White) */
 
     --destructive: 0 80% 65%; /* Adjusted Red for dark theme - #FF5252 */
     --destructive-foreground: 0 0% 98%;
@@ -88,8 +88,8 @@ body {
     --sidebar-foreground: 210 30% 80%; /* Light Grayish Blue for text - #BECBD6 */
     --sidebar-primary: 203 82% 56%; /* Bright Blue - same as main primary */
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 212 50% 20%; /* Muted Navy for hover - #1A2D4A */
-    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-accent: 205 92% 80%; /* Light Blue for hover (match main accent) */
+    --sidebar-accent-foreground: 212 60% 15%; /* Dark Navy for text on hover (match main accent-foreground) */
     --sidebar-border: 212 60% 12%; /* Dark Navy border - #0E1E33 */
     --sidebar-ring: 203 82% 60%;
 
