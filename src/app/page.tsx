@@ -278,19 +278,12 @@ export default function HomePage() {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
     isAboutToSpeakForSilenceRef.current = false; 
-    setIsSendingMessage(false);
     setShowPreparingAudioResponseIndicator(false);
     if (preparingIndicatorTimeoutRef.current) {
         clearTimeout(preparingIndicatorTimeoutRef.current);
         preparingIndicatorTimeoutRef.current = null;
     }
-
-    if (currentAiResponseTextRef.current) {
-      if (!messagesRef.current.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
-        addMessage(currentAiResponseTextRef.current, 'ai');
-      }
-    }
-  }, [addMessage]);
+  }, []);
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
     setIsSpeaking(false);
@@ -304,27 +297,14 @@ export default function HomePage() {
 
     if (isEndingSessionRef.current) {
       if (communicationModeRef.current === 'audio-only' && !showSaveDialog) {
-        // This means session ended automatically (e.g., via silence) in audio-only mode
-        // and save dialog isn't already up.
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
-        // We don't reset or go to splash screen here. The dialog handler will do that.
       } else if (communicationModeRef.current !== 'audio-only' || showSaveDialog) {
-        // For text modes, or if dialog was already shown (e.g. manual end)
         resetConversation();
         setShowSplashScreen(true);
       }
-      // If audio-only and showSaveDialog was true (manual end), dialog is already handled by its own flow.
       return;
     }
-
-
-    if (!audioPlayedSuccessfully && currentAiResponseTextRef.current) {
-       if (!messagesRef.current.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
-            addMessage(currentAiResponseTextRef.current, 'ai');
-       }
-    }
-    setIsSendingMessage(false);
 
     if (elevenLabsAudioRef.current) {
       if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -350,7 +330,7 @@ export default function HomePage() {
       console.log("[AudioOnly][handleAudioProcessEnd] Mic aborted. Calling toggleListening(true) to restart. isSpeakingRef.current is now:", isSpeakingRef.current);
       toggleListeningRef.current(true);
     }
-  }, [addMessage, resetConversation, setShowSplashScreen, showSaveDialog]);
+  }, [resetConversation, setShowSplashScreen, showSaveDialog]);
 
 
   const browserSpeakInternal = useCallback((textForSpeech: string) => {
@@ -380,12 +360,8 @@ export default function HomePage() {
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
     if (communicationModeRef.current === 'text-only' || text.trim() === "") {
-      if (text.trim() !== "" && currentAiResponseTextRef.current) {
-        if (!messagesRef.current.find(m => m.text === currentAiResponseTextRef.current && m.sender === 'ai')) {
-            addMessage(currentAiResponseTextRef.current, 'ai');
-        }
-      }
-      setIsSendingMessage(false);
+      // For text-only or empty text, AI message & sending state are already handled by caller.
+      // We just ensure speaking-related states are reset.
       setIsSpeaking(false);
       isSpeakingRef.current = false;
       isAboutToSpeakForSilenceRef.current = false; 
@@ -507,7 +483,6 @@ export default function HomePage() {
       elevenLabsApiKey,
       elevenLabsVoiceId,
       toast,
-      addMessage,
       browserSpeakInternal,
       handleAudioProcessStart,
       handleActualAudioStart,
@@ -522,7 +497,7 @@ export default function HomePage() {
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     if (text.trim() === '') return;
     addMessage(text, 'user');
-    setIsSendingMessage(true);
+    setIsSendingMessage(true); // "AI is typing" starts
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
     isAboutToSpeakForSilenceRef.current = false; 
@@ -533,7 +508,7 @@ export default function HomePage() {
     }
 
     const historyForGenkit = messagesRef.current
-        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) // Filter out the current user message if it's the last one
+        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) 
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }],
@@ -560,12 +535,19 @@ export default function HomePage() {
         chatHistory: historyForGenkit,
       };
       const result = await generateChatResponse(flowInput);
-      await speakTextRef.current(result.aiResponse);
+      
+      addMessage(result.aiResponse, 'ai'); // AI text bubble appears
+      setIsSendingMessage(false); // "AI is typing" stops
+
+      await speakTextRef.current(result.aiResponse); // AI voice plays
     } catch (error) {
       console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
-      await speakTextRef.current(errorMessage);
-      setIsSendingMessage(false);
+      
+      addMessage(errorMessage, 'ai'); // Error text bubble appears
+      setIsSendingMessage(false); // "AI is typing" stops (if it was still true)
+
+      await speakTextRef.current(errorMessage); // Error voice plays
     }
   }, [addMessage, personaTraits,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
@@ -861,7 +843,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
-      setIsSendingMessage(true);
+      setIsSendingMessage(true); // Show "Preparing greeting..."
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false; 
       setShowPreparingAudioResponseIndicator(false);
@@ -884,17 +866,24 @@ export default function HomePage() {
             knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
           };
           const result = await generateInitialGreeting(greetingInput);
-          await speakTextRef.current(result.greetingMessage);
+          
+          addMessage(result.greetingMessage, 'ai'); // Add text first
+          setIsSendingMessage(false); // "Preparing greeting..." is done, text is shown
+          
+          await speakTextRef.current(result.greetingMessage); // Then speak
         } catch (error) {
           console.error("Failed to get initial AI greeting:", error);
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
-          await speakTextRef.current(errMsg);
-          setIsSendingMessage(false);
+          
+          addMessage(errMsg, 'ai'); // Add error text
+          setIsSendingMessage(false); // "Preparing greeting..." is done
+          
+          await speakTextRef.current(errMsg); // Then speak error
         }
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh]);
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, addMessage]);
 
   const fetchAndProcessKnowledgeLevel = useCallback(async (
     levelPath: string,
