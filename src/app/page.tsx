@@ -543,9 +543,9 @@ export default function HomePage() {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.log("[Recognition] onError triggered. Error type:", event.error, "isListeningRef.current:", isListeningRef.current, "Current inputValue:", inputValueRef.current);
-
+       
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        console.log("[Recognition][no-speech][onerror] 'no-speech' error detected in Audio Only mode.");
+        console.log("[Recognition][no-speech] 'no-speech' error detected in Audio Only mode.");
         setIsListening(false);
         isListeningRef.current = false;
 
@@ -569,7 +569,7 @@ export default function HomePage() {
         });
       } else if (event.error === 'aborted') {
         console.log("[Recognition][onerror] 'aborted'. This is often expected if we stop it manually. isListeningRef.current is now:", isListeningRef.current);
-        if (isListeningRef.current) { // If it was aborted while it thought it should be listening
+        if (isListeningRef.current) { 
           setIsListening(false);
           isListeningRef.current = false;
         }
@@ -584,18 +584,16 @@ export default function HomePage() {
       const finalTranscript = inputValueRef.current;
       console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${finalTranscript}"`);
 
-      const currentIsListening = isListeningRef.current; // Capture before setIsListening changes it
-      setIsListening(false); // Recognition has ended, so we are no longer listening
+      const wasListening = isListeningRef.current;
+      setIsListening(false); 
       isListeningRef.current = false;
 
 
       if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current) {
         console.log("[Recognition][onend] Sending transcript:", finalTranscript);
         handleSendMessageRef.current(finalTranscript, 'voice');
-      } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isSpeakingRef.current && currentIsListening) {
-        // This condition implies no speech was captured and it was expected to be listening.
-        // The 'currentIsListening' check ensures this logic only runs if we were trying to listen.
-        console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current, "wasListening:", currentIsListening);
+      } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && wasListening && !isEndingSessionRef.current && !isSpeakingRef.current ) {
+        console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current, "wasListening:", wasListening);
         setConsecutiveSilencePrompts(currentPrompts => {
             console.log(`[Recognition][onend][silence] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) {
@@ -791,9 +789,9 @@ export default function HomePage() {
         clearTimeout(preparingIndicatorTimeoutRef.current);
         preparingIndicatorTimeoutRef.current = null;
       }
-      setIsSpeaking(false); // Ensure speaking state is false before greeting
+      setIsSpeaking(false); 
       isSpeakingRef.current = false;
-      setIsListening(false); // Ensure listening state is false
+      setIsListening(false); 
       isListeningRef.current = false;
 
 
@@ -1038,7 +1036,7 @@ export default function HomePage() {
         <Card className="w-full max-w-md shadow-2xl">
           <CardHeader className="text-center">
             <CardTitle className="text-3xl font-headline text-primary">{splashScreenWelcomeMessage}</CardTitle>
-            <CardDescription>Choose your preferred way to interact.</CardDescription>
+            <CardDescription>Let's have a conversation.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
             <Image
@@ -1059,7 +1057,7 @@ export default function HomePage() {
               }}
               data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
             />
-            <p className="text-xl font-semibold text-foreground">Choose your preferred way to interact.</p>
+            <p className="text-lg font-semibold text-foreground">Choose your preferred way to interact.</p>
              {isLoadingKnowledge && (
                 <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
                     <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" />
