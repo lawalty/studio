@@ -119,6 +119,7 @@ export default function HomePage() {
   const currentAiResponseTextRef = useRef<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
+  const { cn } = require("@/lib/utils");
   const preparingIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -584,7 +585,7 @@ export default function HomePage() {
       const finalTranscript = inputValueRef.current;
       console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${finalTranscript}"`);
 
-      const wasListening = isListeningRef.current;
+      const wasListening = isListeningRef.current; // Capture state *before* setting it false
       setIsListening(false); 
       isListeningRef.current = false;
 
@@ -595,7 +596,7 @@ export default function HomePage() {
         console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current, "wasListening:", wasListening);
         setConsecutiveSilencePrompts(currentPrompts => {
             console.log(`[Recognition][onend][silence] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
-            if (!isSpeakingRef.current && !isEndingSessionRef.current) {
+            if (!isSpeakingRef.current && !isEndingSessionRef.current) { // Added check for !isSpeakingRef.current
                 const newPromptCount = currentPrompts + 1;
                 console.log(`[Recognition][onend][silence] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
@@ -1003,24 +1004,24 @@ export default function HomePage() {
             </li>
             <li>
               <strong>Identify Your GCS Bucket ID:</strong>
-              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>ai-blair-7fb8o.appspot.com</code> or <code>ai-blair-7fb8o.firebasestorage.app</code>). Use the one that works with `gsutil`. You previously confirmed <code>ai-blair-7fb8o.firebasestorage.app</code> was correct for `gsutil`.
+              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>ai-blair-7fb8o.appspot.com</code> or <code>ai-blair-7fb8o.firebasestorage.app</code>). Use the one that works with \`gsutil\`. You previously confirmed <code>ai-blair-7fb8o.firebasestorage.app</code> was correct for \`gsutil\`.
             </li>
             <li>
-              <strong>Use `gsutil` (Google Cloud SDK command-line):</strong>
+              <strong>Use \`gsutil\` (Google Cloud SDK command-line):</strong>
               <ul className="list-disc list-inside ml-4">
-                <li>Open terminal/shell with `gsutil` configured.</li>
-                <li>Navigate to where `cors-config.json` is saved.</li>
+                <li>Open terminal/shell with \`gsutil\` configured.</li>
+                <li>Navigate to where \`cors-config.json\` is saved.</li>
                 <li>
                   Set policy: <code>gsutil cors set cors-config.json gs://ai-blair-7fb8o.firebasestorage.app</code>
                 </li>
                 <li>
                   Verify: <code>gsutil cors get gs://ai-blair-7fb8o.firebasestorage.app</code>
-                  <br />The output **MUST** match your `cors-config.json`. If not, the `set` command failed or used the wrong bucket ID.
+                  <br />The output **MUST** match your \`cors-config.json\`. If not, the \`set\` command failed or used the wrong bucket ID.
                 </li>
               </ul>
             </li>
             <li>
-              <strong>Wait & Test:</strong> Allow 5-10 min for settings to propagate. **Clear browser cache AND cookies thoroughly.** Test in a new Incognito/Private window.
+              <strong>Wait &amp; Test:</strong> Allow 5-10 min for settings to propagate. **Clear browser cache AND cookies thoroughly.** Test in a new Incognito/Private window.
             </li>
           </ol>
           <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved.</p>
@@ -1074,7 +1075,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
                 <RadioGroupItem value="audio-text" id="r2" disabled={isLoadingKnowledge}/>
-                <Label htmlFor="r2" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio & Text (Recommended)</Label>
+                <Label htmlFor="r2" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio &amp; Text (Recommended)</Label>
               </div>
               <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
                 <RadioGroupItem value="text-only" id="r3" disabled={isLoadingKnowledge}/>
@@ -1218,7 +1219,7 @@ export default function HomePage() {
           <Card className="w-full shadow-xl">
             <CardContent className="pt-6 flex flex-col items-center">
               <Image {...imageProps} />
-              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">AI Blair</h2>
+              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">Ask blAIr</h2>
               {showPreparingGreeting && (
                 <p className="mt-2 text-center text-base font-semibold text-muted-foreground animate-pulse">
                   Preparing greeting...
