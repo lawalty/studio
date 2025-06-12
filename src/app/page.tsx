@@ -359,6 +359,7 @@ export default function HomePage() {
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
     }
+    isSpeakingRef.current = false; // Ensure ref is updated before potential async operations
 
     if (elevenLabsApiKey && elevenLabsVoiceId) {
       const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
@@ -536,60 +537,76 @@ export default function HomePage() {
       console.log("[Recognition] onError triggered. Error type:", event.error, "isListeningRef.current:", isListeningRef.current, "Current inputValue:", inputValueRef.current);
        
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        console.log("[Recognition][no-speech] 'no-speech' error detected in Audio Only mode.");
-        // It's crucial to set isListening to false here, as the recognition session has ended with an error.
+        console.log("[Recognition][no-speech][onerror] 'no-speech' error detected. Setting isListening to false.");
         setIsListening(false);
         isListeningRef.current = false;
 
         setConsecutiveSilencePrompts(currentPrompts => {
-            console.log(`[Recognition][no-speech] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
+            console.log(`[Recognition][no-speech][onerror] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) {
                 const newPromptCount = currentPrompts + 1;
-                console.log(`[Recognition][no-speech] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
+                console.log(`[Recognition][no-speech][onerror] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
-                    console.log("[Recognition][no-speech] Max silence prompts reached. Ending session.");
+                    console.log("[Recognition][no-speech][onerror] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true; 
                     speakTextRef.current("It seems no one is here. Ending the session.");
                 } else {
-                    console.log("[Recognition][no-speech] Prompting for silence: 'Hello? Is someone there?'");
+                    console.log("[Recognition][no-speech][onerror] Prompting for silence: 'Hello? Is someone there?'");
                     speakTextRef.current("Hello? Is someone there?");
                 }
                 return newPromptCount; 
             }
-            console.log(`[Recognition][no-speech] Conditions NOT met for silence prompt (AI Speaking or Session Ending). AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
+            console.log(`[Recognition][no-speech][onerror] Conditions NOT met for silence prompt (AI Speaking or Session Ending). AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
             return currentPrompts; 
         });
       } else if (event.error === 'aborted') {
-        console.log("[Recognition] onError: 'aborted'. This is often expected if we stop it manually. isListeningRef.current is now:", isListeningRef.current);
-        // Ensure isListening is false if aborted.
+        console.log("[Recognition][onerror] 'aborted'. This is often expected if we stop it manually. isListeningRef.current is now:", isListeningRef.current);
         if (isListeningRef.current) {
           setIsListening(false);
           isListeningRef.current = false;
         }
       } else if (event.error !== 'no-speech' && event.error !== 'network' && event.error !== 'interrupted' && (event as any).name !== 'AbortError') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
-        setIsListening(false); // Also set to false on other significant errors
+        setIsListening(false); 
         isListeningRef.current = false;
       }
     };
 
     recognition.onend = () => {
       console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${inputValueRef.current}"`);
-      // isListening should ideally be false already if onEnd is called after an error or successful speech.
-      // If it was true, it means onEnd might have been called for other reasons (e.g. browser stopping it).
-      // This is a good place to ensure the state is consistent.
-      if (isListeningRef.current) {
-        setIsListening(false); 
-        isListeningRef.current = false;
-      }
+      
+      // Always set isListening to false when onend fires, as the session is over.
+      setIsListening(false); 
+      isListeningRef.current = false;
       
       const finalTranscript = inputValueRef.current; 
-      if (finalTranscript && finalTranscript.trim() && !isEndingSessionRef.current) {
-        console.log("[Recognition] onEnd: Sending transcript:", finalTranscript);
+      if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current) {
+        console.log("[Recognition][onend] Sending transcript:", finalTranscript);
         handleSendMessageRef.current(finalTranscript, 'voice');
+      } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !isSpeakingRef.current) {
+        // If onend fires with empty transcript in audio-only mode, and AI is not already speaking (e.g. from a no-speech error),
+        // this means the browser might have timed out without throwing a 'no-speech' error.
+        // We treat this as a silence event.
+        console.log("[Recognition][onend] Empty transcript in Audio Only mode. Treating as silence. Triggering silence prompt logic.");
+        setConsecutiveSilencePrompts(currentPrompts => {
+            console.log(`[Recognition][onend][silence] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
+            if (!isSpeakingRef.current && !isEndingSessionRef.current) { // Double check AI is not speaking
+                const newPromptCount = currentPrompts + 1;
+                console.log(`[Recognition][onend][silence] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
+                if (newPromptCount >= MAX_SILENCE_PROMPTS) {
+                    console.log("[Recognition][onend][silence] Max silence prompts reached. Ending session.");
+                    isEndingSessionRef.current = true; 
+                    speakTextRef.current("It seems no one is here. Ending the session.");
+                } else {
+                    console.log("[Recognition][onend][silence] Prompting for silence: 'Hello? Is someone there?'");
+                    speakTextRef.current("Hello? Is someone there?");
+                }
+                return newPromptCount; 
+            }
+            console.log(`[Recognition][onend][silence] Conditions NOT met for silence prompt (AI Speaking or Session Ending). AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
+            return currentPrompts;
+        });
       }
-      // Do not automatically re-listen here from onEnd if it was due to no-speech.
-      // The onerror for no-speech should have triggered the AI to speak, and handleAudioProcessEnd will then re-listen.
       setInputValue(''); 
     };
     return recognition;
@@ -653,9 +670,6 @@ export default function HomePage() {
     } else {
       console.log("[useEffect isListening] Target state: false (Stop Listen). Attempting recognition.abort().");
       try {
-        // Only abort if recognition is actually running, to avoid errors if it's already stopped.
-        // However, the SpeechRecognition API doesn't have a direct 'isRunning' state.
-        // Aborting a stopped recognition might throw an InvalidStateError but is generally safe.
         recInstance.abort();
         console.log("[useEffect isListening] recognition.abort() called successfully.");
       } catch (e: any) {
@@ -769,6 +783,9 @@ export default function HomePage() {
         clearTimeout(preparingIndicatorTimeoutRef.current);
         preparingIndicatorTimeoutRef.current = null;
       }
+      isSpeakingRef.current = false; // Ensure consistency before speaking
+      isListeningRef.current = false;
+
       const initGreeting = async () => {
         try {
           const greetingInput: GenerateInitialGreetingInput = {
@@ -1124,7 +1141,7 @@ export default function HomePage() {
           <Image {...imageProps} />
           <h2 className="mt-6 text-3xl font-bold font-headline text-primary">AI Blair</h2>
           
-          <div className="mt-4 flex h-12 w-full items-center justify-center">
+          <div className="mt-4 flex h-12 w-full items-center justify-center"> {/* Fixed height container */}
             {showPreparingGreeting ? (
               <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse">
                 Preparing greeting...
@@ -1138,7 +1155,7 @@ export default function HomePage() {
                 <Loader2 size={20} className="mr-2 animate-spin" /> Preparing
                 response...
               </div>
-            ) : null }
+            ) : null } {/* Render null if no message to keep height */}
           </div>
 
           {(messages.length > 0 && showLogForSaveConfirmation) && (
@@ -1226,5 +1243,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-    
