@@ -299,13 +299,13 @@ export default function HomePage() {
       console.log("[AudioOnly][handleAudioProcessEnd] AI finished speaking. Aborting mic before attempting restart.");
       if (recognitionRef.current) {
         try {
-          recognitionRef.current.abort(); // Explicitly abort to reset state
+          recognitionRef.current.abort(); 
           console.log("[AudioOnly][handleAudioProcessEnd] Recognition aborted successfully.");
         } catch (e: any) {
           console.warn("[AudioOnly][handleAudioProcessEnd] Non-critical error aborting recognition before restart:", e.message);
         }
       }
-      isSpeakingRef.current = false; // Ensure ref is updated immediately
+      isSpeakingRef.current = false; 
       console.log("[AudioOnly][handleAudioProcessEnd] Mic aborted. Calling toggleListening(true) to restart. isSpeakingRef.current is now:", isSpeakingRef.current);
       toggleListeningRef.current(true);
     }
@@ -365,8 +365,8 @@ export default function HomePage() {
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
     }
-    setIsSpeaking(false); // Reset speaking state before attempting to speak
-    isSpeakingRef.current = false; // Also reset the ref
+    setIsSpeaking(false); 
+    isSpeakingRef.current = false; 
 
 
     if (elevenLabsApiKey && elevenLabsVoiceId) {
@@ -587,7 +587,6 @@ export default function HomePage() {
       const wasListening = isListeningRef.current;
       setIsListening(false); 
       isListeningRef.current = false;
-
 
       if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current) {
         console.log("[Recognition][onend] Sending transcript:", finalTranscript);
@@ -1150,7 +1149,7 @@ export default function HomePage() {
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
           {corsTroubleshootingAlert}
           <Image {...imageProps} />
-          <h2 className="mt-6 text-3xl font-bold font-headline text-primary">AI Blair</h2>
+          <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask blAIr</h2>
 
           <div className="mt-4 flex h-12 w-full items-center justify-center">
             {showPreparingGreeting ? (
