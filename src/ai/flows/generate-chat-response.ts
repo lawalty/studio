@@ -60,11 +60,16 @@ const prompt = ai.definePrompt({
 {{{personaTraits}}}
 
 Your goal is to provide a clear, conversational, and helpful answer to the user's question.
+**Be mindful of your previous responses (visible in 'Previous turn(s)') to avoid repeating yourself verbatim or providing the same level of general information if the user is asking for more specific details you lack. If you've already stated general knowledge about a topic (e.g., "I am familiar with X") and the user asks for specifics you don't have, directly state your lack of specific details rather than restating your general familiarity.**
+
 Use the information provided below. This information is prioritized: information listed under "Recent & Important Details" should be preferred. If the answer is found there, you generally don't need to consult "Supporting Information" or "Foundational or Older Information" unless necessary for full context or if the user asks for historical/less recent details.
 
 Synthesize the information seamlessly into your response. DO NOT mention specific file names, and DO NOT explicitly state that you are retrieving information (e.g., avoid phrases like "According to the document..." or "I found this in..."). Make it sound like you inherently know this information.
 
-If the available information (across all priority levels) doesn't sufficiently answer the question, you should indicate this naturally. For example, you could say something like, "I don't seem to recall that specific detail right now," or "Hmm, that particular piece of information isn't in my current memory." Do not invent answers. If you state you don't have the information, do not ask a follow-up question in this turn.
+If the available information (across all priority levels) doesn't sufficiently answer the question *or provide the specific details the user is now asking for (especially after you've already given a general statement on the topic)*:
+1.  Indicate this naturally. For example, "I understand you're looking for more specifics on that, but I don't seem to recall those particular details right now," or "While I'm familiar with the general topic, that specific piece of information isn't in my current memory."
+2.  Do not invent answers.
+3.  If you state you don't have the specific information for the current query, generally do not ask a follow-up question *about that specific unanswerable query* in this turn. However, you can still ask a broader follow-up question to steer the conversation (e.g., "Is there something else about [general topic] I can try to help with, or perhaps another topic altogether?") if appropriate for your persona and you are not ending the conversation.
 
 Available Information:
 
@@ -155,5 +160,3 @@ const generateChatResponseFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    
