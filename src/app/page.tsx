@@ -274,40 +274,40 @@ export default function HomePage() {
     setShowPreparingAudioResponseIndicator(false);
   }, []);
 
-  const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
+  const handleAudioProcessEnd = useCallback(() => {
     setIsSpeaking(false);
     isSpeakingRef.current = false;
-    isAboutToSpeakForSilenceRef.current = false; 
+    isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingAudioResponseIndicator(false);
 
     if (elevenLabsAudioRef.current) {
-      if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
-        URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-      }
-      elevenLabsAudioRef.current.onplay = null;
-      elevenLabsAudioRef.current.onended = null;
-      elevenLabsAudioRef.current.onerror = null;
-      if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
+        if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
+            URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+        }
+        elevenLabsAudioRef.current.onplay = null;
+        elevenLabsAudioRef.current.onended = null;
+        elevenLabsAudioRef.current.onerror = null;
+        if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
     }
-    
+
     if (isEndingSessionRef.current) {
-      setShowLogForSaveConfirmation(true);
-      setShowSaveDialog(true); 
-      return; 
+        setShowLogForSaveConfirmation(true);
+        setShowSaveDialog(true);
+        return;
     }
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort(); 
-        } catch (e: any) {
-          // Ignore abort errors if already stopped or not started
+        if (recognitionRef.current) {
+            try {
+                recognitionRef.current.abort();
+            } catch (e: any) {
+                // Ignore abort errors if already stopped or not started
+            }
         }
-      }
-      isSpeakingRef.current = false; 
-      toggleListeningRef.current(true);
+        isSpeakingRef.current = false;
+        toggleListeningRef.current(true);
     }
-  }, []);
+}, []);
 
 
  const browserSpeakInternal = useCallback((textForSpeech: string) => {
@@ -321,7 +321,6 @@ export default function HomePage() {
       const voices = window.speechSynthesis.getVoices();
       let selectedVoice = null;
 
-      // Try to find an 'en-US' male voice first
       selectedVoice = voices.find(voice =>
           voice.lang === 'en-US' &&
           (voice.name.toLowerCase().includes('male') ||
@@ -331,7 +330,6 @@ export default function HomePage() {
            voice.name.toLowerCase().includes('google us english male')) 
       );
 
-      // If not found, try any 'en' male voice
       if (!selectedVoice) {
           selectedVoice = voices.find(voice =>
               voice.lang.startsWith('en-') &&
@@ -339,35 +337,46 @@ export default function HomePage() {
           );
       }
       
-      // If not found, try any 'en-US' voice (could be female, but better than non-English if others were somehow male)
       if (!selectedVoice) {
           selectedVoice = voices.find(voice => voice.lang === 'en-US');
       }
 
-
       if (selectedVoice) {
           utterance.voice = selectedVoice;
       }
-      // If no specific voice is found after these checks, the browser's default will be used.
 
       utterance.onstart = handleActualAudioStart;
-      utterance.onend = () => handleAudioProcessEnd(true);
+      utterance.onend = () => handleAudioProcessEnd();
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
         if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
           toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}. Check console.`, variant: "destructive" });
         }
-        handleAudioProcessEnd(false);
+        handleAudioProcessEnd();
       };
       window.speechSynthesis.speak(utterance);
     } else {
       toast({ title: "TTS Not Supported", description: "Browser does not support speech synthesis.", variant: "default" });
-      handleAudioProcessEnd(false);
+      handleAudioProcessEnd();
     }
   }, [toast, handleActualAudioStart, handleAudioProcessEnd]);
 
  const speakText = useCallback(async (text: string) => {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
+
+    // Diagnostic logs for API key and Voice ID status at the point of use
+    console.log('[HomePage - speakText] Attempting to speak. API Key available:', !!elevenLabsApiKey, 'Voice ID available:', !!elevenLabsVoiceId);
+    if (elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
+      console.log('[HomePage - speakText] API Key starts with:', elevenLabsApiKey.substring(0, 5) + '...');
+    } else {
+      console.log('[HomePage - speakText] API Key is not a string or is null/undefined.');
+    }
+    if (elevenLabsVoiceId && typeof elevenLabsVoiceId === 'string') {
+      console.log('[HomePage - speakText] Voice ID:', elevenLabsVoiceId);
+    } else {
+      console.log('[HomePage - speakText] Voice ID is not a string or is null/undefined.');
+    }
+
 
     if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "") {
       setIsSpeaking(false);
@@ -398,6 +407,7 @@ export default function HomePage() {
 
 
     if (elevenLabsApiKey && elevenLabsVoiceId) {
+      console.log('[HomePage - speakText] Using ElevenLabs TTS.');
       const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
       const headers = {
         'Accept': 'audio/mpeg',
@@ -435,14 +445,14 @@ export default function HomePage() {
           audio.src = audioUrl;
 
           audio.onplay = handleActualAudioStart;
-          audio.onended = () => handleAudioProcessEnd(true);
+          audio.onended = () => handleAudioProcessEnd();
           audio.onerror = (e: Event | string) => {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
             const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
             const errorCode = mediaError?.code;
             
             if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request") || errorMessage.includes("The play() request was interrupted")) {
-                handleAudioProcessEnd(false); 
+                handleAudioProcessEnd(); 
             } else {
                 toast({ title: "TTS Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
                 browserSpeakInternal(textForSpeech); 
@@ -452,7 +462,7 @@ export default function HomePage() {
             await audio.play();
           } catch (playError: any) {
             if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request") || playError.message.includes("The play() request was interrupted")) {
-                handleAudioProcessEnd(false); 
+                handleAudioProcessEnd(); 
             } else {
                 toast({ title: "TTS Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" });
                 browserSpeakInternal(textForSpeech); 
@@ -472,10 +482,13 @@ export default function HomePage() {
         }
       } catch (error: any) { 
         if (error.name === 'AbortError') {
+           // Handled by onerror or play().catch()
         } else {
             toast({ title: "TTS Connection Error", description: "Could not connect to TTS service. Falling back to browser TTS.", variant: "destructive" });
         }
       }
+    } else {
+       console.log('[HomePage - speakText] ElevenLabs API Key or Voice ID missing/invalid in state. Falling back to browser TTS.');
     }
     browserSpeakInternal(textForSpeech);
   }, [
@@ -763,7 +776,7 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        // The save dialog is triggered by handleAudioProcessEnd, which is called when speech stops.
+        // Save dialog is triggered by handleAudioProcessEnd when isEndingSessionRef is true.
     } else {
         setShowSaveDialog(true); // Directly show if AI is not speaking
     }
@@ -926,8 +939,8 @@ export default function HomePage() {
            console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", { 
             tts: keys.tts, 
             voiceId: keys.voiceId,
-            gemini: keys.gemini, // Keep this for debugging if needed
-            stt: keys.stt // Keep this for debugging if needed
+            gemini: keys.gemini, 
+            stt: keys.stt 
           });
 
 
@@ -950,7 +963,7 @@ export default function HomePage() {
           setElevenLabsVoiceId(null);
           toast({
             title: "TTS Configuration Missing",
-            description: "API key configuration document not found in Firestore (configurations/api_keys_config). Falling back to browser default voice.",
+            description: `API key configuration document not found in Firestore ('${FIRESTORE_API_KEYS_PATH}'). Falling back to browser default voice. Please configure in Admin Panel.`,
             variant: "default",
             duration: 8000,
           });
@@ -1318,7 +1331,7 @@ export default function HomePage() {
             onToggleListening={() => toggleListeningRef.current()}
             inputValue={inputValue}
             onInputValueChange={setInputValue}
-            disabled={showSaveDialog || isEndingSessionRef.current} 
+            disabled={showSaveDialog || isEndingSessionRef.current || (isSendingMessage && aiHasInitiatedConversation)} 
           />
           {aiHasInitiatedConversation && !showSaveDialog && (
              <div className="mt-3 flex justify-end">
