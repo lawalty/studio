@@ -201,7 +201,7 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const handleUpload = async () => {
+  const handleUpload = useCallback(async () => {
     if (!selectedFile) {
       toast({ title: "No file selected", variant: "destructive" });
       return;
@@ -229,7 +229,7 @@ export default function KnowledgeBasePage() {
 
       if (!downloadURL) {
         toast({ title: "URL Retrieval Failed", description: `Could not get URL for ${currentFile.name}. Metadata not saved.`, variant: "destructive"});
-        setIsCurrentlyUploading(false);
+        setIsCurrentlyUploading(false); // Reset flag
         setSelectedFile(null);
         setUploadDescription('');
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -270,9 +270,9 @@ export default function KnowledgeBasePage() {
       setUploadDescription('');
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  };
+  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, getSourcesState, saveSourcesToFirestore, uploadDescription, isCurrentlyUploading, isMovingSource, isSavingDescription]);
 
-  const handleDelete = async (id: string, level: KnowledgeBaseLevel) => {
+  const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
     if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
       toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
       return;
@@ -304,9 +304,9 @@ export default function KnowledgeBasePage() {
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Storage or DB for ${level} KB.`, variant: "destructive" });
         setSources(originalSources); 
     }
-  };
+  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
 
-  const handleRefreshSourceUrl = async (sourceId: string, level: KnowledgeBaseLevel) => {
+  const handleRefreshSourceUrl = useCallback(async (sourceId: string, level: KnowledgeBaseLevel) => {
     if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
         toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
         return;
@@ -345,9 +345,9 @@ export default function KnowledgeBasePage() {
       toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name} in ${level} KB.`, variant: "destructive"});
       setSources(originalSourcesSnapshot); 
     }
-  };
+  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
 
-  const handleOpenMoveDialog = (source: KnowledgeSource, currentLevel: KnowledgeBaseLevel) => {
+  const handleOpenMoveDialog = useCallback((source: KnowledgeSource, currentLevel: KnowledgeBaseLevel) => {
     if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
       toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
       return;
@@ -355,9 +355,9 @@ export default function KnowledgeBasePage() {
     setSourceToMoveDetails({ source, currentLevel });
     setSelectedTargetMoveLevel(null);
     setShowMoveDialog(true);
-  };
+  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
 
-  const handleConfirmMoveSource = async () => {
+  const handleConfirmMoveSource = useCallback(async () => {
     if (!sourceToMoveDetails || !selectedTargetMoveLevel || isMovingSource) return;
 
     const { source, currentLevel } = sourceToMoveDetails;
@@ -417,14 +417,13 @@ export default function KnowledgeBasePage() {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
       if (tempFileRef && newDownloadURL) {
-        // Attempt to clean up if target DB update failed but file was copied
-        const targetDocSnap = await getDoc(doc(db, KB_CONFIG[targetLevel].firestorePath));
+        const targetDocRef = doc(db, KB_CONFIG[targetLevel].firestorePath);
+        const targetDocSnap = await getDoc(targetDocRef);
         const targetSources = targetDocSnap.data()?.sources as KnowledgeSource[] | undefined;
-        if (!targetSources || !targetSources.find(s => s.id === source.id && s.storagePath === newStoragePath)) { // check if this specific item was not saved or overwritten
+        if (!targetSources || !targetSources.find(s => s.id === source.id && s.storagePath === newStoragePath)) {
             try { await deleteObject(tempFileRef); } catch (cleanupError) { console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError); }
         }
       }
-      // Refresh both levels from DB to ensure consistency after a failed move
       fetchSourcesForLevel(currentLevel); 
       fetchSourcesForLevel(targetLevel);
     } finally {
@@ -433,9 +432,9 @@ export default function KnowledgeBasePage() {
       setSourceToMoveDetails(null);
       setSelectedTargetMoveLevel(null);
     }
-  };
+  }, [sourceToMoveDetails, selectedTargetMoveLevel, isMovingSource, toast, getSourcesSetter, getSourcesState, saveSourcesToFirestore, fetchSourcesForLevel]);
 
-  const handleOpenDescriptionDialog = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
+  const handleOpenDescriptionDialog = useCallback((source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
       toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
       return;
@@ -443,9 +442,9 @@ export default function KnowledgeBasePage() {
     setEditingSourceDetails({ source, level });
     setDescriptionInput(source.description || '');
     setShowDescriptionDialog(true);
-  };
+  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
 
-  const handleSaveDescription = async () => {
+  const handleSaveDescription = useCallback(async () => {
     if (!editingSourceDetails) return;
     setIsSavingDescription(true);
 
@@ -463,14 +462,14 @@ export default function KnowledgeBasePage() {
       toast({ title: "Description Saved", description: `Description for ${source.name} updated.` });
     } else {
       toast({ title: "Error Saving Description", description: `Could not save description for ${source.name}.`, variant: "destructive" });
-      // Optionally re-fetch or revert state if save fails
       fetchSourcesForLevel(level);
     }
 
     setIsSavingDescription(false);
     setShowDescriptionDialog(false);
     setEditingSourceDetails(null);
-  };
+    setDescriptionInput('');
+  }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, fetchSourcesForLevel]);
 
   const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
     const sources = getSourcesState(level);
@@ -593,11 +592,12 @@ export default function KnowledgeBasePage() {
                 {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
             </div>
             {selectedFile && (
-                <div/> 
-                // Empty div for grid alignment
-                <p className="text-xs text-muted-foreground col-start-2"> 
-                Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
-                </p>
+                <> 
+                  <div/>
+                  <p className="text-xs text-muted-foreground col-start-2"> 
+                  Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
+                  </p>
+                </>
             )}
 
             <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label> 
@@ -684,9 +684,9 @@ export default function KnowledgeBasePage() {
 
       {editingSourceDetails && (
         <Dialog open={showDescriptionDialog} onOpenChange={(open) => {
-          if (!open) { // If dialog is closing
+          if (!open) { 
             setEditingSourceDetails(null); 
-            setDescriptionInput(''); // Clear input
+            setDescriptionInput(''); 
           }
           setShowDescriptionDialog(open);
         }}>
