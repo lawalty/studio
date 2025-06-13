@@ -79,13 +79,13 @@ interface PageKnowledgeSource {
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
 const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechRecognition || (window as any).webkitSpeechRecognition : null;
-const MAX_SILENCE_PROMPTS = 3; 
+const MAX_SILENCE_PROMPTS = 3;
 
 const getUserNameFromHistory = (history: Message[]): string | null => {
-  for (let i = history.length - 1; i >= 0; i--) { 
+  for (let i = history.length - 1; i >= 0; i--) {
     const message = history[i];
     if (message.sender === 'user') {
-      const text = message.text; 
+      const text = message.text;
       const namePatterns = [
         /my name is\s+([A-Za-z]+)/i,
         /i'm\s+([A-Za-z]+)/i,
@@ -119,6 +119,7 @@ export default function HomePage() {
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
+  const [useTtsApi, setUseTtsApi] = useState<boolean>(true); // New state for TTS API toggle
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
@@ -160,7 +161,7 @@ export default function HomePage() {
 
   const isEndingSessionRef = useRef(false);
   const isAboutToSpeakForSilenceRef = useRef(false);
-  
+
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
@@ -189,10 +190,10 @@ export default function HomePage() {
     currentAiResponseTextRef.current = null;
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
-    isAboutToSpeakForSilenceRef.current = false; 
+    isAboutToSpeakForSilenceRef.current = false;
     setShowLogForSaveConfirmation(false);
     setShowSaveDialog(false);
-    setCorsErrorEncountered(false); 
+    setCorsErrorEncountered(false);
     setShowPreparingAudioResponseIndicator(false);
     isSpeakingRef.current = false;
     isListeningRef.current = false;
@@ -250,7 +251,7 @@ export default function HomePage() {
         return true;
       } else {
         if (recognitionRef.current) {
-           recognitionRef.current.stop(); 
+           recognitionRef.current.stop();
         }
         return false;
       }
@@ -270,7 +271,7 @@ export default function HomePage() {
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
     isSpeakingRef.current = true;
-    isAboutToSpeakForSilenceRef.current = false; 
+    isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingAudioResponseIndicator(false);
   }, []);
 
@@ -313,9 +314,9 @@ export default function HomePage() {
  const browserSpeakInternal = useCallback((textForSpeech: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-      
+
       const utterance = new SpeechSynthesisUtterance(textForSpeech);
-      utterance.pitch = 1; 
+      utterance.pitch = 1;
       utterance.rate = 1;
 
       const voices = window.speechSynthesis.getVoices();
@@ -327,7 +328,7 @@ export default function HomePage() {
            voice.name.toLowerCase().includes('david') ||
            voice.name.toLowerCase().includes('mark') ||
            voice.name.toLowerCase().includes('microsoft david') ||
-           voice.name.toLowerCase().includes('google us english male')) 
+           voice.name.toLowerCase().includes('google us english male'))
       );
 
       if (!selectedVoice) {
@@ -336,7 +337,7 @@ export default function HomePage() {
               (voice.name.toLowerCase().includes('male'))
           );
       }
-      
+
       if (!selectedVoice) {
           selectedVoice = voices.find(voice => voice.lang === 'en-US');
       }
@@ -350,39 +351,33 @@ export default function HomePage() {
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
         if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
           console.error("Browser TTS Error:", event.error, event);
-          // toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}. Check console.`, variant: "destructive" }); // User requested removal
         }
         handleAudioProcessEnd();
       };
       window.speechSynthesis.speak(utterance);
     } else {
-      // toast({ title: "TTS Not Supported", description: "Browser does not support speech synthesis.", variant: "default" }); // User requested removal
       console.warn("Browser TTS Not Supported.");
       handleAudioProcessEnd();
     }
-  }, [toast, handleActualAudioStart, handleAudioProcessEnd]);
+  }, [handleActualAudioStart, handleAudioProcessEnd]);
 
  const speakText = useCallback(async (text: string) => {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-    console.log('[HomePage - speakText] Attempting to speak. API Key available:', !!elevenLabsApiKey, 'Voice ID available:', !!elevenLabsVoiceId);
-    if (elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
+    console.log('[HomePage - speakText] Attempting to speak. TTS API Enabled:', useTtsApi, 'API Key available:', !!elevenLabsApiKey, 'Voice ID available:', !!elevenLabsVoiceId);
+    if (useTtsApi && elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
       console.log('[HomePage - speakText] API Key starts with:', elevenLabsApiKey.substring(0, 5) + '...');
-    } else {
-      console.log('[HomePage - speakText] API Key is not a string or is null/undefined.');
     }
-    if (elevenLabsVoiceId && typeof elevenLabsVoiceId === 'string') {
+    if (useTtsApi && elevenLabsVoiceId && typeof elevenLabsVoiceId === 'string') {
       console.log('[HomePage - speakText] Voice ID:', elevenLabsVoiceId);
-    } else {
-      console.log('[HomePage - speakText] Voice ID is not a string or is null/undefined.');
     }
 
 
     if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "") {
       setIsSpeaking(false);
       isSpeakingRef.current = false;
-      isAboutToSpeakForSilenceRef.current = false; 
+      isAboutToSpeakForSilenceRef.current = false;
       setShowPreparingAudioResponseIndicator(false);
       if (isEndingSessionRef.current && communicationModeRef.current === 'text-only') {
          setShowLogForSaveConfirmation(true);
@@ -403,13 +398,13 @@ export default function HomePage() {
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
     }
-    setIsSpeaking(false); 
-    isSpeakingRef.current = false; 
+    setIsSpeaking(false);
+    isSpeakingRef.current = false;
 
 
-    if (elevenLabsApiKey && elevenLabsVoiceId) {
-      console.log('[HomePage - speakText] Using ElevenLabs TTS.');
-      const elevenLabsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
+    if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+      console.log('[HomePage - speakText] Using Custom TTS API.');
+      const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`; // Assuming ElevenLabs for now
       const headers = {
         'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
@@ -417,24 +412,24 @@ export default function HomePage() {
       };
       const body = JSON.stringify({
         text: textForSpeech,
-        model_id: 'eleven_multilingual_v2',
+        model_id: 'eleven_multilingual_v2', // This might need to be configurable if not ElevenLabs
         voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }
       });
 
       try {
-        const response = await fetch(elevenLabsUrl, { method: "POST", headers, body });
+        const response = await fetch(ttsUrl, { method: "POST", headers, body });
         if (response.ok) {
           const audioBlob = await response.blob();
 
           if (audioBlob.size === 0) {
             toast({ title: "TTS Audio Issue", description: "Received empty audio data. Using browser TTS.", variant: "default" });
-            browserSpeakInternal(textForSpeech); 
-            return; 
+            browserSpeakInternal(textForSpeech);
+            return;
           }
           if (!audioBlob.type.startsWith('audio/')) {
             toast({ title: "TTS Audio Issue", description: `Received unexpected content type: ${audioBlob.type}. Using browser TTS.`, variant: "default" });
-            browserSpeakInternal(textForSpeech); 
-            return; 
+            browserSpeakInternal(textForSpeech);
+            return;
           }
 
           const audioUrl = URL.createObjectURL(audioBlob);
@@ -451,54 +446,51 @@ export default function HomePage() {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
             const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
             const errorCode = mediaError?.code;
-            
+
             if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request") || errorMessage.includes("The play() request was interrupted")) {
-                handleAudioProcessEnd(); 
+                handleAudioProcessEnd();
             } else {
                 console.error(`TTS Playback Error (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, e);
-                // toast({ title: "TTS Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" }); // User requested removal
-                browserSpeakInternal(textForSpeech); 
+                browserSpeakInternal(textForSpeech);
             }
           };
           try {
             await audio.play();
           } catch (playError: any) {
             if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request") || playError.message.includes("The play() request was interrupted")) {
-                handleAudioProcessEnd(); 
+                handleAudioProcessEnd();
             } else {
                 console.error(`TTS Playback Start Error: ${playError.message}. Falling back to browser TTS.`, playError);
-                // toast({ title: "TTS Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" }); // User requested removal
-                browserSpeakInternal(textForSpeech); 
+                browserSpeakInternal(textForSpeech);
             }
           }
-          return; 
-        } else { 
+          return;
+        } else {
           let errorDetails = "Unknown error"; let specificAdvice = "Check console for details.";
           try {
             const errorData = await response.json(); errorDetails = errorData?.detail?.message || JSON.stringify(errorData);
-            if (response.status === 401) specificAdvice = "Invalid API Key.";
-            else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "Voice ID not found.";
+            if (response.status === 401) specificAdvice = "Invalid API Key for TTS service.";
+            else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "TTS Voice ID not found.";
             else if (errorData?.detail?.message) specificAdvice = `Service: ${errorData.detail.message}.`;
             else if (response.status === 422) { const messagesArr = Array.isArray(errorData?.detail) ? errorData.detail.map((err: any) => err.msg).join(', ') : 'Invalid request.'; specificAdvice = `Service (422): ${messagesArr}.`;}
           } catch (e) { errorDetails = await response.text(); specificAdvice = `API Error ${response.status}. Response: ${errorDetails.substring(0,100)}...`; }
           console.error(`TTS Service Error: ${specificAdvice} Falling back to browser TTS. Details:`, errorDetails);
-          // toast({ title: "TTS Service Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 }); // User requested removal
         }
-      } catch (error: any) { 
+      } catch (error: any) {
         if (error.name === 'AbortError') {
            // Handled by onerror or play().catch()
         } else {
             console.error("TTS Connection Error. Falling back to browser TTS.", error);
-            // toast({ title: "TTS Connection Error", description: "Could not connect to TTS service. Falling back to browser TTS.", variant: "destructive" }); // User requested removal
         }
       }
     } else {
-       console.log('[HomePage - speakText] ElevenLabs API Key or Voice ID missing/invalid in state. Falling back to browser TTS.');
+       console.log('[HomePage - speakText] Custom TTS API disabled or API Key/Voice ID missing. Falling back to browser TTS.');
     }
     browserSpeakInternal(textForSpeech);
   }, [
-      elevenLabsApiKey, 
-      elevenLabsVoiceId, 
+      useTtsApi, // Added dependency
+      elevenLabsApiKey,
+      elevenLabsVoiceId,
       toast,
       browserSpeakInternal,
       handleAudioProcessStart,
@@ -514,18 +506,18 @@ export default function HomePage() {
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     if (text.trim() === '') return;
     addMessage(text, 'user');
-    
+
     setTimeout(() => {
-        setIsSendingMessage(true); 
+        setIsSendingMessage(true);
     }, 50);
 
     setConsecutiveSilencePrompts(0);
-    isAboutToSpeakForSilenceRef.current = false; 
+    isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingAudioResponseIndicator(false);
 
 
     const historyForGenkit = messagesRef.current
-        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) 
+        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }],
@@ -552,32 +544,32 @@ export default function HomePage() {
         chatHistory: historyForGenkit,
       };
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-      
-      addMessage(result.aiResponse, 'ai'); 
-      setIsSendingMessage(false); 
+
+      addMessage(result.aiResponse, 'ai');
+      setIsSendingMessage(false);
 
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
          if (communicationModeRef.current === 'text-only') {
-            setShowSaveDialog(true); 
-            return; 
+            setShowSaveDialog(true);
+            return;
         }
       }
 
-      await speakTextRef.current(result.aiResponse); 
+      await speakTextRef.current(result.aiResponse);
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
-      
-      addMessage(errorMessage, 'ai'); 
-      setIsSendingMessage(false); 
-      
-      if (isEndingSessionRef.current) { 
+
+      addMessage(errorMessage, 'ai');
+      setIsSendingMessage(false);
+
+      if (isEndingSessionRef.current) {
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
-      } else if (communicationModeRef.current !== 'text-only') { 
-        await speakTextRef.current(errorMessage); 
+      } else if (communicationModeRef.current !== 'text-only') {
+        await speakTextRef.current(errorMessage);
       }
     }
   }, [addMessage, personaTraits,
@@ -600,7 +592,7 @@ export default function HomePage() {
       return null;
     }
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = false; 
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -622,20 +614,20 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-       
+
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        setIsListening(false); 
+        setIsListening(false);
         isListeningRef.current = false;
 
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current) { 
+            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current) {
                 return currentPrompts;
             }
-            isAboutToSpeakForSilenceRef.current = true; 
+            isAboutToSpeakForSilenceRef.current = true;
             const newPromptCount = currentPrompts + 1;
             if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                 isEndingSessionRef.current = true;
-                setShowLogForSaveConfirmation(true); 
+                setShowLogForSaveConfirmation(true);
                 speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
             } else {
                 const userName = getUserNameFromHistory(messagesRef.current);
@@ -645,7 +637,7 @@ export default function HomePage() {
             return newPromptCount;
         });
       } else if (event.error === 'aborted') {
-        if (isListeningRef.current) { 
+        if (isListeningRef.current) {
           setIsListening(false);
           isListeningRef.current = false;
         }
@@ -657,20 +649,20 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
-      const finalTranscript = inputValueRef.current; 
+      const finalTranscript = inputValueRef.current;
 
-      const wasListening = isListeningRef.current; 
-      setIsListening(false); 
+      const wasListening = isListeningRef.current;
+      setIsListening(false);
       isListeningRef.current = false;
 
       if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current) {
         handleSendMessageRef.current(finalTranscript, 'voice');
       } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && wasListening && !isEndingSessionRef.current && !isSpeakingRef.current && !isAboutToSpeakForSilenceRef.current ) {
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current) { 
+            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current) {
                 return currentPrompts;
             }
-            isAboutToSpeakForSilenceRef.current = true; 
+            isAboutToSpeakForSilenceRef.current = true;
             const newPromptCount = currentPrompts + 1;
             if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                 isEndingSessionRef.current = true;
@@ -684,10 +676,10 @@ export default function HomePage() {
             return newPromptCount;
         });
       }
-      setInputValue(''); 
+      setInputValue('');
     };
     return recognition;
-  }, [toast]); 
+  }, [toast]);
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -713,17 +705,17 @@ export default function HomePage() {
 
     if (isListening) {
       if (communicationModeRef.current === 'text-only') {
-        setIsListening(false); 
+        setIsListening(false);
         isListeningRef.current = false;
         return;
       }
-      if (isSpeakingRef.current) { 
+      if (isSpeakingRef.current) {
         setIsListening(false);
         isListeningRef.current = false;
         return;
       }
 
-      setInputValue(''); 
+      setInputValue('');
       try {
         recInstance.start();
       } catch (startError: any) {
@@ -734,12 +726,12 @@ export default function HomePage() {
             description: `${startError.name}: ${startError.message || 'Could not start microphone. Check permissions.'}`,
           });
         }
-        setIsListening(false); 
+        setIsListening(false);
         isListeningRef.current = false;
       }
     } else {
       try {
-        recInstance.abort(); 
+        recInstance.abort();
       } catch (e: any) {
         // Ignore errors from aborting if already stopped or not started
       }
@@ -748,26 +740,26 @@ export default function HomePage() {
 
 
   const handleModeSelectionSubmit = () => {
-    resetConversation(); 
+    resetConversation();
     setCommunicationMode(selectedInitialMode);
     setShowSplashScreen(false);
   };
 
   const handleEndChatManually = () => {
-    isEndingSessionRef.current = true; 
-    isAboutToSpeakForSilenceRef.current = false; 
+    isEndingSessionRef.current = true;
+    isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingAudioResponseIndicator(false);
     setShowLogForSaveConfirmation(true);
 
     if (isListeningRef.current && recognitionRef.current) {
-        recognitionRef.current.abort(); 
+        recognitionRef.current.abort();
     }
     setIsListening(false);
     isListeningRef.current = false;
 
     const aiIsCurrentlySpeaking = isSpeakingRef.current;
 
-    if (aiIsCurrentlySpeaking) { 
+    if (aiIsCurrentlySpeaking) {
         if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
             elevenLabsAudioRef.current.pause();
             if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -800,26 +792,26 @@ export default function HomePage() {
     if (shouldSave) {
       handleSaveConversationAsPdf();
     }
-    resetConversation(); 
+    resetConversation();
     setShowSplashScreen(true);
   };
 
   useEffect(() => {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
-      
+
       setAiHasInitiatedConversation(true);
-      isAboutToSpeakForSilenceRef.current = false; 
+      isAboutToSpeakForSilenceRef.current = false;
       setShowPreparingAudioResponseIndicator(false);
 
-      setIsSpeaking(false); 
+      setIsSpeaking(false);
       isSpeakingRef.current = false;
-      setIsListening(false); 
+      setIsListening(false);
       isListeningRef.current = false;
       if (recognitionRef.current) recognitionRef.current.abort();
 
 
       const initGreeting = async () => {
-        setIsSendingMessage(true); 
+        setIsSendingMessage(true);
         try {
           const greetingInput: GenerateInitialGreetingInput = {
             personaTraits,
@@ -827,24 +819,24 @@ export default function HomePage() {
             knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
           };
           const result = await generateInitialGreeting(greetingInput);
-          
-          addMessage(result.greetingMessage, 'ai'); 
-          setIsSendingMessage(false); 
-          
-          await speakTextRef.current(result.greetingMessage); 
+
+          addMessage(result.greetingMessage, 'ai');
+          setIsSendingMessage(false);
+
+          await speakTextRef.current(result.greetingMessage);
         } catch (error) {
           console.error("Error generating initial greeting:", error);
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
-          
-          addMessage(errMsg, 'ai'); 
-          setIsSendingMessage(false); 
-          
-          await speakTextRef.current(errMsg); 
+
+          addMessage(errMsg, 'ai');
+          setIsSendingMessage(false);
+
+          await speakTextRef.current(errMsg);
         }
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, addMessage]); 
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, addMessage]);
 
   const getFilenameWithoutExtension = (filePath: string | undefined): string | null => {
     if (!filePath) return null;
@@ -891,7 +883,7 @@ export default function HomePage() {
               }
             } catch (fetchError: any) {
               console.error(`[HomePage] Error fetching ${source.name} from ${levelName} KB:`, fetchError.message, `URL: ${source.downloadURL}`);
-              levelCorsError = true; 
+              levelCorsError = true;
             }
           } else if (source.type === 'pdf') {
             const pdfFilename = getFilenameWithoutExtension(source.storagePath || source.name);
@@ -920,7 +912,7 @@ export default function HomePage() {
       }
     } catch (e: any) {
         toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge. ${e.message || ''}`.trim(), variant: "destructive"});
-        levelCorsError = true; 
+        levelCorsError = true;
     }
     return levelCorsError;
   }, [toast]);
@@ -937,27 +929,31 @@ export default function HomePage() {
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
         let localApiKey: string | null = null;
         let localVoiceId: string | null = null;
+        let localUseTtsApi: boolean = true; // Default to true
 
         if (apiKeysDocSnap.exists()) {
           const keys = apiKeysDocSnap.data();
-           console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", { 
-            tts: keys.tts, 
+           console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", {
+            tts: keys.tts,
             voiceId: keys.voiceId,
-            gemini: keys.gemini, 
-            stt: keys.stt 
+            gemini: keys.gemini,
+            stt: keys.stt,
+            useTtsApi: keys.useTtsApi,
           });
 
 
           localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
           localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
-          
+          localUseTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true; // Default to true if not set
+
           setElevenLabsApiKey(localApiKey);
           setElevenLabsVoiceId(localVoiceId);
+          setUseTtsApi(localUseTtsApi); // Set the state for TTS API usage
 
-          if (!localApiKey || !localVoiceId) {
+          if (localUseTtsApi && (!localApiKey || !localVoiceId)) {
             toast({
               title: "TTS Configuration Issue",
-              description: "The API keys configuration was found, but the ElevenLabs API Key or Voice ID field is effectively empty or missing. Falling back to browser default voice.",
+              description: "Custom TTS API is enabled, but the API Key or Voice ID field is effectively empty or missing. Falling back to browser default voice.",
               variant: "default",
               duration: 8000,
             });
@@ -965,6 +961,7 @@ export default function HomePage() {
         } else {
           setElevenLabsApiKey(null);
           setElevenLabsVoiceId(null);
+          setUseTtsApi(true); // Default to true if config doc not found
           toast({
             title: "TTS Configuration Missing",
             description: `API key configuration document not found in Firestore ('${FIRESTORE_API_KEYS_PATH}'). Falling back to browser default voice. Please configure in Admin Panel.`,
@@ -989,8 +986,9 @@ export default function HomePage() {
         }
       } catch (e: any) {
         toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown error'}. Using defaults.`, variant: "destructive"});
-        setElevenLabsApiKey(null); 
+        setElevenLabsApiKey(null);
         setElevenLabsVoiceId(null);
+        setUseTtsApi(true); // Default to true on error
       }
 
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh);
@@ -1023,9 +1021,9 @@ export default function HomePage() {
 
   useEffect(() => {
     if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) {
-      setIsSplashImageLoaded(false); 
+      setIsSplashImageLoaded(false);
     } else {
-      setIsSplashImageLoaded(true); 
+      setIsSplashImageLoaded(true);
     }
   }, [splashImageSrc]);
 
@@ -1035,7 +1033,7 @@ export default function HomePage() {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
-      } else if (!showSaveDialog) { 
+      } else if (!showSaveDialog) {
         resetConversation();
         setShowSplashScreen(true);
       }
@@ -1182,10 +1180,16 @@ export default function HomePage() {
               <CheckCircle className="mr-2"/>
               {isLoadingKnowledge ? "Loading..." : "Start Chatting"}
             </Button>
-             {!isLoadingKnowledge && elevenLabsApiKey === null && (
+             {!isLoadingKnowledge && useTtsApi && elevenLabsApiKey === null && (
                 <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2">
                     <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" />
-                    <span>Voice features (TTS) may be limited. API key not configured. Using browser default TTS.</span>
+                    <span>Custom TTS is ON, but API key/Voice ID may be missing. Voice features might be limited. Using browser default TTS if needed.</span>
+                </div>
+            )}
+             {!isLoadingKnowledge && !useTtsApi && (
+                <div className="flex items-start text-xs text-muted-foreground p-2 border border-border rounded-md mt-2 bg-secondary/20">
+                    <Info className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" />
+                    <span>Custom TTS API is currently OFF. Using browser default voice.</span>
                 </div>
             )}
             {corsTroubleshootingAlert}
@@ -1281,14 +1285,14 @@ export default function HomePage() {
               variant="default"
               size="default"
               className="mt-8"
-              disabled={isSpeaking || isSendingMessage || showSaveDialog} 
+              disabled={isSpeaking || isSendingMessage || showSaveDialog}
             >
               <Power className="mr-2 h-5 w-5" /> End Chat
             </Button>
           )}
            <AlertDialog open={showSaveDialog} onOpenChange={(open) => {
-             if (!open && isEndingSessionRef.current) { 
-                handleCloseSaveDialog(false); 
+             if (!open && isEndingSessionRef.current) {
+                handleCloseSaveDialog(false);
              }
              setShowSaveDialog(open);
            }}>
@@ -1335,7 +1339,7 @@ export default function HomePage() {
             onToggleListening={() => toggleListeningRef.current()}
             inputValue={inputValue}
             onInputValueChange={setInputValue}
-            disabled={showSaveDialog || isEndingSessionRef.current || (isSendingMessage && aiHasInitiatedConversation)} 
+            disabled={showSaveDialog || isEndingSessionRef.current || (isSendingMessage && aiHasInitiatedConversation)}
           />
           {aiHasInitiatedConversation && !showSaveDialog && (
              <div className="mt-3 flex justify-end">
@@ -1350,8 +1354,8 @@ export default function HomePage() {
              </div>
           )}
             <AlertDialog open={showSaveDialog} onOpenChange={(open) => {
-                if (!open && isEndingSessionRef.current) { 
-                    handleCloseSaveDialog(false); 
+                if (!open && isEndingSessionRef.current) {
+                    handleCloseSaveDialog(false);
                 }
                 setShowSaveDialog(open);
             }}>
@@ -1381,4 +1385,3 @@ export default function HomePage() {
     </div>
   );
 }
-
