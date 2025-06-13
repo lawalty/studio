@@ -292,8 +292,8 @@ export default function HomePage() {
     
     if (isEndingSessionRef.current) {
       setShowLogForSaveConfirmation(true);
-      setShowSaveDialog(true);
-      // Do not reset here; reset happens after save dialog interaction
+      setShowSaveDialog(true); // This will now trigger for all modes if session is ending
+      // Reset is handled by handleCloseSaveDialog
       return; 
     }
 
@@ -341,7 +341,6 @@ export default function HomePage() {
       isAboutToSpeakForSilenceRef.current = false; 
       setShowPreparingAudioResponseIndicator(false);
       if (isEndingSessionRef.current && communicationModeRef.current === 'text-only') {
-         // If ending and text-only, no audio process end will call the dialog. Trigger it here.
          setShowLogForSaveConfirmation(true);
          setShowSaveDialog(true);
       }
@@ -510,9 +509,8 @@ export default function HomePage() {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
         if (communicationModeRef.current === 'text-only') {
-          // For text-only, since there's no audio process end, trigger save dialog directly
           setShowSaveDialog(true); 
-          return; // End processing for this message
+          return; 
         }
       }
 
@@ -522,12 +520,12 @@ export default function HomePage() {
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       
       addMessage(errorMessage, 'ai'); 
-      setIsSendingMessage(false);
+      setIsSendingMessage(false); 
       
-      if (isEndingSessionRef.current) { // If an error happened during a flagged ending sequence
+      if (isEndingSessionRef.current) { 
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
-      } else if (communicationModeRef.current !== 'text-only') { // Attempt to speak error if not text only
+      } else if (communicationModeRef.current !== 'text-only') { 
         await speakTextRef.current(errorMessage); 
       }
     }
@@ -586,7 +584,7 @@ export default function HomePage() {
             const newPromptCount = currentPrompts + 1;
             if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                 isEndingSessionRef.current = true;
-                setShowLogForSaveConfirmation(true); // Prepare for save dialog
+                setShowLogForSaveConfirmation(true); 
                 speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
             } else {
                 const userName = getUserNameFromHistory(messagesRef.current);
@@ -729,11 +727,13 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-         // If AI was speaking when user ended, handleAudioProcessEnd will eventually trigger save dialog.
-    } else {
-        // If AI was not speaking, trigger save dialog immediately.
+        // If AI was speaking, handleAudioProcessEnd will trigger save dialog.
+    } else if (communicationMode === 'text-only' || (communicationMode === 'audio-text' && !isSendingMessage)) {
+        // If not speaking (or text-only/audio-text and no pending AI response), trigger save dialog immediately.
         setShowSaveDialog(true);
     }
+    // If in audio-only and AI isn't speaking and user ends, handleAudioProcessEnd will be called by mic logic eventually or implicitly.
+    // The `isEndingSessionRef` flag ensures save dialog appears.
   };
 
   const handleSaveConversationAsPdf = () => {
@@ -750,7 +750,6 @@ export default function HomePage() {
     if (shouldSave) {
       handleSaveConversationAsPdf();
     }
-    // Reset and go to splash after dialog interaction, for all modes.
     resetConversation(); 
     setShowSplashScreen(true);
   };
@@ -888,8 +887,18 @@ export default function HomePage() {
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
         if (apiKeysDocSnap.exists()) {
           const keys = apiKeysDocSnap.data();
-          setElevenLabsApiKey(keys.tts || null);
-          setElevenLabsVoiceId(keys.voiceId || null);
+          // Treat empty strings from Firestore as null for robust checking
+          setElevenLabsApiKey(keys.tts && keys.tts.trim() !== '' ? keys.tts : null);
+          setElevenLabsVoiceId(keys.voiceId && keys.voiceId.trim() !== '' ? keys.voiceId : null);
+        } else {
+          setElevenLabsApiKey(null);
+          setElevenLabsVoiceId(null);
+          toast({
+            title: "TTS Configuration Alert",
+            description: "ElevenLabs API key or Voice ID not found in Firestore settings (configurations/api_keys_config). Falling back to browser default voice.",
+            variant: "default",
+            duration: 8000,
+          });
         }
 
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
@@ -907,7 +916,9 @@ export default function HomePage() {
           setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
         }
       } catch (e: any) {
-        toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown error'}.`, variant: "destructive"});
+        toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown error'}. Using defaults.`, variant: "destructive"});
+        setElevenLabsApiKey(null);
+        setElevenLabsVoiceId(null);
       }
 
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh);
@@ -948,13 +959,11 @@ export default function HomePage() {
 
   useEffect(() => {
     const handleNavigateToSplash = () => {
-      // Before navigating, offer to save if there's a conversation
       if (messagesRef.current.length > 0 && !showSaveDialog) {
-        isEndingSessionRef.current = true; // Flag session as ending
+        isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
-        // The actual navigation to splash will happen after dialog interaction in handleCloseSaveDialog
-      } else if (!showSaveDialog) { // If no messages or dialog already up, just reset and go.
+      } else if (!showSaveDialog) { 
         resetConversation();
         setShowSplashScreen(true);
       }
@@ -1200,7 +1209,7 @@ export default function HomePage() {
               variant="default"
               size="default"
               className="mt-8"
-              disabled={isSpeaking || isSendingMessage} 
+              disabled={isSpeaking || isSendingMessage || showSaveDialog} 
             >
               <Power className="mr-2 h-5 w-5" /> End Chat
             </Button>
@@ -1262,7 +1271,7 @@ export default function HomePage() {
                     onClick={handleEndChatManually}
                     variant="outline"
                     size="sm"
-                    disabled={isSpeaking || isSendingMessage}
+                    disabled={isSpeaking || isSendingMessage || showSaveDialog}
                 >
                     <Power className="mr-2 h-4 w-4" /> End Chat
                 </Button>
