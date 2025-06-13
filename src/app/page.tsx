@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
-import { generateChatResponse, type GenerateChatResponseInput } from '@/ai/flows/generate-chat-response';
+import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
 import { generateInitialGreeting, type GenerateInitialGreetingInput } from '@/ai/flows/generate-initial-greeting';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -281,6 +281,7 @@ export default function HomePage() {
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
       } else if (communicationModeRef.current !== 'audio-only' || showSaveDialog) {
+        // If it's not audio-only, or if the dialog was already shown (e.g. from AI ending), reset.
         resetConversation();
         setShowSplashScreen(true);
       }
@@ -495,10 +496,14 @@ export default function HomePage() {
         personaTraits: personaTraits,
         chatHistory: historyForGenkit,
       };
-      const result = await generateChatResponse(flowInput);
+      const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       
       addMessage(result.aiResponse, 'ai'); 
       setIsSendingMessage(false); 
+
+      if (result.shouldEndConversation && communicationModeRef.current === 'audio-only') {
+        isEndingSessionRef.current = true;
+      }
 
       await speakTextRef.current(result.aiResponse); 
     } catch (error) {

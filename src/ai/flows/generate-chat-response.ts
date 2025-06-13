@@ -42,6 +42,7 @@ export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInput
 
 const GenerateChatResponseOutputSchema = z.object({
   aiResponse: z.string().describe("AI Blair's generated response."),
+  shouldEndConversation: z.boolean().optional().describe("True if the AI detected the user wants to end the conversation and has provided a closing remark. This signals the client that the session can be concluded.")
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
@@ -114,7 +115,13 @@ Regarding greetings and addressing the user by name:
     *   Otherwise (if it's your first response to them and they haven't stated their name in the current message), provide a general, brief opening or proceed directly to answer.
 4.  If the user's name is not known from the conversation, do not guess or ask for it here (another part of the system might have asked initially). Focus on the query.
 
-Generate a helpful and conversational response as AI Blair. After providing the main information, if natural for your persona and the conversation, ask a relevant follow-up question.
+Special instructions for ending the conversation:
+If the user's 'Current user message' clearly expresses a desire to end the chat (e.g., "goodbye", "that's all for now", "I'm done", "end the conversation", "no more questions", "thank you, that's it", "stop"), your 'aiResponse' should be a polite closing remark (e.g., "You're welcome! It was nice talking to you. Goodbye!", "Alright, thanks for chatting with me today!", "Okay, have a great day!").
+In this specific scenario, you MUST also set the 'shouldEndConversation' field in your output to true.
+Crucially, if you are ending the conversation, DO NOT ask any follow-up questions, even if your persona would normally do so.
+
+Generate a helpful and conversational response as AI Blair.
+Unless you are ending the conversation (as per the 'Special instructions for ending the conversation' above), after providing the main information, if natural for your persona and the conversation, ask a relevant follow-up question.
 If the query cannot be answered from the knowledge base, state that and do not ask a follow-up question.
 Keep responses concise and focused.
 Your response:`,
