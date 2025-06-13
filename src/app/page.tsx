@@ -62,29 +62,30 @@ const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
-// New KB paths for High, Medium, Low priority
 const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
 const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
 const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
 
 
 interface PageKnowledgeSource {
+    id: string; // Added id for potential future use, e.g. linking
     name: string;
-    type: string;
+    type: 'text' | 'pdf' | 'document' | 'audio' | 'image' | 'other';
     downloadURL?: string;
+    storagePath?: string; // For deriving filename if needed
 }
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
 const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechRecognition || (window as any).webkitSpeechRecognition : null;
-const MAX_SILENCE_PROMPTS = 3; // AI asks "are you there" twice (prompts 1 & 2), ends on 3rd silence.
+const MAX_SILENCE_PROMPTS = 3; 
 
 const getUserNameFromHistory = (history: Message[]): string | null => {
-  for (let i = history.length - 1; i >= 0; i--) { // Check recent messages first
+  for (let i = history.length - 1; i >= 0; i--) { 
     const message = history[i];
     if (message.sender === 'user') {
-      const text = message.text; // Keep casing for proper noun extraction
+      const text = message.text; 
       const namePatterns = [
         /my name is\s+([A-Za-z]+)/i,
         /i'm\s+([A-Za-z]+)/i,
@@ -95,7 +96,6 @@ const getUserNameFromHistory = (history: Message[]): string | null => {
         const match = text.match(pattern);
         if (match && match[1]) {
           const name = match[1];
-          // Capitalize first letter
           return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
         }
       }
@@ -228,7 +228,6 @@ export default function HomePage() {
 
   const toggleListening = useCallback((forceState?: boolean) => {
     if (isEndingSessionRef.current && (typeof forceState === 'boolean' && forceState === true)) {
-        console.log("[toggleListening] Session is ending, preventing listen start.");
         return;
     }
 
@@ -237,23 +236,18 @@ export default function HomePage() {
 
       if (targetIsListeningState === true) {
         if (isEndingSessionRef.current) {
-          console.log("[toggleListening] Tried to start listening, but session is ending.");
           return false;
         }
         if (!recognitionRef.current) {
           if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-            console.warn("[toggleListening] Speech recognition not initialized.");
           }
           return false;
         }
         if (communicationModeRef.current === 'text-only') {
-           console.log("[toggleListening] Text-only mode, not starting listening.");
            return false;
         }
-        console.log("[toggleListening] Setting isListening to true.");
         return true;
       } else {
-        console.log("[toggleListening] Setting isListening to false.");
         return false;
       }
     });
@@ -304,17 +298,13 @@ export default function HomePage() {
     }
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
-      console.log("[AudioOnly][handleAudioProcessEnd] AI finished speaking. Aborting mic before attempting restart.");
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort(); 
-          console.log("[AudioOnly][handleAudioProcessEnd] Recognition aborted successfully.");
         } catch (e: any) {
-          console.warn("[AudioOnly][handleAudioProcessEnd] Non-critical error aborting recognition before restart:", e.message);
         }
       }
       isSpeakingRef.current = false; 
-      console.log("[AudioOnly][handleAudioProcessEnd] Mic aborted. Calling toggleListening(true) to restart. isSpeakingRef.current is now:", isSpeakingRef.current);
       toggleListeningRef.current(true);
     }
   }, [resetConversation, setShowSplashScreen, showSaveDialog]);
@@ -328,7 +318,6 @@ export default function HomePage() {
       utterance.onstart = handleActualAudioStart;
       utterance.onend = () => handleAudioProcessEnd(true);
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
-        console.error("Browser Speech Synthesis error:", event.error, event);
         if (event.error !== 'interrupted' && event.error !== 'aborted') {
           toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}. Check console.`, variant: "destructive" });
         }
@@ -336,7 +325,6 @@ export default function HomePage() {
       };
       window.speechSynthesis.speak(utterance);
     } else {
-      console.warn("Browser Speech Synthesis not supported.");
       toast({ title: "TTS Not Supported", description: "Browser does not support speech synthesis.", variant: "default" });
       handleAudioProcessEnd(false);
     }
@@ -357,7 +345,6 @@ export default function HomePage() {
 
 
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
-       console.log("[speakText] Pausing existing ElevenLabs audio.");
        elevenLabsAudioRef.current.pause();
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
            URL.revokeObjectURL(elevenLabsAudioRef.current.src);
@@ -365,7 +352,6 @@ export default function HomePage() {
        elevenLabsAudioRef.current.src = '';
     }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-        console.log("[speakText] Cancelling existing browser synthesis.");
         window.speechSynthesis.cancel();
     }
     setIsSpeaking(false); 
@@ -391,13 +377,11 @@ export default function HomePage() {
           const audioBlob = await response.blob();
 
           if (audioBlob.size === 0) {
-            console.warn("ElevenLabs API returned an empty audio blob. Falling back to browser TTS.");
             toast({ title: "ElevenLabs Audio Issue", description: "Received empty audio data. Using browser TTS.", variant: "default" });
             browserSpeakInternal(textForSpeech);
             return;
           }
           if (!audioBlob.type.startsWith('audio/')) {
-            console.warn(`ElevenLabs API returned non-audio content-type: ${audioBlob.type}. Blob size: ${audioBlob.size}. Falling back to browser TTS.`);
             toast({ title: "ElevenLabs Audio Issue", description: `Received unexpected content type: ${audioBlob.type}. Using browser TTS.`, variant: "default" });
             browserSpeakInternal(textForSpeech);
             return;
@@ -417,10 +401,8 @@ export default function HomePage() {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
             const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
             const errorCode = mediaError?.code;
-            console.error("Error playing ElevenLabs audio. MediaError code:", errorCode, "MediaError message:", errorMessage, "Full event:", e);
             
             if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request") || errorMessage.includes("The play() request was interrupted")) {
-                console.warn("ElevenLabs playback aborted, likely by a new load request or explicit stop. Not falling back to browser TTS for this specific interruption.");
                 handleAudioProcessEnd(false); 
             } else {
                 toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
@@ -431,10 +413,8 @@ export default function HomePage() {
             await audio.play();
           } catch (playError: any) {
             if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request") || playError.message.includes("The play() request was interrupted")) {
-                console.warn('ElevenLabs audio.play() was aborted. This is likely due to a new speakText call. Event:', playError);
                 handleAudioProcessEnd(false); 
             } else {
-                console.error('Error caught during ElevenLabs audio.play():', playError);
                 toast({ title: "ElevenLabs Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" });
                 browserSpeakInternal(textForSpeech);
             }
@@ -449,13 +429,10 @@ export default function HomePage() {
             else if (errorData?.detail?.message) specificAdvice = `ElevenLabs: ${errorData.detail.message}.`;
             else if (response.status === 422) { const messagesArr = Array.isArray(errorData?.detail) ? errorData.detail.map((err: any) => err.msg).join(', ') : 'Invalid request.'; specificAdvice = `ElevenLabs (422): ${messagesArr}.`;}
           } catch (e) { errorDetails = await response.text(); specificAdvice = `ElevenLabs API Error ${response.status}. Response: ${errorDetails.substring(0,100)}...`; }
-          console.error("ElevenLabs API error:", response.status, errorDetails);
           toast({ title: "ElevenLabs TTS Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 });
         }
       } catch (error: any) {
-        console.error("Error calling ElevenLabs API:", error);
         if (error.name === 'AbortError') {
-            console.warn('Fetch to ElevenLabs was aborted.');
         } else {
             toast({ title: "ElevenLabs Connection Error", description: "Could not connect to ElevenLabs. Falling back to browser TTS.", variant: "destructive" });
         }
@@ -525,7 +502,6 @@ export default function HomePage() {
 
       await speakTextRef.current(result.aiResponse); 
     } catch (error) {
-      console.error("Failed to get AI response:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       
       addMessage(errorMessage, 'ai'); 
@@ -557,7 +533,6 @@ export default function HomePage() {
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
-      console.log("[Recognition] onStart: Mic has started successfully. isListeningRef.current:", isListeningRef.current);
     };
 
     recognition.onresult = (event) => {
@@ -574,40 +549,31 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.log("[Recognition] onError triggered. Error type:", event.error, "isListeningRef.current:", isListeningRef.current, "Current inputValue:", inputValueRef.current);
        
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        console.log("[Recognition][no-speech] 'no-speech' error detected in Audio Only mode.");
         setIsListening(false);
         isListeningRef.current = false;
 
         setConsecutiveSilencePrompts(currentPrompts => {
             if (isAboutToSpeakForSilenceRef.current) { 
-                console.log(`[Recognition][no-speech][onerror] Already about to speak for silence. Bailing. currentPrompts: ${currentPrompts}`);
                 return currentPrompts;
             }
-            console.log(`[Recognition][no-speech][onerror] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) {
                 isAboutToSpeakForSilenceRef.current = true; 
                 const newPromptCount = currentPrompts + 1;
-                console.log(`[Recognition][no-speech][onerror] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
-                    console.log("[Recognition][no-speech][onerror] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true;
                     speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
                 } else {
                     const userName = getUserNameFromHistory(messagesRef.current);
                     const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-                    console.log(`[Recognition][no-speech][onerror] Prompting for silence: '${promptMessage}'`);
                     speakTextRef.current(promptMessage);
                 }
                 return newPromptCount;
             }
-            console.log(`[Recognition][no-speech][onerror] Conditions NOT met for silence prompt (AI Speaking or Session Ending). AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
             return currentPrompts;
         });
       } else if (event.error === 'aborted') {
-        console.log("[Recognition][onerror] 'aborted'. This is often expected if we stop it manually. isListeningRef.current is now:", isListeningRef.current);
         if (isListeningRef.current) { 
           setIsListening(false);
           isListeningRef.current = false;
@@ -621,40 +587,31 @@ export default function HomePage() {
 
     recognition.onend = () => {
       const finalTranscript = inputValueRef.current;
-      console.log("[Recognition] onEnd triggered. isListeningRef.current was:", isListeningRef.current, "inputValueRef.current:", `"${finalTranscript}"`);
 
       const wasListening = isListeningRef.current; 
       setIsListening(false); 
       isListeningRef.current = false;
 
       if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current) {
-        console.log("[Recognition][onend] Sending transcript:", finalTranscript);
         handleSendMessageRef.current(finalTranscript, 'voice');
       } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && wasListening && !isEndingSessionRef.current && !isSpeakingRef.current ) {
-        console.log("[Recognition][onend] Empty transcript in Audio Only mode (no-speech via onend). isSpeakingRef:", isSpeakingRef.current, "wasListening:", wasListening);
         setConsecutiveSilencePrompts(currentPrompts => {
             if (isAboutToSpeakForSilenceRef.current) { 
-                console.log(`[Recognition][onend][silence] Already about to speak for silence. Bailing. currentPrompts: ${currentPrompts}`);
                 return currentPrompts;
             }
-            console.log(`[Recognition][onend][silence] setConsecutiveSilencePrompts called. currentPrompts: ${currentPrompts}, isSpeakingRef.current: ${isSpeakingRef.current}, isEndingSessionRef.current: ${isEndingSessionRef.current}`);
             if (!isSpeakingRef.current && !isEndingSessionRef.current) { 
                 isAboutToSpeakForSilenceRef.current = true; 
                 const newPromptCount = currentPrompts + 1;
-                console.log(`[Recognition][onend][silence] Conditions met to process silence. newPromptCount: ${newPromptCount}`);
                 if (newPromptCount >= MAX_SILENCE_PROMPTS) {
-                    console.log("[Recognition][onend][silence] Max silence prompts reached. Ending session.");
                     isEndingSessionRef.current = true;
                     speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
                 } else {
                     const userName = getUserNameFromHistory(messagesRef.current);
                     const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-                    console.log(`[Recognition][onend][silence] Prompting for silence: '${promptMessage}'`);
                     speakTextRef.current(promptMessage);
                 }
                 return newPromptCount;
             }
-            console.log(`[Recognition][onend][silence] Conditions NOT met for silence prompt (AI Speaking or Session Ending). AI Speaking: ${isSpeakingRef.current}, Session Ending: ${isEndingSessionRef.current}. Returning currentPrompts: ${currentPrompts}`);
             return currentPrompts;
         });
       }
@@ -682,32 +639,25 @@ export default function HomePage() {
  useEffect(() => {
     const recInstance = recognitionRef.current;
     if (!recInstance) {
-      console.log("[useEffect isListening] Recognition instance is null. Returning.");
       return;
     }
 
     if (isListening) {
-      console.log("[useEffect isListening] Target state: true (Listen). Checking conditions...");
       if (communicationModeRef.current === 'text-only') {
-        console.warn("[useEffect isListening] Text-only mode. Setting isListening to false.");
         setIsListening(false);
         isListeningRef.current = false;
         return;
       }
       if (isSpeakingRef.current) {
-        console.warn("[useEffect isListening] AI is speaking (isSpeakingRef.current is true). Aborting listen attempt by setting isListening to false.");
         setIsListening(false);
         isListeningRef.current = false;
         return;
       }
 
-      console.log("[useEffect isListening] Conditions met (isListening=true, AI not speaking). Clearing inputValue and attempting recognition.start().");
       setInputValue('');
       try {
         recInstance.start();
-        console.log("[useEffect isListening] recognition.start() called successfully.");
       } catch (startError: any) {
-        console.error('[useEffect isListening] Error starting speech recognition:', startError.name, startError.message);
         if (startError.name !== 'InvalidStateError' && startError.name !== 'NoMicPermissionError' && startError.name !== 'AbortError') {
           toast({
             variant: 'destructive',
@@ -719,12 +669,9 @@ export default function HomePage() {
         isListeningRef.current = false;
       }
     } else {
-      console.log("[useEffect isListening] Target state: false (Stop Listen). Attempting recognition.abort().");
       try {
         recInstance.abort();
-        console.log("[useEffect isListening] recognition.abort() called successfully.");
       } catch (e: any) {
-        console.warn("[useEffect isListening] Non-critical error during recognition.abort():", e.message);
       }
     }
   }, [isListening, toast]);
@@ -740,17 +687,14 @@ export default function HomePage() {
      if (communicationMode === 'audio-only') {
         isEndingSessionRef.current = true;
         isAboutToSpeakForSilenceRef.current = false; 
-        console.log("[EndChatManually][AudioOnly] Ending session initiated.");
 
         if (isListeningRef.current && recognitionRef.current) {
-            console.log("[EndChatManually][AudioOnly] Currently listening, stopping mic.");
             recognitionRef.current.abort();
         }
         setIsListening(false);
         isListeningRef.current = false;
 
         if (isSpeakingRef.current) {
-            console.log("[EndChatManually][AudioOnly] AI is speaking, stopping audio.");
             if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
                 elevenLabsAudioRef.current.pause();
                 if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -775,7 +719,6 @@ export default function HomePage() {
   };
 
   const handleSaveConversationAsPdf = () => {
-    console.log("Conversation Messages for PDF (placeholder):", messagesRef.current);
     toast({
       title: "PDF Export (Placeholder)",
       description: "PDF generation is a future feature. Conversation logged to console.",
@@ -806,7 +749,7 @@ export default function HomePage() {
       isListeningRef.current = false;
 
       const initGreeting = async () => {
-        setIsSendingMessage(true); // Show "Preparing greeting..."
+        setIsSendingMessage(true); 
         try {
           const greetingInput: GenerateInitialGreetingInput = {
             personaTraits,
@@ -816,15 +759,14 @@ export default function HomePage() {
           const result = await generateInitialGreeting(greetingInput);
           
           addMessage(result.greetingMessage, 'ai'); 
-          setIsSendingMessage(false); // Hide "Preparing greeting..."
+          setIsSendingMessage(false); 
           
           await speakTextRef.current(result.greetingMessage); 
         } catch (error) {
-          console.error("Failed to get initial AI greeting:", error);
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           
           addMessage(errMsg, 'ai'); 
-          setIsSendingMessage(false); // Hide "Preparing greeting..."
+          setIsSendingMessage(false); 
           
           await speakTextRef.current(errMsg); 
         }
@@ -832,6 +774,17 @@ export default function HomePage() {
       initGreeting();
     }
   }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, addMessage]);
+
+  const getFilenameWithoutExtension = (filePath: string | undefined): string | null => {
+    if (!filePath) return null;
+    const pathSegments = filePath.split('/');
+    const fileNameWithExtension = pathSegments.pop();
+    if (!fileNameWithExtension) return null;
+    const lastDotIndex = fileNameWithExtension.lastIndexOf('.');
+    if (lastDotIndex === -1 || lastDotIndex === 0) return null;
+    return fileNameWithExtension.substring(0, lastDotIndex);
+  };
+
 
   const fetchAndProcessKnowledgeLevel = useCallback(async (
     levelPath: string,
@@ -849,7 +802,7 @@ export default function HomePage() {
       }
 
       if (sources.length > 0) {
-        const summary = `The ${levelName.toLowerCase()} priority knowledge base includes: ` +
+        const summary = `The ${levelName.toLowerCase()} priority knowledge base includes these files: ` +
                         sources.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
         setSummary(summary);
 
@@ -860,17 +813,31 @@ export default function HomePage() {
               const response = await fetch(source.downloadURL);
               if (response.ok) {
                 const textContent = await response.text();
-                textFileContents.push(`Content from ${source.name} (${levelName} Priority):\n${textContent}\n---`);
+                textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${textContent}\n---`);
               } else {
                 levelCorsError = true;
-                console.warn(`[HomePage] Failed to fetch ${source.name} (${levelName}) from ${source.downloadURL}. Status: ${response.status}. Likely CORS. Details in Network tab.`);
               }
             } catch (fetchError: any) {
               levelCorsError = true;
-              console.error(`[HomePage] Fetch error for ${source.name} (${levelName}). URL: ${source.downloadURL}. Error: ${fetchError.message}. Likely CORS.`, fetchError);
             }
-          } else if (source.type === 'text' && (!source.downloadURL || typeof source.downloadURL !== 'string' || source.downloadURL.trim() === '')) {
-            console.warn(`[HomePage] Invalid or missing downloadURL for text file: ${source.name} (${levelName}). URL: '${source.downloadURL}'. Skipping.`);
+          } else if (source.type === 'pdf') {
+            const pdfFilename = getFilenameWithoutExtension(source.storagePath || source.name);
+            if (pdfFilename) {
+              try {
+                const pdfContentDocRef = doc(db, 'sources', pdfFilename);
+                const pdfContentDocSnap = await getDoc(pdfContentDocRef);
+                if (pdfContentDocSnap.exists() && pdfContentDocSnap.data()?.extractedText) {
+                  const extractedPdfText = pdfContentDocSnap.data()?.extractedText;
+                  textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text):\n${extractedPdfText}\n---`);
+                } else {
+                  console.warn(`[HomePage] No extracted text found in 'sources/${pdfFilename}' for PDF: ${source.name} (${levelName}). Cloud Function may not have processed it yet or the document doesn't exist.`);
+                }
+              } catch (firestoreError: any) {
+                 console.error(`[HomePage] Error fetching extracted text for PDF ${source.name} (${levelName}) from 'sources/${pdfFilename}':`, firestoreError.message);
+              }
+            } else {
+              console.warn(`[HomePage] Could not determine filename for PDF source to fetch extracted text: ${source.name} (${levelName})`);
+            }
           }
         }
         setContent(textFileContents.join('\n\n'));
@@ -879,11 +846,8 @@ export default function HomePage() {
         setContent('');
       }
     } catch (e: any) {
-        console.error(`Error fetching ${levelName} KB metadata:`, e);
-        setSummary('');
-        setContent('');
         toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge.`, variant: "destructive"});
-        levelCorsError = true;
+        levelCorsError = true; // Assume error could be CORS related or prevent further processing
     }
     return levelCorsError;
   }, [toast]);
@@ -919,7 +883,6 @@ export default function HomePage() {
           setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
         }
       } catch (e) {
-        console.error("Error fetching common config data:", e);
         toast({ title: "Config Error", description: "Could not load app settings.", variant: "destructive"});
       }
 
@@ -1056,7 +1019,7 @@ export default function HomePage() {
             <CardTitle className="text-3xl font-headline text-primary">
               {isLoadingKnowledge ? "" : splashScreenWelcomeMessage}
             </CardTitle>
-            <CardDescription className="text-base">Let's have a conversation.</CardDescription>
+            <CardDescription className="text-base">Let&apos;s have a conversation.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
             <Image
@@ -1131,7 +1094,6 @@ export default function HomePage() {
     priority: true,
     unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.startsWith('blob:') || !avatarSrc.startsWith('https://'),
     onError: () => {
-      console.warn("Custom avatar failed to load on main page, falling back.");
       setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
     }
   };

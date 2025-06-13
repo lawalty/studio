@@ -18,20 +18,20 @@ const ChatMessageSchema = z.object({
 });
 
 const KBContentSchema = z.object({
-  summary: z.string().optional().describe('Summary of non-text files (e.g., PDF, DOC, audio).'),
-  textContent: z.string().optional().describe('Full text content from .txt files.'),
+  summary: z.string().optional().describe('Summary of non-text/non-PDF files (e.g., DOC, audio).'),
+  textContent: z.string().optional().describe('Full text content from .txt files and extracted from PDF files.'),
 });
 
 const GenerateChatResponseInputSchema = z.object({
   userMessage: z.string().describe('The latest message from the user.'),
   knowledgeBaseHigh: KBContentSchema.describe(
-    'High priority knowledge base content. This is the most recent and important information AI Blair has learned, typically from the last few interactions or critical updates.'
+    'High priority knowledge base content. This is the most recent and important information AI Blair has learned, typically from the last few interactions or critical updates. Includes .txt content and extracted PDF text.'
   ),
   knowledgeBaseMedium: KBContentSchema.describe(
-    'Medium priority knowledge base content. This information was typically learned or updated 6 months to a year ago.'
+    'Medium priority knowledge base content. This information was typically learned or updated 6 months to a year ago. Includes .txt content and extracted PDF text.'
   ),
   knowledgeBaseLow: KBContentSchema.describe(
-    'Low priority knowledge base content. This is foundational or older information, learned over a year ago. It may include general handbooks or less frequently updated topics.'
+    'Low priority knowledge base content. This is foundational or older information, learned over a year ago. It may include general handbooks or less frequently updated topics. Includes .txt content and extracted PDF text.'
   ),
   personaTraits: z
     .string()
@@ -61,36 +61,36 @@ const prompt = ai.definePrompt({
 You must answer user questions based on the following knowledge bases, ordered by priority. High Priority is the most recent and important, then Medium Priority, then Low Priority (foundational/older).
 
 {{#if knowledgeBaseHigh.summary}}
-High Priority File Summary (Most Recent - Learned Lately):
+High Priority File Summary (Non-Text/Non-PDF Files, Most Recent - Learned Lately):
 {{{knowledgeBaseHigh.summary}}}
 {{/if}}
 {{#if knowledgeBaseHigh.textContent}}
-Extracted Content from High Priority .txt files (Most Recent - Learned Lately):
+Extracted Content from High Priority Text-Based Files (.txt, PDFs) (Most Recent - Learned Lately):
 {{{knowledgeBaseHigh.textContent}}}
 {{/if}}
 
 {{#if knowledgeBaseMedium.summary}}
-Medium Priority File Summary (Learned 6 months to a year ago):
+Medium Priority File Summary (Non-Text/Non-PDF Files, Learned 6 months to a year ago):
 {{{knowledgeBaseMedium.summary}}}
 {{/if}}
 {{#if knowledgeBaseMedium.textContent}}
-Extracted Content from Medium Priority .txt files (Learned 6 months to a year ago):
+Extracted Content from Medium Priority Text-Based Files (.txt, PDFs) (Learned 6 months to a year ago):
 {{{knowledgeBaseMedium.textContent}}}
 {{/if}}
 
 {{#if knowledgeBaseLow.summary}}
-Low Priority File Summary (Foundational - Learned over a year ago):
+Low Priority File Summary (Non-Text/Non-PDF Files, Foundational - Learned over a year ago):
 {{{knowledgeBaseLow.summary}}}
 {{/if}}
 {{#if knowledgeBaseLow.textContent}}
-Extracted Content from Low Priority .txt files (Foundational - Learned over a year ago, may include General Handbooks):
+Extracted Content from Low Priority Text-Based Files (.txt, PDFs) (Foundational - Learned over a year ago, may include General Handbooks):
 {{{knowledgeBaseLow.textContent}}}
 {{/if}}
 
 When answering:
-- ALWAYS prioritize information from High Priority .txt files if relevant and available. If not found or not relevant, check Medium Priority .txt files, then Low Priority .txt files. You can quote or summarize directly from this text.
-- If the answer is found in a higher priority KB's .txt files, you generally do not need to search lower priority KBs for the same information unless the user specifically asks for older/foundational details or context.
-- For files mentioned in any File Summary (like PDFs, Word documents, audio files) that are *not* .txt files, you are aware of their existence and the topics they likely cover based on their names and their priority level (High, Medium, Low). State that you have information related to these topics and can discuss them generally according to their recency/priority. However, you cannot access their specific internal contents for direct quoting or detailed analysis. Politely inform the user of this limitation if they ask for very specific details from these non-.txt files.
+- ALWAYS prioritize information from the extracted text content (from .txt files or PDFs) in High Priority if relevant and available. If not found or not relevant, check Medium Priority text content, then Low Priority text content. You can quote or summarize directly from this text.
+- If the answer is found in a higher priority KB's text content (.txt or PDF), you generally do not need to search lower priority KBs for the same information unless the user specifically asks for older/foundational details or context.
+- For other non-text/non-PDF files mentioned in any File Summary (like Word documents, audio files), you are aware of their existence and the topics they likely cover based on their names and their priority level (High, Medium, Low). You cannot access their specific internal contents for direct quoting or detailed analysis. Politely inform the user of this limitation if they ask for very specific details from these non-text, non-PDF files.
 - If the query cannot be answered from any part of the knowledge bases (including inferring from file names across all priority levels), politely state that you don't have information on that topic.
 
 {{#if chatHistory.length}}
