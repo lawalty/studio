@@ -325,15 +325,17 @@ export default function HomePage() {
       const voices = window.speechSynthesis.getVoices();
       let selectedVoice = null;
 
+      // Try to find a specific 'en-US' male voice by name or common keywords
       selectedVoice = voices.find(voice =>
           voice.lang === 'en-US' &&
           (voice.name.toLowerCase().includes('male') ||
            voice.name.toLowerCase().includes('david') ||
            voice.name.toLowerCase().includes('mark') ||
-           voice.name.toLowerCase().includes('microsoft david') ||
-           voice.name.toLowerCase().includes('google us english male'))
+           voice.name.toLowerCase().includes('microsoft david') || // Common on Windows
+           voice.name.toLowerCase().includes('google us english male')) // Common on Chrome
       );
-
+      
+      // If not found, try a broader search for any 'en-' male voice
       if (!selectedVoice) {
           selectedVoice = voices.find(voice =>
               voice.lang.startsWith('en-') &&
@@ -341,10 +343,12 @@ export default function HomePage() {
           );
       }
       
+      // If still not found, try any 'en-US' voice as a fallback
       if (!selectedVoice) {
           selectedVoice = voices.find(voice => voice.lang === 'en-US');
       }
 
+      // If a voice is selected, use it; otherwise, the browser uses its default
       if (selectedVoice) {
           utterance.voice = selectedVoice;
       }
@@ -368,14 +372,14 @@ export default function HomePage() {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-    console.log('[HomePage - speakText] Attempting to speak. Custom TTS API Enabled:', useTtsApi);
-    console.log('[HomePage - speakText] API Key available:', !!elevenLabsApiKey, 'Voice ID available:', !!elevenLabsVoiceId);
+    console.log('[HomePage - speakText] Attempting to speak. Custom TTS API Enabled via toggle:', useTtsApi);
+    console.log('[HomePage - speakText] API Key available in state:', !!elevenLabsApiKey, 'Voice ID available in state:', !!elevenLabsVoiceId);
 
-    if (useTtsApi && elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
-      console.log('[HomePage - speakText] API Key starts with:', elevenLabsApiKey.substring(0, 5) + '...');
+    if (elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
+      console.log('[HomePage - speakText] API Key in state starts with:', elevenLabsApiKey.substring(0, 5) + '...');
     }
-    if (useTtsApi && elevenLabsVoiceId && typeof elevenLabsVoiceId === 'string') {
-      console.log('[HomePage - speakText] Voice ID:', elevenLabsVoiceId);
+    if (elevenLabsVoiceId && typeof elevenLabsVoiceId === 'string') {
+      console.log('[HomePage - speakText] Voice ID in state:', elevenLabsVoiceId);
     }
 
 
@@ -489,7 +493,7 @@ export default function HomePage() {
         }
       }
     } else {
-       console.log('[HomePage - speakText] Custom TTS API disabled or API Key/Voice ID missing. Falling back to browser TTS.');
+       console.log('[HomePage - speakText] Custom TTS API disabled by toggle, or API Key/Voice ID missing in state. Falling back to browser TTS.');
     }
     browserSpeakInternal(textForSpeech);
   }, [
@@ -548,6 +552,18 @@ export default function HomePage() {
         personaTraits: personaTraits,
         chatHistory: historyForGenkit,
       };
+      
+      console.log("[HomePage - handleSendMessage] Sending to generateChatResponse:", {
+        userMessage: text,
+        hasHighKbText: !!dynamicKnowledgeContentHigh,
+        highKbTextSnippet: dynamicKnowledgeContentHigh?.substring(0, 100) + (dynamicKnowledgeContentHigh && dynamicKnowledgeContentHigh.length > 100 ? "..." : ""),
+        hasHighKbSummary: !!knowledgeFileSummaryHigh,
+        highKbSummarySnippet: knowledgeFileSummaryHigh?.substring(0, 100) + (knowledgeFileSummaryHigh && knowledgeFileSummaryHigh.length > 100 ? "..." : ""),
+        // The following are just for debugging context, not used by generateChatResponse directly from here
+        useKnowledgeInGreetingToggleState_DevContext: useKnowledgeInGreeting, 
+        customGreetingSet_DevContext: !!customGreeting,
+      });
+
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
 
       addMessage(result.aiResponse, 'ai');
@@ -557,7 +573,7 @@ export default function HomePage() {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
          if (communicationModeRef.current === 'text-only') {
-            setShowSaveDialog(true);
+            setShowSaveDialog(true); // Show dialog for text-only mode
             return;
         }
       }
@@ -570,7 +586,7 @@ export default function HomePage() {
       addMessage(errorMessage, 'ai');
       setIsSendingMessage(false);
 
-      if (isEndingSessionRef.current) {
+      if (isEndingSessionRef.current) { // Ensure save dialog appears even on error if session was ending
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
       } else if (communicationModeRef.current !== 'text-only') {
@@ -581,6 +597,7 @@ export default function HomePage() {
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
       knowledgeFileSummaryMedium, dynamicKnowledgeContentMedium,
       knowledgeFileSummaryLow, dynamicKnowledgeContentLow,
+      useKnowledgeInGreeting, customGreeting // Added for diagnostic log context
     ]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
@@ -777,9 +794,14 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        // The save dialog will be triggered by handleAudioProcessEnd
+        // The save dialog will be triggered by handleAudioProcessEnd if AI was speaking.
+        // If handleAudioProcessEnd isn't called (e.g., canceled before natural end),
+        // we need to ensure the dialog still shows.
+        // However, handleAudioProcessEnd *will* be called by the cancel() or pause() operations.
+        // So, relying on handleAudioProcessEnd to show the dialog if isEndingSessionRef.current is true is fine.
     } else {
-        setShowSaveDialog(true); // Directly show if AI is not speaking
+        // If AI is not speaking, show the dialog directly.
+        setShowSaveDialog(true);
     }
   };
 
@@ -853,15 +875,15 @@ export default function HomePage() {
       initConversation();
     }
   }, [
-      showSplashScreen, 
-      aiHasInitiatedConversation, 
-      personaTraits, 
-      isSendingMessage, 
-      isLoadingKnowledge, 
-      knowledgeFileSummaryHigh, 
-      dynamicKnowledgeContentHigh, 
-      useKnowledgeInGreeting, 
-      customGreeting, 
+      showSplashScreen,
+      aiHasInitiatedConversation,
+      personaTraits,
+      isSendingMessage,
+      isLoadingKnowledge,
+      knowledgeFileSummaryHigh,
+      dynamicKnowledgeContentHigh,
+      useKnowledgeInGreeting,
+      customGreeting,
       addMessage
     ]);
 
@@ -963,15 +985,18 @@ export default function HomePage() {
            console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", {
             tts: keys.tts,
             voiceId: keys.voiceId,
-            gemini: keys.gemini,
-            stt: keys.stt,
             useTtsApi: keys.useTtsApi,
+            // gemini and stt are not directly used on this page but logged for completeness
+            gemini: keys.gemini, 
+            stt: keys.stt
           });
 
 
           localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
           localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
           localUseTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
+          console.log("[HomePage - fetchAllData] Processed useTtsApi from Firestore:", localUseTtsApi);
+
 
           setElevenLabsApiKey(localApiKey);
           setElevenLabsVoiceId(localVoiceId);
@@ -980,7 +1005,7 @@ export default function HomePage() {
           if (localUseTtsApi && (!localApiKey || !localVoiceId)) {
             toast({
               title: "TTS Configuration Issue",
-              description: "Custom TTS API is enabled, but the API Key or Voice ID field is effectively empty or missing. Falling back to browser default voice.",
+              description: "Custom TTS API is enabled via toggle, but the API Key or Voice ID field is effectively empty or missing in settings. Falling back to browser default voice.",
               variant: "default",
               duration: 8000,
             });
@@ -988,10 +1013,11 @@ export default function HomePage() {
         } else {
           setElevenLabsApiKey(null);
           setElevenLabsVoiceId(null);
-          setUseTtsApi(true);
+          setUseTtsApi(true); // Default to true if doc missing, matching admin panel default
+          console.log("[HomePage - fetchAllData] API keys config doc not found. Defaulting useTtsApi to true.");
           toast({
             title: "TTS Configuration Missing",
-            description: `API key configuration document not found in Firestore ('${FIRESTORE_API_KEYS_PATH}'). Falling back to browser default voice. Please configure in Admin Panel.`,
+            description: `API key configuration document not found in Firestore ('${FIRESTORE_API_KEYS_PATH}'). Custom TTS may not work. Falling back to browser default voice if needed. Please configure in Admin Panel.`,
             variant: "default",
             duration: 8000,
           });
@@ -1214,10 +1240,10 @@ export default function HomePage() {
               <CheckCircle className="mr-2"/>
               {isLoadingKnowledge ? "Loading..." : "Start Chatting"}
             </Button>
-             {!isLoadingKnowledge && useTtsApi && elevenLabsApiKey === null && (
+             {!isLoadingKnowledge && useTtsApi && (elevenLabsApiKey === null || elevenLabsVoiceId === null) && (
                 <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2">
                     <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" />
-                    <span>Custom TTS is ON, but API key/Voice ID may be missing. Voice features might be limited. Using browser default TTS if needed.</span>
+                    <span>Custom TTS is ON, but API key/Voice ID may be missing or empty. Voice features might be limited. Using browser default TTS if needed.</span>
                 </div>
             )}
              {!isLoadingKnowledge && !useTtsApi && (
@@ -1419,6 +1445,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-
-    
