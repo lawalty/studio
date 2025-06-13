@@ -9,33 +9,36 @@ import { Mic, SendHorizontal, Square } from 'lucide-react';
 interface MessageInputProps {
   onSendMessage: (text: string, method: 'text' | 'voice') => void;
   isSending: boolean;
-  isSpeaking: boolean; // Added isSpeaking
+  isSpeaking: boolean; 
   showMicButton?: boolean;
   isListening: boolean;
   onToggleListening: () => void;
   inputValue: string;
   onInputValueChange: (value: string) => void;
+  disabled?: boolean; // Added disabled prop
 }
 
 export default function MessageInput({
   onSendMessage,
   isSending,
-  isSpeaking, // Added isSpeaking
+  isSpeaking,
   showMicButton = true,
   isListening,
   onToggleListening,
   inputValue,
   onInputValueChange,
+  disabled = false, // Default to false
 }: MessageInputProps) {
 
   const handleSendText = useCallback(() => {
-    if (inputValue.trim() === '' || isSending || isSpeaking) return; // Don't send text if AI is speaking
+    if (inputValue.trim() === '' || isSending || isSpeaking || disabled) return;
     onSendMessage(inputValue, 'text');
     onInputValueChange('');
-  }, [inputValue, onSendMessage, isSending, isSpeaking, onInputValueChange]);
+  }, [inputValue, onSendMessage, isSending, isSpeaking, onInputValueChange, disabled]);
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
+    if (disabled) return; // Prevent submission if component is generally disabled
     if (isListening) {
       onToggleListening(); 
     } else {
@@ -43,9 +46,12 @@ export default function MessageInput({
     }
   };
 
-  const micButtonDisabled = isListening 
-    ? false // If listening, button is to stop, so always enabled
-    : (isSending || isSpeaking); // If not listening, disable if sending text OR if AI is speaking
+  const micButtonDisabled = disabled || (isListening 
+    ? false 
+    : (isSending || isSpeaking)); 
+
+  const inputDisabled = disabled || isSending || (isSpeaking && !isListening) || (isListening && communicationMode === 'audio-only');
+  const sendButtonDisabled = disabled || (isListening ? false : ((isSending || isSpeaking) || inputValue.trim() === ''));
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex items-center gap-2">
@@ -64,15 +70,15 @@ export default function MessageInput({
       )}
       <Input
         type="text"
-        placeholder={isListening ? "Listening... Speak now or press send to finish." : "Type your message..."}
+        placeholder={isListening ? "Listening... Speak now or press send to finish." : (disabled ? "Session ended." : "Type your message...")}
         value={inputValue}
         onChange={(e) => onInputValueChange(e.target.value)}
-        disabled={isSending || (isSpeaking && !isListening)} // Disable input if sending or if AI is speaking (unless user is already speaking)
+        disabled={inputDisabled} 
       />
       <Button 
         type="submit" 
         size="icon" 
-        disabled={isListening ? false : ((isSending || isSpeaking) || inputValue.trim() === '')} // Allow send to stop listening
+        disabled={sendButtonDisabled}
         aria-label="Send message"
       >
         <SendHorizontal size={20} />
