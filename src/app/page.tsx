@@ -58,6 +58,7 @@ const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
+const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
@@ -121,6 +122,7 @@ export default function HomePage() {
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
   const [useTtsApi, setUseTtsApi] = useState<boolean>(true);
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
+  const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
@@ -367,6 +369,8 @@ export default function HomePage() {
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
     console.log('[HomePage - speakText] Attempting to speak. Custom TTS API Enabled:', useTtsApi);
+    console.log('[HomePage - speakText] API Key available:', !!elevenLabsApiKey, 'Voice ID available:', !!elevenLabsVoiceId);
+
     if (useTtsApi && elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
       console.log('[HomePage - speakText] API Key starts with:', elevenLabsApiKey.substring(0, 5) + '...');
     }
@@ -553,7 +557,7 @@ export default function HomePage() {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
          if (communicationModeRef.current === 'text-only') {
-            setShowSaveDialog(true); // Directly show dialog for text-only
+            setShowSaveDialog(true);
             return;
         }
       }
@@ -811,34 +815,55 @@ export default function HomePage() {
       if (recognitionRef.current) recognitionRef.current.abort();
 
 
-      const initGreeting = async () => {
+      const initConversation = async () => {
         setIsSendingMessage(true);
-        try {
-          const greetingInput: GenerateInitialGreetingInput = {
-            personaTraits,
-            knowledgeBaseHighSummary: knowledgeFileSummaryHigh || undefined,
-            knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
-            useKnowledgeInGreeting: useKnowledgeInGreeting,
-          };
-          const result = await generateInitialGreeting(greetingInput);
+        let greetingToUse: string | null = null;
 
-          addMessage(result.greetingMessage, 'ai');
+        if (customGreeting && customGreeting.trim() !== "") {
+          greetingToUse = customGreeting.trim();
+          addMessage(greetingToUse, 'ai');
           setIsSendingMessage(false);
+          await speakTextRef.current(greetingToUse);
+        } else {
+          try {
+            const greetingInput: GenerateInitialGreetingInput = {
+              personaTraits,
+              knowledgeBaseHighSummary: knowledgeFileSummaryHigh || undefined,
+              knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
+              useKnowledgeInGreeting: useKnowledgeInGreeting,
+            };
+            const result = await generateInitialGreeting(greetingInput);
+            greetingToUse = result.greetingMessage;
 
-          await speakTextRef.current(result.greetingMessage);
-        } catch (error) {
-          console.error("Error generating initial greeting:", error);
-          const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
+            addMessage(greetingToUse, 'ai');
+            setIsSendingMessage(false);
 
-          addMessage(errMsg, 'ai');
-          setIsSendingMessage(false);
+            await speakTextRef.current(greetingToUse);
+          } catch (error) {
+            console.error("Error generating initial greeting:", error);
+            const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
 
-          await speakTextRef.current(errMsg);
+            addMessage(errMsg, 'ai');
+            setIsSendingMessage(false);
+
+            await speakTextRef.current(errMsg);
+          }
         }
       };
-      initGreeting();
+      initConversation();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, useKnowledgeInGreeting, addMessage]);
+  }, [
+      showSplashScreen, 
+      aiHasInitiatedConversation, 
+      personaTraits, 
+      isSendingMessage, 
+      isLoadingKnowledge, 
+      knowledgeFileSummaryHigh, 
+      dynamicKnowledgeContentHigh, 
+      useKnowledgeInGreeting, 
+      customGreeting, 
+      addMessage
+    ]);
 
   const getFilenameWithoutExtension = (filePath: string | undefined): string | null => {
     if (!filePath) return null;
@@ -981,6 +1006,7 @@ export default function HomePage() {
           setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS);
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
           setUseKnowledgeInGreeting(typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true);
+          setCustomGreeting(assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
 
         } else {
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
@@ -988,6 +1014,7 @@ export default function HomePage() {
           setPersonaTraits(DEFAULT_PERSONA_TRAITS);
           setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
           setUseKnowledgeInGreeting(true);
+          setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
         }
       } catch (e: any) {
         toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown error'}. Using defaults.`, variant: "destructive"});
@@ -995,6 +1022,7 @@ export default function HomePage() {
         setElevenLabsVoiceId(null);
         setUseTtsApi(true);
         setUseKnowledgeInGreeting(true);
+        setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
       }
 
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh);
@@ -1391,3 +1419,6 @@ export default function HomePage() {
     </div>
   );
 }
+
+
+    

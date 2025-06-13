@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -20,12 +20,14 @@ const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
 const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const DEFAULT_CUSTOM_GREETING = "";
 
 export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
   const [avatarPreview, setAvatarPreview] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
+  const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -42,16 +44,19 @@ export default function PersonaPage() {
           setAvatarPreview(data?.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER);
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
+          setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
         } else {
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
           setUseKnowledgeInGreeting(true);
+          setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
         setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
         setUseKnowledgeInGreeting(true);
+        setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -112,9 +117,10 @@ export default function PersonaPage() {
 
 
     try {
-      const dataToSave: { personaTraits: string; avatarUrl?: string; useKnowledgeInGreeting?: boolean } = { 
+      const dataToSave: { personaTraits: string; avatarUrl?: string; useKnowledgeInGreeting?: boolean; customGreetingMessage?: string; } = { 
         personaTraits,
         useKnowledgeInGreeting,
+        customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage, // Save empty string if textarea is empty
       };
       if (avatarUpdated || newAvatarUrl !== (await getDoc(siteAssetsDocRef).then(s => s.data()?.avatarUrl))) {
         dataToSave.avatarUrl = newAvatarUrl;
@@ -179,7 +185,7 @@ export default function PersonaPage() {
                     </Label>
                     <p className="text-xs text-muted-foreground">
                         If ON, AI Blair may reference topics from its High Priority Knowledge Base in its initial greeting.
-                        If OFF, the greeting will be more generic (e.g., "Hello! How can I help you today?").
+                        If OFF (or if a Custom Scripted Greeting below is provided), this setting is overridden or unused for the initial greeting.
                     </p>
                 </div>
                 <Switch
@@ -188,6 +194,24 @@ export default function PersonaPage() {
                     onCheckedChange={setUseKnowledgeInGreeting}
                     aria-label="Toggle use of knowledge base in initial greeting"
                 />
+              </div>
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="customGreetingMessage" className="font-medium flex items-center gap-1.5">
+                  <Type className="h-4 w-4" />
+                  Custom Scripted Greeting (Optional)
+                </Label>
+                <Textarea
+                  id="customGreetingMessage"
+                  value={customGreetingMessage}
+                  onChange={(e) => setCustomGreetingMessage(e.target.value)}
+                  placeholder="Enter a specific greeting AI Blair should use. If empty, AI Blair will generate a greeting based on the toggle above."
+                  rows={3}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
+                  Otherwise, a greeting will be generated based on the "Tailor Initial Greeting" toggle.
+                </p>
               </div>
             </>
           )}
@@ -242,4 +266,6 @@ export default function PersonaPage() {
     </div>
   );
 }
+    
+
     
