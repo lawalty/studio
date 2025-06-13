@@ -119,7 +119,8 @@ export default function HomePage() {
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
-  const [useTtsApi, setUseTtsApi] = useState<boolean>(true); // New state for TTS API toggle
+  const [useTtsApi, setUseTtsApi] = useState<boolean>(true);
+  const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
@@ -337,7 +338,7 @@ export default function HomePage() {
               (voice.name.toLowerCase().includes('male'))
           );
       }
-
+      
       if (!selectedVoice) {
           selectedVoice = voices.find(voice => voice.lang === 'en-US');
       }
@@ -365,7 +366,7 @@ export default function HomePage() {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-    console.log('[HomePage - speakText] Attempting to speak. TTS API Enabled:', useTtsApi, 'API Key available:', !!elevenLabsApiKey, 'Voice ID available:', !!elevenLabsVoiceId);
+    console.log('[HomePage - speakText] Attempting to speak. Custom TTS API Enabled:', useTtsApi);
     if (useTtsApi && elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
       console.log('[HomePage - speakText] API Key starts with:', elevenLabsApiKey.substring(0, 5) + '...');
     }
@@ -404,7 +405,7 @@ export default function HomePage() {
 
     if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
       console.log('[HomePage - speakText] Using Custom TTS API.');
-      const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`; // Assuming ElevenLabs for now
+      const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
       const headers = {
         'Accept': 'audio/mpeg',
         'Content-Type': 'application/json',
@@ -412,7 +413,7 @@ export default function HomePage() {
       };
       const body = JSON.stringify({
         text: textForSpeech,
-        model_id: 'eleven_multilingual_v2', // This might need to be configurable if not ElevenLabs
+        model_id: 'eleven_multilingual_v2',
         voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }
       });
 
@@ -488,7 +489,7 @@ export default function HomePage() {
     }
     browserSpeakInternal(textForSpeech);
   }, [
-      useTtsApi, // Added dependency
+      useTtsApi,
       elevenLabsApiKey,
       elevenLabsVoiceId,
       toast,
@@ -552,7 +553,7 @@ export default function HomePage() {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
          if (communicationModeRef.current === 'text-only') {
-            setShowSaveDialog(true);
+            setShowSaveDialog(true); // Directly show dialog for text-only
             return;
         }
       }
@@ -772,7 +773,7 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        // Save dialog is triggered by handleAudioProcessEnd when isEndingSessionRef is true.
+        // The save dialog will be triggered by handleAudioProcessEnd
     } else {
         setShowSaveDialog(true); // Directly show if AI is not speaking
     }
@@ -817,6 +818,7 @@ export default function HomePage() {
             personaTraits,
             knowledgeBaseHighSummary: knowledgeFileSummaryHigh || undefined,
             knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
+            useKnowledgeInGreeting: useKnowledgeInGreeting,
           };
           const result = await generateInitialGreeting(greetingInput);
 
@@ -836,7 +838,7 @@ export default function HomePage() {
       };
       initGreeting();
     }
-  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, addMessage]);
+  }, [showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, useKnowledgeInGreeting, addMessage]);
 
   const getFilenameWithoutExtension = (filePath: string | undefined): string | null => {
     if (!filePath) return null;
@@ -929,7 +931,7 @@ export default function HomePage() {
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
         let localApiKey: string | null = null;
         let localVoiceId: string | null = null;
-        let localUseTtsApi: boolean = true; // Default to true
+        let localUseTtsApi: boolean = true;
 
         if (apiKeysDocSnap.exists()) {
           const keys = apiKeysDocSnap.data();
@@ -944,11 +946,11 @@ export default function HomePage() {
 
           localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
           localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
-          localUseTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true; // Default to true if not set
+          localUseTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
 
           setElevenLabsApiKey(localApiKey);
           setElevenLabsVoiceId(localVoiceId);
-          setUseTtsApi(localUseTtsApi); // Set the state for TTS API usage
+          setUseTtsApi(localUseTtsApi);
 
           if (localUseTtsApi && (!localApiKey || !localVoiceId)) {
             toast({
@@ -961,7 +963,7 @@ export default function HomePage() {
         } else {
           setElevenLabsApiKey(null);
           setElevenLabsVoiceId(null);
-          setUseTtsApi(true); // Default to true if config doc not found
+          setUseTtsApi(true);
           toast({
             title: "TTS Configuration Missing",
             description: `API key configuration document not found in Firestore ('${FIRESTORE_API_KEYS_PATH}'). Falling back to browser default voice. Please configure in Admin Panel.`,
@@ -978,17 +980,21 @@ export default function HomePage() {
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS);
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
+          setUseKnowledgeInGreeting(typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true);
+
         } else {
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS);
           setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
+          setUseKnowledgeInGreeting(true);
         }
       } catch (e: any) {
         toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown error'}. Using defaults.`, variant: "destructive"});
         setElevenLabsApiKey(null);
         setElevenLabsVoiceId(null);
-        setUseTtsApi(true); // Default to true on error
+        setUseTtsApi(true);
+        setUseKnowledgeInGreeting(true);
       }
 
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh);

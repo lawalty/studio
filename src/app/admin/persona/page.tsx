@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -24,6 +25,7 @@ export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
   const [avatarPreview, setAvatarPreview] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -39,14 +41,17 @@ export default function PersonaPage() {
           const data = docSnap.data();
           setAvatarPreview(data?.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER);
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
+          setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
         } else {
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
+          setUseKnowledgeInGreeting(true);
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
         setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
+        setUseKnowledgeInGreeting(true);
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -107,13 +112,14 @@ export default function PersonaPage() {
 
 
     try {
-      // Save persona traits and avatar URL to Firestore
-      const dataToSave: { personaTraits: string; avatarUrl?: string } = { personaTraits };
+      const dataToSave: { personaTraits: string; avatarUrl?: string; useKnowledgeInGreeting?: boolean } = { 
+        personaTraits,
+        useKnowledgeInGreeting,
+      };
       if (avatarUpdated || newAvatarUrl !== (await getDoc(siteAssetsDocRef).then(s => s.data()?.avatarUrl))) {
         dataToSave.avatarUrl = newAvatarUrl;
       }
       
-      // Check if document exists to decide between set with merge or update
       const docSnap = await getDoc(siteAssetsDocRef);
       if (docSnap.exists()) {
         await updateDoc(siteAssetsDocRef, dataToSave);
@@ -121,10 +127,9 @@ export default function PersonaPage() {
         await setDoc(siteAssetsDocRef, dataToSave);
       }
 
-      // Call Genkit flow for persona adjustment
       const input: AdjustAiPersonaAndPersonalityInput = { personaTraits };
       const result = await adjustAiPersonaAndPersonality(input);
-      toast({ title: "Persona & Avatar Saved", description: result.updatedPersonaDescription || "AI persona settings have been updated." });
+      toast({ title: "Persona Settings Saved", description: result.updatedPersonaDescription || "AI persona and greeting settings have been updated." });
 
     } catch (error) {
       console.error("Failed to save persona or call AI flow:", error);
@@ -153,23 +158,43 @@ export default function PersonaPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {isLoadingData ? (<p>Loading persona settings...</p>) : (
-          <div>
-            <Label htmlFor="personaTraits" className="font-medium">Persona Traits Description</Label>
-            <Textarea
-              id="personaTraits"
-              value={personaTraits}
-              onChange={handlePersonaChange}
-              placeholder="Describe AI Blair's personality, tone, knowledge areas, etc."
-              rows={10}
-              className="mt-1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
-          </div>
+            <>
+              <div>
+                <Label htmlFor="personaTraits" className="font-medium">Persona Traits Description</Label>
+                <Textarea
+                  id="personaTraits"
+                  value={personaTraits}
+                  onChange={handlePersonaChange}
+                  placeholder="Describe AI Blair's personality, tone, knowledge areas, etc."
+                  rows={10}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
+              </div>
+              <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm mt-4">
+                <MessageSquareText className="h-5 w-5 text-primary" />
+                <div className="flex-1 space-y-1">
+                    <Label htmlFor="useKnowledgeInGreeting" className="font-medium">
+                        Tailor Initial Greeting with High Priority Knowledge
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                        If ON, AI Blair may reference topics from its High Priority Knowledge Base in its initial greeting.
+                        If OFF, the greeting will be more generic (e.g., "Hello! How can I help you today?").
+                    </p>
+                </div>
+                <Switch
+                    id="useKnowledgeInGreeting"
+                    checked={useKnowledgeInGreeting}
+                    onCheckedChange={setUseKnowledgeInGreeting}
+                    aria-label="Toggle use of knowledge base in initial greeting"
+                />
+              </div>
+            </>
           )}
         </CardContent>
         <CardFooter>
           <Button onClick={handleSave} disabled={isSaving || isLoadingData}>
-            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : (isLoadingData ? 'Loading...' : 'Save Persona & Avatar')}
+            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : (isLoadingData ? 'Loading...' : 'Save Settings')}
           </Button>
         </CardFooter>
       </Card>
@@ -195,7 +220,7 @@ export default function PersonaPage() {
               height={150}
               className="rounded-full border-2 border-primary shadow-md object-cover"
               data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
-              unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https')}
+              unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https://')}
               onError={() => { console.warn("Custom avatar failed to load, falling back."); setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);}}
             />
           )}
