@@ -141,7 +141,7 @@ export default function KnowledgeBasePage() {
       const sourcesForDb = updatedSourcesToSave.map(s => ({
         id: s.id, name: s.name, type: s.type, size: s.size,
         uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
-        description: s.description || '', // Ensure description is always a string
+        description: s.description || '', 
       }));
 
       if (sourcesForDb.some(s => !s.id || !s.downloadURL || !s.storagePath)) {
@@ -173,7 +173,7 @@ export default function KnowledgeBasePage() {
       if (docSnap.exists() && docSnap.data()?.sources) {
         const fetchedSources = (docSnap.data().sources as KnowledgeSource[]).map(s => ({
           ...s,
-          description: s.description || '', // Ensure description exists
+          description: s.description || '', 
         }));
         setSources(fetchedSources);
       } else {
@@ -406,8 +406,10 @@ export default function KnowledgeBasePage() {
       if (!removedFromOriginalDb) {
          console.error(`[KBPage - Move] CRITICAL: Failed to remove metadata from ${currentLevel} Firestore after successful copy and target save for ${source.name}. Manual check needed.`);
          toast({title: "Move Partial Success", description: `Moved to ${targetLevel}, but failed to update ${currentLevel} DB. Please verify.`, variant: "destructive", duration: 10000});
+      } else {
+        originalSetSources(newOriginalList);
       }
-      originalSetSources(newOriginalList);
+      
 
       await deleteObject(originalFileRef);
       toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
@@ -415,10 +417,14 @@ export default function KnowledgeBasePage() {
     } catch (error: any) {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
-      if (tempFileRef && newDownloadURL && !(await getDoc(doc(db, KB_CONFIG[targetLevel].firestorePath))).data()?.sources.find((s: KnowledgeSource) => s.id === source.id)) {
-        try { await deleteObject(tempFileRef); } catch (cleanupError) { console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError); }
+      if (tempFileRef && newDownloadURL) {
+        const targetDocSnap = await getDoc(doc(db, KB_CONFIG[targetLevel].firestorePath));
+        const targetSources = targetDocSnap.data()?.sources as KnowledgeSource[] | undefined;
+        if (!targetSources || !targetSources.find(s => s.id === source.id)) {
+            try { await deleteObject(tempFileRef); } catch (cleanupError) { console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError); }
+        }
       }
-      fetchSourcesForLevel(currentLevel);
+      fetchSourcesForLevel(currentLevel); 
       fetchSourcesForLevel(targetLevel);
     } finally {
       setIsMovingSource(false);
@@ -707,4 +713,6 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+    
+
     
