@@ -731,7 +731,11 @@ export default function HomePage() {
         setIsSpeaking(false);
         isSpeakingRef.current = false;
         // If AI was speaking, handleAudioProcessEnd will trigger save dialog.
-    } else if (communicationMode === 'text-only' || (communicationMode === 'audio-text' && !isSendingMessage)) {
+        // If it wasn't, and we are here, it means the mode implies audio and we should show dialog.
+        setShowSaveDialog(true);
+    } else if (communicationModeRef.current === 'text-only' || communicationModeRef.current === 'audio-text') {
+        setShowSaveDialog(true);
+    } else { // This primarily covers 'audio-only' mode when AI wasn't speaking
         setShowSaveDialog(true);
     }
   };
@@ -890,6 +894,13 @@ export default function HomePage() {
 
         if (apiKeysDocSnap.exists()) {
           const keys = apiKeysDocSnap.data();
+          console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", { 
+            tts: keys.tts, 
+            voiceId: keys.voiceId,
+            gemini: keys.gemini,
+            stt: keys.stt 
+          });
+
           localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
           localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
           
@@ -897,7 +908,6 @@ export default function HomePage() {
           setElevenLabsVoiceId(localVoiceId);
 
           if (!localApiKey || !localVoiceId) {
-            // This toast will appear if the document exists but keys are empty/missing
             toast({
               title: "TTS Configuration Issue",
               description: "The API keys configuration was found, but the ElevenLabs API Key or Voice ID field is effectively empty or missing. Falling back to browser default voice.",
@@ -932,7 +942,7 @@ export default function HomePage() {
         }
       } catch (e: any) {
         toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown error'}. Using defaults.`, variant: "destructive"});
-        setElevenLabsApiKey(null); // Ensure fallback on error
+        setElevenLabsApiKey(null); 
         setElevenLabsVoiceId(null);
       }
 
@@ -1278,7 +1288,7 @@ export default function HomePage() {
             onToggleListening={() => toggleListeningRef.current()}
             inputValue={inputValue}
             onInputValueChange={setInputValue}
-            disabled={showSaveDialog} 
+            disabled={showSaveDialog || isEndingSessionRef.current} 
           />
           {aiHasInitiatedConversation && !showSaveDialog && (
              <div className="mt-3 flex justify-end">
