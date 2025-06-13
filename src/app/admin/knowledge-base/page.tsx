@@ -11,9 +11,9 @@ import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileT
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from '@/components/ui/label';
+import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertDialog,
@@ -84,6 +84,14 @@ const getFileIcon = (type: KnowledgeSource['type']) => {
   }
 };
 
+const getFilenameWithoutExtensionFromString = (filenameWithExt: string | undefined): string | null => {
+    if (!filenameWithExt) return null;
+    const lastDotIndex = filenameWithExt.lastIndexOf('.');
+    if (lastDotIndex === -1 || lastDotIndex === 0) return null; // No extension or hidden file like .bashrc
+    return filenameWithExt.substring(0, lastDotIndex);
+};
+
+
 export default function KnowledgeBasePage() {
   const [sourcesHigh, setSourcesHigh] = useState<KnowledgeSource[]>([]);
   const [sourcesMedium, setSourcesMedium] = useState<KnowledgeSource[]>([]);
@@ -111,6 +119,10 @@ export default function KnowledgeBasePage() {
   const [editingSourceDetails, setEditingSourceDetails] = useState<{ source: KnowledgeSource; level: KnowledgeBaseLevel } | null>(null);
   const [descriptionInput, setDescriptionInput] = useState('');
   const [isSavingDescription, setIsSavingDescription] = useState(false);
+
+  const currentListenerUnsubscribeRef = useRef<(() => void) | null>(null);
+  const currentTrackingDocIdRef = useRef<string | null>(null);
+  const extractionToastTimoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
   const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
@@ -159,6 +171,80 @@ export default function KnowledgeBasePage() {
       return false;
     }
   }, [toast]);
+
+  const monitorPdfExtraction = useCallback((documentId: string, fileName: string) => {
+    if (currentListenerUnsubscribeRef.current) {
+      currentListenerUnsubscribeRef.current();
+    }
+    if (extractionToastTimoutRef.current) {
+      clearTimeout(extractionToastTimoutRef.current);
+    }
+    currentTrackingDocIdRef.current = documentId;
+
+    extractionToastTimoutRef.current = setTimeout(() => {
+      if (currentTrackingDocIdRef.current === documentId && currentListenerUnsubscribeRef.current) {
+        currentListenerUnsubscribeRef.current();
+        currentListenerUnsubscribeRef.current = null;
+        currentTrackingDocIdRef.current = null;
+        toast({ 
+            title: "PDF Processing Update", 
+            description: `Text extraction for ${fileName} is taking a while. You can check its status later in Firestore (sources/${documentId}).`,
+            duration: 7000 
+        });
+      }
+    }, 2 * 60 * 1000); // 2 minutes timeout
+
+    currentListenerUnsubscribeRef.current = onSnapshot(doc(db, 'sources', documentId), (docSnap) => {
+      if (currentTrackingDocIdRef.current !== documentId || !currentListenerUnsubscribeRef.current) {
+        return; 
+      }
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        let processed = false;
+        if (data.extractionStatus === 'success') {
+          toast({ title: "PDF Processed", description: `Text successfully extracted from ${fileName}.` });
+          processed = true;
+        } else if (data.extractionStatus === 'failed') {
+          toast({ title: "PDF Processing Error", description: `Failed to extract text from ${fileName}. Error: ${data.extractionError || 'Check Cloud Function logs.'}`, variant: "destructive", duration: 10000 });
+          processed = true;
+        } else if (data.extractedText && !data.extractionStatus && data.extractionStatus !== 'pending') {
+           toast({ title: "PDF Text Found", description: `Text for ${fileName} is available.` });
+           processed = true;
+        }
+
+
+        if (processed) {
+          if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
+          if (currentListenerUnsubscribeRef.current) {
+            currentListenerUnsubscribeRef.current();
+            currentListenerUnsubscribeRef.current = null;
+          }
+          currentTrackingDocIdRef.current = null;
+        }
+      }
+    }, (error) => {
+        console.error(`[KBPage - monitorPdfExtraction] Error listening to ${documentId}:`, error);
+        toast({ title: "Listener Error", description: `Error monitoring PDF extraction for ${fileName}.`, variant: "destructive"});
+        if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
+        if (currentListenerUnsubscribeRef.current) {
+            currentListenerUnsubscribeRef.current();
+            currentListenerUnsubscribeRef.current = null;
+        }
+        currentTrackingDocIdRef.current = null;
+    });
+  }, [toast]);
+
+  useEffect(() => {
+    return () => {
+      if (currentListenerUnsubscribeRef.current) {
+        currentListenerUnsubscribeRef.current();
+      }
+      if (extractionToastTimoutRef.current) {
+        clearTimeout(extractionToastTimoutRef.current);
+      }
+    };
+  }, []);
 
 
   const fetchSourcesForLevel = useCallback(async (level: KnowledgeBaseLevel) => {
@@ -229,7 +315,7 @@ export default function KnowledgeBasePage() {
 
       if (!downloadURL) {
         toast({ title: "URL Retrieval Failed", description: `Could not get URL for ${currentFile.name}. Metadata not saved.`, variant: "destructive"});
-        setIsCurrentlyUploading(false); // Reset flag
+        setIsCurrentlyUploading(false); 
         setSelectedFile(null);
         setUploadDescription('');
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -258,6 +344,13 @@ export default function KnowledgeBasePage() {
       if (savedToDb) {
         setSources(newListForStateAndFirestore);
         toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
+
+        if (newSource.type === 'pdf') {
+          const docIdForSourceCollection = getFilenameWithoutExtensionFromString(currentFile.name);
+          if (docIdForSourceCollection) {
+            monitorPdfExtraction(docIdForSourceCollection, currentFile.name);
+          }
+        }
       } else {
         toast({ title: "Database Save Failed", description: `File uploaded but DB save failed for ${targetLevel} KB. Reverting.`, variant: "destructive"});
         try { await deleteObject(fileRef); } catch (delError) { console.warn("Failed to clean up orphaned file after DB save error:", delError); }
@@ -270,7 +363,7 @@ export default function KnowledgeBasePage() {
       setUploadDescription('');
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, getSourcesState, saveSourcesToFirestore, uploadDescription, isCurrentlyUploading, isMovingSource, isSavingDescription]);
+  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, getSourcesState, saveSourcesToFirestore, uploadDescription, isCurrentlyUploading, isMovingSource, isSavingDescription, monitorPdfExtraction]);
 
   const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
     if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
@@ -412,11 +505,26 @@ export default function KnowledgeBasePage() {
       
       await deleteObject(originalFileRef);
       toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
+      
+      // If a PDF was moved, and it was being tracked for extraction, stop tracking.
+      if (source.type === 'pdf') {
+        const docIdForSourceCollection = getFilenameWithoutExtensionFromString(source.name);
+        if (docIdForSourceCollection && currentTrackingDocIdRef.current === docIdForSourceCollection) {
+          if (currentListenerUnsubscribeRef.current) currentListenerUnsubscribeRef.current();
+          if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
+          currentTrackingDocIdRef.current = null;
+          currentListenerUnsubscribeRef.current = null;
+        }
+      }
+
 
     } catch (error: any) {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
       if (tempFileRef && newDownloadURL) {
+        // Attempt to clean up the copied file if the process failed after copy
+        // Only if the metadata wasn't saved or the original wasn't deleted successfully
+        // This logic could be refined - check if target DB entry for *this specific move* exists
         const targetDocRef = doc(db, KB_CONFIG[targetLevel].firestorePath);
         const targetDocSnap = await getDoc(targetDocRef);
         const targetSources = targetDocSnap.data()?.sources as KnowledgeSource[] | undefined;
@@ -424,6 +532,7 @@ export default function KnowledgeBasePage() {
             try { await deleteObject(tempFileRef); } catch (cleanupError) { console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError); }
         }
       }
+      // Refresh both lists to ensure consistency
       fetchSourcesForLevel(currentLevel); 
       fetchSourcesForLevel(targetLevel);
     } finally {
@@ -462,7 +571,7 @@ export default function KnowledgeBasePage() {
       toast({ title: "Description Saved", description: `Description for ${source.name} updated.` });
     } else {
       toast({ title: "Error Saving Description", description: `Could not save description for ${source.name}.`, variant: "destructive" });
-      fetchSourcesForLevel(level);
+      fetchSourcesForLevel(level); // Re-fetch to revert UI on failure
     }
 
     setIsSavingDescription(false);
@@ -470,6 +579,7 @@ export default function KnowledgeBasePage() {
     setEditingSourceDetails(null);
     setDescriptionInput('');
   }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, fetchSourcesForLevel]);
+
 
   const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
     const sources = getSourcesState(level);
@@ -720,3 +830,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
