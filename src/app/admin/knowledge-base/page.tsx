@@ -113,26 +113,26 @@ export default function KnowledgeBasePage() {
   const [isSavingDescription, setIsSavingDescription] = useState(false);
 
 
-  const getSourcesSetter = (level: KnowledgeBaseLevel) => {
+  const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
     if (level === 'High') return setSourcesHigh;
     if (level === 'Medium') return setSourcesMedium;
     if (level === 'Low') return setSourcesLow;
     return setSourcesArchive;
-  };
+  }, []);
 
-  const getIsLoadingSetter = (level: KnowledgeBaseLevel) => {
+  const getIsLoadingSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<boolean>> => {
     if (level === 'High') return setIsLoadingHigh;
     if (level === 'Medium') return setIsLoadingMedium;
     if (level === 'Low') return setIsLoadingLow;
     return setIsLoadingArchive;
-  };
+  }, []);
   
-  const getSourcesState = (level: KnowledgeBaseLevel): KnowledgeSource[] => {
+  const getSourcesState = useCallback((level: KnowledgeBaseLevel): KnowledgeSource[] => {
     if (level === 'High') return sourcesHigh;
     if (level === 'Medium') return sourcesMedium;
     if (level === 'Low') return sourcesLow;
     return sourcesArchive;
-  };
+  }, [sourcesHigh, sourcesMedium, sourcesLow, sourcesArchive]);
 
 
   const saveSourcesToFirestore = useCallback(async (updatedSourcesToSave: KnowledgeSource[], level: KnowledgeBaseLevel): Promise<boolean> => {
@@ -185,7 +185,7 @@ export default function KnowledgeBasePage() {
       setSources([]);
     }
     setIsLoading(false);
-  }, [toast]); // Removed getIsLoadingSetter, getSourcesSetter, KB_CONFIG from deps as they are stable based on `level`
+  }, [toast, getIsLoadingSetter, getSourcesSetter]); 
 
   useEffect(() => {
     fetchSourcesForLevel('High');
@@ -417,12 +417,14 @@ export default function KnowledgeBasePage() {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
       if (tempFileRef && newDownloadURL) {
+        // Attempt to clean up if target DB update failed but file was copied
         const targetDocSnap = await getDoc(doc(db, KB_CONFIG[targetLevel].firestorePath));
         const targetSources = targetDocSnap.data()?.sources as KnowledgeSource[] | undefined;
-        if (!targetSources || !targetSources.find(s => s.id === source.id)) {
+        if (!targetSources || !targetSources.find(s => s.id === source.id && s.storagePath === newStoragePath)) { // check if this specific item was not saved or overwritten
             try { await deleteObject(tempFileRef); } catch (cleanupError) { console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError); }
         }
       }
+      // Refresh both levels from DB to ensure consistency after a failed move
       fetchSourcesForLevel(currentLevel); 
       fetchSourcesForLevel(targetLevel);
     } finally {
@@ -461,6 +463,8 @@ export default function KnowledgeBasePage() {
       toast({ title: "Description Saved", description: `Description for ${source.name} updated.` });
     } else {
       toast({ title: "Error Saving Description", description: `Could not save description for ${source.name}.`, variant: "destructive" });
+      // Optionally re-fetch or revert state if save fails
+      fetchSourcesForLevel(level);
     }
 
     setIsSavingDescription(false);
@@ -590,7 +594,8 @@ export default function KnowledgeBasePage() {
             </div>
             {selectedFile && (
                 <div/> 
-                <p className="text-xs text-muted-foreground"> 
+                // Empty div for grid alignment
+                <p className="text-xs text-muted-foreground col-start-2"> 
                 Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
                 </p>
             )}
@@ -679,7 +684,10 @@ export default function KnowledgeBasePage() {
 
       {editingSourceDetails && (
         <Dialog open={showDescriptionDialog} onOpenChange={(open) => {
-          if (!open) setEditingSourceDetails(null);
+          if (!open) { // If dialog is closing
+            setEditingSourceDetails(null); 
+            setDescriptionInput(''); // Clear input
+          }
           setShowDescriptionDialog(open);
         }}>
           <DialogContent className="sm:max-w-md">
@@ -712,5 +720,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
