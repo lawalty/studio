@@ -144,7 +144,6 @@ export default function HomePage() {
   const currentAiResponseTextRef = useRef<string | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
-  const preparingIndicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
   const isSpeakingRef = useRef(isSpeaking);
@@ -198,10 +197,6 @@ export default function HomePage() {
     isSpeakingRef.current = false;
     isListeningRef.current = false;
 
-    if (preparingIndicatorTimeoutRef.current) {
-      clearTimeout(preparingIndicatorTimeoutRef.current);
-      preparingIndicatorTimeoutRef.current = null;
-    }
 
     if (elevenLabsAudioRef.current) {
       if (elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
@@ -279,10 +274,6 @@ export default function HomePage() {
     isSpeakingRef.current = true;
     isAboutToSpeakForSilenceRef.current = false; 
     setShowPreparingAudioResponseIndicator(false);
-    if (preparingIndicatorTimeoutRef.current) {
-        clearTimeout(preparingIndicatorTimeoutRef.current);
-        preparingIndicatorTimeoutRef.current = null;
-    }
   }, []);
 
   const handleAudioProcessEnd = useCallback((audioPlayedSuccessfully: boolean) => {
@@ -290,17 +281,12 @@ export default function HomePage() {
     isSpeakingRef.current = false;
     isAboutToSpeakForSilenceRef.current = false; 
     setShowPreparingAudioResponseIndicator(false);
-    if (preparingIndicatorTimeoutRef.current) {
-        clearTimeout(preparingIndicatorTimeoutRef.current);
-        preparingIndicatorTimeoutRef.current = null;
-    }
 
     if (isEndingSessionRef.current) {
       if (communicationModeRef.current === 'audio-only' && !showSaveDialog) {
         setShowLogForSaveConfirmation(true);
         setShowSaveDialog(true);
       } else if (communicationModeRef.current !== 'audio-only' || showSaveDialog) {
-        // If not audio-only, or if save dialog was already handled (e.g. manual end), proceed to reset
         resetConversation();
         setShowSplashScreen(true);
       }
@@ -360,17 +346,15 @@ export default function HomePage() {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-    if (communicationModeRef.current === 'text-only' || text.trim() === "") {
+    if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "") {
       setIsSpeaking(false);
       isSpeakingRef.current = false;
       isAboutToSpeakForSilenceRef.current = false; 
       setShowPreparingAudioResponseIndicator(false);
-      if (preparingIndicatorTimeoutRef.current) {
-          clearTimeout(preparingIndicatorTimeoutRef.current);
-          preparingIndicatorTimeoutRef.current = null;
-      }
       return;
     }
+    setShowPreparingAudioResponseIndicator(true);
+
 
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
        console.log("[speakText] Pausing existing ElevenLabs audio.");
@@ -505,10 +489,7 @@ export default function HomePage() {
     isEndingSessionRef.current = false;
     isAboutToSpeakForSilenceRef.current = false; 
     setShowPreparingAudioResponseIndicator(false);
-    if (preparingIndicatorTimeoutRef.current) {
-        clearTimeout(preparingIndicatorTimeoutRef.current);
-        preparingIndicatorTimeoutRef.current = null;
-    }
+
 
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) 
@@ -748,33 +729,6 @@ export default function HomePage() {
     }
   }, [isListening, toast]);
 
-  useEffect(() => {
-    if (preparingIndicatorTimeoutRef.current) {
-        clearTimeout(preparingIndicatorTimeoutRef.current);
-        preparingIndicatorTimeoutRef.current = null;
-    }
-    setShowPreparingAudioResponseIndicator(false);
-
-    if (
-        communicationMode === 'audio-only' &&
-        isSendingMessage &&
-        !isSpeaking &&
-        !isListening
-    ) {
-        preparingIndicatorTimeoutRef.current = setTimeout(() => {
-            if (isSendingMessage && !isSpeaking && !isListening && communicationMode === 'audio-only') {
-                 setShowPreparingAudioResponseIndicator(true);
-            }
-        }, 1200);
-    }
-
-    return () => {
-        if (preparingIndicatorTimeoutRef.current) {
-            clearTimeout(preparingIndicatorTimeoutRef.current);
-        }
-    };
-  }, [isSendingMessage, isSpeaking, isListening, communicationMode]);
-
 
   const handleModeSelectionSubmit = () => {
     resetConversation();
@@ -809,11 +763,6 @@ export default function HomePage() {
             }
             setIsSpeaking(false);
             isSpeakingRef.current = false;
-        }
-
-        if (preparingIndicatorTimeoutRef.current) {
-            clearTimeout(preparingIndicatorTimeoutRef.current);
-            preparingIndicatorTimeoutRef.current = null;
         }
         setShowPreparingAudioResponseIndicator(false);
 
@@ -851,16 +800,13 @@ export default function HomePage() {
       isAboutToSpeakForSilenceRef.current = false; 
       setShowPreparingAudioResponseIndicator(false);
 
-      if (preparingIndicatorTimeoutRef.current) {
-        clearTimeout(preparingIndicatorTimeoutRef.current);
-        preparingIndicatorTimeoutRef.current = null;
-      }
       setIsSpeaking(false); 
       isSpeakingRef.current = false;
       setIsListening(false); 
       isListeningRef.current = false;
 
       const initGreeting = async () => {
+        setIsSendingMessage(true); // Show "Preparing greeting..."
         try {
           const greetingInput: GenerateInitialGreetingInput = {
             personaTraits,
@@ -870,7 +816,7 @@ export default function HomePage() {
           const result = await generateInitialGreeting(greetingInput);
           
           addMessage(result.greetingMessage, 'ai'); 
-          setIsSendingMessage(false);
+          setIsSendingMessage(false); // Hide "Preparing greeting..."
           
           await speakTextRef.current(result.greetingMessage); 
         } catch (error) {
@@ -878,7 +824,7 @@ export default function HomePage() {
           const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           
           addMessage(errMsg, 'ai'); 
-          setIsSendingMessage(false);
+          setIsSendingMessage(false); // Hide "Preparing greeting..."
           
           await speakTextRef.current(errMsg); 
         }
