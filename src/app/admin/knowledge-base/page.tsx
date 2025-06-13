@@ -185,7 +185,7 @@ export default function KnowledgeBasePage() {
       setSources([]);
     }
     setIsLoading(false);
-  }, [toast]);
+  }, [toast]); // Removed getIsLoadingSetter, getSourcesSetter, KB_CONFIG from deps as they are stable based on `level`
 
   useEffect(() => {
     fetchSourcesForLevel('High');
@@ -410,7 +410,6 @@ export default function KnowledgeBasePage() {
         originalSetSources(newOriginalList);
       }
       
-
       await deleteObject(originalFileRef);
       toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
 
@@ -713,6 +712,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-    
 
     
