@@ -349,13 +349,15 @@ export default function HomePage() {
       utterance.onend = () => handleAudioProcessEnd();
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
         if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
-          toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}. Check console.`, variant: "destructive" });
+          console.error("Browser TTS Error:", event.error, event);
+          // toast({ title: "Browser TTS Error", description: `Error: ${event.error || 'Unknown speech synthesis error'}. Check console.`, variant: "destructive" }); // User requested removal
         }
         handleAudioProcessEnd();
       };
       window.speechSynthesis.speak(utterance);
     } else {
-      toast({ title: "TTS Not Supported", description: "Browser does not support speech synthesis.", variant: "default" });
+      // toast({ title: "TTS Not Supported", description: "Browser does not support speech synthesis.", variant: "default" }); // User requested removal
+      console.warn("Browser TTS Not Supported.");
       handleAudioProcessEnd();
     }
   }, [toast, handleActualAudioStart, handleAudioProcessEnd]);
@@ -364,7 +366,6 @@ export default function HomePage() {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-    // Diagnostic logs for API key and Voice ID status at the point of use
     console.log('[HomePage - speakText] Attempting to speak. API Key available:', !!elevenLabsApiKey, 'Voice ID available:', !!elevenLabsVoiceId);
     if (elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
       console.log('[HomePage - speakText] API Key starts with:', elevenLabsApiKey.substring(0, 5) + '...');
@@ -454,7 +455,8 @@ export default function HomePage() {
             if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request") || errorMessage.includes("The play() request was interrupted")) {
                 handleAudioProcessEnd(); 
             } else {
-                toast({ title: "TTS Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
+                console.error(`TTS Playback Error (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, e);
+                // toast({ title: "TTS Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" }); // User requested removal
                 browserSpeakInternal(textForSpeech); 
             }
           };
@@ -464,7 +466,8 @@ export default function HomePage() {
             if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request") || playError.message.includes("The play() request was interrupted")) {
                 handleAudioProcessEnd(); 
             } else {
-                toast({ title: "TTS Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" });
+                console.error(`TTS Playback Start Error: ${playError.message}. Falling back to browser TTS.`, playError);
+                // toast({ title: "TTS Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" }); // User requested removal
                 browserSpeakInternal(textForSpeech); 
             }
           }
@@ -478,13 +481,15 @@ export default function HomePage() {
             else if (errorData?.detail?.message) specificAdvice = `Service: ${errorData.detail.message}.`;
             else if (response.status === 422) { const messagesArr = Array.isArray(errorData?.detail) ? errorData.detail.map((err: any) => err.msg).join(', ') : 'Invalid request.'; specificAdvice = `Service (422): ${messagesArr}.`;}
           } catch (e) { errorDetails = await response.text(); specificAdvice = `API Error ${response.status}. Response: ${errorDetails.substring(0,100)}...`; }
-          toast({ title: "TTS Service Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 });
+          console.error(`TTS Service Error: ${specificAdvice} Falling back to browser TTS. Details:`, errorDetails);
+          // toast({ title: "TTS Service Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 }); // User requested removal
         }
       } catch (error: any) { 
         if (error.name === 'AbortError') {
            // Handled by onerror or play().catch()
         } else {
-            toast({ title: "TTS Connection Error", description: "Could not connect to TTS service. Falling back to browser TTS.", variant: "destructive" });
+            console.error("TTS Connection Error. Falling back to browser TTS.", error);
+            // toast({ title: "TTS Connection Error", description: "Could not connect to TTS service. Falling back to browser TTS.", variant: "destructive" }); // User requested removal
         }
       }
     } else {
@@ -760,7 +765,6 @@ export default function HomePage() {
     setIsListening(false);
     isListeningRef.current = false;
 
-    const currentMode = communicationModeRef.current;
     const aiIsCurrentlySpeaking = isSpeakingRef.current;
 
     if (aiIsCurrentlySpeaking) { 
