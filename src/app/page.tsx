@@ -310,11 +310,46 @@ export default function HomePage() {
   }, []);
 
 
-  const browserSpeakInternal = useCallback((textForSpeech: string) => {
+ const browserSpeakInternal = useCallback((textForSpeech: string) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+      
       const utterance = new SpeechSynthesisUtterance(textForSpeech);
-      utterance.pitch = 1; utterance.rate = 1;
+      utterance.pitch = 1; 
+      utterance.rate = 1;
+
+      const voices = window.speechSynthesis.getVoices();
+      let selectedVoice = null;
+
+      // Try to find an 'en-US' male voice first
+      selectedVoice = voices.find(voice =>
+          voice.lang === 'en-US' &&
+          (voice.name.toLowerCase().includes('male') ||
+           voice.name.toLowerCase().includes('david') ||
+           voice.name.toLowerCase().includes('mark') ||
+           voice.name.toLowerCase().includes('microsoft david') ||
+           voice.name.toLowerCase().includes('google us english male')) 
+      );
+
+      // If not found, try any 'en' male voice
+      if (!selectedVoice) {
+          selectedVoice = voices.find(voice =>
+              voice.lang.startsWith('en-') &&
+              (voice.name.toLowerCase().includes('male'))
+          );
+      }
+      
+      // If not found, try any 'en-US' voice (could be female, but better than non-English if others were somehow male)
+      if (!selectedVoice) {
+          selectedVoice = voices.find(voice => voice.lang === 'en-US');
+      }
+
+
+      if (selectedVoice) {
+          utterance.voice = selectedVoice;
+      }
+      // If no specific voice is found after these checks, the browser's default will be used.
+
       utterance.onstart = handleActualAudioStart;
       utterance.onend = () => handleAudioProcessEnd(true);
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
@@ -511,9 +546,9 @@ export default function HomePage() {
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
-        if (communicationModeRef.current === 'text-only') {
-          setShowSaveDialog(true); 
-          return; 
+         if (communicationModeRef.current === 'text-only') {
+            setShowSaveDialog(true);
+            return; 
         }
       }
 
@@ -717,7 +752,10 @@ export default function HomePage() {
     setIsListening(false);
     isListeningRef.current = false;
 
-    if (isSpeakingRef.current) { 
+    const currentMode = communicationModeRef.current;
+    const aiIsCurrentlySpeaking = isSpeakingRef.current;
+
+    if (aiIsCurrentlySpeaking) { 
         if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
             elevenLabsAudioRef.current.pause();
             if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -730,12 +768,9 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        // If AI was speaking, handleAudioProcessEnd will trigger save dialog.
-        // If it wasn't, and we are here, it means the mode implies audio and we should show dialog.
-        setShowSaveDialog(true);
-    } else if (communicationModeRef.current === 'text-only' || communicationModeRef.current === 'audio-text') {
-        setShowSaveDialog(true);
-    } else { // This primarily covers 'audio-only' mode when AI wasn't speaking
+        // The save dialog will be triggered by handleAudioProcessEnd
+    } else {
+        // If AI is not speaking, we can directly show the save dialog.
         setShowSaveDialog(true);
     }
   };
@@ -894,12 +929,13 @@ export default function HomePage() {
 
         if (apiKeysDocSnap.exists()) {
           const keys = apiKeysDocSnap.data();
-          console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", { 
+           console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", { 
             tts: keys.tts, 
             voiceId: keys.voiceId,
             gemini: keys.gemini,
             stt: keys.stt 
           });
+
 
           localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
           localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
