@@ -62,9 +62,9 @@ const prompt = ai.definePrompt({
 Your goal is to provide a clear, conversational, and helpful answer to the user's question.
 Use the information provided below. This information is prioritized: information listed under "Recent & Important Details" should be preferred. If the answer is found there, you generally don't need to consult "Supporting Information" or "Foundational or Older Information" unless necessary for full context or if the user asks for historical/less recent details.
 
-Synthesize the information seamlessly into your response. DO NOT mention specific file names, and DO NOT explicitly state that you are retrieving information from a document (e.g., avoid phrases like "According to the document..." or "I found this in..."). Make it sound like you inherently know this information.
+Synthesize the information seamlessly into your response. DO NOT mention specific file names, and DO NOT explicitly state that you are retrieving information (e.g., avoid phrases like "According to the document..." or "I found this in..."). Make it sound like you inherently know this information.
 
-If the available information (across all priority levels) doesn't sufficiently answer the question, clearly state that you don't have that specific information right now (e.g., "I don't have the information to answer that question right now," or "I'm not sure about that based on what I know."). Do not invent answers.
+If the available information (across all priority levels) doesn't sufficiently answer the question, you should indicate this naturally. For example, you could say something like, "I don't seem to recall that specific detail right now," or "Hmm, that particular piece of information isn't in my current memory." Do not invent answers. If you state you don't have the information, do not ask a follow-up question in this turn.
 
 Available Information:
 
@@ -95,7 +95,7 @@ General foundational topics (Awareness of topics, prioritize textContent):
 {{{knowledgeBaseLow.summary}}}
 {{/if}}
 
-If a user asks for very specific details from files like Word documents or audio files (which would only be implied by the "General topics" sections above if no corresponding textContent was provided), and you have no specific textContent to draw from, politely inform them you're aware of the topic the file likely covers but can't access its specific internal content for direct quoting.
+If a user asks for very specific details from files like Word documents or audio files (which would only be implied by the "General topics" sections above if no corresponding textContent was provided), and you have no specific textContent to draw from, politely inform them you're aware of the topic the file likely covers but can't access its specific internal content for direct quoting, using natural phrasing like "I recall that topic, but the specific details aren't immediately available to me right now."
 
 {{#if chatHistory.length}}
 Previous turn(s) in this conversation:
@@ -155,3 +155,5 @@ const generateChatResponseFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
