@@ -172,7 +172,7 @@ export default function KnowledgeBasePage() {
     }
   }, [toast]);
 
-  const monitorPdfExtraction = useCallback((documentId: string, fileName: string) => {
+  const monitorPdfExtraction = useCallback((documentId: string, userFriendlyFileName: string) => {
     if (currentListenerUnsubscribeRef.current) {
       currentListenerUnsubscribeRef.current();
     }
@@ -188,7 +188,7 @@ export default function KnowledgeBasePage() {
         currentTrackingDocIdRef.current = null;
         toast({ 
             title: "PDF Processing Update", 
-            description: `Text extraction for ${fileName} is taking a while. You can check its status later in Firestore (sources/${documentId}).`,
+            description: `Text extraction for ${userFriendlyFileName} is taking a while. You can check its status later in Firestore (sources/${documentId}).`,
             duration: 7000 
         });
       }
@@ -203,13 +203,13 @@ export default function KnowledgeBasePage() {
         const data = docSnap.data();
         let processed = false;
         if (data.extractionStatus === 'success') {
-          toast({ title: "PDF Processed", description: `Text successfully extracted from ${fileName}.` });
+          toast({ title: "PDF Processed", description: `Text successfully extracted from ${userFriendlyFileName}.` });
           processed = true;
         } else if (data.extractionStatus === 'failed') {
-          toast({ title: "PDF Processing Error", description: `Failed to extract text from ${fileName}. Error: ${data.extractionError || 'Check Cloud Function logs.'}`, variant: "destructive", duration: 10000 });
+          toast({ title: "PDF Processing Error", description: `Failed to extract text from ${userFriendlyFileName}. Error: ${data.extractionError || 'Check Cloud Function logs.'}`, variant: "destructive", duration: 10000 });
           processed = true;
         } else if (data.extractedText && !data.extractionStatus && data.extractionStatus !== 'pending') {
-           toast({ title: "PDF Text Found", description: `Text for ${fileName} is available.` });
+           toast({ title: "PDF Text Found", description: `Text for ${userFriendlyFileName} is available.` });
            processed = true;
         }
 
@@ -225,7 +225,7 @@ export default function KnowledgeBasePage() {
       }
     }, (error) => {
         console.error(`[KBPage - monitorPdfExtraction] Error listening to ${documentId}:`, error);
-        toast({ title: "Listener Error", description: `Error monitoring PDF extraction for ${fileName}.`, variant: "destructive"});
+        toast({ title: "Listener Error", description: `Error monitoring PDF extraction for ${userFriendlyFileName}.`, variant: "destructive"});
         if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
         if (currentListenerUnsubscribeRef.current) {
             currentListenerUnsubscribeRef.current();
@@ -303,8 +303,12 @@ export default function KnowledgeBasePage() {
     const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
     const currentSources = getSourcesState(targetLevel);
-
-    const filePath = `${config.storageFolder}${Date.now()}-${currentFile.name.replace(/\s+/g, '_')}`;
+    
+    const timestampForFile = Date.now();
+    const sanitizedOriginalName = currentFile.name.replace(/\s+/g, '_');
+    const filenameInStorageWithTimestamp = `${timestampForFile}-${sanitizedOriginalName}`;
+    const filePath = `${config.storageFolder}${filenameInStorageWithTimestamp}`;
+    
     const fileRef = storageRef(storage, filePath);
     const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -346,9 +350,12 @@ export default function KnowledgeBasePage() {
         toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
 
         if (newSource.type === 'pdf') {
-          const docIdForSourceCollection = getFilenameWithoutExtensionFromString(currentFile.name);
+          // Use the timestamped filename (without extension) for monitoring
+          const docIdForSourceCollection = getFilenameWithoutExtensionFromString(filenameInStorageWithTimestamp);
           if (docIdForSourceCollection) {
-            monitorPdfExtraction(docIdForSourceCollection, currentFile.name);
+            monitorPdfExtraction(docIdForSourceCollection, currentFile.name); // Pass original name for user-friendly toast
+          } else {
+            console.warn(`[KBPage - Upload] Could not form documentId for monitoring PDF: ${currentFile.name} from storage filename ${filenameInStorageWithTimestamp}`);
           }
         }
       } else {
@@ -471,8 +478,12 @@ export default function KnowledgeBasePage() {
     try {
       const originalFileRef = storageRef(storage, source.storagePath);
       const blob = await getBlob(originalFileRef);
+      
+      const timestampForFile = Date.now();
+      const sanitizedOriginalName = source.name.replace(/\s+/g, '_'); // Use original name for consistency
+      const newFilenameInStorage = `${timestampForFile}-${sanitizedOriginalName}`;
+      newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${newFilenameInStorage}`;
 
-      newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${Date.now()}-${source.name.replace(/\s+/g, '_')}`;
       tempFileRef = storageRef(storage, newStoragePath);
       await uploadBytes(tempFileRef, blob, { contentType: blob.type });
       newDownloadURL = await getDownloadURL(tempFileRef);
@@ -506,14 +517,19 @@ export default function KnowledgeBasePage() {
       await deleteObject(originalFileRef);
       toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
       
-      // If a PDF was moved, and it was being tracked for extraction, stop tracking.
       if (source.type === 'pdf') {
-        const docIdForSourceCollection = getFilenameWithoutExtensionFromString(source.name);
-        if (docIdForSourceCollection && currentTrackingDocIdRef.current === docIdForSourceCollection) {
+        // If a PDF was moved, and it was being tracked, stop tracking the OLD documentId.
+        const oldDocIdForSourceCollection = getFilenameWithoutExtensionFromString(source.storagePath.split('/').pop());
+        if (oldDocIdForSourceCollection && currentTrackingDocIdRef.current === oldDocIdForSourceCollection) {
           if (currentListenerUnsubscribeRef.current) currentListenerUnsubscribeRef.current();
           if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
           currentTrackingDocIdRef.current = null;
           currentListenerUnsubscribeRef.current = null;
+        }
+        // Now, if it's a PDF, initiate monitoring for the NEW documentId.
+        const newDocIdForSourceCollection = getFilenameWithoutExtensionFromString(newFilenameInStorage);
+        if (newDocIdForSourceCollection) {
+            monitorPdfExtraction(newDocIdForSourceCollection, source.name); // Use original name for toast
         }
       }
 
@@ -522,9 +538,6 @@ export default function KnowledgeBasePage() {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
       if (tempFileRef && newDownloadURL) {
-        // Attempt to clean up the copied file if the process failed after copy
-        // Only if the metadata wasn't saved or the original wasn't deleted successfully
-        // This logic could be refined - check if target DB entry for *this specific move* exists
         const targetDocRef = doc(db, KB_CONFIG[targetLevel].firestorePath);
         const targetDocSnap = await getDoc(targetDocRef);
         const targetSources = targetDocSnap.data()?.sources as KnowledgeSource[] | undefined;
@@ -532,7 +545,6 @@ export default function KnowledgeBasePage() {
             try { await deleteObject(tempFileRef); } catch (cleanupError) { console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError); }
         }
       }
-      // Refresh both lists to ensure consistency
       fetchSourcesForLevel(currentLevel); 
       fetchSourcesForLevel(targetLevel);
     } finally {
@@ -541,7 +553,7 @@ export default function KnowledgeBasePage() {
       setSourceToMoveDetails(null);
       setSelectedTargetMoveLevel(null);
     }
-  }, [sourceToMoveDetails, selectedTargetMoveLevel, isMovingSource, toast, getSourcesSetter, getSourcesState, saveSourcesToFirestore, fetchSourcesForLevel]);
+  }, [sourceToMoveDetails, selectedTargetMoveLevel, isMovingSource, toast, getSourcesSetter, getSourcesState, saveSourcesToFirestore, fetchSourcesForLevel, monitorPdfExtraction]);
 
   const handleOpenDescriptionDialog = useCallback((source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
@@ -830,5 +842,7 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
 
     
