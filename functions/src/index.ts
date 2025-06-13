@@ -11,7 +11,7 @@ if (admin.apps.length === 0) {
 }
 
 const db = admin.firestore();
-const storage = admin.storage();
+const storageAdmin = admin.storage(); // Renamed to avoid conflict
 
 const TARGET_FOLDERS = [
     'knowledge_base_files_high_v1/',
@@ -23,7 +23,7 @@ const TARGET_FOLDERS = [
 export const extractTextFromPdf = functions
   .runWith({ timeoutSeconds: 300, memory: '1GB' }) // Increased timeout to 5 mins and memory
   .storage.object()
-  .onFinalize(async (object) => {
+  .onFinalize(async (object: functions.storage.ObjectMetadata) => { // Explicitly typed 'object'
     const filePath = object.name;
     const contentType = object.contentType;
     const bucketName = object.bucket;
@@ -74,7 +74,7 @@ export const extractTextFromPdf = functions
 
 
     try {
-        const bucket = storage.bucket(bucketName);
+        const bucket = storageAdmin.bucket(bucketName); // Use renamed storageAdmin
         const fileRef = bucket.file(filePath);
 
         const [pdfBuffer] = await fileRef.download();
@@ -97,22 +97,35 @@ export const extractTextFromPdf = functions
         functions.logger.log(`[extractTextFromPdf] Successfully created/updated Firestore document 'sources/${documentId}' with extracted text.`);
         return null;
 
-    } catch (error: any) {
-        functions.logger.error(`[extractTextFromPdf] Error processing file ${filePath}:`, error.message, error);
-        // Optional: Update Firestore document with error status
+    } catch (error) {
+        let errorMessage = 'Unknown error during PDF processing.';
+        if (error instanceof Error) {
+            errorMessage = error.message;
+        } else if (typeof error === 'string') {
+            errorMessage = error;
+        }
+        // Log the full error object for more details, especially if it's not a standard Error instance
+        functions.logger.error(`[extractTextFromPdf] Error processing file ${filePath}:`, errorMessage, error);
+        
         if (documentId) { // Only try to log error if documentId is valid
             try {
                 const docRef = db.collection('sources').doc(documentId);
                 functions.logger.log(`[extractTextFromPdf] Attempting to write error status to Firestore path: sources/${documentId}`);
                 await docRef.set({ // Use set with merge here as well
                     originalFilePath: filePath, // Log original path even on error
-                    extractionError: error.message || 'Unknown error during PDF processing.',
+                    extractionError: errorMessage,
                     extractionStatus: 'failed',
                     lastProcessed: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
                 functions.logger.log(`[extractTextFromPdf] Logged extraction error to Firestore for 'sources/${documentId}'.`);
-            } catch (dbError: any) {
-                functions.logger.error(`[extractTextFromPdf] Failed to log extraction error to Firestore for 'sources/${documentId}':`, dbError.message, dbError);
+            } catch (dbError) { 
+                let dbErrorMessage = 'Unknown database error during error logging.';
+                if (dbError instanceof Error) {
+                    dbErrorMessage = dbError.message;
+                } else if (typeof dbError === 'string') {
+                    dbErrorMessage = dbError;
+                }
+                functions.logger.error(`[extractTextFromPdf] Failed to log extraction error to Firestore for 'sources/${documentId}':`, dbErrorMessage, dbError);
             }
         }
         return null;
