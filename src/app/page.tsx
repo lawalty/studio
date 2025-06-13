@@ -416,14 +416,14 @@ export default function HomePage() {
           const audioBlob = await response.blob();
 
           if (audioBlob.size === 0) {
-            toast({ title: "ElevenLabs Audio Issue", description: "Received empty audio data. Using browser TTS.", variant: "default" });
-            browserSpeakInternal(textForSpeech); // Fallback call
-            return; // Return after initiating fallback
+            toast({ title: "TTS Audio Issue", description: "Received empty audio data. Using browser TTS.", variant: "default" });
+            browserSpeakInternal(textForSpeech); 
+            return; 
           }
           if (!audioBlob.type.startsWith('audio/')) {
-            toast({ title: "ElevenLabs Audio Issue", description: `Received unexpected content type: ${audioBlob.type}. Using browser TTS.`, variant: "default" });
-            browserSpeakInternal(textForSpeech); // Fallback call
-            return; // Return after initiating fallback
+            toast({ title: "TTS Audio Issue", description: `Received unexpected content type: ${audioBlob.type}. Using browser TTS.`, variant: "default" });
+            browserSpeakInternal(textForSpeech); 
+            return; 
           }
 
           const audioUrl = URL.createObjectURL(audioBlob);
@@ -444,9 +444,8 @@ export default function HomePage() {
             if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request") || errorMessage.includes("The play() request was interrupted")) {
                 handleAudioProcessEnd(false); 
             } else {
-                toast({ title: "ElevenLabs Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
-                browserSpeakInternal(textForSpeech); // Fallback on playback error
-                // No handleAudioProcessEnd(false) here, as browserSpeakInternal will call it
+                toast({ title: "TTS Playback Error", description: `Could not play audio (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, variant: "destructive" });
+                browserSpeakInternal(textForSpeech); 
             }
           };
           try {
@@ -455,33 +454,29 @@ export default function HomePage() {
             if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request") || playError.message.includes("The play() request was interrupted")) {
                 handleAudioProcessEnd(false); 
             } else {
-                toast({ title: "ElevenLabs Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" });
-                browserSpeakInternal(textForSpeech); // Fallback on play start error
+                toast({ title: "TTS Playback Start Error", description: `Could not start audio: ${playError.message}. Falling back to browser TTS.`, variant: "destructive" });
+                browserSpeakInternal(textForSpeech); 
             }
           }
-          return; // Successfully initiated ElevenLabs playback (or its error handling which includes fallback)
-        } else { // response not OK
+          return; 
+        } else { 
           let errorDetails = "Unknown error"; let specificAdvice = "Check console for details.";
           try {
             const errorData = await response.json(); errorDetails = errorData?.detail?.message || JSON.stringify(errorData);
-            if (response.status === 401) specificAdvice = "Invalid ElevenLabs API Key.";
-            else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "ElevenLabs Voice ID not found.";
-            else if (errorData?.detail?.message) specificAdvice = `ElevenLabs: ${errorData.detail.message}.`;
-            else if (response.status === 422) { const messagesArr = Array.isArray(errorData?.detail) ? errorData.detail.map((err: any) => err.msg).join(', ') : 'Invalid request.'; specificAdvice = `ElevenLabs (422): ${messagesArr}.`;}
-          } catch (e) { errorDetails = await response.text(); specificAdvice = `ElevenLabs API Error ${response.status}. Response: ${errorDetails.substring(0,100)}...`; }
-          toast({ title: "ElevenLabs TTS Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 });
-          // Will fall through to browserSpeakInternal below
+            if (response.status === 401) specificAdvice = "Invalid API Key.";
+            else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "Voice ID not found.";
+            else if (errorData?.detail?.message) specificAdvice = `Service: ${errorData.detail.message}.`;
+            else if (response.status === 422) { const messagesArr = Array.isArray(errorData?.detail) ? errorData.detail.map((err: any) => err.msg).join(', ') : 'Invalid request.'; specificAdvice = `Service (422): ${messagesArr}.`;}
+          } catch (e) { errorDetails = await response.text(); specificAdvice = `API Error ${response.status}. Response: ${errorDetails.substring(0,100)}...`; }
+          toast({ title: "TTS Service Error", description: `${specificAdvice} Falling back to browser TTS.`, variant: "destructive", duration: 7000 });
         }
-      } catch (error: any) { // Network or other fetch error
+      } catch (error: any) { 
         if (error.name === 'AbortError') {
-           // This can happen if another speech request comes in quickly.
         } else {
-            toast({ title: "ElevenLabs Connection Error", description: "Could not connect to ElevenLabs. Falling back to browser TTS.", variant: "destructive" });
+            toast({ title: "TTS Connection Error", description: "Could not connect to TTS service. Falling back to browser TTS.", variant: "destructive" });
         }
-        // Will fall through to browserSpeakInternal below
       }
     }
-    // Fallback to browser TTS if keys are missing OR ElevenLabs API call failed (HTTP error or network error)
     browserSpeakInternal(textForSpeech);
   }, [
       elevenLabsApiKey, 
@@ -547,7 +542,7 @@ export default function HomePage() {
         isEndingSessionRef.current = true;
         setShowLogForSaveConfirmation(true);
          if (communicationModeRef.current === 'text-only') {
-            setShowSaveDialog(true);
+            setShowSaveDialog(true); 
             return; 
         }
       }
@@ -768,12 +763,9 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        // The save dialog will be triggered by handleAudioProcessEnd
-        // which is called implicitly when speech is cancelled/paused.
-        // If that's not robust, we might need to call setShowSaveDialog(true) directly here after a short delay or condition.
-        // For now, relying on onended/onerror to trigger handleAudioProcessEnd.
+        // The save dialog is triggered by handleAudioProcessEnd, which is called when speech stops.
     } else {
-        setShowSaveDialog(true);
+        setShowSaveDialog(true); // Directly show if AI is not speaking
     }
   };
 
@@ -934,8 +926,8 @@ export default function HomePage() {
            console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", { 
             tts: keys.tts, 
             voiceId: keys.voiceId,
-            gemini: keys.gemini,
-            stt: keys.stt 
+            gemini: keys.gemini, // Keep this for debugging if needed
+            stt: keys.stt // Keep this for debugging if needed
           });
 
 
@@ -958,7 +950,7 @@ export default function HomePage() {
           setElevenLabsVoiceId(null);
           toast({
             title: "TTS Configuration Missing",
-            description: "ElevenLabs API key configuration document not found in Firestore (configurations/api_keys_config). Falling back to browser default voice.",
+            description: "API key configuration document not found in Firestore (configurations/api_keys_config). Falling back to browser default voice.",
             variant: "default",
             duration: 8000,
           });
@@ -1176,7 +1168,7 @@ export default function HomePage() {
              {!isLoadingKnowledge && elevenLabsApiKey === null && (
                 <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2">
                     <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" />
-                    <span>Voice features (ElevenLabs TTS) may be limited. API key not configured. Using browser default TTS.</span>
+                    <span>Voice features (TTS) may be limited. API key not configured. Using browser default TTS.</span>
                 </div>
             )}
             {corsTroubleshootingAlert}
