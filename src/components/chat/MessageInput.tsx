@@ -15,7 +15,7 @@ interface MessageInputProps {
   onToggleListening: () => void;
   inputValue: string;
   onInputValueChange: (value: string) => void;
-  disabled?: boolean; // Added disabled prop
+  disabled?: boolean; 
 }
 
 export default function MessageInput({
@@ -27,7 +27,7 @@ export default function MessageInput({
   onToggleListening,
   inputValue,
   onInputValueChange,
-  disabled = false, // Default to false
+  disabled = false, 
 }: MessageInputProps) {
 
   const handleSendText = useCallback(() => {
@@ -38,7 +38,7 @@ export default function MessageInput({
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
-    if (disabled) return; // Prevent submission if component is generally disabled
+    if (disabled) return; 
     if (isListening) {
       onToggleListening(); 
     } else {
@@ -46,12 +46,15 @@ export default function MessageInput({
     }
   };
 
-  const micButtonDisabled = disabled || (isListening 
-    ? false 
-    : (isSending || isSpeaking)); 
+  // Disable mic button if component is disabled, or if (not listening AND (sending or speaking))
+  const micButtonDisabled = disabled || (isListening ? false : (isSending || isSpeaking));
+  
+  // Disable input field if component is disabled, or if sending, or if (speaking and not listening), or if (listening and in audio-only mode implicitly)
+  const inputDisabled = disabled || isSending || (isSpeaking && !isListening) || (isListening && !showMicButton); // Assuming !showMicButton implies audio-only for input context
+  
+  // Disable send button if component is disabled, or if (listening and mic isn't shown - implies form submit is for stopping listening), or if (not listening AND (sending OR speaking OR input is empty))
+  const sendButtonDisabled = disabled || (isListening && showMicButton ? false : ((isSending || isSpeaking) || inputValue.trim() === ''));
 
-  const inputDisabled = disabled || isSending || (isSpeaking && !isListening) || (isListening && communicationMode === 'audio-only');
-  const sendButtonDisabled = disabled || (isListening ? false : ((isSending || isSpeaking) || inputValue.trim() === ''));
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex items-center gap-2">
@@ -70,7 +73,7 @@ export default function MessageInput({
       )}
       <Input
         type="text"
-        placeholder={isListening ? "Listening... Speak now or press send to finish." : (disabled ? "Session ended." : "Type your message...")}
+        placeholder={disabled ? "Conversation ended. Please choose an option above." : (isListening ? "Listening... Speak now or press send to finish." : "Type your message...")}
         value={inputValue}
         onChange={(e) => onInputValueChange(e.target.value)}
         disabled={inputDisabled} 
