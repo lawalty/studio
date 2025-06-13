@@ -769,8 +769,10 @@ export default function HomePage() {
         setIsSpeaking(false);
         isSpeakingRef.current = false;
         // The save dialog will be triggered by handleAudioProcessEnd
+        // which is called implicitly when speech is cancelled/paused.
+        // If that's not robust, we might need to call setShowSaveDialog(true) directly here after a short delay or condition.
+        // For now, relying on onended/onerror to trigger handleAudioProcessEnd.
     } else {
-        // If AI is not speaking, we can directly show the save dialog.
         setShowSaveDialog(true);
     }
   };
