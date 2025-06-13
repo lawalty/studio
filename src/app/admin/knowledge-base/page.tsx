@@ -5,12 +5,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
-import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -24,6 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 
 export interface KnowledgeSource {
@@ -34,6 +44,7 @@ export interface KnowledgeSource {
   uploadedAt: string;
   storagePath: string;
   downloadURL: string;
+  description?: string;
 }
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
@@ -85,6 +96,7 @@ export default function KnowledgeBasePage() {
   const [isLoadingArchive, setIsLoadingArchive] = useState(true);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadDescription, setUploadDescription] = useState('');
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
   const [selectedKBTargetForUpload, setSelectedKBTargetForUpload] = useState<KnowledgeBaseLevel>('Medium');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,6 +106,12 @@ export default function KnowledgeBasePage() {
   const [sourceToMoveDetails, setSourceToMoveDetails] = useState<{ source: KnowledgeSource; currentLevel: KnowledgeBaseLevel } | null>(null);
   const [selectedTargetMoveLevel, setSelectedTargetMoveLevel] = useState<KnowledgeBaseLevel | null>(null);
   const [isMovingSource, setIsMovingSource] = useState(false);
+
+  const [showDescriptionDialog, setShowDescriptionDialog] = useState(false);
+  const [editingSourceDetails, setEditingSourceDetails] = useState<{ source: KnowledgeSource; level: KnowledgeBaseLevel } | null>(null);
+  const [descriptionInput, setDescriptionInput] = useState('');
+  const [isSavingDescription, setIsSavingDescription] = useState(false);
+
 
   const getSourcesSetter = (level: KnowledgeBaseLevel) => {
     if (level === 'High') return setSourcesHigh;
@@ -123,6 +141,7 @@ export default function KnowledgeBasePage() {
       const sourcesForDb = updatedSourcesToSave.map(s => ({
         id: s.id, name: s.name, type: s.type, size: s.size,
         uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
+        description: s.description || '', // Ensure description is always a string
       }));
 
       if (sourcesForDb.some(s => !s.id || !s.downloadURL || !s.storagePath)) {
@@ -152,7 +171,11 @@ export default function KnowledgeBasePage() {
       const docRef = doc(db, config.firestorePath);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists() && docSnap.data()?.sources) {
-        setSources(docSnap.data().sources as KnowledgeSource[]);
+        const fetchedSources = (docSnap.data().sources as KnowledgeSource[]).map(s => ({
+          ...s,
+          description: s.description || '', // Ensure description exists
+        }));
+        setSources(fetchedSources);
       } else {
         setSources([]);
       }
@@ -183,8 +206,8 @@ export default function KnowledgeBasePage() {
       toast({ title: "No file selected", variant: "destructive" });
       return;
     }
-    if (isCurrentlyUploading || isMovingSource) {
-      toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+      toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
       return;
     }
 
@@ -208,6 +231,7 @@ export default function KnowledgeBasePage() {
         toast({ title: "URL Retrieval Failed", description: `Could not get URL for ${currentFile.name}. Metadata not saved.`, variant: "destructive"});
         setIsCurrentlyUploading(false);
         setSelectedFile(null);
+        setUploadDescription('');
         if (fileInputRef.current) fileInputRef.current.value = "";
         return;
       }
@@ -225,18 +249,17 @@ export default function KnowledgeBasePage() {
         size: `${(currentFile.size / (1024 * 1024)).toFixed(2)}MB`,
         uploadedAt: new Date().toISOString().split('T')[0],
         storagePath: filePath, downloadURL: downloadURL,
+        description: uploadDescription || '',
       };
 
       const newListForStateAndFirestore = [newSource, ...currentSources];
       
-
       const savedToDb = await saveSourcesToFirestore(newListForStateAndFirestore, targetLevel);
       if (savedToDb) {
         setSources(newListForStateAndFirestore);
         toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
       } else {
         toast({ title: "Database Save Failed", description: `File uploaded but DB save failed for ${targetLevel} KB. Reverting.`, variant: "destructive"});
-        // Attempt to delete the uploaded file if DB save failed
         try { await deleteObject(fileRef); } catch (delError) { console.warn("Failed to clean up orphaned file after DB save error:", delError); }
       }
     } catch (error: any) {
@@ -244,13 +267,14 @@ export default function KnowledgeBasePage() {
     } finally {
       setIsCurrentlyUploading(false);
       setSelectedFile(null);
+      setUploadDescription('');
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const handleDelete = async (id: string, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource) {
-      toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+      toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
       return;
     }
     const currentSources = getSourcesState(level);
@@ -283,8 +307,8 @@ export default function KnowledgeBasePage() {
   };
 
   const handleRefreshSourceUrl = async (sourceId: string, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource) {
-        toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+        toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
         return;
     }
     const currentSources = getSourcesState(level);
@@ -309,7 +333,6 @@ export default function KnowledgeBasePage() {
       const refreshedSourceItem: KnowledgeSource = { ...sourceToRefresh, downloadURL: newDownloadURL };
       const listWithRefreshedUrl = currentSources.map(s => s.id === sourceId ? refreshedSourceItem : s);
       
-
       const refreshedInDb = await saveSourcesToFirestore(listWithRefreshedUrl, level); 
       if(refreshedInDb) {
           setSources(listWithRefreshedUrl);
@@ -325,12 +348,12 @@ export default function KnowledgeBasePage() {
   };
 
   const handleOpenMoveDialog = (source: KnowledgeSource, currentLevel: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource) {
-      toast({ title: "Operation in Progress", description: "Please wait for the current upload or move to complete.", variant: "default" });
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+      toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
       return;
     }
     setSourceToMoveDetails({ source, currentLevel });
-    setSelectedTargetMoveLevel(null); // Reset selection
+    setSelectedTargetMoveLevel(null);
     setShowMoveDialog(true);
   };
 
@@ -353,11 +376,9 @@ export default function KnowledgeBasePage() {
     let tempFileRef = null;
 
     try {
-      // 1. Get original file blob
       const originalFileRef = storageRef(storage, source.storagePath);
       const blob = await getBlob(originalFileRef);
 
-      // 2. Upload to new storage location
       newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${Date.now()}-${source.name.replace(/\s+/g, '_')}`;
       tempFileRef = storageRef(storage, newStoragePath);
       await uploadBytes(tempFileRef, blob, { contentType: blob.type });
@@ -367,9 +388,8 @@ export default function KnowledgeBasePage() {
         throw new Error("Failed to get download URL for the copied file.");
       }
 
-      const movedSource: KnowledgeSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL };
+      const movedSource: KnowledgeSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL, description: source.description || '' };
 
-      // 3. Add to target Firestore & UI
       const targetSetSources = getSourcesSetter(targetLevel);
       const targetCurrentSources = getSourcesState(targetLevel);
       const newTargetList = [movedSource, ...targetCurrentSources];
@@ -379,7 +399,6 @@ export default function KnowledgeBasePage() {
       }
       targetSetSources(newTargetList);
 
-      // 4. Remove from original Firestore & UI
       const originalSetSources = getSourcesSetter(currentLevel);
       const originalCurrentSources = getSourcesState(currentLevel);
       const newOriginalList = originalCurrentSources.filter(s => s.id !== source.id);
@@ -390,22 +409,14 @@ export default function KnowledgeBasePage() {
       }
       originalSetSources(newOriginalList);
 
-
-      // 5. Delete original file from storage (only after DB updates are confirmed or handled)
       await deleteObject(originalFileRef);
-
       toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
 
     } catch (error: any) {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
       if (tempFileRef && newDownloadURL && !(await getDoc(doc(db, KB_CONFIG[targetLevel].firestorePath))).data()?.sources.find((s: KnowledgeSource) => s.id === source.id)) {
-        try {
-          await deleteObject(tempFileRef);
-          console.log("[KBPage - Move] Cleaned up copied file after move failure.");
-        } catch (cleanupError) {
-          console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError);
-        }
+        try { await deleteObject(tempFileRef); } catch (cleanupError) { console.error("[KBPage - Move] Failed to cleanup copied file after move failure:", cleanupError); }
       }
       fetchSourcesForLevel(currentLevel);
       fetchSourcesForLevel(targetLevel);
@@ -417,6 +428,40 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  const handleOpenDescriptionDialog = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+      toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
+      return;
+    }
+    setEditingSourceDetails({ source, level });
+    setDescriptionInput(source.description || '');
+    setShowDescriptionDialog(true);
+  };
+
+  const handleSaveDescription = async () => {
+    if (!editingSourceDetails) return;
+    setIsSavingDescription(true);
+
+    const { source, level } = editingSourceDetails;
+    const currentSources = getSourcesState(level);
+    const setSources = getSourcesSetter(level);
+
+    const updatedSources = currentSources.map(s =>
+      s.id === source.id ? { ...s, description: descriptionInput } : s
+    );
+
+    const success = await saveSourcesToFirestore(updatedSources, level);
+    if (success) {
+      setSources(updatedSources);
+      toast({ title: "Description Saved", description: `Description for ${source.name} updated.` });
+    } else {
+      toast({ title: "Error Saving Description", description: `Could not save description for ${source.name}.`, variant: "destructive" });
+    }
+
+    setIsSavingDescription(false);
+    setShowDescriptionDialog(false);
+    setEditingSourceDetails(null);
+  };
 
   const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
     const sources = getSourcesState(level);
@@ -427,15 +472,15 @@ export default function KnowledgeBasePage() {
         isLoadingArchive;
     const config = KB_CONFIG[level];
 
-    const description = level === 'Archive'
+    const descriptionText = level === 'Archive'
       ? "Archived sources. Files here are not used by AI Blair for responses but are kept for record-keeping."
-      : `View and manage sources. Uploaded files are in Firebase Storage (folder: ${config.storageFolder}), metadata in Firestore (path: ${config.firestorePath}).`;
+      : `View and manage sources. Uploaded files are in Firebase Storage (folder: ${config.storageFolder}), metadata in Firestore (path: ${config.firestorePath}). Descriptions are for admin use only.`;
 
     return (
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="font-headline">{config.title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
+          <CardDescription>{descriptionText}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingSources ? (
@@ -455,6 +500,7 @@ export default function KnowledgeBasePage() {
                 <TableHead className="w-[50px]"></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Description</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded At</TableHead>
                 <TableHead>Status/Link</TableHead>
@@ -467,6 +513,11 @@ export default function KnowledgeBasePage() {
                   <TableCell>{getFileIcon(source.type)}</TableCell>
                   <TableCell className="font-medium break-all">{source.name}</TableCell>
                   <TableCell className="capitalize">{source.type}</TableCell>
+                  <TableCell>
+                    <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={() => handleOpenDescriptionDialog(source, level)} disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
+                      <Edit3 className="h-3 w-3 mr-1" /> View/Edit
+                    </Button>
+                  </TableCell>
                   <TableCell>{source.size}</TableCell>
                   <TableCell>{source.uploadedAt}</TableCell>
                   <TableCell>
@@ -475,7 +526,7 @@ export default function KnowledgeBasePage() {
                         <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
                           View File
                         </a>
-                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources}>
+                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
                             <RefreshCw className="h-3 w-3" />
                         </Button>
                       </div>
@@ -486,10 +537,10 @@ export default function KnowledgeBasePage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources}>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
                       <ArrowRightLeft className="h-4 w-4 text-blue-600" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>
@@ -504,6 +555,7 @@ export default function KnowledgeBasePage() {
   };
 
   const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
+  const anyOperationInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription;
 
   return (
     <div className="space-y-6">
@@ -511,54 +563,65 @@ export default function KnowledgeBasePage() {
         <CardHeader>
           <CardTitle className="font-headline">Upload New Source</CardTitle>
           <CardDescription>
-            Add content to AI Blair's knowledge base or archive. Select the target level before uploading.
+            Add content to AI Blair's knowledge base or archive. Select the target level and add an optional description before uploading.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Label htmlFor="file-upload" className="font-medium whitespace-nowrap shrink-0">Step 1:</Label>
-            <Input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              id="file-upload"
-              disabled={isCurrentlyUploading || anyKbLoading || isMovingSource}
-            />
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isCurrentlyUploading || anyKbLoading || isMovingSource} className="w-full sm:w-auto">
-              <UploadCloud className="mr-2 h-4 w-4" /> Choose File
-            </Button>
-            {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
-          </div>
-           {selectedFile && (
-            <p className="text-xs text-muted-foreground pl-16"> 
-              Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
-            </p>
-          )}
+          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
+            <Label htmlFor="file-upload" className="font-medium whitespace-nowrap shrink-0">Step 1: File</Label>
+            <div className="flex items-center gap-2">
+                <Input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                id="file-upload"
+                disabled={anyOperationInProgress || anyKbLoading}
+                />
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={anyOperationInProgress || anyKbLoading} className="w-full sm:w-auto">
+                <UploadCloud className="mr-2 h-4 w-4" /> Choose File
+                </Button>
+                {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
+            </div>
+            {selectedFile && (
+                <div/> 
+                <p className="text-xs text-muted-foreground"> 
+                Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
+                </p>
+            )}
 
-          <div className="flex items-start gap-4"> 
-            <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2:</Label> 
+            <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label> 
             <div className="flex flex-col">
-              <Label className="font-medium mb-1">Select Target Level:</Label>
               <RadioGroup
                 value={selectedKBTargetForUpload}
                 onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
-                className="flex flex-col sm:flex-row sm:space-x-4"
+                className="flex flex-col sm:flex-row sm:space-x-4 pt-2"
               >
                 {KB_LEVELS.map(level => (
                   <div key={level} className="flex items-center space-x-2">
-                    <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={isCurrentlyUploading || anyKbLoading || isMovingSource}/>
+                    <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={anyOperationInProgress || anyKbLoading}/>
                     <Label htmlFor={`r-upload-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
                   </div>
                 ))}
               </RadioGroup>
             </div>
+
+            <Label htmlFor="uploadDescription" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 3: Description (Optional)</Label>
+            <Textarea
+                id="uploadDescription"
+                value={uploadDescription}
+                onChange={(e) => setUploadDescription(e.target.value)}
+                placeholder="Enter a brief description for this source (for admin use only)..."
+                rows={2}
+                className="mt-1"
+                disabled={anyOperationInProgress || anyKbLoading}
+            />
           </div>
         </CardContent>
         <CardFooter>
           <div className="flex items-center gap-2">
-            <Label className="font-medium whitespace-nowrap shrink-0">Step 3:</Label>
-            <Button onClick={handleUpload} disabled={!selectedFile || isCurrentlyUploading || anyKbLoading || isMovingSource}>
+            <Label className="font-medium whitespace-nowrap shrink-0">Step 4:</Label>
+            <Button onClick={handleUpload} disabled={!selectedFile || anyOperationInProgress || anyKbLoading}>
               {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
               {isCurrentlyUploading ? 'Uploading...' : `Upload to ${selectedKBTargetForUpload === 'Archive' ? 'Archive' : selectedKBTargetForUpload + ' KB'}`}
             </Button>
@@ -607,6 +670,39 @@ export default function KnowledgeBasePage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+      )}
+
+      {editingSourceDetails && (
+        <Dialog open={showDescriptionDialog} onOpenChange={(open) => {
+          if (!open) setEditingSourceDetails(null);
+          setShowDescriptionDialog(open);
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Description for: {editingSourceDetails.source.name}</DialogTitle>
+              <DialogDescription>
+                This description is for administrative purposes only and is not used by the AI.
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              value={descriptionInput}
+              onChange={(e) => setDescriptionInput(e.target.value)}
+              placeholder="Enter description..."
+              rows={5}
+              className="mt-2"
+              disabled={isSavingDescription}
+            />
+            <DialogFooter className="mt-4">
+              <DialogClose asChild>
+                 <Button type="button" variant="outline" disabled={isSavingDescription}>Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleSaveDescription} disabled={isSavingDescription}>
+                {isSavingDescription ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isSavingDescription ? 'Saving...' : 'Save Description'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
