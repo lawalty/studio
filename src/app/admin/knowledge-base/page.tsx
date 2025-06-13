@@ -180,6 +180,7 @@ export default function KnowledgeBasePage() {
       clearTimeout(extractionToastTimoutRef.current);
     }
     currentTrackingDocIdRef.current = documentId;
+    console.log(`[KBPage - monitorPdfExtraction] Monitoring Firestore document: sources/${documentId} for file: ${userFriendlyFileName}`);
 
     extractionToastTimoutRef.current = setTimeout(() => {
       if (currentTrackingDocIdRef.current === documentId && currentListenerUnsubscribeRef.current) {
@@ -187,9 +188,9 @@ export default function KnowledgeBasePage() {
         currentListenerUnsubscribeRef.current = null;
         currentTrackingDocIdRef.current = null;
         toast({ 
-            title: "PDF Processing Update", 
-            description: `Text extraction for ${userFriendlyFileName} is taking a while. You can check its status later in Firestore (sources/${documentId}).`,
-            duration: 7000 
+            title: "PDF Processing Delayed",
+            description: `Text extraction for '${userFriendlyFileName}' (monitoring ID: ${documentId}) is taking longer than 2 minutes. The UI listener has timed out. Please check Cloud Function logs or Firestore at 'sources/${documentId}' for final status.`,
+            duration: 15000 // Increased duration for this important message
         });
       }
     }, 2 * 60 * 1000); // 2 minutes timeout
@@ -203,13 +204,13 @@ export default function KnowledgeBasePage() {
         const data = docSnap.data();
         let processed = false;
         if (data.extractionStatus === 'success') {
-          toast({ title: "PDF Processed", description: `Text successfully extracted from ${userFriendlyFileName}.` });
+          toast({ title: "PDF Processed", description: `Text successfully extracted from ${userFriendlyFileName}. Monitored ID: ${documentId}` });
           processed = true;
         } else if (data.extractionStatus === 'failed') {
-          toast({ title: "PDF Processing Error", description: `Failed to extract text from ${userFriendlyFileName}. Error: ${data.extractionError || 'Check Cloud Function logs.'}`, variant: "destructive", duration: 10000 });
+          toast({ title: "PDF Processing Error", description: `Failed to extract text from ${userFriendlyFileName} (ID: ${documentId}). Error: ${data.extractionError || 'Check Cloud Function logs.'}`, variant: "destructive", duration: 10000 });
           processed = true;
         } else if (data.extractedText && !data.extractionStatus && data.extractionStatus !== 'pending') {
-           toast({ title: "PDF Text Found", description: `Text for ${userFriendlyFileName} is available.` });
+           toast({ title: "PDF Text Found", description: `Text for ${userFriendlyFileName} (ID: ${documentId}) is available.` });
            processed = true;
         }
 
@@ -224,8 +225,8 @@ export default function KnowledgeBasePage() {
         }
       }
     }, (error) => {
-        console.error(`[KBPage - monitorPdfExtraction] Error listening to ${documentId}:`, error);
-        toast({ title: "Listener Error", description: `Error monitoring PDF extraction for ${userFriendlyFileName}.`, variant: "destructive"});
+        console.error(`[KBPage - monitorPdfExtraction] Error listening to Firestore document sources/${documentId}:`, error);
+        toast({ title: "Listener Error", description: `Error monitoring PDF extraction for ${userFriendlyFileName} (ID: ${documentId}).`, variant: "destructive"});
         if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
         if (currentListenerUnsubscribeRef.current) {
             currentListenerUnsubscribeRef.current();
@@ -305,7 +306,8 @@ export default function KnowledgeBasePage() {
     const currentSources = getSourcesState(targetLevel);
     
     const timestampForFile = Date.now();
-    const sanitizedOriginalName = currentFile.name.replace(/\s+/g, '_');
+    // Sanitize original name: replace spaces with underscores, remove other problematic chars
+    const sanitizedOriginalName = currentFile.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
     const filenameInStorageWithTimestamp = `${timestampForFile}-${sanitizedOriginalName}`;
     const filePath = `${config.storageFolder}${filenameInStorageWithTimestamp}`;
     
@@ -350,10 +352,9 @@ export default function KnowledgeBasePage() {
         toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
 
         if (newSource.type === 'pdf') {
-          // Use the timestamped filename (without extension) for monitoring
           const docIdForSourceCollection = getFilenameWithoutExtensionFromString(filenameInStorageWithTimestamp);
           if (docIdForSourceCollection) {
-            monitorPdfExtraction(docIdForSourceCollection, currentFile.name); // Pass original name for user-friendly toast
+            monitorPdfExtraction(docIdForSourceCollection, currentFile.name); 
           } else {
             console.warn(`[KBPage - Upload] Could not form documentId for monitoring PDF: ${currentFile.name} from storage filename ${filenameInStorageWithTimestamp}`);
           }
@@ -480,7 +481,7 @@ export default function KnowledgeBasePage() {
       const blob = await getBlob(originalFileRef);
       
       const timestampForFile = Date.now();
-      const sanitizedOriginalName = source.name.replace(/\s+/g, '_'); // Use original name for consistency
+      const sanitizedOriginalName = source.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
       const newFilenameInStorage = `${timestampForFile}-${sanitizedOriginalName}`;
       newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${newFilenameInStorage}`;
 
@@ -518,7 +519,6 @@ export default function KnowledgeBasePage() {
       toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
       
       if (source.type === 'pdf') {
-        // If a PDF was moved, and it was being tracked, stop tracking the OLD documentId.
         const oldDocIdForSourceCollection = getFilenameWithoutExtensionFromString(source.storagePath.split('/').pop());
         if (oldDocIdForSourceCollection && currentTrackingDocIdRef.current === oldDocIdForSourceCollection) {
           if (currentListenerUnsubscribeRef.current) currentListenerUnsubscribeRef.current();
@@ -526,10 +526,9 @@ export default function KnowledgeBasePage() {
           currentTrackingDocIdRef.current = null;
           currentListenerUnsubscribeRef.current = null;
         }
-        // Now, if it's a PDF, initiate monitoring for the NEW documentId.
         const newDocIdForSourceCollection = getFilenameWithoutExtensionFromString(newFilenameInStorage);
         if (newDocIdForSourceCollection) {
-            monitorPdfExtraction(newDocIdForSourceCollection, source.name); // Use original name for toast
+            monitorPdfExtraction(newDocIdForSourceCollection, source.name);
         }
       }
 
