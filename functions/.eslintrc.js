@@ -8,7 +8,7 @@ module.exports = {
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
-    'google',
+    // 'google', // Removed to avoid resolution issues with ESLint 9.x
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
@@ -28,11 +28,11 @@ module.exports = {
     'quotes': ['error', 'single', { 'avoidEscape': true }],
     'indent': ['error', 2],
     'object-curly-spacing': ['error', 'always'],
-    'require-jsdoc': 'off', // Turned off for simplicity, can be re-enabled
+    'require-jsdoc': 'off', // Turned off for simplicity
     'valid-jsdoc': 'off',   // Turned off for simplicity
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
-    'import/no-unresolved': 0, // Can be helpful with TypeScript paths
+    'import/no-unresolved': 0, // Can be helpful with TypeScript paths, though eslint-plugin-import is not explicitly used now
     'max-len': ['warn', {'code': 120, 'ignoreComments': true, 'ignoreUrls': true}],
     'operator-linebreak': ['error', 'after'],
     'no-prototype-builtins': 'warn', // Firebase often uses this
