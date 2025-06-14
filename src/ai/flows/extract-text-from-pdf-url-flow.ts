@@ -11,12 +11,12 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const ExtractTextFromPdfUrlInputSchema = z.object({
+const ExtractTextFromPdfUrlInputSchema = z.object({
   pdfUrl: z.string().url().describe('The public URL of the PDF file to process.'),
 });
 export type ExtractTextFromPdfUrlInput = z.infer<typeof ExtractTextFromPdfUrlInputSchema>;
 
-export const ExtractTextFromPdfUrlOutputSchema = z.object({
+const ExtractTextFromPdfUrlOutputSchema = z.object({
   extractedText: z.string().describe('The extracted text content from the PDF.'),
 });
 export type ExtractTextFromPdfUrlOutput = z.infer<typeof ExtractTextFromPdfUrlOutputSchema>;
@@ -62,3 +62,4 @@ const extractTextFromPdfUrlFlow = ai.defineFlow(
     return output;
   }
 );
+
