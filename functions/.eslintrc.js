@@ -8,7 +8,6 @@ module.exports = {
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
-    // 'google', // Removed to avoid resolution issues with ESLint 9.x
   ],
   parser: '@typescript-eslint/parser',
   parserOptions: {
