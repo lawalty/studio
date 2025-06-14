@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -21,6 +21,7 @@ const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_CUSTOM_GREETING = "";
+const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
 
 export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
@@ -28,6 +29,7 @@ export default function PersonaPage() {
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
+  const [responsePauseTime, setResponsePauseTime] = useState<number>(DEFAULT_RESPONSE_PAUSE_TIME_MS);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -45,11 +47,13 @@ export default function PersonaPage() {
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
+          setResponsePauseTime(data?.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : Number(data.responsePauseTimeMs));
         } else {
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
           setUseKnowledgeInGreeting(true);
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
+          setResponsePauseTime(DEFAULT_RESPONSE_PAUSE_TIME_MS);
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
@@ -57,6 +61,7 @@ export default function PersonaPage() {
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
+        setResponsePauseTime(DEFAULT_RESPONSE_PAUSE_TIME_MS);
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -84,6 +89,13 @@ export default function PersonaPage() {
     }
   };
 
+  const handleResponsePauseTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Allow empty input for easier editing, default to 0 if NaN
+    setResponsePauseTime(value === '' ? DEFAULT_RESPONSE_PAUSE_TIME_MS : (isNaN(parseInt(value)) ? 0 : parseInt(value)));
+  };
+
+
   const handleSave = async () => {
     setIsSaving(true);
 
@@ -96,7 +108,7 @@ export default function PersonaPage() {
       try {
         await uploadBytes(fileRef, selectedAvatarFile);
         newAvatarUrl = await getDownloadURL(fileRef);
-        setAvatarPreview(newAvatarUrl); 
+        setAvatarPreview(newAvatarUrl);
         setSelectedAvatarFile(null);
         avatarUpdated = true;
         toast({ title: "Avatar Uploaded", description: "New avatar image has been saved." });
@@ -108,24 +120,31 @@ export default function PersonaPage() {
         }
         toast({ title: "Avatar Upload Failed", description, variant: "destructive", duration: 7000 });
         setIsSaving(false);
-        return; 
+        return;
       }
     } else if (avatarPreview === DEFAULT_AVATAR_PLACEHOLDER) {
        newAvatarUrl = DEFAULT_AVATAR_PLACEHOLDER;
-       avatarUpdated = true; 
+       avatarUpdated = true;
     }
 
 
     try {
-      const dataToSave: { personaTraits: string; avatarUrl?: string; useKnowledgeInGreeting?: boolean; customGreetingMessage?: string; } = { 
+      const dataToSave: {
+        personaTraits: string;
+        avatarUrl?: string;
+        useKnowledgeInGreeting?: boolean;
+        customGreetingMessage?: string;
+        responsePauseTimeMs?: number;
+      } = {
         personaTraits,
         useKnowledgeInGreeting,
-        customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage, // Save empty string if textarea is empty
+        customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
+        responsePauseTimeMs: responsePauseTime,
       };
       if (avatarUpdated || newAvatarUrl !== (await getDoc(siteAssetsDocRef).then(s => s.data()?.avatarUrl))) {
         dataToSave.avatarUrl = newAvatarUrl;
       }
-      
+
       const docSnap = await getDoc(siteAssetsDocRef);
       if (docSnap.exists()) {
         await updateDoc(siteAssetsDocRef, dataToSave);
@@ -141,7 +160,7 @@ export default function PersonaPage() {
       console.error("Failed to save persona or call AI flow:", error);
       toast({ title: "Error Saving Settings", description: "Could not save all settings. Please check console.", variant: "destructive" });
     }
-    
+
     setIsSaving(false);
   };
 
@@ -213,6 +232,26 @@ export default function PersonaPage() {
                   Otherwise, a greeting will be generated based on the "Tailor Initial Greeting" toggle.
                 </p>
               </div>
+               <div className="space-y-2 mt-4">
+                <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
+                    <Timer className="h-4 w-4" />
+                    AI Response Pause Time (milliseconds)
+                </Label>
+                <Input
+                    id="responsePauseTime"
+                    type="number"
+                    value={responsePauseTime}
+                    onChange={handleResponsePauseTimeChange}
+                    placeholder="e.g., 750"
+                    min="0"
+                    step="50"
+                    className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                    Delay before AI Blair processes your message. Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
+                    Affects how quickly the AI "starts thinking" after you send a message.
+                </p>
+              </div>
             </>
           )}
         </CardContent>
@@ -266,6 +305,4 @@ export default function PersonaPage() {
     </div>
   );
 }
-    
-
     
