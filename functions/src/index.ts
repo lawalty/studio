@@ -18,10 +18,23 @@ const TARGET_FOLDERS = [
     'knowledge_base_files_archive_v1/',
 ];
 
+/**
+ * Extracts text from a PDF file uploaded to Cloud Storage and saves it to Firestore.
+ * Triggered when a new object is finalized in a Cloud Storage bucket.
+ * This function processes PDFs from specified target folders, extracts their text content,
+ * and stores it in a 'sources' collection in Firestore, along with metadata
+ * about the extraction process.
+ *
+ * @param {functions.storage.ObjectMetadata} object The Cloud Storage object metadata,
+ *     containing details like the file path, content type, and bucket.
+ * @param {functions.EventContext} context The event context.
+ * @return {Promise<null>} A promise that resolves to null when processing is complete,
+ *     or if the file is not applicable for processing.
+ */
 export const extractTextFromPdf = functions
   .runWith({ timeoutSeconds: 300, memory: '1GB' })
   .storage.object()
-  .onFinalize(async (object: functions.storage.ObjectMetadata) => {
+  .onFinalize(async (object: functions.storage.ObjectMetadata): Promise<null> => {
     const filePath = object.name;
     const contentType = object.contentType;
     const bucketName = object.bucket;
@@ -61,15 +74,13 @@ export const extractTextFromPdf = functions
     let documentId: string | null = null;
     if (lastDotIndex === -1 || lastDotIndex === 0) {
         functions.logger.error(`[extractTextFromPdf] Could not determine valid filename without extension for: ${fileNameWithExtension}. File path: ${filePath}`);
-        // Not returning here, will attempt to log error to Firestore if a documentId can be formed later, or just log if not.
     } else {
         documentId = fileNameWithExtension.substring(0, lastDotIndex);
     }
     
-    if (!documentId) { // If documentId could still not be formed (e.g. filename was just ".pdf")
+    if (!documentId) {
         functions.logger.error(`[extractTextFromPdf] Final documentId is null or empty for file: ${filePath}. Cannot process further for Firestore source writing.`);
-        // Attempt to log error to a generic error log or just rely on function logs if no documentId
-        return null; // Must return if no valid documentId for the 'sources' collection
+        return null;
     }
     functions.logger.log(`[extractTextFromPdf] Determined documentId for Firestore 'sources' collection: '${documentId}' for file: ${filePath}`);
 
@@ -100,22 +111,21 @@ export const extractTextFromPdf = functions
     } catch (error) {
         let errorMessage = 'Unknown error during PDF processing.';
         let errorDetails: string = '';
+        const unknownError = error as any;
 
         if (error instanceof Error) {
             errorMessage = error.message;
-            errorDetails = error.stack || '';
+            errorDetails = error.stack || JSON.stringify(error);
         } else if (typeof error === 'string') {
             errorMessage = error;
-        } else if (error && typeof error === 'object' && 'message' in error) {
-            errorMessage = String((error as { message: unknown }).message);
-            errorDetails = JSON.stringify(error);
+            errorDetails = 'Error is a string type.';
         } else {
+            errorMessage = String(unknownError?.message || 'Undetermined error structure during PDF processing.');
             errorDetails = JSON.stringify(error);
         }
         
-        functions.logger.error(`[extractTextFromPdf] Error processing file ${filePath}: ${errorMessage}`, {details: errorDetails, originalError: error});
+        functions.logger.error(`[extractTextFromPdf] Error processing file ${filePath}: ${errorMessage}`, {details: errorDetails, originalErrorObj: error});
         
-        // documentId should be valid here due to earlier check, but defensive check anyway
         if (documentId) {
             try {
                 const docRef = db.collection('sources').doc(documentId);
@@ -130,19 +140,19 @@ export const extractTextFromPdf = functions
             } catch (dbError) { 
                 let dbErrorMessage = 'Unknown database error during error logging.';
                 let dbErrorDetails: string = '';
+                const unknownDbError = dbError as any;
 
                 if (dbError instanceof Error) {
                     dbErrorMessage = dbError.message;
-                    dbErrorDetails = dbError.stack || '';
+                    dbErrorDetails = dbError.stack || JSON.stringify(dbError);
                 } else if (typeof dbError === 'string') {
-                    dbErrorMessage = dbError;
-                } else if (dbError && typeof dbError === 'object' && 'message' in dbError) {
-                    dbErrorMessage = String((dbError as { message: unknown }).message);
-                    dbErrorDetails = JSON.stringify(dbError);
+                   dbErrorMessage = dbError;
+                   dbErrorDetails = 'DB Error is a string type.';
                 } else {
+                    dbErrorMessage = String(unknownDbError?.message || 'Undetermined error structure during DB error logging.');
                     dbErrorDetails = JSON.stringify(dbError);
                 }
-                functions.logger.error(`[extractTextFromPdf] Failed to log extraction error to Firestore for 'sources/${documentId}': ${dbErrorMessage}`, {details: dbErrorDetails, originalDbError: dbError});
+                functions.logger.error(`[extractTextFromPdf] Failed to log extraction error to Firestore for 'sources/${documentId}': ${dbErrorMessage}`, {details: dbErrorDetails, originalDbErrorObj: dbError});
             }
         }
         return null;
