@@ -151,7 +151,6 @@ export default function HomePage() {
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // Effect to inform Header about splash screen state
   useEffect(() => {
     if (typeof window !== 'undefined') {
         if (showSplashScreen) {
@@ -162,7 +161,6 @@ export default function HomePage() {
     }
   }, [showSplashScreen]);
 
-  // Effect to listen for header's request for initial state
   useEffect(() => {
     const sendInitialState = () => {
         if (showSplashScreen) window.dispatchEvent(new CustomEvent('splashScreenActive'));
@@ -185,13 +183,13 @@ export default function HomePage() {
     dismissAllToasts();
     setMessages([]);
     setIsSendingMessage(false);
-    setAiHasInitiatedConversation(false); 
+    setAiHasInitiatedConversation(false);
     setInputValue('');
     currentAiResponseTextRef.current = null;
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
     isAboutToSpeakForSilenceRef.current = false;
-    setHasConversationEnded(false); 
+    setHasConversationEnded(false);
     setShowPreparingAudioResponseIndicator(false);
 
     if (elevenLabsAudioRef.current) {
@@ -213,13 +211,11 @@ export default function HomePage() {
     setIsSpeaking(false);
     isSpeakingRef.current = false;
 
-
     if (recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
     }
     setIsListening(false);
     isListeningRef.current = false;
-
   }, [dismissAllToasts]);
 
 
@@ -288,22 +284,22 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current) {
-        setHasConversationEnded(true); 
+        setHasConversationEnded(true);
         return;
     }
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         if (recognitionRef.current) {
             try {
-                recognitionRef.current.abort(); // Ensure any ongoing recognition is stopped.
+                recognitionRef.current.abort();
             } catch (e: any) {
-                // Ignore errors if recognition is already stopped or not active.
+                // Ignore errors
             }
         }
-        isSpeakingRef.current = false; // Ensure this is false before potentially starting listening
+        isSpeakingRef.current = false;
         toggleListeningRef.current(true);
     }
-}, [hasConversationEnded]);
+  }, [hasConversationEnded]);
 
 
  const browserSpeakInternal = useCallback((textForSpeech: string) => {
@@ -325,14 +321,14 @@ export default function HomePage() {
            voice.name.toLowerCase().includes('microsoft david') ||
            voice.name.toLowerCase().includes('google us english male'))
       );
-      
+
       if (!selectedVoice) {
           selectedVoice = voices.find(voice =>
               voice.lang.startsWith('en-') &&
               (voice.name.toLowerCase().includes('male'))
           );
       }
-      
+
       if (!selectedVoice) {
           selectedVoice = voices.find(voice => voice.lang === 'en-US');
       }
@@ -432,7 +428,7 @@ export default function HomePage() {
       } catch (error: any) {
          toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
          if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            setCorsErrorEncountered(true); 
+            setCorsErrorEncountered(true);
          }
       }
     }
@@ -469,7 +465,7 @@ export default function HomePage() {
         knowledgeBaseLow: { summary: knowledgeFileSummaryLow || undefined, textContent: combinedLowPriorityText || undefined },
         personaTraits: personaTraits, chatHistory: historyForGenkit,
       };
-      
+
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       addMessage(result.aiResponse, 'ai');
       setIsSendingMessage(false);
@@ -477,8 +473,8 @@ export default function HomePage() {
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
         if (communicationModeRef.current === 'text-only') {
-            setHasConversationEnded(true); 
-            return; 
+            setHasConversationEnded(true);
+            return;
         }
       }
       await speakTextRef.current(result.aiResponse);
@@ -510,7 +506,7 @@ export default function HomePage() {
       return null;
     }
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = true; 
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -526,13 +522,13 @@ export default function HomePage() {
           interimTranscriptSegment += event.results[i][0].transcript;
         }
       }
-      
+
       const currentTranscript = (finalTranscriptSegment || interimTranscriptSegment).trim();
-      setInputValue(currentTranscript); 
+      setInputValue(currentTranscript);
 
       if (finalTranscriptSegment.trim() && communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         handleSendMessageRef.current(finalTranscriptSegment.trim(), 'voice');
-        setInputValue(''); 
+        setInputValue('');
       }
     };
 
@@ -540,7 +536,7 @@ export default function HomePage() {
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only' && !hasConversationEnded) {
         const wasListening = isListeningRef.current;
         setIsListening(false); isListeningRef.current = false;
-        if (wasListening) { 
+        if (wasListening) {
              setConsecutiveSilencePrompts(currentPrompts => {
                 if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current || hasConversationEnded) return currentPrompts;
                 isAboutToSpeakForSilenceRef.current = true;
@@ -565,16 +561,16 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
-      const wasActuallyListening = isListeningRef.current; 
-      
-      setIsListening(false); 
-      isListeningRef.current = false; 
-      
+      const wasActuallyListening = isListeningRef.current;
+
+      setIsListening(false);
+      isListeningRef.current = false;
+
       if (communicationModeRef.current === 'audio-only' &&
           !isSpeakingRef.current &&
           !isEndingSessionRef.current &&
-          !isAboutToSpeakForSilenceRef.current && 
-          wasActuallyListening && 
+          !isAboutToSpeakForSilenceRef.current &&
+          wasActuallyListening &&
           !hasConversationEnded) {
             toggleListeningRef.current(true);
       }
@@ -600,9 +596,9 @@ export default function HomePage() {
       if (communicationModeRef.current === 'text-only' || isSpeakingRef.current) {
         setIsListening(false); isListeningRef.current = false; return;
       }
-      setInputValue(''); 
-      try { 
-        recInstance.start(); 
+      setInputValue('');
+      try {
+        recInstance.start();
       } catch (startError: any) {
         if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
           toast({ variant: 'destructive', title: 'Microphone Start Error', description: `${startError.name}: ${startError.message || 'Could not start microphone.'}` });
@@ -610,16 +606,15 @@ export default function HomePage() {
         setIsListening(false); isListeningRef.current = false;
       }
     } else {
-      // No explicit recInstance.stop() or abort() here. 
-      // 'onend' will be triggered by the browser if speech stops or if stop() was called in toggleListening.
+      // No explicit recInstance.stop() or abort() here.
     }
   }, [isListening, toast, hasConversationEnded]);
 
 
   const handleModeSelectionSubmit = () => {
-    resetConversation(); 
-    setCommunicationMode(selectedInitialMode); 
-    setShowSplashScreen(false); 
+    resetConversation();
+    setCommunicationMode(selectedInitialMode);
+    setShowSplashScreen(false);
   };
 
   const handleEndChatManually = () => {
@@ -648,9 +643,9 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        setHasConversationEnded(true); 
+        setHasConversationEnded(true);
     } else {
-        setHasConversationEnded(true); 
+        setHasConversationEnded(true);
     }
   };
 
@@ -664,7 +659,10 @@ export default function HomePage() {
   };
 
   const handleStartNewChat = () => {
-    resetConversation(); 
+    resetConversation();
+    setAiHasInitiatedConversation(false); // This will trigger the initial greeting flow
+    setHasConversationEnded(false);
+    // The communicationMode remains the same, so no need to set it here.
   };
 
 
@@ -770,7 +768,7 @@ export default function HomePage() {
             toast({ title: "TTS Configuration Issue", description: "Custom TTS API is ON, but API Key/Voice ID is missing. Using browser default.", variant: "default", duration: 8000 });
           }
         } else {
-          setElevenLabsApiKey(null); setElevenLabsVoiceId(null); setUseTtsApi(true); 
+          setElevenLabsApiKey(null); setElevenLabsVoiceId(null); setUseTtsApi(true);
           toast({ title: "TTS Configuration Missing", description: `API keys not found. Custom TTS may not work. Configure in Admin.`, variant: "default", duration: 8000 });
         }
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
@@ -801,12 +799,12 @@ export default function HomePage() {
 
   useEffect(() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(false); else setIsSplashImageLoaded(true); }, [splashImageSrc]);
 
-  useEffect(() => { 
+  useEffect(() => {
     const handleForceGoToSplash = () => {
       if (messagesRef.current.length > 0 && !hasConversationEnded) {
-        handleEndChatManually(); 
+        handleEndChatManually();
       }
-      resetConversation(); 
+      resetConversation();
       setShowSplashScreen(true);
     };
     window.addEventListener('forceGoToSplashScreen', handleForceGoToSplash);
@@ -900,7 +898,7 @@ export default function HomePage() {
           {corsTroubleshootingAlert}
           {!hasConversationEnded && <Image {...imageProps} />}
           {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask blAIr</h2>}
-          
+
           <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {showPreparingGreeting ? ( <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> Preparing greeting... </div>
             ) : isListening ? ( <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>
@@ -973,6 +971,5 @@ export default function HomePage() {
     </div>
   );
 }
-
 
     
