@@ -150,14 +150,29 @@ export default function HomePage() {
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-
+  // Effect to inform Header about splash screen state
   useEffect(() => {
-    if (showSplashScreen) {
-      window.dispatchEvent(new CustomEvent('splashScreenActive'));
-    } else {
-      window.dispatchEvent(new CustomEvent('splashScreenInactive'));
+    if (typeof window !== 'undefined') {
+        if (showSplashScreen) {
+            window.dispatchEvent(new CustomEvent('splashScreenActive'));
+        } else {
+            window.dispatchEvent(new CustomEvent('splashScreenInactive'));
+        }
     }
   }, [showSplashScreen]);
+
+  // Effect to listen for header's request for initial state
+  useEffect(() => {
+    const sendInitialState = () => {
+        if (showSplashScreen) window.dispatchEvent(new CustomEvent('splashScreenActive'));
+        else window.dispatchEvent(new CustomEvent('splashScreenInactive'));
+    };
+    window.addEventListener('requestInitialSplashState', sendInitialState);
+    // Send initial state once on mount
+    sendInitialState();
+    return () => window.removeEventListener('requestInitialSplashState', sendInitialState);
+  }, [showSplashScreen]);
+
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
     setMessages((prevMessages) => [
@@ -170,17 +185,15 @@ export default function HomePage() {
     dismissAllToasts();
     setMessages([]);
     setIsSendingMessage(false);
-    setAiHasInitiatedConversation(false);
+    setAiHasInitiatedConversation(false); 
     setInputValue('');
     currentAiResponseTextRef.current = null;
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
     isAboutToSpeakForSilenceRef.current = false;
-    setHasConversationEnded(false);
-    setCorsErrorEncountered(false);
+    setHasConversationEnded(false); 
+    // setCorsErrorEncountered(false); // Decide if this should be reset
     setShowPreparingAudioResponseIndicator(false);
-    isSpeakingRef.current = false;
-    isListeningRef.current = false;
 
 
     if (elevenLabsAudioRef.current) {
@@ -200,13 +213,14 @@ export default function HomePage() {
       window.speechSynthesis.cancel();
     }
     setIsSpeaking(false);
+    isSpeakingRef.current = false;
 
 
     if (recognitionRef.current) {
-      recognitionRef.current.abort();
+      try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
     }
     setIsListening(false);
-
+    isListeningRef.current = false;
 
   }, [dismissAllToasts]);
 
@@ -420,7 +434,7 @@ export default function HomePage() {
       } catch (error: any) {
          toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
          if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-            setCorsErrorEncountered(true); // Potentially a CORS or network issue with ElevenLabs
+            setCorsErrorEncountered(true); 
          }
       }
     }
@@ -646,7 +660,7 @@ export default function HomePage() {
 
   const handleStartNewChat = () => {
     resetConversation();
-    setShowSplashScreen(true);
+    // No setShowSplashScreen(true); the useEffect for initial greeting will pick it up.
   };
 
 
@@ -783,16 +797,16 @@ export default function HomePage() {
   useEffect(() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(false); else setIsSplashImageLoaded(true); }, [splashImageSrc]);
 
   useEffect(() => {
-    const handleNavigateToSplash = () => {
+    const handleForceGoToSplash = () => {
       if (messagesRef.current.length > 0 && !hasConversationEnded) {
         handleEndChatManually(); 
-      } else { 
-        handleStartNewChat();
       }
+      resetConversation(); 
+      setShowSplashScreen(true);
     };
-    window.addEventListener('navigateToSplashScreen', handleNavigateToSplash);
-    return () => window.removeEventListener('navigateToSplashScreen', handleNavigateToSplash);
-  }, [hasConversationEnded]);
+    window.addEventListener('forceGoToSplashScreen', handleForceGoToSplash);
+    return () => window.removeEventListener('forceGoToSplashScreen', handleForceGoToSplash);
+  }, [hasConversationEnded, resetConversation]);
 
 
   const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (

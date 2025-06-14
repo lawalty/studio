@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <CardTitle className="text-2xl font-headline">Admin Panel</CardTitle>
           <Button variant="outline" asChild>
             <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to AI Blair
+              <ArrowLeft className="mr-2 h-4 w-4" /> Home / AI Blair
             </Link>
           </Button>
         </CardHeader>

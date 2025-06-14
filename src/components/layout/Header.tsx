@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Bot, Undo2 } from 'lucide-react';
+import { Bot, ArrowLeft } from 'lucide-react'; // Changed Undo2 to ArrowLeft
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -19,11 +19,14 @@ export default function Header() {
     const handleSplashScreenActive = () => setIsSplashScreenCurrentlyActive(true);
     const handleSplashScreenInactive = () => setIsSplashScreenCurrentlyActive(false);
 
+    // Check initial state from page.tsx immediately if possible
+    // For now, relying on event dispatch from page.tsx
+    const initialSplashStateEvent = new CustomEvent('requestInitialSplashState');
+    window.dispatchEvent(initialSplashStateEvent);
+
+
     window.addEventListener('splashScreenActive', handleSplashScreenActive);
     window.addEventListener('splashScreenInactive', handleSplashScreenInactive);
-
-    // Initial dispatch from page.tsx should set this correctly soon after mount.
-    // If page.tsx starts with showSplashScreen = true, it will dispatch 'splashScreenActive'.
     
     return () => {
       window.removeEventListener('splashScreenActive', handleSplashScreenActive);
@@ -31,14 +34,21 @@ export default function Header() {
     };
   }, []);
 
-  const handleNavigateToSplash = () => {
-    window.dispatchEvent(new CustomEvent('navigateToSplashScreen'));
+  const handleGoToSplash = () => {
+    // This event will be caught by page.tsx to end any active chat and show the splash screen
+    window.dispatchEvent(new CustomEvent('forceGoToSplashScreen'));
   };
 
   return (
     <header className="bg-card border-b border-border">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-primary hover:text-accent transition-colors">
+        <Link href="/" className="flex items-center gap-2 text-primary hover:text-accent transition-colors" onClick={(e) => {
+          // If not on splash screen, clicking logo should also go to splash
+          if (!isSplashScreenCurrentlyActive) {
+            e.preventDefault(); // Prevent default Link navigation
+            handleGoToSplash(); // Use our custom logic
+          }
+        }}>
           <Bot size={28} />
           <h1 className="text-2xl font-bold font-headline">AI Chat</h1>
         </Link>
@@ -47,12 +57,13 @@ export default function Header() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleNavigateToSplash} aria-label="Change Interaction Mode">
-                  <Undo2 size={20} />
+                <Button variant="outline" onClick={handleGoToSplash} aria-label="Go Home and Change Mode">
+                  <ArrowLeft size={20} />
+                  <span className="ml-2">Home</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Change Interaction Mode</p>
+                <p>Go Home / Change Mode</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -61,4 +72,3 @@ export default function Header() {
     </header>
   );
 }
-
