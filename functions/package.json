@@ -3,7 +3,7 @@
   "name": "functions",
   "description": "Cloud Functions for Firebase",
   "scripts": {
-    "lint": "npx eslint --ext .js,.ts .",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false npx eslint --ext .js,.ts .",
     "build": "npx tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
@@ -23,7 +23,8 @@
     "eslint": "^8.57.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-import": "^2.29.1",
-    "typescript": "~5.4.0"
+    "typescript": "~5.4.0",
+    "@types/pdf-parse": "^1.1.4"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.2.0"
