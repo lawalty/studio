@@ -54,12 +54,26 @@ const extractTextFromPdfUrlFlow = ai.defineFlow(
     outputSchema: ExtractTextFromPdfUrlOutputSchema,
   },
   async (input) => {
-    const { output } = await extractTextPrompt(input);
-    if (!output) {
-      // Throw an error if the output is unexpectedly null or undefined
-      throw new Error('No output received from the text extraction prompt. The PDF might be empty or unreadable.');
+    try {
+      const { output } = await extractTextPrompt(input); // This calls the Gemini model
+
+      // Validate the output structure more explicitly, even with Zod, for robustness in Server Actions
+      if (!output || typeof output.extractedText !== 'string') {
+        console.error('[extractTextFromPdfUrlFlow] Invalid or malformed output from prompt. Expected { extractedText: string }, received:', output);
+        throw new Error('Extraction failed: The AI model returned an unexpected data structure. The PDF might be incompatible or an issue occurred with the model.');
+      }
+      return output;
+    } catch (e: any) {
+      console.error('[extractTextFromPdfUrlFlow] Error during text extraction flow:', e);
+      // Ensure a simple, serializable error is thrown
+      let errorMessage = 'Failed to extract text from PDF due to an internal error in the AI flow.';
+      if (e instanceof Error) {
+        errorMessage = e.message; // Use the original message if it's an Error instance
+      } else if (typeof e === 'string') {
+        errorMessage = e;
+      }
+      // Prepend a clear indicator for easier debugging from client-side toast
+      throw new Error(`Genkit PDF Extraction Error: ${errorMessage}`);
     }
-    return output;
   }
 );
-
