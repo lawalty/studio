@@ -13,18 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
-import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle, Info, Loader2 } from 'lucide-react';
+import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriangle, Info, Loader2, Save, RotateCcw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { KnowledgeSource, KnowledgeSourceExtractionStatus } from '@/app/admin/knowledge-base/page';
@@ -121,8 +111,8 @@ export default function HomePage() {
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [consecutiveSilencePrompts, setConsecutiveSilencePrompts] = useState(0);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [showLogForSaveConfirmation, setShowLogForSaveConfirmation] = useState(false);
+  const [hasConversationEnded, setHasConversationEnded] = useState(false);
+
 
   const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
   const [knowledgeFileSummaryMedium, setKnowledgeFileSummaryMedium] = useState<string>('');
@@ -186,8 +176,7 @@ export default function HomePage() {
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
     isAboutToSpeakForSilenceRef.current = false;
-    setShowLogForSaveConfirmation(false);
-    setShowSaveDialog(false);
+    setHasConversationEnded(false);
     setCorsErrorEncountered(false);
     setShowPreparingAudioResponseIndicator(false);
     isSpeakingRef.current = false;
@@ -231,7 +220,7 @@ export default function HomePage() {
       const targetIsListeningState = typeof forceState === 'boolean' ? forceState : !currentIsListening;
 
       if (targetIsListeningState === true) {
-        if (isEndingSessionRef.current) {
+        if (isEndingSessionRef.current || hasConversationEnded) {
           return false;
         }
         if (!recognitionRef.current) {
@@ -251,7 +240,7 @@ export default function HomePage() {
         return false;
       }
     });
-  }, [toast]);
+  }, [toast, hasConversationEnded]);
 
   const toggleListeningRef = useRef(toggleListening);
   useEffect(() => {
@@ -287,12 +276,11 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current) {
-        setShowLogForSaveConfirmation(true);
-        setShowSaveDialog(true);
+        setHasConversationEnded(true); // Set state to trigger UI update for end-of-chat
         return;
     }
 
-    if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current) {
+    if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         if (recognitionRef.current) {
             try {
                 recognitionRef.current.abort();
@@ -303,7 +291,7 @@ export default function HomePage() {
         isSpeakingRef.current = false;
         toggleListeningRef.current(true);
     }
-}, []);
+}, [hasConversationEnded]);
 
 
  const browserSpeakInternal = useCallback((textForSpeech: string) => {
@@ -317,17 +305,15 @@ export default function HomePage() {
       const voices = window.speechSynthesis.getVoices();
       let selectedVoice = null;
 
-      // Try to find a specific 'en-US' male voice by name or common keywords
       selectedVoice = voices.find(voice =>
           voice.lang === 'en-US' &&
           (voice.name.toLowerCase().includes('male') ||
            voice.name.toLowerCase().includes('david') ||
            voice.name.toLowerCase().includes('mark') ||
-           voice.name.toLowerCase().includes('microsoft david') || // Common on Windows
-           voice.name.toLowerCase().includes('google us english male')) // Common on Chrome
+           voice.name.toLowerCase().includes('microsoft david') ||
+           voice.name.toLowerCase().includes('google us english male'))
       );
       
-      // If not found, try a broader search for any 'en-' male voice
       if (!selectedVoice) {
           selectedVoice = voices.find(voice =>
               voice.lang.startsWith('en-') &&
@@ -335,12 +321,10 @@ export default function HomePage() {
           );
       }
       
-      // If still not found, try any 'en-US' voice as a fallback
       if (!selectedVoice) {
           selectedVoice = voices.find(voice => voice.lang === 'en-US');
       }
 
-      // If a voice is selected, use it; otherwise, the browser uses its default
       if (selectedVoice) {
           utterance.voice = selectedVoice;
       }
@@ -364,30 +348,17 @@ export default function HomePage() {
     handleAudioProcessStart(text);
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-    console.log('[HomePage - speakText] Attempting to speak. Custom TTS API Enabled via toggle:', useTtsApi);
-    console.log('[HomePage - speakText] API Key available in state:', !!elevenLabsApiKey, 'Voice ID available in state:', !!elevenLabsVoiceId);
-
-    if (elevenLabsApiKey && typeof elevenLabsApiKey === 'string') {
-      console.log('[HomePage - speakText] API Key in state starts with:', elevenLabsApiKey.substring(0, 5) + '...');
-    }
-    if (elevenLabsVoiceId && typeof elevenLabsVoiceId === 'string') {
-      console.log('[HomePage - speakText] Voice ID in state:', elevenLabsVoiceId);
-    }
-
-
-    if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "") {
+    if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || hasConversationEnded) {
       setIsSpeaking(false);
       isSpeakingRef.current = false;
       isAboutToSpeakForSilenceRef.current = false;
       setShowPreparingAudioResponseIndicator(false);
-      if (isEndingSessionRef.current && communicationModeRef.current === 'text-only') {
-         setShowLogForSaveConfirmation(true);
-         setShowSaveDialog(true);
+      if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
+         setHasConversationEnded(true);
       }
       return;
     }
     setShowPreparingAudioResponseIndicator(true);
-
 
     if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.ended && !elevenLabsAudioRef.current.paused) {
        elevenLabsAudioRef.current.pause();
@@ -404,7 +375,6 @@ export default function HomePage() {
 
 
     if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-      console.log('[HomePage - speakText] Using Custom TTS API.');
       const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
       const headers = {
         'Accept': 'audio/mpeg',
@@ -421,82 +391,39 @@ export default function HomePage() {
         const response = await fetch(ttsUrl, { method: "POST", headers, body });
         if (response.ok) {
           const audioBlob = await response.blob();
-
-          if (audioBlob.size === 0) {
-            toast({ title: "TTS Audio Issue", description: "Received empty audio data. Using browser TTS.", variant: "default" });
-            browserSpeakInternal(textForSpeech);
-            return;
+          if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
+            toast({ title: "TTS Audio Issue", description: "Received invalid audio data. Using browser TTS.", variant: "default" });
+            browserSpeakInternal(textForSpeech); return;
           }
-          if (!audioBlob.type.startsWith('audio/')) {
-            toast({ title: "TTS Audio Issue", description: `Received unexpected content type: ${audioBlob.type}. Using browser TTS.`, variant: "default" });
-            browserSpeakInternal(textForSpeech);
-            return;
-          }
-
           const audioUrl = URL.createObjectURL(audioBlob);
-
-          if (!elevenLabsAudioRef.current) {
-            elevenLabsAudioRef.current = new Audio();
-          }
+          if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
-
           audio.onplay = handleActualAudioStart;
           audio.onended = () => handleAudioProcessEnd();
           audio.onerror = (e: Event | string) => {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
             const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
-            const errorCode = mediaError?.code;
-
-            if (errorCode === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted by a new load request") || errorMessage.includes("The play() request was interrupted")) {
+            if (mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) {
                 handleAudioProcessEnd();
-            } else {
-                console.error(`TTS Playback Error (Code: ${errorCode || 'N/A'}). Falling back to browser TTS.`, e);
-                browserSpeakInternal(textForSpeech);
-            }
+            } else { browserSpeakInternal(textForSpeech); }
           };
-          try {
-            await audio.play();
-          } catch (playError: any) {
-            if (playError.name === 'AbortError' || playError.message.includes("interrupted by a new load request") || playError.message.includes("The play() request was interrupted")) {
-                handleAudioProcessEnd();
-            } else {
-                console.error(`TTS Playback Start Error: ${playError.message}. Falling back to browser TTS.`, playError);
-                browserSpeakInternal(textForSpeech);
-            }
+          try { await audio.play(); } catch (playError: any) {
+            if (playError.name === 'AbortError' || playError.message.includes("interrupted")) { handleAudioProcessEnd(); }
+            else { browserSpeakInternal(textForSpeech); }
           }
           return;
         } else {
-          let errorDetails = "Unknown error"; let specificAdvice = "Check console for details.";
-          try {
-            const errorData = await response.json(); errorDetails = errorData?.detail?.message || JSON.stringify(errorData);
-            if (response.status === 401) specificAdvice = "Invalid API Key for TTS service.";
-            else if (response.status === 404 && errorData?.detail?.status === "voice_not_found") specificAdvice = "TTS Voice ID not found.";
-            else if (errorData?.detail?.message) specificAdvice = `Service: ${errorData.detail.message}.`;
-            else if (response.status === 422) { const messagesArr = Array.isArray(errorData?.detail) ? errorData.detail.map((err: any) => err.msg).join(', ') : 'Invalid request.'; specificAdvice = `Service (422): ${messagesArr}.`;}
-          } catch (e) { errorDetails = await response.text(); specificAdvice = `API Error ${response.status}. Response: ${errorDetails.substring(0,100)}...`; }
-          console.error(`TTS Service Error: ${specificAdvice} Falling back to browser TTS. Details:`, errorDetails);
+          // TTS API Error
         }
       } catch (error: any) {
-        if (error.name === 'AbortError') {
-           // Handled by onerror or play().catch()
-        } else {
-            console.error("TTS Connection Error. Falling back to browser TTS.", error);
-        }
+         // Connection Error
       }
-    } else {
-       console.log('[HomePage - speakText] Custom TTS API disabled by toggle, or API Key/Voice ID missing in state. Falling back to browser TTS.');
     }
     browserSpeakInternal(textForSpeech);
   }, [
-      useTtsApi,
-      elevenLabsApiKey,
-      elevenLabsVoiceId,
-      toast,
-      browserSpeakInternal,
-      handleAudioProcessStart,
-      handleActualAudioStart,
-      handleAudioProcessEnd,
+      useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeakInternal,
+      handleAudioProcessStart, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded
     ]);
 
   const speakTextRef = useRef(speakText);
@@ -505,91 +432,51 @@ export default function HomePage() {
   }, [speakText]);
 
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
-    if (text.trim() === '') return;
+    if (text.trim() === '' || hasConversationEnded) return;
     addMessage(text, 'user');
-
-    setTimeout(() => {
-        setIsSendingMessage(true);
-    }, 50);
-
+    setTimeout(() => setIsSendingMessage(true), 50);
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingAudioResponseIndicator(false);
 
-
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
-        .map(msg => ({
-            role: msg.sender === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.text }],
-        }));
-
+        .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
     const combinedLowPriorityText = [MOCK_KNOWLEDGE_BASE_CONTENT, dynamicKnowledgeContentLow].filter(Boolean).join('\n\n');
 
     try {
       const flowInput: GenerateChatResponseInput = {
         userMessage: text,
-        knowledgeBaseHigh: {
-            summary: knowledgeFileSummaryHigh || undefined,
-            textContent: dynamicKnowledgeContentHigh || undefined,
-        },
-        knowledgeBaseMedium: {
-            summary: knowledgeFileSummaryMedium || undefined,
-            textContent: dynamicKnowledgeContentMedium || undefined,
-        },
-        knowledgeBaseLow: {
-            summary: knowledgeFileSummaryLow || undefined,
-            textContent: combinedLowPriorityText || undefined,
-        },
-        personaTraits: personaTraits,
-        chatHistory: historyForGenkit,
+        knowledgeBaseHigh: { summary: knowledgeFileSummaryHigh || undefined, textContent: dynamicKnowledgeContentHigh || undefined },
+        knowledgeBaseMedium: { summary: knowledgeFileSummaryMedium || undefined, textContent: dynamicKnowledgeContentMedium || undefined },
+        knowledgeBaseLow: { summary: knowledgeFileSummaryLow || undefined, textContent: combinedLowPriorityText || undefined },
+        personaTraits: personaTraits, chatHistory: historyForGenkit,
       };
       
-      console.log("[HomePage - handleSendMessage] Sending to generateChatResponse:", {
-        userMessage: text,
-        hasHighKbText: !!dynamicKnowledgeContentHigh,
-        highKbTextSnippet: dynamicKnowledgeContentHigh?.substring(0, 100) + (dynamicKnowledgeContentHigh && dynamicKnowledgeContentHigh.length > 100 ? "..." : ""),
-        hasHighKbSummary: !!knowledgeFileSummaryHigh,
-        highKbSummarySnippet: knowledgeFileSummaryHigh?.substring(0, 100) + (knowledgeFileSummaryHigh && knowledgeFileSummaryHigh.length > 100 ? "..." : ""),
-        // The following are just for debugging context, not used by generateChatResponse directly from here
-        useKnowledgeInGreetingToggleState_DevContext: useKnowledgeInGreeting, 
-        customGreetingSet_DevContext: !!customGreeting,
-      });
-
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-
       addMessage(result.aiResponse, 'ai');
       setIsSendingMessage(false);
 
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
-        setShowLogForSaveConfirmation(true);
-         if (communicationModeRef.current === 'text-only') {
-            setShowSaveDialog(true); // Show dialog for text-only mode
-            return;
+        if (communicationModeRef.current === 'text-only') {
+            setHasConversationEnded(true); // Directly end for text-only
+            return; 
         }
       }
-
       await speakTextRef.current(result.aiResponse);
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
-
       addMessage(errorMessage, 'ai');
       setIsSendingMessage(false);
-
-      if (isEndingSessionRef.current) { // Ensure save dialog appears even on error if session was ending
-        setShowLogForSaveConfirmation(true);
-        setShowSaveDialog(true);
-      } else if (communicationModeRef.current !== 'text-only') {
-        await speakTextRef.current(errorMessage);
-      }
+      if (isEndingSessionRef.current) { setHasConversationEnded(true); }
+      else if (communicationModeRef.current !== 'text-only') { await speakTextRef.current(errorMessage); }
     }
-  }, [addMessage, personaTraits,
+  }, [addMessage, personaTraits, hasConversationEnded,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
       knowledgeFileSummaryMedium, dynamicKnowledgeContentMedium,
-      knowledgeFileSummaryLow, dynamicKnowledgeContentLow,
-      useKnowledgeInGreeting, customGreeting // Added for diagnostic log context
+      knowledgeFileSummaryLow, dynamicKnowledgeContentLow
     ]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
@@ -610,39 +497,28 @@ export default function HomePage() {
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onstart = () => {
-        // setIsListening(true) is handled by toggleListening
-    };
+    recognition.onstart = () => {};
 
     recognition.onresult = (event) => {
       let finalTranscript = '';
       let interimTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+        else interimTranscript += event.results[i][0].transcript;
       }
       setInputValue(finalTranscript || interimTranscript);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-
-      if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        setIsListening(false);
-        isListeningRef.current = false;
-
+      if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only' && !hasConversationEnded) {
+        setIsListening(false); isListeningRef.current = false;
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current) {
-                return currentPrompts;
-            }
+            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current || hasConversationEnded) return currentPrompts;
             isAboutToSpeakForSilenceRef.current = true;
             const newPromptCount = currentPrompts + 1;
             if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                 isEndingSessionRef.current = true;
-                setShowLogForSaveConfirmation(true);
-                speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
+                speakTextRef.current("It looks like you might have stepped away. Let's end this chat.");
             } else {
                 const userName = getUserNameFromHistory(messagesRef.current);
                 const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
@@ -651,37 +527,28 @@ export default function HomePage() {
             return newPromptCount;
         });
       } else if (event.error === 'aborted') {
-        if (isListeningRef.current) {
-          setIsListening(false);
-          isListeningRef.current = false;
-        }
+        if (isListeningRef.current) { setIsListening(false); isListeningRef.current = false; }
       } else if (event.error !== 'no-speech' && event.error !== 'network' && event.error !== 'interrupted' && event.error !== 'canceled' && (event as any).name !== 'AbortError') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
-        setIsListening(false);
-        isListeningRef.current = false;
+        setIsListening(false); isListeningRef.current = false;
       }
     };
 
     recognition.onend = () => {
       const finalTranscript = inputValueRef.current;
-
       const wasListening = isListeningRef.current;
-      setIsListening(false);
-      isListeningRef.current = false;
+      setIsListening(false); isListeningRef.current = false;
 
-      if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current) {
+      if (finalTranscript && finalTranscript.trim() !== '' && !isEndingSessionRef.current && !hasConversationEnded) {
         handleSendMessageRef.current(finalTranscript, 'voice');
-      } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && wasListening && !isEndingSessionRef.current && !isSpeakingRef.current && !isAboutToSpeakForSilenceRef.current ) {
+      } else if (finalTranscript.trim() === '' && communicationModeRef.current === 'audio-only' && wasListening && !isEndingSessionRef.current && !hasConversationEnded && !isSpeakingRef.current && !isAboutToSpeakForSilenceRef.current ) {
         setConsecutiveSilencePrompts(currentPrompts => {
-            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current) {
-                return currentPrompts;
-            }
+            if (isAboutToSpeakForSilenceRef.current || isSpeakingRef.current || isEndingSessionRef.current || hasConversationEnded) return currentPrompts;
             isAboutToSpeakForSilenceRef.current = true;
             const newPromptCount = currentPrompts + 1;
             if (newPromptCount >= MAX_SILENCE_PROMPTS) {
                 isEndingSessionRef.current = true;
-                setShowLogForSaveConfirmation(true);
-                speakTextRef.current("It looks like you might have stepped away. Let's end this chat. I'll bring up an option to save our conversation.");
+                speakTextRef.current("It looks like you might have stepped away. Let's end this chat.");
             } else {
                 const userName = getUserNameFromHistory(messagesRef.current);
                 const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
@@ -693,19 +560,14 @@ export default function HomePage() {
       setInputValue('');
     };
     return recognition;
-  }, [toast]);
+  }, [toast, hasConversationEnded]);
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
     recognitionRef.current = rec;
-
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
-        recognitionRef.current.onstart = null;
-        recognitionRef.current.onresult = null;
-        recognitionRef.current.onerror = null;
-        recognitionRef.current.onend = null;
         recognitionRef.current = null;
       }
     };
@@ -713,44 +575,22 @@ export default function HomePage() {
 
  useEffect(() => {
     const recInstance = recognitionRef.current;
-    if (!recInstance) {
-      return;
-    }
-
+    if (!recInstance || hasConversationEnded) return;
     if (isListening) {
-      if (communicationModeRef.current === 'text-only') {
-        setIsListening(false);
-        isListeningRef.current = false;
-        return;
+      if (communicationModeRef.current === 'text-only' || isSpeakingRef.current) {
+        setIsListening(false); isListeningRef.current = false; return;
       }
-      if (isSpeakingRef.current) {
-        setIsListening(false);
-        isListeningRef.current = false;
-        return;
-      }
-
       setInputValue('');
-      try {
-        recInstance.start();
-      } catch (startError: any) {
-        if (startError.name !== 'InvalidStateError' && startError.name !== 'NoMicPermissionError' && startError.name !== 'AbortError' && startError.message !== 'recognition activity is busy') {
-          toast({
-            variant: 'destructive',
-            title: 'Microphone Start Error',
-            description: `${startError.name}: ${startError.message || 'Could not start microphone. Check permissions.'}`,
-          });
+      try { recInstance.start(); } catch (startError: any) {
+        if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
+          toast({ variant: 'destructive', title: 'Microphone Start Error', description: `${startError.name}: ${startError.message || 'Could not start microphone.'}` });
         }
-        setIsListening(false);
-        isListeningRef.current = false;
+        setIsListening(false); isListeningRef.current = false;
       }
     } else {
-      try {
-        recInstance.abort();
-      } catch (e: any) {
-        // Ignore errors from aborting if already stopped or not started
-      }
+      try { recInstance.abort(); } catch (e: any) {}
     }
-  }, [isListening, toast]);
+  }, [isListening, toast, hasConversationEnded]);
 
 
   const handleModeSelectionSubmit = () => {
@@ -763,7 +603,6 @@ export default function HomePage() {
     isEndingSessionRef.current = true;
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingAudioResponseIndicator(false);
-    setShowLogForSaveConfirmation(true);
 
     if (isListeningRef.current && recognitionRef.current) {
         recognitionRef.current.abort();
@@ -786,8 +625,9 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
+        setHasConversationEnded(true); // Set immediately if we stopped AI speech
     } else {
-        setShowSaveDialog(true);
+        setHasConversationEnded(true); // Set if AI wasn't speaking
     }
   };
 
@@ -800,38 +640,26 @@ export default function HomePage() {
     });
   };
 
-  const handleCloseSaveDialog = (shouldSave: boolean) => {
-    setShowSaveDialog(false);
-    if (shouldSave) {
-      handleSaveConversationAsPdf();
-    }
+  const handleStartNewChat = () => {
     resetConversation();
     setShowSplashScreen(true);
   };
 
-  useEffect(() => {
-    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge) {
 
+  useEffect(() => {
+    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false;
       setShowPreparingAudioResponseIndicator(false);
-
-      setIsSpeaking(false);
-      isSpeakingRef.current = false;
-      setIsListening(false);
-      isListeningRef.current = false;
+      setIsSpeaking(false); isSpeakingRef.current = false;
+      setIsListening(false); isListeningRef.current = false;
       if (recognitionRef.current) recognitionRef.current.abort();
-
 
       const initConversation = async () => {
         setIsSendingMessage(true);
         let greetingToUse: string | null = null;
-
         if (customGreeting && customGreeting.trim() !== "") {
           greetingToUse = customGreeting.trim();
-          addMessage(greetingToUse, 'ai');
-          setIsSendingMessage(false);
-          await speakTextRef.current(greetingToUse);
         } else {
           try {
             const greetingInput: GenerateInitialGreetingInput = {
@@ -842,40 +670,24 @@ export default function HomePage() {
             };
             const result = await generateInitialGreeting(greetingInput);
             greetingToUse = result.greetingMessage;
-
-            addMessage(greetingToUse, 'ai');
-            setIsSendingMessage(false);
-
-            await speakTextRef.current(greetingToUse);
           } catch (error) {
             console.error("Error generating initial greeting:", error);
-            const errMsg = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
-
-            addMessage(errMsg, 'ai');
-            setIsSendingMessage(false);
-
-            await speakTextRef.current(errMsg);
+            greetingToUse = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           }
         }
+        if (greetingToUse) addMessage(greetingToUse, 'ai');
+        setIsSendingMessage(false);
+        if (greetingToUse) await speakTextRef.current(greetingToUse);
       };
       initConversation();
     }
   }, [
-      showSplashScreen,
-      aiHasInitiatedConversation,
-      personaTraits,
-      isSendingMessage,
-      isLoadingKnowledge,
-      knowledgeFileSummaryHigh,
-      dynamicKnowledgeContentHigh,
-      useKnowledgeInGreeting,
-      customGreeting,
-      addMessage
+      showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, hasConversationEnded,
+      knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, useKnowledgeInGreeting, customGreeting, addMessage
     ]);
 
   const fetchAndProcessKnowledgeLevel = useCallback(async (
-    levelPath: string,
-    levelName: string,
+    levelPath: string, levelName: string,
     setSummary: React.Dispatch<React.SetStateAction<string>>,
     setContent: React.Dispatch<React.SetStateAction<string>>
   ): Promise<boolean> => {
@@ -887,50 +699,31 @@ export default function HomePage() {
       if (kbMetaDocSnap.exists() && kbMetaDocSnap.data()?.sources) {
         sourcesFromDb = kbMetaDocSnap.data().sources as KnowledgeSource[];
       }
-
       if (sourcesFromDb.length > 0) {
         const summary = `The ${levelName.toLowerCase()} priority knowledge base includes these files: ` +
                         sourcesFromDb.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
         setSummary(summary);
-
         const textFileContents: string[] = [];
         for (const source of sourcesFromDb) {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
-            // For .txt files uploaded directly, we attempt to fetch their content.
-            // The admin panel also tries to read .txt content client-side and store in 'extractedText'.
-            // We prefer 'extractedText' if available and status is 'success'.
             if (source.extractedText && source.extractionStatus === 'success') {
                 textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
-            } else if (source.downloadURL) { // Fallback to fetching if not pre-extracted
+            } else if (source.downloadURL) {
                 try {
                     const response = await fetch(source.downloadURL);
                     if (response.ok) {
                         const textContent = await response.text();
                         textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${textContent}\n---`);
-                    } else {
-                        console.warn(`[HomePage] Failed to fetch ${source.name} from ${levelName} KB. Status: ${response.status}. URL: ${source.downloadURL}`);
-                        if (response.type === 'opaque' || response.status === 0) levelCorsError = true;
-                    }
-                } catch (fetchError: any) {
-                    console.error(`[HomePage] Error fetching ${source.name} from ${levelName} KB:`, fetchError.message, `URL: ${source.downloadURL}`);
-                    levelCorsError = true; // Assume CORS if fetch itself fails for a storage URL
-                }
+                    } else { if (response.type === 'opaque' || response.status === 0) levelCorsError = true; }
+                } catch (fetchError: any) { levelCorsError = true; }
             }
           } else if (source.type === 'pdf' && source.extractedText && source.extractionStatus === 'success') {
-            // For PDFs, we rely on the 'extractedText' field populated by the Genkit flow.
             textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text):\n${source.extractedText}\n---`);
           }
         }
         setContent(textFileContents.join('\n\n'));
-      } else {
-        setSummary('');
-        setContent('');
-      }
-    } catch (e: any) {
-        toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge. ${e.message || ''}`.trim(), variant: "destructive"});
-        // Assuming any error here could be CORS or network related, affecting file access
-        levelCorsError = true;
-    }
+      } else { setSummary(''); setContent(''); }
+    } catch (e: any) { toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge. ${e.message || ''}`.trim(), variant: "destructive"}); levelCorsError = true; }
     return levelCorsError;
   }, [toast]);
 
@@ -940,56 +733,23 @@ export default function HomePage() {
       setIsLoadingKnowledge(true);
       setCorsErrorEncountered(false);
       let anyCorsError = false;
-
       try {
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
-        let localApiKey: string | null = null;
-        let localVoiceId: string | null = null;
-        let localUseTtsApi: boolean = true;
-
+        let localApiKey: string | null = null, localVoiceId: string | null = null, localUseTtsApi: boolean = true;
         if (apiKeysDocSnap.exists()) {
           const keys = apiKeysDocSnap.data();
-           console.log("[HomePage - fetchAllData] Raw API Keys from Firestore:", {
-            tts: keys.tts,
-            voiceId: keys.voiceId,
-            useTtsApi: keys.useTtsApi,
-            gemini: keys.gemini, 
-            stt: keys.stt
-          });
-
-
           localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
           localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
           localUseTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
-          console.log("[HomePage - fetchAllData] Processed useTtsApi from Firestore:", localUseTtsApi);
-
-
-          setElevenLabsApiKey(localApiKey);
-          setElevenLabsVoiceId(localVoiceId);
-          setUseTtsApi(localUseTtsApi);
-
+          setElevenLabsApiKey(localApiKey); setElevenLabsVoiceId(localVoiceId); setUseTtsApi(localUseTtsApi);
           if (localUseTtsApi && (!localApiKey || !localVoiceId)) {
-            toast({
-              title: "TTS Configuration Issue",
-              description: "Custom TTS API is enabled via toggle, but the API Key or Voice ID field is effectively empty or missing in settings. Falling back to browser default voice.",
-              variant: "default",
-              duration: 8000,
-            });
+            toast({ title: "TTS Configuration Issue", description: "Custom TTS API is ON, but API Key/Voice ID is missing. Using browser default.", variant: "default", duration: 8000 });
           }
         } else {
-          setElevenLabsApiKey(null);
-          setElevenLabsVoiceId(null);
-          setUseTtsApi(true); 
-          console.log("[HomePage - fetchAllData] API keys config doc not found. Defaulting useTtsApi to true.");
-          toast({
-            title: "TTS Configuration Missing",
-            description: `API key configuration document not found in Firestore ('${FIRESTORE_API_KEYS_PATH}'). Custom TTS may not work. Falling back to browser default voice if needed. Please configure in Admin Panel.`,
-            variant: "default",
-            duration: 8000,
-          });
+          setElevenLabsApiKey(null); setElevenLabsVoiceId(null); setUseTtsApi(true); 
+          toast({ title: "TTS Configuration Missing", description: `API keys not found. Custom TTS may not work. Configure in Admin.`, variant: "default", duration: 8000 });
         }
-
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
         const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
         if (siteAssetsDocSnap.exists()) {
@@ -1000,76 +760,35 @@ export default function HomePage() {
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
           setUseKnowledgeInGreeting(typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true);
           setCustomGreeting(assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
+        } else { /* Use defaults */ }
+      } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
 
-        } else {
-          setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
-          setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-          setPersonaTraits(DEFAULT_PERSONA_TRAITS);
-          setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
-          setUseKnowledgeInGreeting(true);
-          setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
-        }
-      } catch (e: any) {
-        toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown error'}. Using defaults.`, variant: "destructive"});
-        setElevenLabsApiKey(null);
-        setElevenLabsVoiceId(null);
-        setUseTtsApi(true);
-        setUseKnowledgeInGreeting(true);
-        setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
-      }
-
-      const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh);
-      if (highError) anyCorsError = true;
-      const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium);
-      if (mediumError) anyCorsError = true;
-      const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setKnowledgeFileSummaryLow, setDynamicKnowledgeContentLow);
-      if (lowError) anyCorsError = true;
-
-      if (anyCorsError) {
-        setCorsErrorEncountered(true);
-      }
-
+      const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh); if (highError) anyCorsError = true;
+      const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium); if (mediumError) anyCorsError = true;
+      const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setKnowledgeFileSummaryLow, setDynamicKnowledgeContentLow); if (lowError) anyCorsError = true;
+      if (anyCorsError) setCorsErrorEncountered(true);
       setIsLoadingKnowledge(false);
     };
     fetchAllData();
   }, [toast, fetchAndProcessKnowledgeLevel]);
 
   const performResetOnUnmountRef = useRef(resetConversation);
-  useEffect(() => {
-    performResetOnUnmountRef.current = resetConversation;
-  }, [resetConversation]);
+  useEffect(() => { performResetOnUnmountRef.current = resetConversation; }, [resetConversation]);
+  useEffect(() => { const performResetOnUnmount = performResetOnUnmountRef.current; return () => { performResetOnUnmount(); }; }, []);
 
-  useEffect(() => {
-    const performResetOnUnmount = performResetOnUnmountRef.current;
-    return () => {
-      performResetOnUnmount();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) {
-      setIsSplashImageLoaded(false);
-    } else {
-      setIsSplashImageLoaded(true);
-    }
-  }, [splashImageSrc]);
+  useEffect(() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(false); else setIsSplashImageLoaded(true); }, [splashImageSrc]);
 
   useEffect(() => {
     const handleNavigateToSplash = () => {
-      if (messagesRef.current.length > 0 && !showSaveDialog) {
-        isEndingSessionRef.current = true;
-        setShowLogForSaveConfirmation(true);
-        setShowSaveDialog(true);
-      } else if (!showSaveDialog) {
-        resetConversation();
-        setShowSplashScreen(true);
+      if (messagesRef.current.length > 0 && !hasConversationEnded) {
+        handleEndChatManually(); // This will set hasConversationEnded, then the UI will show "Start New Chat"
+      } else { // If already ended or no messages, just go to splash
+        handleStartNewChat();
       }
     };
     window.addEventListener('navigateToSplashScreen', handleNavigateToSplash);
-    return () => {
-      window.removeEventListener('navigateToSplashScreen', handleNavigateToSplash);
-    };
-  }, [resetConversation, showSaveDialog]);
+    return () => window.removeEventListener('navigateToSplashScreen', handleNavigateToSplash);
+  }, [hasConversationEnded]); // Added hasConversationEnded as dependency
 
 
   const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
@@ -1078,70 +797,19 @@ export default function HomePage() {
         <AlertTitle>Critical: Knowledge Base Access Issue (CORS)</AlertTitle>
         <AlertDescription className="space-y-2 text-left">
           <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
-
            <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
           <ul className="list-disc list-inside space-y-1 text-xs pl-4">
               <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
               <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
               <li>Verify with <code>gsutil cors get gs://your-storage-bucket-id.appspot.com</code> that the active policy on the bucket includes this exact Studio origin. Replace <code>your-storage-bucket-id.appspot.com</code> with your actual bucket ID.</li>
           </ul>
-
           <p className="font-semibold mt-2">General CORS Troubleshooting for Firebase Storage:</p>
           <ol className="list-decimal list-inside space-y-1 text-xs">
-            <li>
-              <strong>Identify ALL Your App's Origins:</strong>
-              <ul className="list-disc list-inside ml-4">
-                <li>Firebase Studio: In your Studio browser's developer console (F12, Console tab), find the CORS error. Copy the **exact "origin"** shown.</li>
-                <li>Deployed App: e.g., <code>https://your-app-name.web.app</code> (or your custom domain).</li>
-                <li>Local Development: e.g., <code>http://localhost:9002</code>, <code>http://localhost:3000</code>.</li>
-              </ul>
-            </li>
-            <li>
-              <strong>Create/Update <code>cors-config.json</code> file with ALL origins:</strong>
-              <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
-{`[
-  {
-    "origin": [
-      "https://YOUR_FIREBASE_STUDIO_ORIGIN_HERE",
-      "https://YOUR_DEPLOYED_APP_ORIGIN_HERE",
-      "http://localhost:3000",
-      "http://localhost:9002"
-    ],
-    "method": [
-      "GET",
-      "HEAD",
-      "OPTIONS"
-    ],
-    "responseHeader": [
-      "Content-Type",
-      "Access-Control-Allow-Origin"
-    ],
-    "maxAgeSeconds": 3600
-  }
-]`}
-              </pre>
-            </li>
-            <li>
-              <strong>Identify Your GCS Bucket ID:</strong>
-              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>your-project-id.appspot.com</code>).
-            </li>
-            <li>
-              <strong>Use \`gsutil\` (Google Cloud SDK command-line):</strong>
-              <ul className="list-disc list-inside ml-4">
-                <li>Open terminal/shell with \`gsutil\` configured.</li>
-                <li>Navigate to where \`cors-config.json\` is saved.</li>
-                <li>
-                  Set policy: <code>gsutil cors set cors-config.json gs://your-storage-bucket-id.appspot.com</code> (Replace with your bucket ID)
-                </li>
-                <li>
-                  Verify: <code>gsutil cors get gs://your-storage-bucket-id.appspot.com</code>
-                  <br />The output **MUST** match your \`cors-config.json\`.
-                </li>
-              </ul>
-            </li>
-            <li>
-              <strong>Wait &amp; Test:</strong> Allow 5-10 min for settings to propagate. **Clear browser cache AND cookies thoroughly.** Test in a new Incognito/Private window.
-            </li>
+            <li><strong>Identify ALL Your App's Origins</strong> (Studio, Deployed, Local).</li>
+            <li><strong>Create/Update <code>cors-config.json</code> file with ALL origins.</strong></li>
+            <li><strong>Identify Your GCS Bucket ID.</strong></li>
+            <li><strong>Use \`gsutil\` to set and verify the policy on your bucket.</strong></li>
+            <li><strong>Wait &amp; Test:</strong> Allow 5-10 min. Clear browser cache/cookies. Test in Incognito.</li>
           </ol>
           <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved.</p>
         </AlertDescription>
@@ -1161,64 +829,23 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="flex flex-col items-center space-y-6">
             <Image
-              src={splashImageSrc}
-              alt="AI Chat Splash"
-              width={400}
-              height={267}
-              className={cn(
-                "rounded-lg shadow-md object-cover transition-opacity duration-700 ease-in-out",
-                (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC && !isSplashImageLoaded) ? "opacity-0" : "opacity-100"
-              )}
-              priority
-              unoptimized={splashImageSrc.startsWith('data:image/')}
+              src={splashImageSrc} alt="AI Chat Splash" width={400} height={267}
+              className={cn("rounded-lg shadow-md object-cover transition-opacity duration-700 ease-in-out", (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC && !isSplashImageLoaded) ? "opacity-0" : "opacity-100")}
+              priority unoptimized={splashImageSrc.startsWith('data:image/')}
               onLoad={() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(true); }}
-              onError={() => {
-                setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-                setIsSplashImageLoaded(true);
-              }}
+              onError={() => { setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC); setIsSplashImageLoaded(true); }}
               data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
             />
             <p className="text-base font-semibold text-foreground">Choose your preferred way to interact:</p>
-             {isLoadingKnowledge && (
-                <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
-                    <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" />
-                    Connecting to knowledge bases...
-                </div>
-            )}
-            <RadioGroup
-              value={selectedInitialMode}
-              onValueChange={(value: CommunicationMode) => setSelectedInitialMode(value)}
-              className="w-full space-y-2"
-            >
-              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="audio-only" id="r1" disabled={isLoadingKnowledge}/>
-                <Label htmlFor="r1" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio Only</Label>
-              </div>
-              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="audio-text" id="r2" disabled={isLoadingKnowledge}/>
-                <Label htmlFor="r2" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio &amp; Text (Recommended)</Label>
-              </div>
-              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors">
-                <RadioGroupItem value="text-only" id="r3" disabled={isLoadingKnowledge}/>
-                <Label htmlFor="r3" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Text Only</Label>
-              </div>
+             {isLoadingKnowledge && ( <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30"> <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" /> Connecting to knowledge bases... </div> )}
+            <RadioGroup value={selectedInitialMode} onValueChange={(value: CommunicationMode) => setSelectedInitialMode(value)} className="w-full space-y-2">
+              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="audio-only" id="r1" disabled={isLoadingKnowledge}/> <Label htmlFor="r1" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio Only</Label> </div>
+              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="audio-text" id="r2" disabled={isLoadingKnowledge}/> <Label htmlFor="r2" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio &amp; Text (Recommended)</Label> </div>
+              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="text-only" id="r3" disabled={isLoadingKnowledge}/> <Label htmlFor="r3" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Text Only</Label> </div>
             </RadioGroup>
-            <Button onClick={handleModeSelectionSubmit} size="lg" className="w-full" disabled={isLoadingKnowledge}>
-              <CheckCircle className="mr-2"/>
-              {isLoadingKnowledge ? "Loading..." : "Start Chatting"}
-            </Button>
-             {!isLoadingKnowledge && useTtsApi && (elevenLabsApiKey === null || elevenLabsVoiceId === null) && (
-                <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2">
-                    <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" />
-                    <span>Custom TTS is ON, but API key/Voice ID may be missing or empty. Voice features might be limited. Using browser default TTS if needed.</span>
-                </div>
-            )}
-             {!isLoadingKnowledge && !useTtsApi && (
-                <div className="flex items-start text-xs text-muted-foreground p-2 border border-border rounded-md mt-2 bg-secondary/20">
-                    <Info className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" />
-                    <span>Custom TTS API is currently OFF. Using browser default voice.</span>
-                </div>
-            )}
+            <Button onClick={handleModeSelectionSubmit} size="lg" className="w-full" disabled={isLoadingKnowledge}> <CheckCircle className="mr-2"/> {isLoadingKnowledge ? "Loading..." : "Start Chatting"} </Button>
+             {!isLoadingKnowledge && useTtsApi && (elevenLabsApiKey === null || elevenLabsVoiceId === null) && ( <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2"> <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" /> <span>Custom TTS is ON, but API key/Voice ID may be missing or empty. Voice features might be limited. Using browser default TTS if needed.</span> </div> )}
+             {!isLoadingKnowledge && !useTtsApi && ( <div className="flex items-start text-xs text-muted-foreground p-2 border border-border rounded-md mt-2 bg-secondary/20"> <Info className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" /> <span>Custom TTS API is currently OFF. Using browser default voice.</span> </div> )}
             {corsTroubleshootingAlert}
           </CardContent>
         </Card>
@@ -1227,118 +854,54 @@ export default function HomePage() {
   }
 
   const imageProps: React.ComponentProps<typeof Image> = {
-    src: avatarSrc,
-    alt: "AI Blair Avatar",
+    src: avatarSrc, alt: "AI Blair Avatar",
     width: communicationMode === 'audio-only' ? 200 : 120,
     height: communicationMode === 'audio-only' ? 200 : 120,
-    className: cn(
-      "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
-      isSpeaking && "animate-pulse-speak"
-    ),
-    priority: true,
-    unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.startsWith('blob:') || !avatarSrc.startsWith('https://'),
-    onError: () => {
-      setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
-    }
+    className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", isSpeaking && "animate-pulse-speak"),
+    priority: true, unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.startsWith('blob:') || !avatarSrc.startsWith('https://'),
+    onError: () => setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL)
   };
-
-  if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) {
-    (imageProps as any)['data-ai-hint'] = "professional woman";
-  }
-
+  if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) { (imageProps as any)['data-ai-hint'] = "professional woman"; }
 
   const showPreparingGreeting = !aiHasInitiatedConversation && isSendingMessage && messagesRef.current.length === 0;
-
-  const showSpeakButtonAudioOnly =
-      communicationMode === 'audio-only' &&
-      aiHasInitiatedConversation &&
-      !isListening &&
-      !isSendingMessage &&
-      !isSpeaking &&
-      !showSaveDialog &&
-      !showPreparingAudioResponseIndicator &&
-      !(messagesRef.current.length === 1 && messagesRef.current[0]?.sender === 'ai' && aiHasInitiatedConversation);
-
+  const showSpeakButtonAudioOnly = communicationMode === 'audio-only' && aiHasInitiatedConversation && !isListening && !isSendingMessage && !isSpeaking && !hasConversationEnded && !showPreparingAudioResponseIndicator && !(messagesRef.current.length === 1 && messagesRef.current[0]?.sender === 'ai' && aiHasInitiatedConversation);
 
   const mainContent = () => {
     if (isLoadingKnowledge) {
-        return (
-            <div className="flex flex-col items-center justify-center h-full text-center py-8">
-                <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
-                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Bases</h2>
-                <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p>
-            </div>
-        );
+        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Bases</h2> <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p> </div> );
     }
 
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
           {corsTroubleshootingAlert}
-          <Image {...imageProps} />
-          <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask blAIr</h2>
-
-          <div className="mt-4 flex h-12 w-full items-center justify-center">
-            {showPreparingGreeting ? (
-              <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse">
-                Preparing greeting...
-              </div>
-            ) : isListening ? (
-              <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse">
-                <Mic size={20} className="mr-2" /> Listening...
-              </div>
-            ) : showPreparingAudioResponseIndicator && !isSpeaking && !isListening ? (
-              <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse">
-                <Loader2 size={20} className="mr-2 animate-spin" /> Preparing
-                response...
-              </div>
+          {!hasConversationEnded && <Image {...imageProps} />}
+          {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask blAIr</h2>}
+          
+          <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
+            {showPreparingGreeting ? ( <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> Preparing greeting... </div>
+            ) : isListening ? ( <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>
+            ) : showPreparingAudioResponseIndicator && !isSpeaking && !isListening ? ( <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing response... </div>
             ) : null }
           </div>
 
-          {(messagesRef.current.length > 0 && showLogForSaveConfirmation) && (
-            <div className="w-full max-w-md mt-6">
+          {(messagesRef.current.length > 0 && hasConversationEnded) && (
+            <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
+                 <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog messages={messagesRef.current} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
+                 <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
+                    <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
+                    <Button onClick={handleStartNewChat}> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+                 </div>
             </div>
           )}
 
-          {showSpeakButtonAudioOnly && (
-             <Button onClick={() => toggleListeningRef.current(true)} variant="outline" size="lg" className="mt-6">
-                <Mic size={24} className="mr-2"/> Speak
-            </Button>
-          )}
-          {aiHasInitiatedConversation && !showSaveDialog && (
-            <Button
-              onClick={handleEndChatManually}
-              variant="default"
-              size="default"
-              className="mt-8"
-              disabled={isSpeaking || isSendingMessage || showSaveDialog}
-            >
-              <Power className="mr-2 h-5 w-5" /> End Chat
-            </Button>
-          )}
-           <AlertDialog open={showSaveDialog} onOpenChange={(open) => {
-             if (!open && isEndingSessionRef.current) {
-                handleCloseSaveDialog(false);
-             }
-             setShowSaveDialog(open);
-           }}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Save Conversation?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Would you like to save the conversation log to your computer as a PDF?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => handleCloseSaveDialog(false)}>Don&apos;t Save</AlertDialogCancel>
-                <AlertDialogAction onClick={() => handleCloseSaveDialog(true)}>Save as PDF</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {showSpeakButtonAudioOnly && ( <Button onClick={() => toggleListeningRef.current(true)} variant="outline" size="lg" className="mt-6"> <Mic size={24} className="mr-2"/> Speak </Button> )}
+          {aiHasInitiatedConversation && !hasConversationEnded && ( <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8" disabled={isSpeaking || isSendingMessage}> <Power className="mr-2 h-5 w-5" /> End Chat </Button> )}
         </div>
       );
     }
+    // Audio & Text or Text Only Mode
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
         <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
@@ -1346,59 +909,34 @@ export default function HomePage() {
             <CardContent className="pt-6 flex flex-col items-center">
               <Image {...imageProps} />
               <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">Ask blAIr</h2>
-              {showPreparingGreeting && (
-                <p className="mt-2 text-center text-base font-semibold text-muted-foreground animate-pulse">
-                  Preparing greeting...
-                </p>
-              )}
+              {showPreparingGreeting && ( <p className="mt-2 text-center text-base font-semibold text-muted-foreground animate-pulse"> Preparing greeting... </p> )}
             </CardContent>
           </Card>
            {corsTroubleshootingAlert}
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
-          <ConversationLog messages={messagesRef.current} isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation} avatarSrc={avatarSrc} />
+          <ConversationLog messages={messagesRef.current} isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded} avatarSrc={avatarSrc} />
           <MessageInput
             onSendMessage={handleSendMessageRef.current}
-            isSending={isSendingMessage}
-            isSpeaking={isSpeaking}
+            isSending={isSendingMessage && !hasConversationEnded}
+            isSpeaking={isSpeaking && !hasConversationEnded}
             showMicButton={communicationModeRef.current === 'audio-text'}
-            isListening={isListening}
+            isListening={isListening && !hasConversationEnded}
             onToggleListening={() => toggleListeningRef.current()}
             inputValue={inputValue}
             onInputValueChange={setInputValue}
-            disabled={showSaveDialog || isEndingSessionRef.current || (isSendingMessage && aiHasInitiatedConversation)}
+            disabled={hasConversationEnded || (isSendingMessage && aiHasInitiatedConversation)}
           />
-          {aiHasInitiatedConversation && !showSaveDialog && (
+          {hasConversationEnded ? (
+             <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
+                <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
+                <Button onClick={handleStartNewChat}> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+             </div>
+          ) : aiHasInitiatedConversation && (
              <div className="mt-3 flex justify-end">
-                <Button
-                    onClick={handleEndChatManually}
-                    variant="outline"
-                    size="sm"
-                    disabled={isSpeaking || isSendingMessage || showSaveDialog}
-                >
-                    <Power className="mr-2 h-4 w-4" /> End Chat
-                </Button>
+                <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}> <Power className="mr-2 h-4 w-4" /> End Chat </Button>
              </div>
           )}
-            <AlertDialog open={showSaveDialog} onOpenChange={(open) => {
-                if (!open && isEndingSessionRef.current) {
-                    handleCloseSaveDialog(false);
-                }
-                setShowSaveDialog(open);
-            }}>
-                <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Save Conversation?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                    Would you like to save the conversation log to your computer as a PDF?
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => handleCloseSaveDialog(false)}>Don&apos;t Save</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleCloseSaveDialog(true)}>Save as PDF</AlertDialogAction>
-                </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
         </div>
       </div>
     );
@@ -1412,3 +950,4 @@ export default function HomePage() {
     </div>
   );
 }
+
