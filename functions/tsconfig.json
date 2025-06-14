@@ -14,7 +14,6 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true
   },
-  "compileOnSave": true,
   "include": [
     "src/**/*.ts"
   ],
