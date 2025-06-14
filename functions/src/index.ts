@@ -44,12 +44,20 @@ export const extractTextFromPdf = functions
     }
 
     if (contentType === 'application/pdf') {
-        functions.logger.info(`[extractTextFromPdf - Placeholder] PDF file ${filePath} detected. Text extraction is now primarily handled client-side via a Genkit flow after upload. This function serves as a basic trigger log or for any other potential onFinalize actions not related to direct text parsing here.`);
+        functions.logger.info(
+          `[extractTextFromPdf - Placeholder] PDF file ${filePath} detected. ` +
+          'Text extraction is now primarily handled client-side via a Genkit flow after upload. ' +
+          'This function serves as a basic trigger log or for any other potential onFinalize ' +
+          'actions not related to direct text parsing here.'
+        );
         // Future: Could add a flag to the PDF's metadata in Firestore here if needed,
         // e.g., { needs_verification: true }, if some backend check is still desired.
         // For now, all primary extraction logic is client-initiated.
     } else {
-        functions.logger.info(`[extractTextFromPdf - Placeholder] Non-PDF file ${filePath} detected (contentType: ${contentType}). No specific action taken by this placeholder function.`);
+        functions.logger.info(
+          `[extractTextFromPdf - Placeholder] Non-PDF file ${filePath} detected ` +
+          `(contentType: ${contentType}). No specific action taken by this placeholder function.`
+        );
     }
 
     // This function no longer performs text extraction or writes to the 'sources' collection.
