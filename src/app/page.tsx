@@ -276,7 +276,7 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current) {
-        setHasConversationEnded(true); // Set state to trigger UI update for end-of-chat
+        setHasConversationEnded(true); 
         return;
     }
 
@@ -414,10 +414,14 @@ export default function HomePage() {
           }
           return;
         } else {
-          // TTS API Error
+          const errorBody = await response.text();
+          toast({ title: `TTS API Error (${response.status})`, description: `ElevenLabs: ${errorBody.substring(0,100)}. Using browser default.`, variant: "destructive", duration: 8000 });
         }
       } catch (error: any) {
-         // Connection Error
+         toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
+         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+            setCorsErrorEncountered(true); // Potentially a CORS or network issue with ElevenLabs
+         }
       }
     }
     browserSpeakInternal(textForSpeech);
@@ -460,7 +464,7 @@ export default function HomePage() {
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
         if (communicationModeRef.current === 'text-only') {
-            setHasConversationEnded(true); // Directly end for text-only
+            setHasConversationEnded(true); 
             return; 
         }
       }
@@ -625,9 +629,9 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        setHasConversationEnded(true); // Set immediately if we stopped AI speech
+        setHasConversationEnded(true); 
     } else {
-        setHasConversationEnded(true); // Set if AI wasn't speaking
+        setHasConversationEnded(true); 
     }
   };
 
@@ -781,14 +785,14 @@ export default function HomePage() {
   useEffect(() => {
     const handleNavigateToSplash = () => {
       if (messagesRef.current.length > 0 && !hasConversationEnded) {
-        handleEndChatManually(); // This will set hasConversationEnded, then the UI will show "Start New Chat"
-      } else { // If already ended or no messages, just go to splash
+        handleEndChatManually(); 
+      } else { 
         handleStartNewChat();
       }
     };
     window.addEventListener('navigateToSplashScreen', handleNavigateToSplash);
     return () => window.removeEventListener('navigateToSplashScreen', handleNavigateToSplash);
-  }, [hasConversationEnded]); // Added hasConversationEnded as dependency
+  }, [hasConversationEnded]);
 
 
   const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
@@ -891,7 +895,7 @@ export default function HomePage() {
                  <ConversationLog messages={messagesRef.current} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                     <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
-                    <Button onClick={handleStartNewChat}> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+                    <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
                  </div>
             </div>
           )}
@@ -930,7 +934,7 @@ export default function HomePage() {
           {hasConversationEnded ? (
              <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
                 <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
-                <Button onClick={handleStartNewChat}> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+                <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
              </div>
           ) : aiHasInitiatedConversation && (
              <div className="mt-3 flex justify-end">
@@ -950,4 +954,3 @@ export default function HomePage() {
     </div>
   );
 }
-
