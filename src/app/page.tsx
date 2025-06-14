@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import type { KnowledgeSource, KnowledgeSourceExtractionStatus } from '@/app/admin/knowledge-base/page';
 
 
 export interface Message {
@@ -66,15 +67,6 @@ const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
 const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
 const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
-
-
-interface PageKnowledgeSource {
-    id: string; // Added id for potential future use, e.g. linking
-    name: string;
-    type: 'text' | 'pdf' | 'document' | 'audio' | 'image' | 'other';
-    downloadURL?: string;
-    storagePath?: string; // For deriving filename if needed
-}
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
@@ -794,13 +786,7 @@ export default function HomePage() {
         }
         setIsSpeaking(false);
         isSpeakingRef.current = false;
-        // The save dialog will be triggered by handleAudioProcessEnd if AI was speaking.
-        // If handleAudioProcessEnd isn't called (e.g., canceled before natural end),
-        // we need to ensure the dialog still shows.
-        // However, handleAudioProcessEnd *will* be called by the cancel() or pause() operations.
-        // So, relying on handleAudioProcessEnd to show the dialog if isEndingSessionRef.current is true is fine.
     } else {
-        // If AI is not speaking, show the dialog directly.
         setShowSaveDialog(true);
     }
   };
@@ -887,17 +873,6 @@ export default function HomePage() {
       addMessage
     ]);
 
-  const getFilenameWithoutExtension = (filePath: string | undefined): string | null => {
-    if (!filePath) return null;
-    const pathSegments = filePath.split('/');
-    const fileNameWithExtension = pathSegments.pop();
-    if (!fileNameWithExtension) return null;
-    const lastDotIndex = fileNameWithExtension.lastIndexOf('.');
-    if (lastDotIndex === -1 || lastDotIndex === 0) return null;
-    return fileNameWithExtension.substring(0, lastDotIndex);
-  };
-
-
   const fetchAndProcessKnowledgeLevel = useCallback(async (
     levelPath: string,
     levelName: string,
@@ -908,50 +883,42 @@ export default function HomePage() {
     try {
       const kbMetaDocRef = doc(db, levelPath);
       const kbMetaDocSnap = await getDoc(kbMetaDocRef);
-      let sources: PageKnowledgeSource[] = [];
+      let sourcesFromDb: KnowledgeSource[] = [];
       if (kbMetaDocSnap.exists() && kbMetaDocSnap.data()?.sources) {
-        sources = kbMetaDocSnap.data().sources as PageKnowledgeSource[];
+        sourcesFromDb = kbMetaDocSnap.data().sources as KnowledgeSource[];
       }
 
-      if (sources.length > 0) {
+      if (sourcesFromDb.length > 0) {
         const summary = `The ${levelName.toLowerCase()} priority knowledge base includes these files: ` +
-                        sources.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
+                        sourcesFromDb.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
         setSummary(summary);
 
         const textFileContents: string[] = [];
-        for (const source of sources) {
+        for (const source of sourcesFromDb) {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
-            try {
-              const response = await fetch(source.downloadURL);
-              if (response.ok) {
-                const textContent = await response.text();
-                textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${textContent}\n---`);
-              } else {
-                console.warn(`[HomePage] Failed to fetch ${source.name} from ${levelName} KB. Status: ${response.status}. URL: ${source.downloadURL}`);
-                if (response.type === 'opaque' || response.status === 0) levelCorsError = true;
-              }
-            } catch (fetchError: any) {
-              console.error(`[HomePage] Error fetching ${source.name} from ${levelName} KB:`, fetchError.message, `URL: ${source.downloadURL}`);
-              levelCorsError = true;
-            }
-          } else if (source.type === 'pdf') {
-            const pdfFilename = getFilenameWithoutExtension(source.storagePath || source.name);
-            if (pdfFilename) {
-              try {
-                const pdfContentDocRef = doc(db, 'sources', pdfFilename);
-                const pdfContentDocSnap = await getDoc(pdfContentDocRef);
-                if (pdfContentDocSnap.exists() && pdfContentDocSnap.data()?.extractedText) {
-                  const extractedPdfText = pdfContentDocSnap.data()?.extractedText;
-                  textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text):\n${extractedPdfText}\n---`);
-                } else {
-                  // console.warn(`[HomePage] No extracted text found in 'sources/${pdfFilename}' for PDF: ${source.name} (${levelName}). Cloud Function may not have processed it yet or the document doesn't exist.`);
+            // For .txt files uploaded directly, we attempt to fetch their content.
+            // The admin panel also tries to read .txt content client-side and store in 'extractedText'.
+            // We prefer 'extractedText' if available and status is 'success'.
+            if (source.extractedText && source.extractionStatus === 'success') {
+                textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
+            } else if (source.downloadURL) { // Fallback to fetching if not pre-extracted
+                try {
+                    const response = await fetch(source.downloadURL);
+                    if (response.ok) {
+                        const textContent = await response.text();
+                        textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${textContent}\n---`);
+                    } else {
+                        console.warn(`[HomePage] Failed to fetch ${source.name} from ${levelName} KB. Status: ${response.status}. URL: ${source.downloadURL}`);
+                        if (response.type === 'opaque' || response.status === 0) levelCorsError = true;
+                    }
+                } catch (fetchError: any) {
+                    console.error(`[HomePage] Error fetching ${source.name} from ${levelName} KB:`, fetchError.message, `URL: ${source.downloadURL}`);
+                    levelCorsError = true; // Assume CORS if fetch itself fails for a storage URL
                 }
-              } catch (firestoreError: any) {
-                 console.error(`[HomePage] Error fetching extracted text for PDF ${source.name} (${levelName}) from 'sources/${pdfFilename}':`, firestoreError.message);
-              }
-            } else {
-              console.warn(`[HomePage] Could not determine filename for PDF source to fetch extracted text: ${source.name} (${levelName})`);
             }
+          } else if (source.type === 'pdf' && source.extractedText && source.extractionStatus === 'success') {
+            // For PDFs, we rely on the 'extractedText' field populated by the Genkit flow.
+            textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text):\n${source.extractedText}\n---`);
           }
         }
         setContent(textFileContents.join('\n\n'));
@@ -961,6 +928,7 @@ export default function HomePage() {
       }
     } catch (e: any) {
         toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge. ${e.message || ''}`.trim(), variant: "destructive"});
+        // Assuming any error here could be CORS or network related, affecting file access
         levelCorsError = true;
     }
     return levelCorsError;
@@ -986,7 +954,6 @@ export default function HomePage() {
             tts: keys.tts,
             voiceId: keys.voiceId,
             useTtsApi: keys.useTtsApi,
-            // gemini and stt are not directly used on this page but logged for completeness
             gemini: keys.gemini, 
             stt: keys.stt
           });
@@ -1013,7 +980,7 @@ export default function HomePage() {
         } else {
           setElevenLabsApiKey(null);
           setElevenLabsVoiceId(null);
-          setUseTtsApi(true); // Default to true if doc missing, matching admin panel default
+          setUseTtsApi(true); 
           console.log("[HomePage - fetchAllData] API keys config doc not found. Defaulting useTtsApi to true.");
           toast({
             title: "TTS Configuration Missing",
@@ -1116,7 +1083,7 @@ export default function HomePage() {
           <ul className="list-disc list-inside space-y-1 text-xs pl-4">
               <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
               <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
-              <li>Verify with <code>gsutil cors get gs://ai-blair-7fb8o.firebasestorage.app</code> that the active policy on the bucket includes this exact Studio origin.</li>
+              <li>Verify with <code>gsutil cors get gs://your-storage-bucket-id.appspot.com</code> that the active policy on the bucket includes this exact Studio origin. Replace <code>your-storage-bucket-id.appspot.com</code> with your actual bucket ID.</li>
           </ul>
 
           <p className="font-semibold mt-2">General CORS Troubleshooting for Firebase Storage:</p>
@@ -1124,19 +1091,19 @@ export default function HomePage() {
             <li>
               <strong>Identify ALL Your App's Origins:</strong>
               <ul className="list-disc list-inside ml-4">
-                <li>Firebase Studio: In your Studio browser's developer console (F12, Console tab), find the CORS error. Copy the **exact "origin"** shown (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
-                <li>Deployed App: e.g., <code>https://studio--ai-blair-7fb8o.us-central1.hosted.app</code> (or your custom domain).</li>
+                <li>Firebase Studio: In your Studio browser's developer console (F12, Console tab), find the CORS error. Copy the **exact "origin"** shown.</li>
+                <li>Deployed App: e.g., <code>https://your-app-name.web.app</code> (or your custom domain).</li>
                 <li>Local Development: e.g., <code>http://localhost:9002</code>, <code>http://localhost:3000</code>.</li>
               </ul>
             </li>
             <li>
-              <strong>Create/Update <code>cors-config.json</code> file with this exact content (replace the Studio origin if yours is different):</strong>
+              <strong>Create/Update <code>cors-config.json</code> file with ALL origins:</strong>
               <pre className="mt-1 p-2 bg-muted text-xs rounded-md overflow-x-auto">
 {`[
   {
     "origin": [
-      "https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev",
-      "https://studio--ai-blair-7fb8o.us-central1.hosted.app",
+      "https://YOUR_FIREBASE_STUDIO_ORIGIN_HERE",
+      "https://YOUR_DEPLOYED_APP_ORIGIN_HERE",
       "http://localhost:3000",
       "http://localhost:9002"
     ],
@@ -1156,7 +1123,7 @@ export default function HomePage() {
             </li>
             <li>
               <strong>Identify Your GCS Bucket ID:</strong>
-              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>ai-blair-7fb8o.appspot.com</code> or <code>ai-blair-7fb8o.firebasestorage.app</code>). Use the one that works with \`gsutil\`. You previously confirmed <code>ai-blair-7fb8o.firebasestorage.app</code> was correct for \`gsutil\`.
+              In Firebase Console > Storage > Files tab, your bucket ID is displayed (e.g., <code>your-project-id.appspot.com</code>).
             </li>
             <li>
               <strong>Use \`gsutil\` (Google Cloud SDK command-line):</strong>
@@ -1164,11 +1131,11 @@ export default function HomePage() {
                 <li>Open terminal/shell with \`gsutil\` configured.</li>
                 <li>Navigate to where \`cors-config.json\` is saved.</li>
                 <li>
-                  Set policy: <code>gsutil cors set cors-config.json gs://ai-blair-7fb8o.firebasestorage.app</code>
+                  Set policy: <code>gsutil cors set cors-config.json gs://your-storage-bucket-id.appspot.com</code> (Replace with your bucket ID)
                 </li>
                 <li>
-                  Verify: <code>gsutil cors get gs://ai-blair-7fb8o.firebasestorage.app</code>
-                  <br />The output **MUST** match your \`cors-config.json\`. If not, the \`set\` command failed or used the wrong bucket ID.
+                  Verify: <code>gsutil cors get gs://your-storage-bucket-id.appspot.com</code>
+                  <br />The output **MUST** match your \`cors-config.json\`.
                 </li>
               </ul>
             </li>

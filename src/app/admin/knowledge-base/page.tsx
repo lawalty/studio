@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, AlertTriangle, Brain } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -34,7 +34,10 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
+import { extractTextFromPdfUrl, type ExtractTextFromPdfUrlInput } from '@/ai/flows/extract-text-from-pdf-url-flow';
 
+
+export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
 
 export interface KnowledgeSource {
   id: string;
@@ -45,6 +48,9 @@ export interface KnowledgeSource {
   storagePath: string;
   downloadURL: string;
   description?: string;
+  extractedText?: string;
+  extractionStatus?: KnowledgeSourceExtractionStatus;
+  extractionError?: string;
 }
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
@@ -84,14 +90,6 @@ const getFileIcon = (type: KnowledgeSource['type']) => {
   }
 };
 
-const getFilenameWithoutExtensionFromString = (filenameWithExt: string | undefined): string | null => {
-    if (!filenameWithExt) return null;
-    const lastDotIndex = filenameWithExt.lastIndexOf('.');
-    if (lastDotIndex === -1 || lastDotIndex === 0) return null; // No extension or hidden file like .bashrc
-    return filenameWithExt.substring(0, lastDotIndex);
-};
-
-
 export default function KnowledgeBasePage() {
   const [sourcesHigh, setSourcesHigh] = useState<KnowledgeSource[]>([]);
   const [sourcesMedium, setSourcesMedium] = useState<KnowledgeSource[]>([]);
@@ -119,10 +117,7 @@ export default function KnowledgeBasePage() {
   const [editingSourceDetails, setEditingSourceDetails] = useState<{ source: KnowledgeSource; level: KnowledgeBaseLevel } | null>(null);
   const [descriptionInput, setDescriptionInput] = useState('');
   const [isSavingDescription, setIsSavingDescription] = useState(false);
-
-  const currentListenerUnsubscribeRef = useRef<(() => void) | null>(null);
-  const currentTrackingDocIdRef = useRef<string | null>(null);
-  const extractionToastTimoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isExtractingTextId, setIsExtractingTextId] = useState<string | null>(null);
 
 
   const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
@@ -147,13 +142,16 @@ export default function KnowledgeBasePage() {
   }, [sourcesHigh, sourcesMedium, sourcesLow, sourcesArchive]);
 
 
-  const saveSourcesToFirestore = useCallback(async (updatedSourcesToSave: KnowledgeSource[], level: KnowledgeBaseLevel): Promise<boolean> => {
+ const saveSourcesToFirestore = useCallback(async (updatedSourcesToSave: KnowledgeSource[], level: KnowledgeBaseLevel): Promise<boolean> => {
     try {
       const config = KB_CONFIG[level];
       const sourcesForDb = updatedSourcesToSave.map(s => ({
         id: s.id, name: s.name, type: s.type, size: s.size,
         uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
         description: s.description || '', 
+        extractedText: s.extractedText || '',
+        extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' ? 'pending' : 'not_applicable'),
+        extractionError: s.extractionError || '',
       }));
 
       if (sourcesForDb.some(s => !s.id || !s.downloadURL || !s.storagePath)) {
@@ -172,81 +170,6 @@ export default function KnowledgeBasePage() {
     }
   }, [toast]);
 
-  const monitorPdfExtraction = useCallback((documentId: string, userFriendlyFileName: string) => {
-    if (currentListenerUnsubscribeRef.current) {
-      currentListenerUnsubscribeRef.current();
-    }
-    if (extractionToastTimoutRef.current) {
-      clearTimeout(extractionToastTimoutRef.current);
-    }
-    currentTrackingDocIdRef.current = documentId;
-    console.log(`[KBPage - monitorPdfExtraction] Monitoring Firestore document: sources/${documentId} for file: ${userFriendlyFileName}`);
-
-    extractionToastTimoutRef.current = setTimeout(() => {
-      if (currentTrackingDocIdRef.current === documentId && currentListenerUnsubscribeRef.current) {
-        currentListenerUnsubscribeRef.current();
-        currentListenerUnsubscribeRef.current = null;
-        currentTrackingDocIdRef.current = null;
-        toast({ 
-            title: "PDF Processing Delayed",
-            description: `Text extraction for '${userFriendlyFileName}' (monitoring ID: ${documentId}) is taking longer than 2 minutes. The UI listener has timed out. Please check Cloud Function logs or Firestore at 'sources/${documentId}' for final status.`,
-            duration: 15000 // Increased duration for this important message
-        });
-      }
-    }, 2 * 60 * 1000); // 2 minutes timeout
-
-    currentListenerUnsubscribeRef.current = onSnapshot(doc(db, 'sources', documentId), (docSnap) => {
-      if (currentTrackingDocIdRef.current !== documentId || !currentListenerUnsubscribeRef.current) {
-        return; 
-      }
-
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        let processed = false;
-        if (data.extractionStatus === 'success') {
-          toast({ title: "PDF Processed", description: `Text successfully extracted from ${userFriendlyFileName}. Monitored ID: ${documentId}` });
-          processed = true;
-        } else if (data.extractionStatus === 'failed') {
-          toast({ title: "PDF Processing Error", description: `Failed to extract text from ${userFriendlyFileName} (ID: ${documentId}). Error: ${data.extractionError || 'Check Cloud Function logs.'}`, variant: "destructive", duration: 10000 });
-          processed = true;
-        } else if (data.extractedText && !data.extractionStatus && data.extractionStatus !== 'pending') {
-           toast({ title: "PDF Text Found", description: `Text for ${userFriendlyFileName} (ID: ${documentId}) is available.` });
-           processed = true;
-        }
-
-
-        if (processed) {
-          if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
-          if (currentListenerUnsubscribeRef.current) {
-            currentListenerUnsubscribeRef.current();
-            currentListenerUnsubscribeRef.current = null;
-          }
-          currentTrackingDocIdRef.current = null;
-        }
-      }
-    }, (error) => {
-        console.error(`[KBPage - monitorPdfExtraction] Error listening to Firestore document sources/${documentId}:`, error);
-        toast({ title: "Listener Error", description: `Error monitoring PDF extraction for ${userFriendlyFileName} (ID: ${documentId}).`, variant: "destructive"});
-        if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
-        if (currentListenerUnsubscribeRef.current) {
-            currentListenerUnsubscribeRef.current();
-            currentListenerUnsubscribeRef.current = null;
-        }
-        currentTrackingDocIdRef.current = null;
-    });
-  }, [toast]);
-
-  useEffect(() => {
-    return () => {
-      if (currentListenerUnsubscribeRef.current) {
-        currentListenerUnsubscribeRef.current();
-      }
-      if (extractionToastTimoutRef.current) {
-        clearTimeout(extractionToastTimoutRef.current);
-      }
-    };
-  }, []);
-
 
   const fetchSourcesForLevel = useCallback(async (level: KnowledgeBaseLevel) => {
     const setIsLoading = getIsLoadingSetter(level);
@@ -261,6 +184,9 @@ export default function KnowledgeBasePage() {
         const fetchedSources = (docSnap.data().sources as KnowledgeSource[]).map(s => ({
           ...s,
           description: s.description || '', 
+          extractedText: s.extractedText || '',
+          extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' ? 'pending' : 'not_applicable'),
+          extractionError: s.extractionError || '',
         }));
         setSources(fetchedSources);
       } else {
@@ -288,12 +214,52 @@ export default function KnowledgeBasePage() {
     }
   };
 
+  const triggerPdfTextExtraction = useCallback(async (sourceToExtract: KnowledgeSource, level: KnowledgeBaseLevel) => {
+    if (sourceToExtract.type !== 'pdf' || !sourceToExtract.downloadURL) {
+      toast({ title: "Cannot Extract", description: "Source is not a PDF or has no download URL.", variant: "destructive" });
+      return;
+    }
+    setIsExtractingTextId(sourceToExtract.id);
+    const setSources = getSourcesSetter(level);
+    
+    try {
+      toast({ title: "PDF Extraction Started", description: `Requesting text extraction for ${sourceToExtract.name}... This may take a moment.` });
+      
+      // Update status to pending in UI and DB
+      setSources(prev => prev.map(s => s.id === sourceToExtract.id ? { ...s, extractionStatus: 'pending', extractionError: '' } : s));
+      const currentSourcesForDB = getSourcesState(level).map(s => s.id === sourceToExtract.id ? { ...s, extractionStatus: 'pending', extractionError: '' } : s);
+      await saveSourcesToFirestore(currentSourcesForDB, level);
+
+      const input: ExtractTextFromPdfUrlInput = { pdfUrl: sourceToExtract.downloadURL };
+      const result = await extractTextFromPdfUrl(input);
+
+      setSources(prev => prev.map(s => s.id === sourceToExtract.id ? { ...s, extractedText: result.extractedText, extractionStatus: 'success', extractionError: '' } : s));
+      const successSourcesForDB = getSourcesState(level).map(s => s.id === sourceToExtract.id ? { ...s, extractedText: result.extractedText, extractionStatus: 'success', extractionError: '' } : s);
+      await saveSourcesToFirestore(successSourcesForDB, level);
+
+      toast({ title: "PDF Text Extracted", description: `Text successfully extracted from ${sourceToExtract.name}.` });
+
+    } catch (error: any) {
+      console.error(`[KBPage - triggerPdfTextExtraction - ${level}] Error extracting text for ${sourceToExtract.name}:`, error);
+      const errorMessage = error.message || 'Unknown error during extraction.';
+      
+      setSources(prev => prev.map(s => s.id === sourceToExtract.id ? { ...s, extractionStatus: 'failed', extractionError: errorMessage } : s));
+      const failedSourcesForDB = getSourcesState(level).map(s => s.id === sourceToExtract.id ? { ...s, extractionStatus: 'failed', extractionError: errorMessage } : s);
+      await saveSourcesToFirestore(failedSourcesForDB, level);
+
+      toast({ title: "PDF Extraction Failed", description: `Could not extract text from ${sourceToExtract.name}: ${errorMessage}`, variant: "destructive" });
+    } finally {
+      setIsExtractingTextId(null);
+    }
+  }, [getSourcesSetter, getSourcesState, saveSourcesToFirestore, toast]);
+
+
   const handleUpload = useCallback(async () => {
     if (!selectedFile) {
       toast({ title: "No file selected", variant: "destructive" });
       return;
     }
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isExtractingTextId) {
       toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
       return;
     }
@@ -306,7 +272,6 @@ export default function KnowledgeBasePage() {
     const currentSources = getSourcesState(targetLevel);
     
     const timestampForFile = Date.now();
-    // Sanitize original name: replace spaces with underscores, remove other problematic chars
     const sanitizedOriginalName = currentFile.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
     const filenameInStorageWithTimestamp = `${timestampForFile}-${sanitizedOriginalName}`;
     const filePath = `${config.storageFolder}${filenameInStorageWithTimestamp}`;
@@ -342,23 +307,42 @@ export default function KnowledgeBasePage() {
         uploadedAt: new Date().toISOString().split('T')[0],
         storagePath: filePath, downloadURL: downloadURL,
         description: uploadDescription || '',
+        extractionStatus: fileType === 'pdf' ? 'pending' : (fileType === 'text' ? 'success' : 'not_applicable'), // Text files are considered 'extracted'
+        extractedText: fileType === 'text' ? 'Content is directly in the file.' : '', // Placeholder for text files
+        extractionError: '',
       };
 
       const newListForStateAndFirestore = [newSource, ...currentSources];
-      
       const savedToDb = await saveSourcesToFirestore(newListForStateAndFirestore, targetLevel);
+
       if (savedToDb) {
         setSources(newListForStateAndFirestore);
         toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
 
         if (newSource.type === 'pdf') {
-          const docIdForSourceCollection = getFilenameWithoutExtensionFromString(filenameInStorageWithTimestamp);
-          if (docIdForSourceCollection) {
-            monitorPdfExtraction(docIdForSourceCollection, currentFile.name); 
-          } else {
-            console.warn(`[KBPage - Upload] Could not form documentId for monitoring PDF: ${currentFile.name} from storage filename ${filenameInStorageWithTimestamp}`);
-          }
+          // Asynchronously trigger Genkit flow for PDF text extraction
+          triggerPdfTextExtraction(newSource, targetLevel); 
+        } else if (newSource.type === 'text') {
+            // For text files, we can try to read content client-side for immediate 'extraction'
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const textContent = e.target?.result as string;
+                const updatedSourcesWithText = getSourcesState(targetLevel).map(s => 
+                    s.id === newSource.id ? { ...s, extractedText: textContent, extractionStatus: 'success' } : s
+                );
+                setSources(updatedSourcesWithText);
+                await saveSourcesToFirestore(updatedSourcesWithText, targetLevel);
+            };
+            reader.onerror = async () => {
+                const updatedSourcesWithError = getSourcesState(targetLevel).map(s => 
+                    s.id === newSource.id ? { ...s, extractionStatus: 'failed', extractionError: 'Failed to read text file content client-side.' } : s
+                );
+                setSources(updatedSourcesWithError);
+                await saveSourcesToFirestore(updatedSourcesWithError, targetLevel);
+            };
+            reader.readAsText(currentFile);
         }
+
       } else {
         toast({ title: "Database Save Failed", description: `File uploaded but DB save failed for ${targetLevel} KB. Reverting.`, variant: "destructive"});
         try { await deleteObject(fileRef); } catch (delError) { console.warn("Failed to clean up orphaned file after DB save error:", delError); }
@@ -371,10 +355,10 @@ export default function KnowledgeBasePage() {
       setUploadDescription('');
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, getSourcesState, saveSourcesToFirestore, uploadDescription, isCurrentlyUploading, isMovingSource, isSavingDescription, monitorPdfExtraction]);
+  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, getSourcesState, saveSourcesToFirestore, uploadDescription, isCurrentlyUploading, isMovingSource, isSavingDescription, triggerPdfTextExtraction, isExtractingTextId]);
 
   const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isExtractingTextId) {
       toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
       return;
     }
@@ -405,10 +389,10 @@ export default function KnowledgeBasePage() {
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name} from Storage or DB for ${level} KB.`, variant: "destructive" });
         setSources(originalSources); 
     }
-  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
+  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isExtractingTextId]);
 
   const handleRefreshSourceUrl = useCallback(async (sourceId: string, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isExtractingTextId) {
         toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
         return;
     }
@@ -446,17 +430,17 @@ export default function KnowledgeBasePage() {
       toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name} in ${level} KB.`, variant: "destructive"});
       setSources(originalSourcesSnapshot); 
     }
-  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
+  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isExtractingTextId]);
 
   const handleOpenMoveDialog = useCallback((source: KnowledgeSource, currentLevel: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isExtractingTextId) {
       toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
       return;
     }
     setSourceToMoveDetails({ source, currentLevel });
     setSelectedTargetMoveLevel(null);
     setShowMoveDialog(true);
-  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
+  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isExtractingTextId]);
 
   const handleConfirmMoveSource = useCallback(async () => {
     if (!sourceToMoveDetails || !selectedTargetMoveLevel || isMovingSource) return;
@@ -493,7 +477,16 @@ export default function KnowledgeBasePage() {
         throw new Error("Failed to get download URL for the copied file.");
       }
 
-      const movedSource: KnowledgeSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL, description: source.description || '' };
+      const movedSource: KnowledgeSource = { 
+        ...source, 
+        storagePath: newStoragePath, 
+        downloadURL: newDownloadURL, 
+        description: source.description || '',
+        // Carry over extraction status and text if already processed
+        extractedText: source.extractedText || '',
+        extractionStatus: source.extractionStatus || (source.type === 'pdf' ? 'pending' : 'not_applicable'),
+        extractionError: source.extractionError || '',
+       };
 
       const targetSetSources = getSourcesSetter(targetLevel);
       const targetCurrentSources = getSourcesState(targetLevel);
@@ -518,25 +511,14 @@ export default function KnowledgeBasePage() {
       await deleteObject(originalFileRef);
       toast({ title: "Move Successful", description: `${source.name} moved from ${currentLevel} to ${targetLevel}.` });
       
-      if (source.type === 'pdf') {
-        const oldDocIdForSourceCollection = getFilenameWithoutExtensionFromString(source.storagePath.split('/').pop());
-        if (oldDocIdForSourceCollection && currentTrackingDocIdRef.current === oldDocIdForSourceCollection) {
-          if (currentListenerUnsubscribeRef.current) currentListenerUnsubscribeRef.current();
-          if (extractionToastTimoutRef.current) clearTimeout(extractionToastTimoutRef.current);
-          currentTrackingDocIdRef.current = null;
-          currentListenerUnsubscribeRef.current = null;
-        }
-        const newDocIdForSourceCollection = getFilenameWithoutExtensionFromString(newFilenameInStorage);
-        if (newDocIdForSourceCollection) {
-            monitorPdfExtraction(newDocIdForSourceCollection, source.name);
-        }
-      }
-
+      // If it was a PDF and extraction was pending or failed, and now moved, it might need re-triggering if desired
+      // For now, if it was 'pending' and moved, it will remain 'pending' in new location.
+      // If it was 'success', text is carried over.
 
     } catch (error: any) {
       console.error(`[KBPage - Move] Error moving ${source.name}:`, error);
       toast({ title: "Move Failed", description: `Could not move source: ${error.message || 'Unknown error'}.`, variant: "destructive" });
-      if (tempFileRef && newDownloadURL) {
+      if (tempFileRef && newDownloadURL) { // Attempt to clean up copied file if target DB save failed or original delete failed
         const targetDocRef = doc(db, KB_CONFIG[targetLevel].firestorePath);
         const targetDocSnap = await getDoc(targetDocRef);
         const targetSources = targetDocSnap.data()?.sources as KnowledgeSource[] | undefined;
@@ -552,17 +534,17 @@ export default function KnowledgeBasePage() {
       setSourceToMoveDetails(null);
       setSelectedTargetMoveLevel(null);
     }
-  }, [sourceToMoveDetails, selectedTargetMoveLevel, isMovingSource, toast, getSourcesSetter, getSourcesState, saveSourcesToFirestore, fetchSourcesForLevel, monitorPdfExtraction]);
+  }, [sourceToMoveDetails, selectedTargetMoveLevel, isMovingSource, toast, getSourcesSetter, getSourcesState, saveSourcesToFirestore, fetchSourcesForLevel]);
 
   const handleOpenDescriptionDialog = useCallback((source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription) {
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isExtractingTextId) {
       toast({ title: "Operation in Progress", description: "Please wait for current operation to complete.", variant: "default" });
       return;
     }
     setEditingSourceDetails({ source, level });
     setDescriptionInput(source.description || '');
     setShowDescriptionDialog(true);
-  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription]);
+  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isExtractingTextId]);
 
   const handleSaveDescription = useCallback(async () => {
     if (!editingSourceDetails) return;
@@ -591,6 +573,55 @@ export default function KnowledgeBasePage() {
     setDescriptionInput('');
   }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, fetchSourcesForLevel]);
 
+  const renderExtractionStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
+    if (source.type !== 'pdf' && source.type !== 'text') return <span className="text-xs text-muted-foreground">N/A</span>;
+    if (source.type === 'text' && source.extractionStatus !== 'failed') return <span className="text-xs text-green-600">Available (text file)</span>;
+
+
+    const isProcessingThisFile = isExtractingTextId === source.id;
+
+    switch (source.extractionStatus) {
+      case 'pending':
+        return (
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-yellow-600">Pending AI</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 w-6 p-0" 
+              onClick={() => triggerPdfTextExtraction(source, level)} 
+              disabled={isProcessingThisFile || anyOperationInProgress}
+              aria-label="Retry PDF text extraction"
+            >
+              {isProcessingThisFile ? <Loader2 className="h-3 w-3 animate-spin" /> : <Brain className="h-3 w-3 text-yellow-600" />}
+            </Button>
+          </div>
+        );
+      case 'success':
+        return <span className="text-xs text-green-600">Extracted</span>;
+      case 'failed':
+        return (
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-red-600" title={source.extractionError || 'Extraction failed'}>Failed</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 w-6 p-0" 
+              onClick={() => triggerPdfTextExtraction(source, level)} 
+              disabled={isProcessingThisFile || anyOperationInProgress}
+              aria-label="Retry PDF text extraction"
+            >
+              {isProcessingThisFile ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3 text-red-600" />}
+            </Button>
+          </div>
+        );
+      case 'not_applicable':
+         return <span className="text-xs text-muted-foreground">N/A</span>;
+      default:
+        return <span className="text-xs text-gray-500">Unknown</span>;
+    }
+  };
+
 
   const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
     const sources = getSourcesState(level);
@@ -603,7 +634,7 @@ export default function KnowledgeBasePage() {
 
     const descriptionText = level === 'Archive'
       ? "Archived sources. Files here are not used by AI Blair for responses but are kept for record-keeping."
-      : `View and manage sources. Uploaded files are in Firebase Storage (folder: ${config.storageFolder}), metadata in Firestore (path: ${config.firestorePath}). Descriptions are for admin use only.`;
+      : `View and manage sources. Uploaded files are in Firebase Storage (folder: ${config.storageFolder}), metadata in Firestore (path: ${config.firestorePath}). Descriptions are for admin use only. For PDF files, text extraction is triggered automatically on upload using AI; status shown below.`;
 
     return (
       <Card className="mt-6">
@@ -631,8 +662,9 @@ export default function KnowledgeBasePage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Size</TableHead>
-                <TableHead>Uploaded At</TableHead>
-                <TableHead>Status/Link</TableHead>
+                <TableHead>Uploaded</TableHead>
+                <TableHead>Link/Refresh</TableHead>
+                <TableHead>Text Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -640,10 +672,10 @@ export default function KnowledgeBasePage() {
               {sources.map((source) => (
                 <TableRow key={source.id}>
                   <TableCell>{getFileIcon(source.type)}</TableCell>
-                  <TableCell className="font-medium break-all">{source.name}</TableCell>
+                  <TableCell className="font-medium break-all max-w-xs truncate" title={source.name}>{source.name}</TableCell>
                   <TableCell className="capitalize">{source.type}</TableCell>
                   <TableCell>
-                    <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={() => handleOpenDescriptionDialog(source, level)} disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
+                    <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={() => handleOpenDescriptionDialog(source, level)} disabled={anyOperationInProgress || isLoadingSources}>
                       <Edit3 className="h-3 w-3 mr-1" /> View/Edit
                     </Button>
                   </TableCell>
@@ -655,21 +687,22 @@ export default function KnowledgeBasePage() {
                         <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
                           View File
                         </a>
-                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
+                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0" disabled={anyOperationInProgress || isLoadingSources}>
                             <RefreshCw className="h-3 w-3" />
                         </Button>
                       </div>
                     ) : source.storagePath ? (
                         <span className="text-xs text-yellow-600">Processing...</span>
                     ) : (
-                        <span className="text-xs text-gray-500">Error or pending</span>
+                        <span className="text-xs text-gray-500">Error</span>
                     )}
                   </TableCell>
+                  <TableCell>{renderExtractionStatus(source, level)}</TableCell>
                   <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={anyOperationInProgress || isLoadingSources}>
                       <ArrowRightLeft className="h-4 w-4 text-blue-600" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={isCurrentlyUploading || isMovingSource || isLoadingSources || isSavingDescription}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={anyOperationInProgress || isLoadingSources}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>
@@ -684,7 +717,7 @@ export default function KnowledgeBasePage() {
   };
 
   const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
-  const anyOperationInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription;
+  const anyOperationInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isExtractingTextId;
 
   return (
     <div className="space-y-6">
@@ -693,6 +726,7 @@ export default function KnowledgeBasePage() {
           <CardTitle className="font-headline">Upload New Source</CardTitle>
           <CardDescription>
             Add content to AI Blair's knowledge base or archive. Select the target level and add an optional description before uploading.
+             For PDF files, text extraction via AI will be attempted automatically after upload.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -841,7 +875,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
-
-    
