@@ -1,8 +1,10 @@
 
 import type { Message } from '@/app/page';
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"; // Ensure ScrollBar is imported if used structurally
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"; 
 import ChatBubble from "./ChatBubble";
 import React, { useEffect, useRef } from 'react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Bot } from 'lucide-react';
 
 interface ConversationLogProps {
   messages: Message[];
@@ -12,7 +14,7 @@ interface ConversationLogProps {
 
 export default function ConversationLog({ messages, isLoadingAiResponse, avatarSrc }: ConversationLogProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null); // Ref for the viewport
+  const viewportRef = useRef<HTMLDivElement>(null); 
 
   useEffect(() => {
     if (viewportRef.current) {
@@ -20,19 +22,28 @@ export default function ConversationLog({ messages, isLoadingAiResponse, avatarS
     }
   }, [messages, isLoadingAiResponse]);
 
+  const DEFAULT_AVATAR_PLACEHOLDER_TYPING = "https://placehold.co/40x40.png";
+
   return (
     <ScrollArea
       className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
       ref={scrollAreaRef}
     >
-      <div ref={viewportRef} className="h-full w-full" data-testid="conversation-log-viewport"> {/* Added data-testid here */}
+      <div ref={viewportRef} className="h-full w-full" data-testid="conversation-log-viewport"> 
         {messages.map((msg) => (
           <ChatBubble key={msg.id} message={msg} avatarSrc={avatarSrc} />
         ))}
-        {isLoadingAiResponse && (
-          <div className="flex items-center justify-start mb-4">
-            {/* Using a simplified structure for the typing indicator to avoid avatar issues in PDF if it's complex */}
-            <div className="p-3 rounded-lg bg-secondary text-secondary-foreground shadow rounded-bl-none animate-pulse">
+        {isLoadingAiResponse && messages.length > 0 && (
+          <div className="flex mb-4 items-end animate-in fade-in duration-300 justify-start">
+             <Avatar className="h-8 w-8 mr-2 self-start">
+                {avatarSrc && !avatarSrc.startsWith('https://placehold.co') ? (
+                    <AvatarImage src={avatarSrc} alt="AI Avatar Typing" className="object-cover"/>
+                ) : (
+                    <AvatarImage src={DEFAULT_AVATAR_PLACEHOLDER_TYPING} alt="AI Avatar Placeholder Typing" data-ai-hint="professional woman" />
+                )}
+                <AvatarFallback><Bot size={20}/></AvatarFallback>
+            </Avatar>
+            <div className="max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg shadow bg-secondary text-secondary-foreground rounded-bl-none animate-pulse">
               <p className="text-sm">AI Blair is typing...</p>
             </div>
           </div>
@@ -43,7 +54,7 @@ export default function ConversationLog({ messages, isLoadingAiResponse, avatarS
           </div>
         )}
       </div>
-      <ScrollBar orientation="vertical" /> {/* Explicitly add ScrollBar if needed by ScrollArea structure */}
+      <ScrollBar orientation="vertical" /> 
     </ScrollArea>
   );
 }
