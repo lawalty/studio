@@ -68,7 +68,6 @@ export default function MessageInput({
       {showMicButton && (
         <Button
           type="button"
-          variant="outline"
           size="icon"
           onClick={onToggleListening}
           disabled={micButtonDisabled}
@@ -96,3 +95,4 @@ export default function MessageInput({
     </form>
   );
 }
+
