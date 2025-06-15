@@ -55,6 +55,13 @@ export default function MessageInput({
   // Disable send button if component is disabled, or if (listening and mic isn't shown - implies form submit is for stopping listening), or if (not listening AND (sending OR speaking OR input is empty))
   const sendButtonDisabled = disabled || (isListening && showMicButton ? false : ((isSending || isSpeaking) || inputValue.trim() === ''));
 
+  const placeholderText = disabled 
+    ? "Conversation ended. Please choose an option above." 
+    : isListening 
+      ? "Listening... Speak now or press send to finish." 
+      : showMicButton 
+        ? "Use the microphone or type your message..." 
+        : "Type your message...";
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex items-center gap-2">
@@ -73,7 +80,7 @@ export default function MessageInput({
       )}
       <Input
         type="text"
-        placeholder={disabled ? "Conversation ended. Please choose an option above." : (isListening ? "Listening... Speak now or press send to finish." : "Type your message...")}
+        placeholder={placeholderText}
         value={inputValue}
         onChange={(e) => onInputValueChange(e.target.value)}
         disabled={inputDisabled} 
@@ -89,4 +96,3 @@ export default function MessageInput({
     </form>
   );
 }
-
