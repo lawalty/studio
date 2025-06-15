@@ -255,8 +255,6 @@ export default function HomePage() {
       if (hasConversationEnded) { setIsListening(false); return; }
       if (communicationModeRef.current === 'text-only') { setIsListening(false); return; }
 
-      // When forceState is true (programmatic call), be less strict about checking isSpeakingRef.
-      // This is crucial after AI speaks and needs to immediately start listening.
       if (typeof forceState === 'undefined') { 
          if (isSpeakingRef.current) {
             toast({ title: "AI Speaking", description: "Please wait for AI Blair to finish speaking.", variant: "default"});
@@ -275,7 +273,7 @@ export default function HomePage() {
 
       try {
         if (communicationModeRef.current === 'audio-text') {
-           if (inputValueRef.current !== accumulatedTranscriptRef.current) { // Sync with potentially typed text
+           if (inputValueRef.current !== accumulatedTranscriptRef.current) { 
              accumulatedTranscriptRef.current = inputValueRef.current;
            }
         } else if (communicationModeRef.current === 'audio-only') {
@@ -291,18 +289,15 @@ export default function HomePage() {
       }
     } else { 
       if (recognitionRef.current) {
-         try { recognitionRef.current.stop(); } catch(e) { /* ignore */ } // onend will set isListening(false)
+         try { recognitionRef.current.stop(); } catch(e) { /* ignore */ } 
       } else {
         setIsListening(false); 
       }
 
-      if (sendTranscriptTimerRef.current) { // If user manually stops listening, cancel pending auto-send
+      if (sendTranscriptTimerRef.current) { 
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
-      // For audio-text, MessageInput's handleSubmit will send the inputValue if the form is submitted.
-      // If just the mic button is clicked to stop, the text remains in input.
-      // For audio-only, if stopped manually and there's text, send it.
       if (typeof forceState === 'undefined' && communicationModeRef.current === 'audio-only' && accumulatedTranscriptRef.current.trim() !== '') {
         handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
         accumulatedTranscriptRef.current = '';
@@ -345,7 +340,9 @@ export default function HomePage() {
         return;
     }
 
-    if ((communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') && !isEndingSessionRef.current && !hasConversationEnded) {
+    // Only auto-listen for "audio-only" mode.
+    // For "audio-text", wait for user interaction (mic click or type).
+    if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true);
     }
   }, [hasConversationEnded]);
@@ -486,7 +483,7 @@ export default function HomePage() {
 
     addMessage(text, 'user');
     if (communicationModeRef.current === 'audio-only' || (communicationModeRef.current === 'audio-text' && method === 'voice')) {
-        setInputValue(''); // Clear input field only if message was from voice in relevant modes
+        setInputValue(''); 
     }
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
@@ -551,9 +548,9 @@ export default function HomePage() {
     recognition.lang = 'en-US';
 
     if (communicationModeRef.current === 'audio-only') {
-        recognition.continuous = false; // Stops after first significant pause for audio-only
+        recognition.continuous = false; 
     } else if (communicationModeRef.current === 'audio-text') {
-        recognition.continuous = true;  // Allows longer utterances for audio-text
+        recognition.continuous = true;  
     }
 
 
@@ -577,18 +574,16 @@ export default function HomePage() {
       const newFinalText = finalTranscriptSegmentForCurrentEvent.trim();
 
       if (communicationModeRef.current === 'audio-text') {
-        // Append new final text to existing accumulated, then add interim
         const currentBaseTranscript = accumulatedTranscriptRef.current;
         const updatedAccumulated = (currentBaseTranscript + (currentBaseTranscript && newFinalText ? " " : "") + newFinalText).trim();
         
         setInputValue(updatedAccumulated + (interimTranscriptSegment ? (updatedAccumulated ? " " : "") + interimTranscriptSegment : ""));
 
         if (newFinalText) {
-            accumulatedTranscriptRef.current = updatedAccumulated; // Update ref only with confirmed final text
+            accumulatedTranscriptRef.current = updatedAccumulated; 
             if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
             
             sendTranscriptTimerRef.current = setTimeout(() => {
-                // Check if still listening and if the current input value matches what was accumulated (user hasn't typed over it)
                 if (isListeningRef.current && inputValueRef.current.trim() === accumulatedTranscriptRef.current.trim() && accumulatedTranscriptRef.current.trim() !== '') {
                     handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
                 }
@@ -596,11 +591,11 @@ export default function HomePage() {
             }, responsePauseTimeMs);
         }
       } else if (communicationModeRef.current === 'audio-only') {
-         if (newFinalText) { // Only process final, non-empty text
+         if (newFinalText) { 
             accumulatedTranscriptRef.current += newFinalText + ' '; 
             if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
             
-            setIsSendingMessage(true); // Show "Preparing response..." for audio-only
+            setIsSendingMessage(true);
 
             sendTranscriptTimerRef.current = setTimeout(() => {
                 if (accumulatedTranscriptRef.current.trim() !== '') {
@@ -611,7 +606,7 @@ export default function HomePage() {
                 sendTranscriptTimerRef.current = null; 
             }, responsePauseTimeMs);
          }
-         if (!isListeningRef.current && newFinalText) setIsListening(true); // Ensure listening state is true if we got results
+         if (!isListeningRef.current && newFinalText) setIsListening(true); 
       }
     };
 
@@ -626,7 +621,7 @@ export default function HomePage() {
 
       if (event.error === 'aborted') { /* Usually programmatic, handled by onend */ }
       else if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        if (!wasListeningBeforeError) { // if it was already false, silence prompt might have just happened
+        if (!wasListeningBeforeError) { 
           isAboutToSpeakForSilenceRef.current = false;
         }
       } else if (event.error === 'audio-capture') {
@@ -641,15 +636,15 @@ export default function HomePage() {
       setIsListening(false); 
 
       if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current) {
-        return; // Don't restart listening if AI is active or chat is ending
+        return; 
       }
 
       if (communicationModeRef.current === 'audio-only') {
-        if (sendTranscriptTimerRef.current) { // If timer is active, means onresult is handling the send
+        if (sendTranscriptTimerRef.current) { 
             return;
         }
 
-        if (accumulatedTranscriptRef.current.trim() === '' && wasListeningWhenRecognitionEnded) { // No speech captured, and was actually listening
+        if (accumulatedTranscriptRef.current.trim() === '' && wasListeningWhenRecognitionEnded) { 
           isAboutToSpeakForSilenceRef.current = true;
           setConsecutiveSilencePrompts(currentPrompts => {
             const newPromptCount = currentPrompts + 1;
@@ -661,23 +656,21 @@ export default function HomePage() {
             } else {
               const userName = getUserNameFromHistory(messagesRef.current);
               const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-              speakTextRef.current(promptMessage); // This will trigger handleAudioProcessEnd -> toggleListening(true)
+              speakTextRef.current(promptMessage); 
             }
             return newPromptCount;
           });
         } else if (accumulatedTranscriptRef.current.trim() !== '' && !sendTranscriptTimerRef.current && wasListeningWhenRecognitionEnded) {
-            // This case implies recognition stopped (e.g. continuous=false) and timer didn't fire or wasn't set, but there's text.
             handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
         } else if (wasListeningWhenRecognitionEnded && !isSpeakingRef.current && !isSendingMessage && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current ) {
-             // Safety net for audio-only if it stops unexpectedly without text and without a silence prompt scenario
              toggleListeningRef.current(true);
         }
       } else if (communicationModeRef.current === 'audio-text') {
-          // For audio-text (continuous=true), onend might mean prolonged silence or a browser/network issue.
-          // If no send timer is active (meaning we weren't in a user pause detection that would send),
-          // and the user didn't just manually stop it (which would clear the timer), try to restart.
-          if (wasListeningWhenRecognitionEnded && !sendTranscriptTimerRef.current && !isSpeakingRef.current && !isSendingMessage && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current) {
-               toggleListeningRef.current(true); // Attempt to recover listening
+          if (wasListeningWhenRecognitionEnded && !sendTranscriptTimerRef.current && !isSpeakingRef.current && !isSendingMessage && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current && !inputValueRef.current.trim()) {
+               // Do not automatically restart listening in audio-text mode after it ends,
+               // unless it was programmatically stopped by AI speaking (which is handled by handleAudioProcessEnd)
+               // or if the user sends a message (which is handled by handleSubmit/handleSendMessage).
+               // If recognition ends due to prolonged silence from the user, just stay stopped.
           }
       }
     };
@@ -755,15 +748,14 @@ export default function HomePage() {
     });
 
     try {
-      // Add a small delay to ensure all images (avatars) are rendered if they were just added.
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(conversationLogElement, {
-        scale: 2, // Increase scale for better quality
-        useCORS: true, // Important for external images
-        backgroundColor: '#FFFFFF', // Explicitly set background
-        height: conversationLogElement.scrollHeight, // Capture full scroll height
-        windowHeight: conversationLogElement.scrollHeight // Ensure full content is rendered
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#FFFFFF', 
+        height: conversationLogElement.scrollHeight, 
+        windowHeight: conversationLogElement.scrollHeight 
       });
 
       if (canvas.width === 0 || canvas.height === 0) {
@@ -774,27 +766,25 @@ export default function HomePage() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', // points
+        unit: 'pt', 
         format: 'a4',
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; // Margin in points
+      const pageMargin = 20; 
       const contentWidth = pdfWidth - (pageMargin * 2);
       
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; // Initial Y position for the image
+      let position = pageMargin; 
 
-      // Add the first page
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract visible area height
+      heightLeft -= (pdfHeight - (pageMargin * 2)); 
 
-      // Add more pages if needed
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)); // New Y position for the image on the new page
+        position = position - (pdfHeight - (pageMargin * 2)); 
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -852,7 +842,7 @@ export default function HomePage() {
             await speakTextRef.current(greetingToUse);
         } else {
              setShowPreparingGreeting(false);
-             if ((communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') && !isEndingSessionRef.current && !hasConversationEnded) {
+             if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
                 toggleListeningRef.current(true);
             }
         }
@@ -1056,11 +1046,10 @@ export default function HomePage() {
   const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null;
     if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
-    // For audio-only, isSendingMessage is now the primary indicator for "Preparing response"
     if (isSendingMessage && !isSpeaking) { 
       return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing response... </div>;
     }
-    if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) { // Actively listening for user speech
+    if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) { 
       return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
     }
     return null;
@@ -1133,7 +1122,7 @@ export default function HomePage() {
             inputValue={inputValue}
             onInputValueChange={(value) => {
                 setInputValue(value);
-                if (communicationModeRef.current === 'audio-text') { // Keep accumulatedTranscript in sync if user types
+                if (communicationModeRef.current === 'audio-text') { 
                     accumulatedTranscriptRef.current = value;
                 }
             }}
