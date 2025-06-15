@@ -50,7 +50,7 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful as
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
-const DEFAULT_RESPONSE_PAUSE_TIME_MS_MAIN_PAGE = 750; // This is for user's speaking pause in audio-only
+const DEFAULT_RESPONSE_PAUSE_TIME_MS_MAIN_PAGE = 750;
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -146,7 +146,7 @@ export default function HomePage() {
     }
     const rec = initializeSpeechRecognition();
     recognitionRef.current = rec;
-    setIsListening(false);
+    setIsListening(false); // Ensure listening is off when mode changes
     accumulatedTranscriptRef.current = '';
     if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
@@ -204,7 +204,7 @@ export default function HomePage() {
     dismissAllToasts();
     setMessages([]);
     setIsSendingMessage(false);
-    setAiHasInitiatedConversation(false); // Critical for re-greeting in current mode
+    setAiHasInitiatedConversation(false);
     setInputValue('');
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
@@ -256,14 +256,22 @@ export default function HomePage() {
       const targetIsListeningState = typeof forceState === 'boolean' ? forceState : !currentIsListening;
 
       if (targetIsListeningState === true) { // Attempting to START listening
-        if (hasConversationEnded || isSpeakingRef.current || isSendingMessage) return false;
+        if (hasConversationEnded) return false;
         if (communicationModeRef.current === 'text-only') return false;
+
+        // If this is a user-initiated toggle (forceState is undefined)
+        // AND (AI is speaking OR a message is being sent to AI), prevent starting.
+        if (typeof forceState === 'undefined' && (isSpeakingRef.current || isSendingMessage)) {
+            return false;
+        }
+        // For programmatic calls (forceState is true), these checks are bypassed,
+        // assuming the caller (e.g., handleAudioProcessEnd) has ensured it's safe to listen.
 
         if (sendTranscriptTimerRef.current) {
           clearTimeout(sendTranscriptTimerRef.current);
           sendTranscriptTimerRef.current = null;
         }
-        setShowPreparingAudioResponseIndicator(false); // Hide "Preparing" if we start listening
+        setShowPreparingAudioResponseIndicator(false);
 
         try {
           if (communicationModeRef.current === 'audio-text') setInputValue(accumulatedTranscriptRef.current);
@@ -279,11 +287,22 @@ export default function HomePage() {
         if (recognitionRef.current) {
            try { recognitionRef.current.stop(); } catch(e) { /* ignore */ }
         }
-        // Logic for sending accumulated transcript in audio-only (if any) is now handled in recognition.onend after timer
+        // For audio-only, if we stop listening and there's accumulated transcript, start the send timer.
+        if (communicationModeRef.current === 'audio-only' && accumulatedTranscriptRef.current.trim() !== '') {
+            if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
+            setShowPreparingAudioResponseIndicator(true); // Show "Preparing" as we wait for pause
+            sendTranscriptTimerRef.current = setTimeout(() => {
+                if (accumulatedTranscriptRef.current.trim() !== '') {
+                  handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
+                  accumulatedTranscriptRef.current = '';
+                }
+                sendTranscriptTimerRef.current = null;
+            }, responsePauseTimeMs);
+        }
         return false;
       }
     });
-  }, [toast, hasConversationEnded, isSendingMessage]);
+  }, [toast, hasConversationEnded, isSendingMessage, responsePauseTimeMs]);
 
   const toggleListeningRef = useRef(toggleListening);
   useEffect(() => {
@@ -298,7 +317,7 @@ export default function HomePage() {
     setShowPreparingGreeting(false);
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {/*ignore*/}
-        setIsListening(false); // Turn off listening when AI starts to speak
+        setIsListening(false);
     }
   }, []);
 
@@ -325,7 +344,7 @@ export default function HomePage() {
     }
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
-        toggleListeningRef.current(true);
+        toggleListeningRef.current(true); // forceState will be true
     }
   }, [hasConversationEnded]);
 
@@ -386,7 +405,7 @@ export default function HomePage() {
     }
     setIsSpeaking(false);
 
-    setShowPreparingAudioResponseIndicator(true); // Show "Preparing" until audio actually starts
+    setShowPreparingAudioResponseIndicator(true);
 
     if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
       const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
@@ -405,7 +424,7 @@ export default function HomePage() {
           if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
-          audio.onplay = handleActualAudioStart; // This will set isSpeaking true, hide "Preparing..."
+          audio.onplay = handleActualAudioStart;
           audio.onended = handleAudioProcessEnd;
           audio.onerror = (e: Event | string) => {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
@@ -452,26 +471,24 @@ export default function HomePage() {
 
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch(e) {/* ignore */}
-        setIsListening(false); // Stop listening when user sends message
+        setIsListening(false);
     }
      if (sendTranscriptTimerRef.current) {
       clearTimeout(sendTranscriptTimerRef.current);
       sendTranscriptTimerRef.current = null;
     }
-    accumulatedTranscriptRef.current = ''; // Clear accumulator as message is being sent
+    accumulatedTranscriptRef.current = '';
 
     addMessage(text, 'user');
     if (method === 'voice' && communicationModeRef.current === 'audio-only') {
-        setInputValue(''); // Clear visual input if it was somehow populated in audio-only
+        setInputValue('');
     }
     setIsSendingMessage(true);
-    setShowPreparingAudioResponseIndicator(true); // Show "Preparing" while AI thinks
+    setShowPreparingAudioResponseIndicator(true);
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
 
     const historyForGenkit = messagesRef.current
-        // Exclude the current user message being sent, as it's already added to `messages`
-        // and the Genkit flow receives it as `userMessage` input.
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
 
@@ -488,8 +505,7 @@ export default function HomePage() {
 
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       addMessage(result.aiResponse, 'ai');
-      setIsSendingMessage(false); // AI finished "thinking"
-      // "Preparing response" will be hidden by speakText -> handleActualAudioStart
+      setIsSendingMessage(false);
 
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
@@ -500,12 +516,10 @@ export default function HomePage() {
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       addMessage(errorMessage, 'ai');
       setIsSendingMessage(false);
-      setShowPreparingAudioResponseIndicator(false); // Hide "Preparing" on error
+      setShowPreparingAudioResponseIndicator(false);
       if (isEndingSessionRef.current) {
         setHasConversationEnded(true);
       } else if (communicationModeRef.current !== 'text-only') {
-        // If AI errored and we are in audio mode, try to speak the error message
-        // This will call handleAudioProcessEnd, which should re-enable listening for audio-only
         await speakTextRef.current(errorMessage);
       }
     }
@@ -534,9 +548,9 @@ export default function HomePage() {
     recognition.lang = 'en-US';
 
     if (communicationModeRef.current === 'audio-text') {
-        recognition.continuous = true;
+        recognition.continuous = true; // User explicitly sends
     } else if (communicationModeRef.current === 'audio-only') {
-        recognition.continuous = false;
+        recognition.continuous = false; // Auto-send after pause
     }
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
@@ -562,25 +576,19 @@ export default function HomePage() {
       } else if (communicationModeRef.current === 'audio-only') {
          if (finalTranscriptSegmentForCurrentEvent.trim()) {
             accumulatedTranscriptRef.current += finalTranscriptSegmentForCurrentEvent.trim() + ' ';
-            // Show "Preparing response" as we're now waiting for the user pause timeout
-            setShowPreparingAudioResponseIndicator(true);
-            // Recognizer with continuous=false should stop itself. onend will handle the timer.
-            setIsListening(false); // Indicate we are not actively listening for new mic input *right now*
+            // Recognizer with continuous=false should stop itself.
+            // onend will handle starting the sendTranscriptTimer.
+            // UI will show "Listening..." until onend, then potentially "Preparing..."
          }
+         // For interim results, we don't update UI directly in audio-only, wait for final.
       }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only' && !hasConversationEnded && !isEndingSessionRef.current && !isSpeakingRef.current && !isAboutToSpeakForSilenceRef.current && isListeningRef.current) {
-          setIsListening(false); // Stop listening indicator
-          // No speech detected, but we might have accumulated transcript from previous segments or user is truly silent.
-          // The onend handler will now check accumulatedTranscriptRef and decide if to start send timer or silence prompt.
-          // If accumulatedTranscriptRef is empty, onend will trigger silence prompt flow.
-          // If accumulatedTranscriptRef has content, onend will start the send timer.
-          // setShowPreparingAudioResponseIndicator might be set by onend if there's content.
+          // This case will be handled by onend. If accumulatedTranscript is empty, then silence prompt.
       } else if (event.error === 'aborted' || event.error === 'canceled') {
-        // Normal behavior, often happens when we programmatically stop/abort.
-        // If it was aborted while accumulatedTranscriptRef had content, onend should handle it.
+        // Normal behavior.
       } else if (event.error === 'audio-capture') {
         toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
         setIsListening(false);
@@ -593,30 +601,27 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
-      const wasListening = isListeningRef.current; // Capture state before any async ops or re-renders
-      // setIsListening(false); // Don't immediately set to false. Let toggleListening manage or specific logic paths.
+      const wasListening = isListeningRef.current;
+      setIsListening(false); // Recognizer has stopped.
 
       if (communicationModeRef.current === 'audio-only' && !isSpeakingRef.current && !isSendingMessage && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current) {
-        if (sendTranscriptTimerRef.current) { // Clear any existing timer from a previous segment.
+        if (sendTranscriptTimerRef.current) {
           clearTimeout(sendTranscriptTimerRef.current);
           sendTranscriptTimerRef.current = null;
         }
 
         if (accumulatedTranscriptRef.current.trim() !== '') {
-          // We have speech, start the user pause timer.
-          setShowPreparingAudioResponseIndicator(true); // Ensure "Preparing" is shown while timer runs
+          setShowPreparingAudioResponseIndicator(true);
           sendTranscriptTimerRef.current = setTimeout(() => {
             if (accumulatedTranscriptRef.current.trim() !== '') {
               handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
               accumulatedTranscriptRef.current = '';
             }
             sendTranscriptTimerRef.current = null;
-            // "Preparing response" will persist until AI actually starts speaking or fails.
-          }, responsePauseTimeMs); // USER'S PAUSE TIMEOUT
-        } else if (wasListening) {
-          // It was listening but ended up with no accumulated text (e.g., true silence after a segment, or silence from start).
+          }, responsePauseTimeMs);
+        } else if (wasListening) { // No accumulated text, and it was genuinely listening.
           isAboutToSpeakForSilenceRef.current = true;
-          setShowPreparingAudioResponseIndicator(false); // Hide "Preparing" as we're going into silence prompt
+          setShowPreparingAudioResponseIndicator(false);
           setConsecutiveSilencePrompts(currentPrompts => {
               const newPromptCount = currentPrompts + 1;
               if (newPromptCount >= MAX_SILENCE_PROMPTS_AUDIO_ONLY) {
@@ -625,20 +630,23 @@ export default function HomePage() {
               } else {
                   const userName = getUserNameFromHistory(messagesRef.current);
                   const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-                  speakTextRef.current(promptMessage); // After this speaks, handleAudioProcessEnd should re-listen
+                  speakTextRef.current(promptMessage);
               }
               return newPromptCount;
           });
         } else {
-          // Recognizer ended, wasn't listening (e.g. after AI spoke), and no accumulated text. Try to re-listen.
-           if (!isEndingSessionRef.current && !hasConversationEnded) {
+          // Recognizer ended, wasn't listening (e.g. after AI spoke or manual stop), and no text.
+          // If conversation isn't ending, try to re-listen (handleAudioProcessEnd does this implicitly if AI just spoke)
+          // Or if user manually stopped, it's fine.
+           if (!isEndingSessionRef.current && !hasConversationEnded && !wasSpeaking) { // Added !wasSpeaking
+             // This case might occur if recognition stopped for other reasons while AI wasn't speaking
+             // and the user wasn't trying to send a message. Attempt to restart listening.
              toggleListeningRef.current(true);
            }
         }
       } else if (communicationModeRef.current === 'audio-text') {
-         // For audio-text with continuous=true, onend usually means explicit stop or error.
-         // User needs to press send. inputValueRef holds the current transcript.
-         // isListening should be false if explicitly stopped.
+         // In audio-text mode, onend means user stopped mic or an error.
+         // inputValue should have the final transcript.
       }
     };
     return recognition;
@@ -664,42 +672,39 @@ export default function HomePage() {
     resetConversation();
     setCommunicationMode(selectedInitialMode);
     setShowSplashScreen(false);
-    // aiHasInitiatedConversation will be set to false by resetConversation, prompting greeting
   };
 
   const handleEndChatManually = () => {
     isEndingSessionRef.current = true;
-    isAboutToSpeakForSilenceRef.current = false; // No more silence prompts
-    setShowPreparingAudioResponseIndicator(false); // Hide indicators
+    isAboutToSpeakForSilenceRef.current = false;
+    setShowPreparingAudioResponseIndicator(false);
     setShowPreparingGreeting(false);
 
-    if (sendTranscriptTimerRef.current) { // Stop any pending user speech processing
+    if (sendTranscriptTimerRef.current) {
       clearTimeout(sendTranscriptTimerRef.current);
       sendTranscriptTimerRef.current = null;
     }
-    accumulatedTranscriptRef.current = ''; // Clear any partial user speech
+    accumulatedTranscriptRef.current = '';
 
-    if (isListeningRef.current && recognitionRef.current) { // Stop microphone
+    if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
         setIsListening(false);
     }
 
-    if (isSpeakingRef.current) { // If AI is currently speaking, stop it
+    if (isSpeakingRef.current) {
         if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
             elevenLabsAudioRef.current.pause();
             if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
             elevenLabsAudioRef.current.src = '';
         }
         if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-            window.speechSynthesis.cancel(); // This will trigger onend for synthesis, which will call handleAudioProcessEnd
+            window.speechSynthesis.cancel();
         }
-        // If neither TTS was playing but isSpeaking was true (shouldn't happen often), directly handle end.
         if (!elevenLabsAudioRef.current?.src && !(typeof window !== 'undefined' && window.speechSynthesis?.speaking)) {
-             setIsSpeaking(false); // Correct state
-             setHasConversationEnded(true); // Set directly as no onend will fire
+             setIsSpeaking(false);
+             setHasConversationEnded(true);
         }
     } else {
-        // If AI not speaking, we can directly set conversation as ended.
         setHasConversationEnded(true);
     }
   };
@@ -714,8 +719,9 @@ export default function HomePage() {
   };
 
   const handleStartNewChat = () => {
-    resetConversation(); // This will set aiHasInitiatedConversation to false
-    // The useEffect for initial greeting will then trigger
+    resetConversation();
+    // The current communicationMode remains, so the useEffect for initial greeting will trigger
+    // for that mode. aiHasInitiatedConversation is set to false by resetConversation.
   };
 
 
@@ -723,7 +729,7 @@ export default function HomePage() {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false;
-      setShowPreparingGreeting(true); // Show "Preparing greeting..."
+      setShowPreparingGreeting(true);
 
       const initConversation = async () => {
         let greetingToUse: string | null = null;
@@ -747,11 +753,9 @@ export default function HomePage() {
 
         if (greetingToUse) {
             addMessage(greetingToUse, 'ai');
-            // speakText will set showPreparingGreeting to false once audio starts
             await speakTextRef.current(greetingToUse);
         } else {
-             setShowPreparingGreeting(false); // No greeting, ensure indicator is off
-             // If audio-only and no greeting, start listening immediately
+             setShowPreparingGreeting(false);
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
                 toggleListeningRef.current(true);
             }
@@ -868,10 +872,9 @@ export default function HomePage() {
 
   useEffect(() => {
     const handleForceGoToSplash = () => {
-      handleEndChatManually();
-      resetConversation();
-      setShowSplashScreen(true);
-      // aiHasInitiatedConversation will be false from reset, so greeting re-triggers
+      handleEndChatManually(); // End current chat if active
+      resetConversation(); // Reset all states
+      setShowSplashScreen(true); // Show splash to allow re-selection
     };
     window.addEventListener('forceGoToSplashScreen', handleForceGoToSplash);
     return () => window.removeEventListener('forceGoToSplashScreen', handleForceGoToSplash);
@@ -984,7 +987,7 @@ export default function HomePage() {
                  </div>
             </div>
           )}
-          {aiHasInitiatedConversation && !hasConversationEnded && ( <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8" disabled={isSpeaking || isSendingMessage || showPreparingGreeting}> <Power className="mr-2 h-5 w-5" /> End Chat </Button> )}
+          {aiHasInitiatedConversation && !hasConversationEnded && ( <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8" disabled={showPreparingGreeting || isSpeaking || isSendingMessage}> <Power className="mr-2 h-5 w-5" /> End Chat </Button> )}
         </div>
       );
     }
