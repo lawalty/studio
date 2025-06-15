@@ -29,7 +29,7 @@ export default function PersonaPage() {
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
-  const [responsePauseTime, setResponsePauseTime] = useState<number>(DEFAULT_RESPONSE_PAUSE_TIME_MS);
+  const [responsePauseTime, setResponsePauseTime] = useState<string>(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -47,13 +47,13 @@ export default function PersonaPage() {
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
-          setResponsePauseTime(data?.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : Number(data.responsePauseTimeMs));
+          setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
         } else {
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
           setUseKnowledgeInGreeting(true);
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
-          setResponsePauseTime(DEFAULT_RESPONSE_PAUSE_TIME_MS);
+          setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
@@ -61,7 +61,7 @@ export default function PersonaPage() {
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
-        setResponsePauseTime(DEFAULT_RESPONSE_PAUSE_TIME_MS);
+        setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -91,8 +91,10 @@ export default function PersonaPage() {
 
   const handleResponsePauseTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    // Allow empty input for easier editing, default to 0 if NaN
-    setResponsePauseTime(value === '' ? DEFAULT_RESPONSE_PAUSE_TIME_MS : (isNaN(parseInt(value)) ? 0 : parseInt(value)));
+    // Allow only digits or an empty string to permit clearing the field
+    if (value === '' || /^\d*$/.test(value)) {
+      setResponsePauseTime(value);
+    }
   };
 
 
@@ -127,6 +129,8 @@ export default function PersonaPage() {
        avatarUpdated = true;
     }
 
+    const pauseTimeMs = parseInt(responsePauseTime);
+    const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
 
     try {
       const dataToSave: {
@@ -139,7 +143,7 @@ export default function PersonaPage() {
         personaTraits,
         useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
-        responsePauseTimeMs: responsePauseTime,
+        responsePauseTimeMs: validPauseTime,
       };
       if (avatarUpdated || newAvatarUrl !== (await getDoc(siteAssetsDocRef).then(s => s.data()?.avatarUrl))) {
         dataToSave.avatarUrl = newAvatarUrl;
@@ -235,7 +239,7 @@ export default function PersonaPage() {
                <div className="space-y-2 mt-4">
                 <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
                     <Timer className="h-4 w-4" />
-                    AI Response Pause Time (milliseconds)
+                    User Speaking Pause Time (milliseconds)
                 </Label>
                 <Input
                     id="responsePauseTime"
@@ -243,13 +247,12 @@ export default function PersonaPage() {
                     value={responsePauseTime}
                     onChange={handleResponsePauseTimeChange}
                     placeholder="e.g., 750"
-                    min="0"
+                    min="0" 
                     step="50"
                     className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                    Delay before AI Blair processes your message. Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
-                    Affects how quickly the AI "starts thinking" after you send a message.
+                    Pause duration (after user stops speaking) before AI processes input in Audio Only mode. Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
                 </p>
               </div>
             </>
@@ -305,4 +308,6 @@ export default function PersonaPage() {
     </div>
   );
 }
+    
+
     
