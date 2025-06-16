@@ -17,20 +17,24 @@ export default function ConversationLog({ messages, isLoadingAiResponse, avatarS
   const viewportRef = useRef<HTMLDivElement>(null); 
 
   useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
     const scrollToBottom = () => {
-      if (viewportRef.current) {
-        viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' });
-      }
+      // Using 'instant' for reliability. Can be changed to 'smooth' later if 'instant' works.
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'instant' });
     };
 
-    // Attempt to scroll immediately
+    // Attempt to scroll immediately as props change.
     scrollToBottom();
 
-    // And also ensure it scrolls after a very brief delay to catch any pending DOM updates.
-    // This can help if scrollHeight isn't updated immediately for the first call.
-    const timerId = setTimeout(scrollToBottom, 0);
+    // Schedule another scroll attempt right before the next browser paint.
+    // This often helps if scrollHeight wasn't updated for the immediate call.
+    const animationFrameId = requestAnimationFrame(scrollToBottom);
 
-    return () => clearTimeout(timerId);
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [messages, isLoadingAiResponse]);
 
   const DEFAULT_AVATAR_PLACEHOLDER_TYPING = "https://placehold.co/40x40.png";
