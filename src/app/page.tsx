@@ -257,9 +257,12 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
       
+      // Always clear for a new listening session initiated by user or auto-start
       accumulatedTranscriptRef.current = ''; 
       if (communicationModeRef.current === 'audio-text' && typeof forceState === 'undefined') {
-          setInputValue(''); // Clear visual input only when user clicks mic in audio-text
+          setInputValue(''); 
+      } else if (communicationModeRef.current === 'audio-only' && forceState === true) { // Auto-start for audio-only
+          setInputValue(''); // Also clear visual if any, though not primary for audio-only
       }
       
       try {
@@ -283,13 +286,8 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
       
-      // For audio-only mode, if user explicitly stops mic (forceState=false, not typical)
-      // or if it's an implicit stop from continuous mode due to timer completion (handled in onresult)
-      // or natural end of speech.
-      // The main logic for sending audio-only transcript is now in onend or the timer.
       if (typeof forceState === 'undefined' && communicationModeRef.current === 'audio-only' && accumulatedTranscriptRef.current.trim() !== '') {
         handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
-        // accumulatedTranscriptRef.current is cleared in handleSendMessage
       }
     }
   }, [toast, hasConversationEnded, isSendingMessage]);
@@ -329,11 +327,9 @@ export default function HomePage() {
         return;
     }
 
-    // Only auto-start listening for "Audio Only" mode here
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true);
     }
-    // For "Audio & Text", we wait for user interaction (mic click or type/send)
   }, [hasConversationEnded]);
 
 
@@ -468,19 +464,20 @@ export default function HomePage() {
       clearTimeout(sendTranscriptTimerRef.current);
       sendTranscriptTimerRef.current = null;
     }
-    accumulatedTranscriptRef.current = ''; // Clear after capturing text for sending
-
+    
     addMessage(text, 'user');
     if (communicationModeRef.current === 'audio-only' || (communicationModeRef.current === 'audio-text' && method === 'voice')) {
         setInputValue('');
     }
+    accumulatedTranscriptRef.current = ''; // Clear after capturing text for sending and adding message
+
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
 
 
     const historyForGenkit = messagesRef.current
-        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) // Exclude current user message being sent
+        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) 
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
 
     const combinedLowPriorityText = [MOCK_KNOWLEDGE_BASE_CONTENT, dynamicKnowledgeContentLow].filter(Boolean).join('\n\n');
@@ -544,59 +541,42 @@ export default function HomePage() {
         return;
       }
 
-      let currentInterimTranscript = '';
-      let currentFinalTranscriptSegment = '';
-
+      let latestFinalUtteranceThisEvent = '';
       if (communicationModeRef.current === 'audio-text') {
-          // For continuous mode, rebuild the full current utterance for display
-          let fullDisplayTranscript = '';
-          for (let i = 0; i < event.results.length; ++i) {
-              fullDisplayTranscript += event.results[i][0].transcript;
-              if (event.results[i].isFinal) {
-                  // Store the latest final segment for accumulatedTranscriptRef
-                  currentFinalTranscriptSegment = event.results[i][0].transcript.trim();
-              }
-          }
-          setInputValue(fullDisplayTranscript);
-          // accumulatedTranscriptRef is built from final segments only
-          if (currentFinalTranscriptSegment) {
-             accumulatedTranscriptRef.current = fullDisplayTranscript.split(' ').filter(Boolean).join(' '); // use the full final string from continuous
-          }
+        const visualTranscript = Array.from(event.results)
+            .map(result => result[0].transcript)
+            .join('');
+        setInputValue(visualTranscript);
 
-      } else { // For audio-only mode (non-continuous)
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-              const transcript_piece = event.results[i][0].transcript;
-              if (event.results[i].isFinal) {
-                  currentFinalTranscriptSegment += transcript_piece;
-              } else {
-                  currentInterimTranscript += transcript_piece;
-              }
-          }
-          currentFinalTranscriptSegment = currentFinalTranscriptSegment.trim();
-          if (currentFinalTranscriptSegment) {
-              accumulatedTranscriptRef.current = (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + currentFinalTranscriptSegment;
-          }
+        for (let i = event.results.length - 1; i >= 0; i--) {
+            if (event.results[i].isFinal) {
+                latestFinalUtteranceThisEvent = event.results[i][0].transcript.trim();
+                break; 
+            }
+        }
+      } else { // audio-only mode
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                latestFinalUtteranceThisEvent = event.results[i][0].transcript.trim(); 
+                break;
+            }
+        }
       }
       
-      if (sendTranscriptTimerRef.current) {
-        clearTimeout(sendTranscriptTimerRef.current);
-      }
+      if (latestFinalUtteranceThisEvent) {
+        accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent; // Set, not append
+        setConsecutiveSilencePrompts(0);
 
-      // If there's any new final text segment or interim text, reset silence prompts and set timer
-      if (currentFinalTranscriptSegment || currentInterimTranscript) {
-        setConsecutiveSilencePrompts(0); 
-        if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-          sendTranscriptTimerRef.current = setTimeout(() => {
-            if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
-              // For audio-text, stop listening if timer fires.
-              if(communicationModeRef.current === 'audio-text') {
-                setIsListening(false);
-                if(recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */}}
+        if (communicationModeRef.current === 'audio-text') {
+            if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
+            sendTranscriptTimerRef.current = setTimeout(() => {
+              if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
+                  if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */ } }
+                  setIsListening(false); 
+                  handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
               }
-              handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
-            }
-            sendTranscriptTimerRef.current = null;
-          }, responsePauseTimeMs);
+              sendTranscriptTimerRef.current = null;
+            }, responsePauseTimeMs);
         }
       }
     };
@@ -625,13 +605,12 @@ export default function HomePage() {
       if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current) {
         return; 
       }
-      if (sendTranscriptTimerRef.current) {
-        // Let timer handle it, onend fired too soon or because timer's stop() call
+      if (sendTranscriptTimerRef.current) { // Timer is active (audio-text mode), let it handle sending
         return;
       }
 
       const transcriptToSend = accumulatedTranscriptRef.current.trim();
-      if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) {
+      if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) { // Primarily for audio-only or if audio-text stopped before timer
         handleSendMessageRef.current(transcriptToSend, 'voice');
       } else if (transcriptToSend === '' && wasListeningWhenRecognitionEnded && communicationModeRef.current === 'audio-only') {
         isAboutToSpeakForSilenceRef.current = true;
@@ -659,14 +638,14 @@ export default function HomePage() {
   useEffect(() => {
     if (typeof window !== 'undefined' && SpeechRecognitionAPI) {
         if (recognitionRef.current) {
-            recognitionRef.current.abort(); // Stop previous instance
+            try { recognitionRef.current.abort(); } catch(e) {}
         }
         const rec = initializeSpeechRecognition();
         recognitionRef.current = rec;
     }
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.abort();
+        try { recognitionRef.current.abort(); } catch(e) {}
         recognitionRef.current = null;
       }
       if (sendTranscriptTimerRef.current) {
@@ -674,12 +653,12 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
     };
-  }, [initializeSpeechRecognition, communicationMode]); // Re-initialize if communicationMode changes
+  }, [initializeSpeechRecognition, communicationMode]); 
 
 
   const handleModeSelectionSubmit = () => {
     resetConversation();
-    setCommunicationMode(selectedInitialMode); // This will trigger re-initialization of speech recognition
+    setCommunicationMode(selectedInitialMode); 
     setShowSplashScreen(false);
   };
 
@@ -710,9 +689,9 @@ export default function HomePage() {
             window.speechSynthesis.cancel();
         }
         setIsSpeaking(false);
-        setHasConversationEnded(true); // Set ended after TTS is stopped
+        setHasConversationEnded(true); 
     } else {
-        setHasConversationEnded(true); // Set ended if not speaking
+        setHasConversationEnded(true); 
     }
   };
 
@@ -733,15 +712,14 @@ export default function HomePage() {
     });
 
     try {
-      // Brief delay to allow UI to settle, especially if called immediately after AI response
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(conversationLogElement, {
-        scale: 2, // Increase scale for better quality
-        useCORS: true, // Important for external images like avatars
-        backgroundColor: '#FFFFFF', // Explicitly set a background
-        height: conversationLogElement.scrollHeight, // Capture full scroll height
-        windowHeight: conversationLogElement.scrollHeight // Ensure full content is rendered
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#FFFFFF', 
+        height: conversationLogElement.scrollHeight, 
+        windowHeight: conversationLogElement.scrollHeight 
       });
 
       if (canvas.width === 0 || canvas.height === 0) {
@@ -752,27 +730,25 @@ export default function HomePage() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', // points
+        unit: 'pt', 
         format: 'a4',
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; // Margin in points
+      const pageMargin = 20; 
       const contentWidth = pdfWidth - (pageMargin * 2);
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; // Initial y position for the image (top margin)
+      let position = pageMargin; 
 
-      // Add the first page
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract visible area of first page
+      heightLeft -= (pdfHeight - (pageMargin * 2)); 
 
-      // Add more pages if needed
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)); // New y position for the image on subsequent pages
+        position = position - (pdfHeight - (pageMargin * 2)); 
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -796,9 +772,7 @@ export default function HomePage() {
 
   const handleStartNewChat = () => {
     resetConversation();
-    // Speech recognition will re-initialize due to communicationMode dependency in its useEffect
-    // Trigger initial greeting logic again
-    setAiHasInitiatedConversation(false); // This will allow the greeting useEffect to run
+    setAiHasInitiatedConversation(false); 
   };
 
 
@@ -831,10 +805,8 @@ export default function HomePage() {
         if (greetingToUse) {
             addMessage(greetingToUse, 'ai');
             await speakTextRef.current(greetingToUse);
-            // handleAudioProcessEnd will correctly decide whether to start listening based on mode
         } else {
              setShowPreparingGreeting(false);
-             // If no greeting, and audio-only, start listening
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
                 toggleListeningRef.current(true);
             }
