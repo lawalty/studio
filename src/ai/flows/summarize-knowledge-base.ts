@@ -1,3 +1,4 @@
+
 // 'use server';
 
 /**
@@ -50,6 +51,10 @@ const summarizeKnowledgeBaseFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await summarizeKnowledgeBasePrompt(input);
-    return output!;
+    if (!output || typeof output.summary !== 'string') {
+      console.error('[summarizeKnowledgeBaseFlow] Invalid or malformed output from prompt. Expected { summary: string }, received:', output);
+      throw new Error('AI model returned an unexpected data structure for the summary.');
+    }
+    return output;
   }
 );

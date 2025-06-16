@@ -59,7 +59,10 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output || typeof output.updatedPersonaDescription !== 'string') {
+      console.error('[adjustAiPersonaAndPersonalityFlow] Invalid or malformed output from prompt. Expected { updatedPersonaDescription: string }, received:', output);
+      throw new Error('AI model returned an unexpected data structure for persona confirmation.');
+    }
+    return output;
   }
 );
-

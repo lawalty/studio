@@ -104,6 +104,10 @@ const generateInitialGreetingFlow = ai.defineFlow(
     }
     
     const {output} = await prompt(promptInput);
-    return output!;
+    if (!output || typeof output.greetingMessage !== 'string') {
+      console.error('[generateInitialGreetingFlow] Invalid or malformed output from prompt. Expected { greetingMessage: string }, received:', output);
+      throw new Error('AI model returned an unexpected data structure for the greeting message.');
+    }
+    return output;
   }
 );
