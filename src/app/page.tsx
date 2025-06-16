@@ -145,7 +145,7 @@ export default function HomePage() {
     if (recognitionRef.current && isListeningRef.current) {
       try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
     }
-    const rec = initializeSpeechRecognition(); 
+    const rec = initializeSpeechRecognition();
     recognitionRef.current = rec;
     setIsListening(false);
     accumulatedTranscriptRef.current = '';
@@ -255,7 +255,7 @@ export default function HomePage() {
       if (hasConversationEnded) { setIsListening(false); return; }
       if (communicationModeRef.current === 'text-only') { setIsListening(false); return; }
 
-      if (typeof forceState === 'undefined') { 
+      if (typeof forceState === 'undefined') {
          if (isSpeakingRef.current) {
             toast({ title: "AI Speaking", description: "Please wait for AI Blair to finish speaking.", variant: "default"});
             setIsListening(false); return;
@@ -264,21 +264,27 @@ export default function HomePage() {
             toast({ title: "Processing", description: "Please wait for the current message to process.", variant: "default"});
             setIsListening(false); return;
          }
-      } 
+      }
 
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
 
-      try {
-        if (communicationModeRef.current === 'audio-text') {
-           if (inputValueRef.current !== accumulatedTranscriptRef.current) { 
-             accumulatedTranscriptRef.current = inputValueRef.current;
-           }
-        } else if (communicationModeRef.current === 'audio-only') {
-           accumulatedTranscriptRef.current = ''; 
+      if (communicationModeRef.current === 'audio-text') {
+        // If user clicks mic button in audio-text, always clear input and accumulated transcript for a fresh voice input.
+        if (typeof forceState === 'undefined') {
+          setInputValue('');
+          accumulatedTranscriptRef.current = '';
         }
+        // Note: If forceState is true (programmatic start for audio-text),
+        // we might want to append to existing inputValue. However, this mode currently
+        // does not programmatically start listening after AI speech.
+      } else if (communicationModeRef.current === 'audio-only') {
+         accumulatedTranscriptRef.current = ''; // Always clear for audio-only mode when starting.
+      }
+
+      try {
         recognitionRef.current?.start();
         setIsListening(true);
       } catch (startError: any) {
@@ -287,14 +293,14 @@ export default function HomePage() {
         }
         setIsListening(false);
       }
-    } else { 
+    } else {
       if (recognitionRef.current) {
-         try { recognitionRef.current.stop(); } catch(e) { /* ignore */ } 
+         try { recognitionRef.current.stop(); } catch(e) { /* ignore */ }
       } else {
-        setIsListening(false); 
+        setIsListening(false);
       }
 
-      if (sendTranscriptTimerRef.current) { 
+      if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
@@ -303,7 +309,7 @@ export default function HomePage() {
         accumulatedTranscriptRef.current = '';
       }
     }
-  }, [toast, hasConversationEnded, isSendingMessage]);
+  }, [toast, hasConversationEnded, isSendingMessage, setInputValue]);
 
   const toggleListeningRef = useRef(toggleListening);
   useEffect(() => {
@@ -340,11 +346,10 @@ export default function HomePage() {
         return;
     }
 
-    // Only auto-listen for "audio-only" mode.
-    // For "audio-text", wait for user interaction (mic click or type).
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true);
     }
+    // For "audio-text", we explicitly DO NOT auto-listen after AI speaks. User must click mic or type.
   }, [hasConversationEnded]);
 
 
@@ -404,7 +409,7 @@ export default function HomePage() {
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
        elevenLabsAudioRef.current.src = '';
     }
-    setIsSpeaking(false); 
+    setIsSpeaking(false);
     if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) {
         setShowPreparingGreeting(true);
     }
@@ -483,7 +488,7 @@ export default function HomePage() {
 
     addMessage(text, 'user');
     if (communicationModeRef.current === 'audio-only' || (communicationModeRef.current === 'audio-text' && method === 'voice')) {
-        setInputValue(''); 
+        setInputValue('');
     }
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
@@ -506,7 +511,7 @@ export default function HomePage() {
 
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       addMessage(result.aiResponse, 'ai');
-      setIsSendingMessage(false); 
+      setIsSendingMessage(false);
 
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
@@ -524,7 +529,7 @@ export default function HomePage() {
       }
     }
 
-  }, [addMessage, personaTraits, hasConversationEnded, isSendingMessage,
+  }, [addMessage, personaTraits, hasConversationEnded, isSendingMessage, setInputValue,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
       knowledgeFileSummaryMedium, dynamicKnowledgeContentMedium,
       knowledgeFileSummaryLow, dynamicKnowledgeContentLow
@@ -548,9 +553,9 @@ export default function HomePage() {
     recognition.lang = 'en-US';
 
     if (communicationModeRef.current === 'audio-only') {
-        recognition.continuous = false; 
+        recognition.continuous = false;
     } else if (communicationModeRef.current === 'audio-text') {
-        recognition.continuous = true;  
+        recognition.continuous = true;
     }
 
 
@@ -570,50 +575,56 @@ export default function HomePage() {
           interimTranscriptSegment += event.results[i][0].transcript;
         }
       }
-      
+
       const newFinalText = finalTranscriptSegmentForCurrentEvent.trim();
 
       if (communicationModeRef.current === 'audio-text') {
+        // If user manually cleared the input field while listening, reset accumulated.
+        if (inputValueRef.current === '' && accumulatedTranscriptRef.current !== '') {
+            accumulatedTranscriptRef.current = '';
+        }
+
         const currentBaseTranscript = accumulatedTranscriptRef.current;
+        // Prepend a space if currentBase isn't empty and newFinalText is also not empty.
         const updatedAccumulated = (currentBaseTranscript + (currentBaseTranscript && newFinalText ? " " : "") + newFinalText).trim();
-        
+
         setInputValue(updatedAccumulated + (interimTranscriptSegment ? (updatedAccumulated ? " " : "") + interimTranscriptSegment : ""));
 
         if (newFinalText) {
-            accumulatedTranscriptRef.current = updatedAccumulated; 
+            accumulatedTranscriptRef.current = updatedAccumulated;
             if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
-            
+
             sendTranscriptTimerRef.current = setTimeout(() => {
                 if (isListeningRef.current && inputValueRef.current.trim() === accumulatedTranscriptRef.current.trim() && accumulatedTranscriptRef.current.trim() !== '') {
                     handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
                 }
-                sendTranscriptTimerRef.current = null; 
+                sendTranscriptTimerRef.current = null;
             }, responsePauseTimeMs);
         }
       } else if (communicationModeRef.current === 'audio-only') {
-         if (newFinalText) { 
-            accumulatedTranscriptRef.current += newFinalText + ' '; 
+         if (newFinalText) {
+            accumulatedTranscriptRef.current += newFinalText + ' ';
             if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
-            
+
             setIsSendingMessage(true);
 
             sendTranscriptTimerRef.current = setTimeout(() => {
                 if (accumulatedTranscriptRef.current.trim() !== '') {
                   handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
                 } else {
-                  setIsSendingMessage(false); 
+                  setIsSendingMessage(false);
                 }
-                sendTranscriptTimerRef.current = null; 
+                sendTranscriptTimerRef.current = null;
             }, responsePauseTimeMs);
          }
-         if (!isListeningRef.current && newFinalText) setIsListening(true); 
+         if (!isListeningRef.current && newFinalText) setIsListening(true);
       }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       const wasListeningBeforeError = isListeningRef.current;
       setIsListening(false);
-      setIsSendingMessage(false); 
+      setIsSendingMessage(false);
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
@@ -621,7 +632,7 @@ export default function HomePage() {
 
       if (event.error === 'aborted') { /* Usually programmatic, handled by onend */ }
       else if (event.error === 'no-speech' && communicationModeRef.current === 'audio-only') {
-        if (!wasListeningBeforeError) { 
+        if (!wasListeningBeforeError) {
           isAboutToSpeakForSilenceRef.current = false;
         }
       } else if (event.error === 'audio-capture') {
@@ -633,18 +644,18 @@ export default function HomePage() {
 
     recognition.onend = () => {
       const wasListeningWhenRecognitionEnded = isListeningRef.current;
-      setIsListening(false); 
+      setIsListening(false);
 
       if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current) {
-        return; 
+        return;
       }
 
       if (communicationModeRef.current === 'audio-only') {
-        if (sendTranscriptTimerRef.current) { 
+        if (sendTranscriptTimerRef.current) {
             return;
         }
 
-        if (accumulatedTranscriptRef.current.trim() === '' && wasListeningWhenRecognitionEnded) { 
+        if (accumulatedTranscriptRef.current.trim() === '' && wasListeningWhenRecognitionEnded) {
           isAboutToSpeakForSilenceRef.current = true;
           setConsecutiveSilencePrompts(currentPrompts => {
             const newPromptCount = currentPrompts + 1;
@@ -656,7 +667,7 @@ export default function HomePage() {
             } else {
               const userName = getUserNameFromHistory(messagesRef.current);
               const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-              speakTextRef.current(promptMessage); 
+              speakTextRef.current(promptMessage);
             }
             return newPromptCount;
           });
@@ -667,15 +678,17 @@ export default function HomePage() {
         }
       } else if (communicationModeRef.current === 'audio-text') {
           if (wasListeningWhenRecognitionEnded && !sendTranscriptTimerRef.current && !isSpeakingRef.current && !isSendingMessage && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current && !inputValueRef.current.trim()) {
-               // Do not automatically restart listening in audio-text mode after it ends,
-               // unless it was programmatically stopped by AI speaking (which is handled by handleAudioProcessEnd)
-               // or if the user sends a message (which is handled by handleSubmit/handleSendMessage).
-               // If recognition ends due to prolonged silence from the user, just stay stopped.
+               // Do not automatically restart listening in audio-text mode after it ends due to prolonged silence.
+          } else if (wasListeningWhenRecognitionEnded && !sendTranscriptTimerRef.current && !isSpeakingRef.current && !isSendingMessage && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current && inputValueRef.current.trim() !== '' && inputValueRef.current.trim() === accumulatedTranscriptRef.current.trim()) {
+              // This means STT ended, and there's final text in input, but no send timer was active.
+              // This can happen if the pause was very short or speech recognition stopped for other reasons.
+              // To be safe, and to align with explicit user action for 'send' in audio-text,
+              // we don't auto-send here. The user can click send.
           }
       }
     };
     return recognition;
-  }, [toast, responsePauseTimeMs, addMessage]);
+  }, [toast, responsePauseTimeMs, addMessage, setInputValue]);
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -751,11 +764,11 @@ export default function HomePage() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(conversationLogElement, {
-        scale: 2, 
-        useCORS: true, 
-        backgroundColor: '#FFFFFF', 
-        height: conversationLogElement.scrollHeight, 
-        windowHeight: conversationLogElement.scrollHeight 
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#FFFFFF', // Ensure a background color
+        height: conversationLogElement.scrollHeight, // Capture full scrollable height
+        windowHeight: conversationLogElement.scrollHeight // Ensure full scrollable height
       });
 
       if (canvas.width === 0 || canvas.height === 0) {
@@ -766,25 +779,25 @@ export default function HomePage() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', 
+        unit: 'pt',
         format: 'a4',
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; 
+      const pageMargin = 20;
       const contentWidth = pdfWidth - (pageMargin * 2);
-      
+
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; 
+      let position = pageMargin;
 
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); 
+      heightLeft -= (pdfHeight - (pageMargin * 2));
 
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)); 
+        position = position - (pdfHeight - (pageMargin * 2));
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -1043,13 +1056,13 @@ export default function HomePage() {
   };
   if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) { (imageProps as any)['data-ai-hint'] = "professional woman"; }
 
-  const audioOnlyLiveIndicator = () => {
+ const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null;
     if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
-    if (isSendingMessage && !isSpeaking) { 
+    if (isSendingMessage && !isSpeaking) {
       return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing response... </div>;
     }
-    if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) { 
+    if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
       return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
     }
     return null;
@@ -1122,7 +1135,7 @@ export default function HomePage() {
             inputValue={inputValue}
             onInputValueChange={(value) => {
                 setInputValue(value);
-                if (communicationModeRef.current === 'audio-text') { 
+                if (communicationModeRef.current === 'audio-text') {
                     accumulatedTranscriptRef.current = value;
                 }
             }}
