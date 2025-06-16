@@ -241,7 +241,7 @@ export default function HomePage() {
       if (hasConversationEnded) { setIsListening(false); return; }
       if (communicationModeRef.current === 'text-only') { setIsListening(false); return; }
 
-      if (typeof forceState === 'undefined') { // Only check these conditions if it's a user-initiated toggle
+      if (typeof forceState === 'undefined') { 
          if (isSpeakingRef.current) {
             toast({ title: "AI Speaking", description: "Please wait for AI Blair to finish speaking.", variant: "default"});
             setIsListening(false); return;
@@ -258,25 +258,21 @@ export default function HomePage() {
       }
       
       accumulatedTranscriptRef.current = ''; 
-      // If user clicks mic in audio-text, or if audio-only forces start, clear visual input
-      if ((communicationModeRef.current === 'audio-text' && typeof forceState === 'undefined') || forceState === true) {
-          setInputValue(''); 
-      }
+      setInputValue(''); 
       
       try {
         recognitionRef.current?.start();
         setIsListening(true);
       } catch (startError: any) {
-        if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') { // Don't toast for "already started" or "aborted" errors
+        if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') { 
           toast({ variant: 'destructive', title: 'Microphone Start Error', description: `${startError.name}: ${startError.message || 'Could not start microphone.'}` });
         }
-        setIsListening(false); // Ensure listening state is false if start fails
+        setIsListening(false); 
       }
-    } else { // targetIsListeningState is false (stop listening)
+    } else { 
       if (recognitionRef.current) {
          try { recognitionRef.current.stop(); } catch(e) { /* ignore - might already be stopped */ }
       } else {
-        // If no recognition object, just ensure state is false
         setIsListening(false); 
       }
 
@@ -285,19 +281,15 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
       
-      // If listening was stopped manually by user (not by timer or AI speaking)
-      // and there was text accumulated or typed, send it.
-      if (typeof forceState === 'undefined') { // Manual stop by user
+      if (typeof forceState === 'undefined') { 
         const textToSendFromStop = (communicationModeRef.current === 'audio-only') 
             ? accumulatedTranscriptRef.current.trim() 
-            : inputValueRef.current.trim(); // For audio-text, send what's visually there
+            : inputValueRef.current.trim(); 
 
         if (textToSendFromStop !== '') {
-            // Don't clear accumulatedTranscriptRef here, handleSendMessage will do it.
             handleSendMessageRef.current(textToSendFromStop, 'voice');
         }
       }
-      // setIsListening(false); // Will be set by onend or directly if no recognitionRef
     }
   }, [toast, hasConversationEnded, isSendingMessage]);
 
@@ -309,21 +301,18 @@ export default function HomePage() {
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
-    isAboutToSpeakForSilenceRef.current = false; // Reset this flag
-    setShowPreparingGreeting(false); // Hide greeting spinner
-    // If AI starts speaking, it should interrupt any active user listening.
+    isAboutToSpeakForSilenceRef.current = false; 
+    setShowPreparingGreeting(false); 
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {/*ignore*/}
-        // Note: onend for recognition will set isListening to false.
     }
   }, []);
 
   const handleAudioProcessEnd = useCallback(() => {
     const wasSpeakingBeforeEnd = isSpeakingRef.current;
     setIsSpeaking(false);
-    setShowPreparingGreeting(false); // Ensure greeting spinner is off
+    setShowPreparingGreeting(false); 
 
-    // Clean up audio object
     if (elevenLabsAudioRef.current) {
         if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
             URL.revokeObjectURL(elevenLabsAudioRef.current.src);
@@ -335,15 +324,13 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current && wasSpeakingBeforeEnd) {
-        setHasConversationEnded(true); // Finalize conversation end
-        return; // Don't proceed to restart listening
+        setHasConversationEnded(true); 
+        return; 
     }
 
-    // For audio-only mode, automatically restart listening if conversation hasn't ended
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
-        toggleListeningRef.current(true); // Force start listening
+        toggleListeningRef.current(true); 
     } else if (communicationModeRef.current === 'audio-text' && !isEndingSessionRef.current && !hasConversationEnded) {
-        // In audio-text mode, do NOT automatically restart listening. Wait for user interaction.
     }
   }, [hasConversationEnded]);
 
@@ -432,7 +419,7 @@ export default function HomePage() {
           if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
-          audio.onplay = () => { // More reliable for ElevenLabs actual start
+          audio.onplay = () => { 
             onSpeechStartCallback?.(); 
             handleActualAudioStart(); 
           };
@@ -441,12 +428,11 @@ export default function HomePage() {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
             const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
             if (mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) {
-                // Aborted
             } else {
                 console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
                 toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
             }
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback); // Fallback
+            browserSpeakInternal(textForSpeech, onSpeechStartCallback); 
           };
           try { 
             await audio.play(); 
@@ -456,7 +442,7 @@ export default function HomePage() {
                 console.error("ElevenLabs Audio Play Error:", playError);
                 toast({ title: "TTS Play Error", description: "Using browser default.", variant: "destructive" });
             }
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback); // Fallback
+            browserSpeakInternal(textForSpeech, onSpeechStartCallback); 
           }
           return;
         } else {
@@ -468,7 +454,6 @@ export default function HomePage() {
          if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
       }
     }
-    // Fallback to browser TTS if API not used, keys missing, or API call failed
     browserSpeakInternal(textForSpeech, onSpeechStartCallback);
   }, [
       useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeakInternal,
@@ -519,7 +504,9 @@ export default function HomePage() {
       
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
-          addMessage(result.aiResponse, 'ai');
+          if (!isEndingSessionRef.current || (isEndingSessionRef.current && result.shouldEndConversation)) {
+            addMessage(result.aiResponse, 'ai');
+          }
           setIsSendingMessage(false); 
         }, 50);
       };
@@ -541,7 +528,6 @@ export default function HomePage() {
           await speakTextRef.current(errorMessage); 
         }
       } else {
-        // If it was supposed to end, but an error occurred, ensure we still mark as ended visually
         setHasConversationEnded(true);
         setIsSendingMessage(false);
       }
@@ -577,71 +563,39 @@ export default function HomePage() {
         return;
       }
       
-      let visualTranscriptForInput = '';
+      let currentVisualTranscript = '';
       let latestFinalUtteranceThisEvent = '';
 
-      // Construct visual transcript from all results so far in this session (for audio-text mode)
-      if (communicationModeRef.current === 'audio-text') {
-          let tempFinal = '';
-          let tempInterim = '';
-          for (let i = 0; i < event.results.length; i++) {
-              const segmentTranscript = event.results[i][0].transcript;
-              if (event.results[i].isFinal) {
-                  tempFinal += segmentTranscript;
-              } else {
-                  tempInterim += segmentTranscript;
-              }
-          }
-          visualTranscriptForInput = (tempFinal + tempInterim).trim();
+      for (let i = 0; i < event.results.length; i++) {
+        const segmentTranscript = event.results[i][0].transcript;
+        if (communicationModeRef.current === 'audio-text') {
+            currentVisualTranscript += segmentTranscript;
+        }
+        if (event.results[i].isFinal) {
+            latestFinalUtteranceThisEvent = segmentTranscript.trim(); // Overwrite with the latest final
+        }
       }
       
-      // Determine the very latest final utterance from *this specific event*
-      // Iterate from the end of results for the current event to find the most recent final transcript
-      for (let i = event.results.length - 1; i >= event.resultIndex; i--) {
-          if (event.results[i].isFinal) {
-              latestFinalUtteranceThisEvent = event.results[i][0].transcript.trim();
-              break; 
-          }
-      }
-      // If no final found in this specific event, but there's an interim, use it for audio-only accumulation for now
-      if (!latestFinalUtteranceThisEvent && event.results[event.results.length-1] && !event.results[event.results.length-1].isFinal && communicationModeRef.current === 'audio-only') {
-         // This part is tricky for audio-only; typically it's non-continuous so `isFinal` is what we want.
-         // For audio-only, we primarily care about the final result from onend.
-         // But if user speaks very briefly, onresult might be the only place it's captured.
-         // So, accumulate non-final if it's the only thing there.
-         if (event.results[event.resultIndex] && event.results[event.resultIndex][0]) {
-            accumulatedTranscriptRef.current = event.results[event.resultIndex][0].transcript.trim();
-         }
-      }
-
-
       if (communicationModeRef.current === 'audio-text') {
-        setInputValue(visualTranscriptForInput); 
-        
-        if (latestFinalUtteranceThisEvent) { 
-          // Only act on new *final* text for sending logic
-          // Check if this final utterance is different from what we last considered final
-          if (latestFinalUtteranceThisEvent !== accumulatedTranscriptRef.current) {
+        setInputValue(currentVisualTranscript.trimStart()); 
+        if (latestFinalUtteranceThisEvent && latestFinalUtteranceThisEvent !== accumulatedTranscriptRef.current) {
              accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
              setConsecutiveSilencePrompts(0); 
              if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
              sendTranscriptTimerRef.current = setTimeout(() => {
                if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
-                   setIsListening(false); 
-                   if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */ } }
+                   // setIsListening(false); // No, let onend handle this, or manual toggle
+                   // if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */ } }
                    handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
                }
                sendTranscriptTimerRef.current = null;
              }, responsePauseTimeMs);
           }
-        }
-      } else { // audio-only mode (non-continuous)
-         // Here, continuous is false, so each `onresult` (if it has a final part) is usually the whole utterance.
+      } else { // audio-only mode
          if (latestFinalUtteranceThisEvent) {
             accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
             setConsecutiveSilencePrompts(0);
           }
-          // The actual sending for audio-only primarily happens in onend.
       }
     };
 
@@ -656,33 +610,25 @@ export default function HomePage() {
       else if (event.error === 'no-speech') { /* Handled by onend for audio-only's silence prompts */ }
       else if (event.error === 'audio-capture') {
         toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
-      } else if (event.error !== 'network') { // Ignore generic network errors which can be transient
+      } else if (event.error !== 'network') { 
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       }
     };
 
     recognition.onend = () => {
       const wasListeningWhenRecognitionEnded = isListeningRef.current;
-      setIsListening(false); // Always set to false when recognition ends
+      setIsListening(false); 
 
-      if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current) {
-        return; // Don't proceed if AI is speaking, sending, or chat has ended, or about to speak for silence
+      if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current || sendTranscriptTimerRef.current) {
+        return; 
       }
-      // If a timer is active, it means speech was detected and `onresult` is waiting for a pause.
-      // Let the timer handle the message sending.
-      if (sendTranscriptTimerRef.current) {
-        return;
-      }
-
+      
       const transcriptToSend = accumulatedTranscriptRef.current.trim();
       
-      // If onend fires, and there's a transcript (and not handled by timer), send it
-      // This typically applies to audio-only mode where continuous=false, or very short utterances.
       if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) { 
         handleSendMessageRef.current(transcriptToSend, 'voice');
       } else if (transcriptToSend === '' && wasListeningWhenRecognitionEnded && communicationModeRef.current === 'audio-only') {
-        // This is a true silence in audio-only mode (no speech detected by onresult before onend)
-        isAboutToSpeakForSilenceRef.current = true; // Set flag before calling speakText
+        isAboutToSpeakForSilenceRef.current = true; 
         setConsecutiveSilencePrompts(currentPrompts => {
           const newPromptCount = currentPrompts + 1;
           if (newPromptCount >= MAX_SILENCE_PROMPTS_AUDIO_ONLY) {
@@ -691,31 +637,29 @@ export default function HomePage() {
             if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) { 
                 addMessage(endMsg, 'ai');
             }
-            speakTextRef.current(endMsg); // Speak and then handleAudioProcessEnd will set hasConversationEnded
+            speakTextRef.current(endMsg); 
           } else {
             const userName = getUserNameFromHistory(messagesRef.current);
             const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-            speakTextRef.current(promptMessage); // This will call handleAudioProcessEnd, which restarts listening
+            speakTextRef.current(promptMessage); 
           }
           return newPromptCount;
         });
       } else if (communicationModeRef.current === 'audio-only' && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current) {
-         // If audio-only, and onend fired without text, no timer, and not ending/silence-prompting, restart listening
          toggleListeningRef.current(true);
       }
     };
     return recognition;
-  }, [toast, responsePauseTimeMs, addMessage, communicationMode]); // Added communicationMode
+  }, [toast, responsePauseTimeMs, addMessage, communicationMode]); 
 
   useEffect(() => {
     if (typeof window !== 'undefined' && SpeechRecognitionAPI) {
         if (recognitionRef.current) {
-            try { recognitionRef.current.abort(); } catch(e) {} // Stop existing before creating new
+            try { recognitionRef.current.abort(); } catch(e) {} 
         }
         const rec = initializeSpeechRecognition();
         recognitionRef.current = rec;
     }
-    // Cleanup function
     return () => {
       if (recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch(e) {}
@@ -726,7 +670,7 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
     };
-  }, [initializeSpeechRecognition, communicationMode]); // Re-initialize if communicationMode changes
+  }, [initializeSpeechRecognition, communicationMode]); 
 
 
   const handleModeSelectionSubmit = () => {
@@ -763,10 +707,10 @@ export default function HomePage() {
         if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
             window.speechSynthesis.cancel();
         }
-        setIsSpeaking(false); // Stop speaking immediately
-        setHasConversationEnded(true); // Set conversation ended state
+        setIsSpeaking(false); 
+        setHasConversationEnded(true); 
     } else {
-        setHasConversationEnded(true); // If not speaking, just set conversation ended
+        setHasConversationEnded(true); 
     }
   };
 
@@ -787,19 +731,16 @@ export default function HomePage() {
     });
 
     try {
-      // Brief delay to allow any final UI updates
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(conversationLogElement, {
-        scale: 2, // Increase for better resolution
-        useCORS: true, // Important if images are from other origins (though unlikely here)
-        backgroundColor: '#FFFFFF', // Ensure a white background for the canvas
-        // Explicitly set height and windowHeight to scrollHeight to capture full log
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#FFFFFF', 
         height: conversationLogElement.scrollHeight, 
         windowHeight: conversationLogElement.scrollHeight 
       });
 
-      // Check if canvas is valid
       if (canvas.width === 0 || canvas.height === 0) {
          toast({ title: "Canvas Error", description: "Captured canvas is empty or has zero dimensions. PDF cannot be generated.", variant: "destructive" });
          return;
@@ -808,27 +749,25 @@ export default function HomePage() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', // points
+        unit: 'pt', 
         format: 'a4',
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; // Margin around the content on PDF page
+      const pageMargin = 20; 
       const contentWidth = pdfWidth - (pageMargin * 2);
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; // Initial y position on the first page
+      let position = pageMargin; 
 
-      // Add the first part of the image
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract the visible height on the first page
+      heightLeft -= (pdfHeight - (pageMargin * 2)); 
 
-      // Add more pages if the image is taller than the page
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)); // Move the image "up" relative to the new page
+        position = position - (pdfHeight - (pageMargin * 2)); 
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -852,14 +791,14 @@ export default function HomePage() {
 
   const handleStartNewChat = () => {
     resetConversation();
-    setAiHasInitiatedConversation(false); // This will trigger the greeting sequence
+    setAiHasInitiatedConversation(false); 
   };
 
 
   useEffect(() => {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
-      setAiHasInitiatedConversation(true); // Mark that we've started the process
-      isAboutToSpeakForSilenceRef.current = false; // Reset silence prompt flag
+      setAiHasInitiatedConversation(true); 
+      isAboutToSpeakForSilenceRef.current = false; 
 
       const initConversation = async () => {
         let greetingToUse: string | null = null;
@@ -873,31 +812,28 @@ export default function HomePage() {
               knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
               useKnowledgeInGreeting: useKnowledgeInGreeting,
             };
-            setShowPreparingGreeting(true); // Show spinner before calling AI
+            setShowPreparingGreeting(true); 
             const result = await generateInitialGreeting(greetingInput);
             greetingToUse = result.greetingMessage;
           } catch (error) {
             console.error("Error generating initial greeting:", error);
             greetingToUse = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
-            // setShowPreparingGreeting(false); // Hide spinner on error before speech
           }
         }
 
         if (greetingToUse) {
           const onGreetingSpeechActuallyStarting = () => {
-            setTimeout(() => { // Small delay for UI update
-                 if (!isEndingSessionRef.current) { // Ensure not to add if chat ended during prep
+            setTimeout(() => { 
+                 if (!isEndingSessionRef.current) { 
                     addMessage(greetingToUse!, 'ai');
                  }
             }, 50); 
           };
           await speakTextRef.current(greetingToUse, onGreetingSpeechActuallyStarting);
-          // setShowPreparingGreeting is handled by handleActualAudioStart or handleAudioProcessEnd
         } else {
-             // If no greeting could be generated (e.g., empty custom and AI error)
              setShowPreparingGreeting(false);
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
-                toggleListeningRef.current(true); // Start listening if audio-only and no greeting
+                toggleListeningRef.current(true); 
             }
         }
       };
@@ -930,14 +866,14 @@ export default function HomePage() {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
             if (source.extractedText && source.extractionStatus === 'success') {
                 textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
-            } else if (source.downloadURL) { // Fallback to fetch if no pre-extracted text
+            } else if (source.downloadURL) { 
                 try {
                     const response = await fetch(source.downloadURL);
                     if (response.ok) {
                         const textContent = await response.text();
                         textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${textContent}\n---`);
                     } else { if (response.type === 'opaque' || response.status === 0) levelCorsError = true; }
-                } catch (fetchError: any) { /* console.error(`Fetch error for ${source.name}:`, fetchError); */ levelCorsError = true; }
+                } catch (fetchError: any) { levelCorsError = true; }
             }
           } else if (source.type === 'pdf' && source.extractedText && source.extractionStatus === 'success') {
             textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text):\n${source.extractedText}\n---`);
@@ -956,7 +892,6 @@ export default function HomePage() {
       setCorsErrorEncountered(false);
       let anyCorsError = false;
       try {
-        // Fetch API Keys
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
         let localApiKey: string | null = null, localVoiceId: string | null = null, localUseTtsApi: boolean = true;
@@ -970,12 +905,10 @@ export default function HomePage() {
             toast({ title: "TTS Configuration Issue", description: "Custom TTS API is ON, but API Key/Voice ID is missing. Using browser default.", variant: "default", duration: 8000 });
           }
         } else {
-          // Default if API keys not found
           setElevenLabsApiKey(null); setElevenLabsVoiceId(null); setUseTtsApi(true);
           toast({ title: "TTS Configuration Missing", description: `API keys not found. Custom TTS may not work. Configure in Admin.`, variant: "default", duration: 8000 });
         }
 
-        // Fetch Site Assets
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
         const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
         if (siteAssetsDocSnap.exists()) {
@@ -989,7 +922,6 @@ export default function HomePage() {
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
 
         } else {
-            // Defaults if site assets not found
             setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
             setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
             setPersonaTraits(DEFAULT_PERSONA_TRAITS);
@@ -1000,31 +932,26 @@ export default function HomePage() {
         }
       } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
 
-      // Fetch Knowledge Base Content
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh); if (highError) anyCorsError = true;
       const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium); if (mediumError) anyCorsError = true;
       const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setKnowledgeFileSummaryLow, setDynamicKnowledgeContentLow); if (lowError) anyCorsError = true;
       if (anyCorsError) setCorsErrorEncountered(true);
       setIsLoadingKnowledge(false);
     };
-    if(showSplashScreen) fetchAllData(); // Only fetch all this data when splash screen is initially shown
-  }, [toast, fetchAndProcessKnowledgeLevel, showSplashScreen]); // Dependency on showSplashScreen
+    if(showSplashScreen) fetchAllData(); 
+  }, [toast, fetchAndProcessKnowledgeLevel, showSplashScreen]); 
 
-  // Ensure conversation is reset if component unmounts unexpectedly
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => { performResetOnUnmountRef.current = resetConversation; }, [resetConversation]);
   useEffect(() => { const performResetOnUnmount = performResetOnUnmountRef.current; return () => { performResetOnUnmount(); }; }, []);
 
-  // Splash image loading state
   useEffect(() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(false); else setIsSplashImageLoaded(true); }, [splashImageSrc]);
 
-  // Handle requests to go back to splash screen from header
   useEffect(() => {
     const handleForceGoToSplash = () => {
-      if (!showSplashScreen) { // Only act if not already on splash
-         handleEndChatManually(); // End current chat properly
+      if (!showSplashScreen) { 
+         handleEndChatManually(); 
       }
-      // These should run regardless to ensure clean state for splash
       resetConversation();
       setAiHasInitiatedConversation(false);
       setShowSplashScreen(true);
@@ -1032,7 +959,7 @@ export default function HomePage() {
     window.addEventListener('forceGoToSplashScreen', handleForceGoToSplash);
     return () => window.removeEventListener('forceGoToSplashScreen', handleForceGoToSplash);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetConversation, showSplashScreen]); // handleEndChatManually is stable due to useCallback
+  }, [resetConversation, showSplashScreen]); 
 
 
   const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
@@ -1108,24 +1035,20 @@ export default function HomePage() {
   if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) { (imageProps as any)['data-ai-hint'] = "professional woman"; }
 
   const audioOnlyLiveIndicator = () => {
-    if (hasConversationEnded) return null; // No indicator if chat ended
-    // Greeting spinner takes precedence
+    if (hasConversationEnded) return null; 
     if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
-    // Listening indicator
     if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
       return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
     }
-    // "Preparing response" / "AI is typing" indicator for audio-only
      if (isSendingMessage && !isSpeaking && !isListening) { 
       return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> AI Blair is preparing... </div>;
     }
-    // No specific indicator if AI is speaking (avatar pulses), or idle
     return null;
   };
 
 
   const mainContent = () => {
-    if (isLoadingKnowledge && !aiHasInitiatedConversation) { // Show loading only if KB is loading AND chat hasn't started
+    if (isLoadingKnowledge && !aiHasInitiatedConversation) { 
         return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Bases</h2> <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p> </div> );
     }
 
@@ -1143,7 +1066,7 @@ export default function HomePage() {
           {hasConversationEnded && (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
-                 <ConversationLog messages={messages} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
+                 <ConversationLog messages={messages} avatarSrc={avatarSrc} />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                     <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
                     <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
@@ -1158,7 +1081,6 @@ export default function HomePage() {
         </div>
       );
     }
-    // For 'audio-text' and 'text-only' modes
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
         <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
@@ -1171,6 +1093,11 @@ export default function HomePage() {
                   Preparing greeting...
                 </p>
               )}
+              {isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting && !isSpeaking && (
+                <p className="mt-2 text-center text-sm text-muted-foreground animate-pulse">
+                  AI Blair is typing...
+                </p>
+              )}
             </CardContent>
           </Card>
            {corsTroubleshootingAlert}
@@ -1178,7 +1105,6 @@ export default function HomePage() {
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
             messages={messages}
-            isLoadingAiResponse={isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting}
             avatarSrc={avatarSrc}
           />
           <MessageInput
@@ -1197,13 +1123,12 @@ export default function HomePage() {
                 <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
                 <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
              </div>
-          ) : aiHasInitiatedConversation && ( // Show End Chat button if conversation has started and not ended
+          ) : aiHasInitiatedConversation && ( 
              <div className="mt-3 flex justify-end">
                 <Button
                   onClick={handleEndChatManually}
                   variant="outline"
                   size="sm"
-                  // Disable if greeting is preparing, or AI is sending/speaking (unless it's audio-text where user might want to interrupt type)
                   disabled={showPreparingGreeting || (isSendingMessage && aiHasInitiatedConversation) || isSpeaking }
                 >
                   <Power className="mr-2 h-4 w-4" /> End Chat
