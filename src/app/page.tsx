@@ -257,12 +257,11 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
       
-      // Always clear for a new listening session initiated by user or auto-start
       accumulatedTranscriptRef.current = ''; 
       if (communicationModeRef.current === 'audio-text' && typeof forceState === 'undefined') {
           setInputValue(''); 
-      } else if (communicationModeRef.current === 'audio-only' && forceState === true) { // Auto-start for audio-only
-          setInputValue(''); // Also clear visual if any, though not primary for audio-only
+      } else if (communicationModeRef.current === 'audio-only' && forceState === true) { 
+          setInputValue(''); 
       }
       
       try {
@@ -469,14 +468,14 @@ export default function HomePage() {
     if (communicationModeRef.current === 'audio-only' || (communicationModeRef.current === 'audio-text' && method === 'voice')) {
         setInputValue('');
     }
-    accumulatedTranscriptRef.current = ''; // Clear after capturing text for sending and adding message
+    accumulatedTranscriptRef.current = ''; 
 
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
 
 
-    const historyForGenkit = messagesRef.current
+    const historyForGenkit = messagesRef.current 
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) 
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
 
@@ -540,44 +539,37 @@ export default function HomePage() {
         if(recognitionRef.current && isListeningRef.current) try { recognitionRef.current.abort(); } catch(e){}
         return;
       }
-
+      
+      let visualTranscriptForInput = '';
       let latestFinalUtteranceThisEvent = '';
-      if (communicationModeRef.current === 'audio-text') {
-        const visualTranscript = Array.from(event.results)
-            .map(result => result[0].transcript)
-            .join('');
-        setInputValue(visualTranscript);
 
-        for (let i = event.results.length - 1; i >= 0; i--) {
-            if (event.results[i].isFinal) {
-                latestFinalUtteranceThisEvent = event.results[i][0].transcript.trim();
-                break; 
-            }
-        }
-      } else { // audio-only mode
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                latestFinalUtteranceThisEvent = event.results[i][0].transcript.trim(); 
-                break;
-            }
+      for (let i = 0; i < event.results.length; i++) {
+        visualTranscriptForInput += event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          latestFinalUtteranceThisEvent = event.results[i][0].transcript.trim();
         }
       }
       
-      if (latestFinalUtteranceThisEvent) {
-        accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent; // Set, not append
-        setConsecutiveSilencePrompts(0);
-
-        if (communicationModeRef.current === 'audio-text') {
-            if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
-            sendTranscriptTimerRef.current = setTimeout(() => {
-              if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
-                  if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */ } }
-                  setIsListening(false); 
-                  handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
-              }
-              sendTranscriptTimerRef.current = null;
-            }, responsePauseTimeMs);
+      if (communicationModeRef.current === 'audio-text') {
+        setInputValue(visualTranscriptForInput);
+        if (latestFinalUtteranceThisEvent && latestFinalUtteranceThisEvent !== accumulatedTranscriptRef.current) {
+          accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
+          setConsecutiveSilencePrompts(0);
+          if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
+          sendTranscriptTimerRef.current = setTimeout(() => {
+            if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
+                setIsListening(false);
+                if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */ } }
+                handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
+            }
+            sendTranscriptTimerRef.current = null;
+          }, responsePauseTimeMs);
         }
+      } else { // audio-only mode
+         if (latestFinalUtteranceThisEvent) {
+           accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
+           setConsecutiveSilencePrompts(0);
+         }
       }
     };
 
@@ -605,12 +597,12 @@ export default function HomePage() {
       if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current) {
         return; 
       }
-      if (sendTranscriptTimerRef.current) { // Timer is active (audio-text mode), let it handle sending
+      if (sendTranscriptTimerRef.current) { 
         return;
       }
 
       const transcriptToSend = accumulatedTranscriptRef.current.trim();
-      if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) { // Primarily for audio-only or if audio-text stopped before timer
+      if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) { 
         handleSendMessageRef.current(transcriptToSend, 'voice');
       } else if (transcriptToSend === '' && wasListeningWhenRecognitionEnded && communicationModeRef.current === 'audio-only') {
         isAboutToSpeakForSilenceRef.current = true;
@@ -777,7 +769,7 @@ export default function HomePage() {
 
 
   useEffect(() => {
-    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messagesRef.current.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
+    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false;
 
@@ -815,7 +807,7 @@ export default function HomePage() {
       initConversation();
     }
   }, [
-      showSplashScreen, aiHasInitiatedConversation, personaTraits, isSendingMessage, isLoadingKnowledge, hasConversationEnded,
+      showSplashScreen, aiHasInitiatedConversation, personaTraits, messages, isSendingMessage, isLoadingKnowledge, hasConversationEnded,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, useKnowledgeInGreeting, customGreeting, addMessage
     ]);
 
@@ -1037,7 +1029,7 @@ export default function HomePage() {
           {hasConversationEnded && (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
-                 <ConversationLog messages={messagesRef.current} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
+                 <ConversationLog messages={messages} isLoadingAiResponse={false} avatarSrc={avatarSrc} />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                     <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
                     <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
@@ -1070,7 +1062,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messagesRef.current}
+            messages={messages}
             isLoadingAiResponse={(isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting && !isSpeaking)}
             avatarSrc={avatarSrc}
           />
