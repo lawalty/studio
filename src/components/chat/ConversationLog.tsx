@@ -17,9 +17,20 @@ export default function ConversationLog({ messages, isLoadingAiResponse, avatarS
   const viewportRef = useRef<HTMLDivElement>(null); 
 
   useEffect(() => {
-    if (viewportRef.current) {
-      viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' });
-    }
+    const scrollToBottom = () => {
+      if (viewportRef.current) {
+        viewportRef.current.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' });
+      }
+    };
+
+    // Attempt to scroll immediately
+    scrollToBottom();
+
+    // And also ensure it scrolls after a very brief delay to catch any pending DOM updates.
+    // This can help if scrollHeight isn't updated immediately for the first call.
+    const timerId = setTimeout(scrollToBottom, 0);
+
+    return () => clearTimeout(timerId);
   }, [messages, isLoadingAiResponse]);
 
   const DEFAULT_AVATAR_PLACEHOLDER_TYPING = "https://placehold.co/40x40.png";
