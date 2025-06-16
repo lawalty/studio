@@ -52,7 +52,7 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful as
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
-const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 1500;
+const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -118,6 +118,7 @@ export default function HomePage() {
   const [inputValue, setInputValue] = useState('');
   const [consecutiveSilencePrompts, setConsecutiveSilencePrompts] = useState(0);
   const [hasConversationEnded, setHasConversationEnded] = useState(false);
+  const [showPreparingAudioResponseIndicator, setShowPreparingAudioResponseIndicator] = useState(false);
 
 
   const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
@@ -140,21 +141,7 @@ export default function HomePage() {
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
 
   const communicationModeRef = useRef(communicationMode);
-   useEffect(() => {
-    communicationModeRef.current = communicationMode;
-    if (recognitionRef.current && isListeningRef.current) {
-      try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
-    }
-    const rec = initializeSpeechRecognition();
-    recognitionRef.current = rec;
-    setIsListening(false);
-    accumulatedTranscriptRef.current = '';
-    if (sendTranscriptTimerRef.current) {
-        clearTimeout(sendTranscriptTimerRef.current);
-        sendTranscriptTimerRef.current = null;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [communicationMode, responsePauseTimeMs]);
+  useEffect(() => { communicationModeRef.current = communicationMode; }, [communicationMode]);
 
   const inputValueRef = useRef(inputValue);
   useEffect(() => { inputValueRef.current = inputValue; }, [inputValue]);
@@ -211,6 +198,7 @@ export default function HomePage() {
     isAboutToSpeakForSilenceRef.current = false;
     setHasConversationEnded(false);
     setShowPreparingGreeting(false);
+    setShowPreparingAudioResponseIndicator(false);
 
 
     accumulatedTranscriptRef.current = '';
@@ -265,20 +253,12 @@ export default function HomePage() {
             setIsListening(false); return;
          }
       }
-
+      
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
-      
-      // When user manually clicks mic in audio-text, clear input for fresh voice input.
-      // Also for programmatic starts in audio-text if inputValueRef.current IS NOT what accumulatedTranscriptRef held
-      if (communicationModeRef.current === 'audio-text' && (typeof forceState === 'undefined' || inputValueRef.current !== accumulatedTranscriptRef.current) ) {
-        setInputValue(''); // Clear visual input
-        accumulatedTranscriptRef.current = ''; // Clear internal buffer
-      } else if (communicationModeRef.current === 'audio-only') {
-         accumulatedTranscriptRef.current = ''; 
-      }
+      accumulatedTranscriptRef.current = ''; 
       
       try {
         recognitionRef.current?.start();
@@ -306,7 +286,7 @@ export default function HomePage() {
         accumulatedTranscriptRef.current = '';
       }
     }
-  }, [toast, hasConversationEnded, isSendingMessage, setInputValue]);
+  }, [toast, hasConversationEnded, isSendingMessage]);
 
   const toggleListeningRef = useRef(toggleListening);
   useEffect(() => {
@@ -318,6 +298,7 @@ export default function HomePage() {
     setIsSpeaking(true);
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingGreeting(false);
+    setShowPreparingAudioResponseIndicator(false);
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {/*ignore*/}
     }
@@ -327,6 +308,7 @@ export default function HomePage() {
     const wasSpeakingBeforeEnd = isSpeakingRef.current;
     setIsSpeaking(false);
     setShowPreparingGreeting(false);
+    setShowPreparingAudioResponseIndicator(false);
 
     if (elevenLabsAudioRef.current) {
         if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -346,7 +328,6 @@ export default function HomePage() {
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true);
     }
-    // For "audio-text", user must click mic or type. No auto-listen after AI speaks.
   }, [hasConversationEnded]);
 
 
@@ -385,6 +366,7 @@ export default function HomePage() {
     if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
       setIsSpeaking(false);
       setShowPreparingGreeting(false);
+      setShowPreparingAudioResponseIndicator(false);
       if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
          setHasConversationEnded(true);
       }
@@ -409,6 +391,8 @@ export default function HomePage() {
     setIsSpeaking(false);
     if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) {
         setShowPreparingGreeting(true);
+    } else if (communicationModeRef.current === 'audio-only') {
+        setShowPreparingAudioResponseIndicator(true);
     }
 
 
@@ -491,6 +475,10 @@ export default function HomePage() {
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
 
+    if (communicationModeRef.current === 'audio-only') {
+       setShowPreparingAudioResponseIndicator(true);
+    }
+
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
@@ -508,7 +496,7 @@ export default function HomePage() {
 
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       addMessage(result.aiResponse, 'ai');
-      setIsSendingMessage(false);
+      setIsSendingMessage(false); // Set to false before speakText for typing indicator to disappear
 
       if (result.shouldEndConversation) {
         isEndingSessionRef.current = true;
@@ -519,6 +507,7 @@ export default function HomePage() {
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       addMessage(errorMessage, 'ai');
       setIsSendingMessage(false);
+      setShowPreparingAudioResponseIndicator(false);
       if (isEndingSessionRef.current) {
         setHasConversationEnded(true);
       } else if (communicationModeRef.current !== 'text-only') {
@@ -546,15 +535,9 @@ export default function HomePage() {
       return null;
     }
     const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = communicationModeRef.current === 'audio-text';
     recognition.interimResults = true;
     recognition.lang = 'en-US';
-
-    if (communicationModeRef.current === 'audio-only') {
-        recognition.continuous = false;
-    } else if (communicationModeRef.current === 'audio-text') {
-        recognition.continuous = true;
-    }
-
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       if (isSpeakingRef.current || isSendingMessage) {
@@ -562,73 +545,47 @@ export default function HomePage() {
         return;
       }
 
-      if (communicationModeRef.current === 'audio-text') {
-        let currentFullFinalTranscript = '';
-        let currentFullInterimTranscript = '';
+      let interimTranscript = '';
+      let finalTranscript = '';
 
-        for (let i = 0; i < event.results.length; ++i) { // Iterate all results for continuous mode
-          const segment = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            currentFullFinalTranscript += segment;
-          } else {
-            currentFullInterimTranscript += segment;
-          }
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
         }
-        currentFullFinalTranscript = currentFullFinalTranscript.trim();
-        currentFullInterimTranscript = currentFullInterimTranscript.trim();
+      }
+      finalTranscript = finalTranscript.trim();
+      interimTranscript = interimTranscript.trim();
 
-        // Update the visual input field
-        setInputValue(
-          (currentFullFinalTranscript + (currentFullFinalTranscript && currentFullInterimTranscript ? " " : "") + currentFullInterimTranscript).trim()
-        );
-        
-        // If the *final* part of the transcript has changed, update internal ref and reset timer
-        if (currentFullFinalTranscript && currentFullFinalTranscript !== accumulatedTranscriptRef.current) {
-          accumulatedTranscriptRef.current = currentFullFinalTranscript;
+      if (communicationModeRef.current === 'audio-text') {
+        setInputValue(accumulatedTranscriptRef.current + finalTranscript + (finalTranscript && interimTranscript ? ' ' : '') + interimTranscript);
+      }
+      
+      if (finalTranscript) {
+         accumulatedTranscriptRef.current += (accumulatedTranscriptRef.current ? ' ' : '') + finalTranscript;
+      }
 
-          if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
+      if (sendTranscriptTimerRef.current) {
+        clearTimeout(sendTranscriptTimerRef.current);
+      }
 
-          sendTranscriptTimerRef.current = setTimeout(() => {
+      if (finalTranscript || interimTranscript) {
+        sendTranscriptTimerRef.current = setTimeout(() => {
+          if (isListeningRef.current) { // Check if still listening
             const transcriptToSend = accumulatedTranscriptRef.current.trim();
-            if (isListeningRef.current && transcriptToSend !== '') {
-              setIsListening(false); 
-              if (recognitionRef.current) {
-                try { recognitionRef.current.stop(); } 
-                catch (e) { console.warn("Error stopping recognition in timer (audio-text):", e); }
+            if (transcriptToSend !== '') {
+              if (communicationModeRef.current === 'audio-text') {
+                setIsListening(false); // Stop listening before sending for audio-text
+                if(recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */}}
               }
               handleSendMessageRef.current(transcriptToSend, 'voice');
+              // accumulatedTranscriptRef.current will be cleared in handleSendMessage or by toggleListening if it's audio-only
             }
             sendTranscriptTimerRef.current = null;
-          }, responsePauseTimeMs);
-        }
-      } else if (communicationModeRef.current === 'audio-only') {
-         // This logic uses event.resultIndex, suitable for non-continuous (audio-only)
-        let interimTranscriptSegment = '';
-        let finalTranscriptSegmentForCurrentEvent = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscriptSegmentForCurrentEvent += event.results[i][0].transcript;
-          } else {
-            interimTranscriptSegment += event.results[i][0].transcript;
           }
-        }
-        const newFinalText = finalTranscriptSegmentForCurrentEvent.trim();
-
-         if (newFinalText) {
-            accumulatedTranscriptRef.current += newFinalText + ' '; 
-            if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
-            setIsSendingMessage(true); 
-            sendTranscriptTimerRef.current = setTimeout(() => {
-                if (accumulatedTranscriptRef.current.trim() !== '') {
-                  handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
-                } else {
-                  setIsSendingMessage(false); 
-                }
-                sendTranscriptTimerRef.current = null;
-            }, responsePauseTimeMs);
-         }
-         if (!isListeningRef.current && newFinalText) setIsListening(true);
+        }, responsePauseTimeMs);
       }
     };
 
@@ -636,6 +593,7 @@ export default function HomePage() {
       const wasListeningBeforeError = isListeningRef.current;
       setIsListening(false); 
       setIsSendingMessage(false); 
+      setShowPreparingAudioResponseIndicator(false);
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
@@ -662,11 +620,16 @@ export default function HomePage() {
       }
 
       if (communicationModeRef.current === 'audio-only') {
-        if (sendTranscriptTimerRef.current) {
+        if (sendTranscriptTimerRef.current) { // If timer is active, let it handle the send
             return;
         }
 
-        if (accumulatedTranscriptRef.current.trim() === '' && wasListeningWhenRecognitionEnded) {
+        // If no timer (meaning very short utterance or immediate stop) and transcript exists, send it.
+        if (accumulatedTranscriptRef.current.trim() !== '' && wasListeningWhenRecognitionEnded && !isSendingMessage) {
+            handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
+            // accumulatedTranscriptRef.current will be cleared in handleSendMessage
+        } else if (accumulatedTranscriptRef.current.trim() === '' && wasListeningWhenRecognitionEnded) {
+          // No speech captured, and it was in listening state for audio-only mode
           isAboutToSpeakForSilenceRef.current = true;
           setConsecutiveSilencePrompts(currentPrompts => {
             const newPromptCount = currentPrompts + 1;
@@ -678,21 +641,22 @@ export default function HomePage() {
             } else {
               const userName = getUserNameFromHistory(messagesRef.current);
               const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-              speakTextRef.current(promptMessage); 
+              speakTextRef.current(promptMessage); // This will call handleAudioProcessEnd, which then calls toggleListening(true) for audio-only
             }
             return newPromptCount;
           });
-        } else if (accumulatedTranscriptRef.current.trim() !== '' && !sendTranscriptTimerRef.current && wasListeningWhenRecognitionEnded) {
-            handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
         } else if (wasListeningWhenRecognitionEnded && !isSpeakingRef.current && !isSendingMessage && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current ) {
+            // Fallback to ensure listening restarts if no other condition met
              toggleListeningRef.current(true);
         }
       } else if (communicationModeRef.current === 'audio-text') {
-          // No auto-restart listening here for audio-text. User controls mic or types.
+          // For audio-text, if a timer was running, it would have sent.
+          // If no timer and user stopped manually (or short utterance), the text is in inputValue.
+          // No automatic restart of listening here. User must click mic or type.
       }
     };
     return recognition;
-  }, [toast, responsePauseTimeMs, addMessage, setInputValue]);
+  }, [toast, responsePauseTimeMs, addMessage]);
 
   useEffect(() => {
     const rec = initializeSpeechRecognition();
@@ -720,6 +684,7 @@ export default function HomePage() {
     isEndingSessionRef.current = true;
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingGreeting(false);
+    setShowPreparingAudioResponseIndicator(false);
     setIsSendingMessage(false);
 
     if (sendTranscriptTimerRef.current) {
@@ -859,6 +824,7 @@ export default function HomePage() {
             await speakTextRef.current(greetingToUse);
         } else {
              setShowPreparingGreeting(false);
+             setShowPreparingAudioResponseIndicator(false);
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
                 toggleListeningRef.current(true);
             }
@@ -1060,10 +1026,10 @@ export default function HomePage() {
   };
   if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) { (imageProps as any)['data-ai-hint'] = "professional woman"; }
 
- const audioOnlyLiveIndicator = () => {
+  const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null;
     if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
-    if (isSendingMessage && !isSpeaking) { 
+    if (showPreparingAudioResponseIndicator && !isSpeaking) { 
       return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing response... </div>;
     }
     if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
@@ -1137,12 +1103,7 @@ export default function HomePage() {
             isListening={isListening && !hasConversationEnded}
             onToggleListening={() => toggleListeningRef.current()}
             inputValue={inputValue}
-            onInputValueChange={(value) => {
-                setInputValue(value);
-                if (communicationModeRef.current === 'audio-text') {
-                    accumulatedTranscriptRef.current = value;
-                }
-            }}
+            onInputValueChange={setInputValue}
             disabled={hasConversationEnded || showPreparingGreeting || (isSendingMessage && aiHasInitiatedConversation && communicationModeRef.current !== 'audio-text') || (isSpeaking && communicationModeRef.current !== 'audio-text')}
           />
           {hasConversationEnded ? (
@@ -1175,4 +1136,3 @@ export default function HomePage() {
     </div>
   );
 }
-
