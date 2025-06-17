@@ -1034,13 +1034,15 @@ export default function HomePage() {
   };
   if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) { (imageProps as any)['data-ai-hint'] = "professional woman"; }
 
+  const showAiTypingIndicator = isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting;
+
   const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null; 
     if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
     if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
       return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
     }
-     if (isSendingMessage && !isSpeaking && !isListening) { 
+     if (showAiTypingIndicator && !isSpeaking && !isListening) { 
       return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> AI Blair is preparing... </div>;
     }
     return null;
@@ -1089,12 +1091,12 @@ export default function HomePage() {
               <Image {...imageProps} />
               <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">Ask blAIr</h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
-                <p className="mt-2 text-center text-base font-semibold text-muted-foreground animate-pulse">
+                <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
                   Preparing greeting...
                 </p>
               )}
-              {isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting && !isSpeaking && (
-                <p className="mt-2 text-center text-sm text-muted-foreground animate-pulse">
+              {showAiTypingIndicator && !isSpeaking && (
+                 <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
                   AI Blair is typing...
                 </p>
               )}

@@ -157,11 +157,31 @@ const generateChatResponseFlow = ai.defineFlow(
         chatHistory: processedChatHistory,
     };
 
-    const {output} = await prompt(promptInput);
-    if (!output || typeof output.aiResponse !== 'string') {
-      console.error('[generateChatResponseFlow] Invalid or malformed output from prompt. Expected { aiResponse: string, ... }, received:', output);
-      throw new Error('AI model returned an unexpected data structure for the chat response.');
+    try {
+      const {output} = await prompt(promptInput);
+      if (!output || typeof output.aiResponse !== 'string') {
+        console.error('[generateChatResponseFlow] Invalid or malformed output from prompt. Expected { aiResponse: string, ... }, received:', output);
+        // Even if the structure is off, if aiResponse is missing, it's a critical failure.
+        // Return a graceful error message.
+        return {
+          aiResponse: "I seem to have lost my train of thought! Could you please try sending your message again?",
+          shouldEndConversation: false,
+        };
+      }
+      return output;
+    } catch (error: any) {
+      console.error('[generateChatResponseFlow] Error calling AI model:', error);
+      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please try sending your message again in a moment.";
+      if (error.message && error.message.includes('503 Service Unavailable')) {
+        userFriendlyMessage = "My apologies, it seems my core systems are a bit busy or temporarily unavailable. Could you please try your message again in a few moments?";
+      } else if (error.message && error.message.toLowerCase().includes('network error')) {
+         userFriendlyMessage = "I'm experiencing some network issues. Please check your connection and try again.";
+      }
+      // For other errors, keep the generic message.
+      return {
+        aiResponse: userFriendlyMessage,
+        shouldEndConversation: false,
+      };
     }
-    return output;
   }
 );
