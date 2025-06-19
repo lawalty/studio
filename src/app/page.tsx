@@ -742,7 +742,17 @@ export default function HomePage() {
     });
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Increased delay and added scroll manipulations to attempt to solve capture issues
+      await new Promise(resolve => setTimeout(resolve, 750));
+
+      const originalScrollTop = conversationLogElement.scrollTop;
+      conversationLogElement.scrollTop = 0; // Scroll to top
+      await new Promise(resolve => setTimeout(resolve, 50));
+      conversationLogElement.scrollTop = conversationLogElement.scrollHeight; // Scroll to bottom
+      await new Promise(resolve => setTimeout(resolve, 50));
+      conversationLogElement.scrollTop = originalScrollTop; // Restore original scroll position
+      await new Promise(resolve => setTimeout(resolve, 50));
+
 
       const canvas = await html2canvas(conversationLogElement, {
         scale: 2,
@@ -1004,14 +1014,15 @@ export default function HomePage() {
       if (secondLastMessage.sender === 'user') {
         return [secondLastMessage, lastMessage];
       } else {
-        return [lastMessage];
+        return [lastMessage]; // Handles AI -> AI (e.g. silence prompt after greeting)
       }
     }
-    if (messages.length > 0) {
-        return [messages[messages.length -1]];
+    // Fallback for single AI message if not caught above, or other edge cases.
+    if (lastMessage.sender === 'ai') {
+        return [lastMessage];
     }
 
-    return [];
+    return []; // Should ideally not be reached if messages.length > 0
   }, [messages, hasConversationEnded]);
 
   const displayedMessages = useMemo(() => getDisplayedMessages(), [getDisplayedMessages]);
@@ -1095,8 +1106,8 @@ export default function HomePage() {
     height: communicationMode === 'audio-only' ? 200 : 120,
     className: cn(
       "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
-       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak",
-       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow"
+       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak", // Pulse static avatar
+       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow" // Glow animated avatar
     ),
     priority: true,
     unoptimized: isDisplayingAnimatedAvatar || currentAvatarToDisplay.startsWith('data:image/') || currentAvatarToDisplay.startsWith('blob:') || !currentAvatarToDisplay.startsWith('https://'),
@@ -1147,7 +1158,7 @@ export default function HomePage() {
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={displayedMessages}
+                    messages={displayedMessages} // Uses potentially filtered if not all desired
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1168,6 +1179,7 @@ export default function HomePage() {
         </div>
       );
     }
+    // For 'audio-text' and 'text-only' modes:
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
         <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
@@ -1191,7 +1203,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={displayedMessages}
+            messages={messages} // Ensure full message history is passed here
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
