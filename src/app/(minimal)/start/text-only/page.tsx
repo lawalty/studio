@@ -10,6 +10,8 @@ import { MessageSquareText } from 'lucide-react'; // Using a more specific text 
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
+export const dynamic = 'force-dynamic';
+
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 

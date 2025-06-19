@@ -12,6 +12,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
