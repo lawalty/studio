@@ -1,5 +1,6 @@
 
 import type { ReactNode } from 'react';
+import { Suspense } from 'react'; // Import Suspense
 import { Toaster } from "@/components/ui/toaster"; // Keep toaster for any potential toasts on start pages
 
 // This layout is specifically for the /start/* iframe embed precursor pages.
@@ -14,7 +15,9 @@ export default function MinimalStartLayout({ children }: { children: ReactNode }
       </head>
       <body className="font-body antialiased bg-background text-foreground flex flex-col min-h-screen">
         <main className="flex-grow container mx-auto px-4 py-8 flex flex-col items-center justify-center">
-          {children}
+          <Suspense fallback={<div className="flex items-center justify-center h-screen w-screen text-lg">Loading start page...</div>}>
+            {children}
+          </Suspense>
         </main>
         <Toaster />
       </body>
