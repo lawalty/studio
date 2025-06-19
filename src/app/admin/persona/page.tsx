@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, Link as LinkIcon, Copy } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -24,6 +24,7 @@ const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
+const DEFAULT_PUBLIC_EMBED_URL = "";
 
 export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
@@ -34,6 +35,10 @@ export default function PersonaPage() {
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
   const [responsePauseTime, setResponsePauseTime] = useState<string>(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
+  const [publicEmbedUrlInput, setPublicEmbedUrlInput] = useState<string>(DEFAULT_PUBLIC_EMBED_URL);
+  const [currentPublicEmbedUrl, setCurrentPublicEmbedUrl] = useState<string>(DEFAULT_PUBLIC_EMBED_URL);
+
+
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -54,22 +59,31 @@ export default function PersonaPage() {
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
+          const fetchedPublicUrl = data?.publicEmbedUrl || DEFAULT_PUBLIC_EMBED_URL;
+          setPublicEmbedUrlInput(fetchedPublicUrl);
+          setCurrentPublicEmbedUrl(fetchedPublicUrl);
         } else {
+          // Set all to defaults if doc doesn't exist
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
           setUseKnowledgeInGreeting(true);
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
+          setPublicEmbedUrlInput(DEFAULT_PUBLIC_EMBED_URL);
+          setCurrentPublicEmbedUrl(DEFAULT_PUBLIC_EMBED_URL);
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
+        // Fallback to defaults on error
         setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
         setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
+        setPublicEmbedUrlInput(DEFAULT_PUBLIC_EMBED_URL);
+        setCurrentPublicEmbedUrl(DEFAULT_PUBLIC_EMBED_URL);
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -116,8 +130,32 @@ export default function PersonaPage() {
     }
   };
 
+  const handlePublicEmbedUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPublicEmbedUrlInput(e.target.value);
+  };
 
-  const handleSave = async () => {
+  const handleSavePublicEmbedUrl = async () => {
+     setIsSaving(true);
+     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+     try {
+        const urlToSave = publicEmbedUrlInput.trim();
+        const currentDocSnap = await getDoc(siteAssetsDocRef);
+        if (currentDocSnap.exists()) {
+            await updateDoc(siteAssetsDocRef, { publicEmbedUrl: urlToSave });
+        } else {
+            await setDoc(siteAssetsDocRef, { publicEmbedUrl: urlToSave }, { merge: true }); // merge to not overwrite other fields if somehow created by another process
+        }
+        setCurrentPublicEmbedUrl(urlToSave);
+        toast({ title: "Public URL Saved", description: "The Public URL for embeds has been updated."});
+     } catch (error) {
+        console.error("Failed to save public embed URL:", error);
+        toast({ title: "Error Saving URL", description: "Could not save the Public URL for embeds.", variant: "destructive" });
+     }
+     setIsSaving(false);
+  };
+
+
+  const handleSaveAllSettings = async () => {
     setIsSaving(true);
 
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
@@ -131,17 +169,16 @@ export default function PersonaPage() {
       try {
         await uploadBytes(fileRef, selectedAvatarFile);
         newAvatarUrl = await getDownloadURL(fileRef);
-        setAvatarPreview(newAvatarUrl); // Update preview with final URL
+        setAvatarPreview(newAvatarUrl); 
         setSelectedAvatarFile(null);
         avatarUpdated = true;
-        toast({ title: "Static Avatar Uploaded", description: "New static avatar image has been saved." });
       } catch (uploadError: any) {
         toast({ title: "Static Avatar Upload Failed", description: `Could not upload: ${uploadError.message}`, variant: "destructive" });
         setIsSaving(false); return;
       }
     } else if (avatarPreview === DEFAULT_AVATAR_PLACEHOLDER) {
-       newAvatarUrl = DEFAULT_AVATAR_PLACEHOLDER; // Ensure default is saved if reset
-       avatarUpdated = true; // Mark as updated if it was reset to default
+       newAvatarUrl = DEFAULT_AVATAR_PLACEHOLDER; 
+       avatarUpdated = true; 
     }
 
 
@@ -150,10 +187,9 @@ export default function PersonaPage() {
       try {
         await uploadBytes(animatedFileRef, selectedAnimatedAvatarFile);
         newAnimatedAvatarUrl = await getDownloadURL(animatedFileRef);
-        setAnimatedAvatarPreview(newAnimatedAvatarUrl); // Update preview with final URL
+        setAnimatedAvatarPreview(newAnimatedAvatarUrl); 
         setSelectedAnimatedAvatarFile(null);
         animatedAvatarUpdated = true;
-        toast({ title: "Animated Avatar Uploaded", description: "New animated GIF avatar has been saved." });
       } catch (uploadError: any) {
         toast({ title: "Animated Avatar Upload Failed", description: `Could not upload GIF: ${uploadError.message}`, variant: "destructive" });
         setIsSaving(false); return;
@@ -166,6 +202,7 @@ export default function PersonaPage() {
 
     const pauseTimeMs = parseInt(responsePauseTime);
     const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
+    const finalPublicEmbedUrl = publicEmbedUrlInput.trim(); // Use the input state for saving
 
     try {
       const currentDocSnap = await getDoc(siteAssetsDocRef);
@@ -176,6 +213,7 @@ export default function PersonaPage() {
         useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
         responsePauseTimeMs: validPauseTime,
+        publicEmbedUrl: finalPublicEmbedUrl, // Save the current input value
       };
 
       if (avatarUpdated || newAvatarUrl !== currentData.avatarUrl) {
@@ -185,26 +223,42 @@ export default function PersonaPage() {
         dataToSave.animatedAvatarUrl = newAnimatedAvatarUrl;
       }
       
+      let settingsChanged = false;
+      if (Object.keys(dataToSave).some(key => dataToSave[key] !== (currentData[key] ?? (key === 'publicEmbedUrl' ? DEFAULT_PUBLIC_EMBED_URL : undefined) ))) {
+        settingsChanged = true;
+      }
+      // Explicit checks for default values if currentData doesn't have the key
+      if (dataToSave.personaTraits !== (currentData.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT)) settingsChanged = true;
+      if (dataToSave.useKnowledgeInGreeting !== (currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting)) settingsChanged = true;
+      if (dataToSave.customGreetingMessage !== (currentData.customGreetingMessage || DEFAULT_CUSTOM_GREETING)) settingsChanged = true;
+      if (dataToSave.responsePauseTimeMs !== (currentData.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : currentData.responsePauseTimeMs)) settingsChanged = true;
+      if (dataToSave.publicEmbedUrl !== (currentData.publicEmbedUrl || DEFAULT_PUBLIC_EMBED_URL)) settingsChanged = true;
 
-      if (Object.keys(dataToSave).length > 4 || dataToSave.personaTraits !== (currentData.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT) || dataToSave.useKnowledgeInGreeting !== (currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting) || dataToSave.customGreetingMessage !== (currentData.customGreetingMessage || DEFAULT_CUSTOM_GREETING) || dataToSave.responsePauseTimeMs !== (currentData.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : currentData.responsePauseTimeMs) ) {
+
+      if (settingsChanged || avatarUpdated || animatedAvatarUpdated) {
         if (currentDocSnap.exists()) {
           await updateDoc(siteAssetsDocRef, dataToSave);
         } else {
+          // Default other fields that might be on site_display_assets from SiteSettingsPage
           await setDoc(siteAssetsDocRef, {
              ...dataToSave,
-             // ensure all fields are present on new doc creation
              avatarUrl: dataToSave.avatarUrl !== undefined ? dataToSave.avatarUrl : DEFAULT_AVATAR_PLACEHOLDER,
              animatedAvatarUrl: dataToSave.animatedAvatarUrl !== undefined ? dataToSave.animatedAvatarUrl : DEFAULT_ANIMATED_AVATAR_PLACEHOLDER,
              splashImageUrl: currentData.splashImageUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
              splashWelcomeMessage: currentData.splashWelcomeMessage || "Welcome to AI Chat",
              enableTextAnimation: currentData.enableTextAnimation === undefined ? false : currentData.enableTextAnimation,
              textAnimationSpeedMs: currentData.textAnimationSpeedMs === undefined ? 800 : currentData.textAnimationSpeedMs,
-
           });
         }
+        setCurrentPublicEmbedUrl(finalPublicEmbedUrl); // Update the display URL after successful save
         const input: AdjustAiPersonaAndPersonalityInput = { personaTraits };
         const result = await adjustAiPersonaAndPersonality(input);
-        toast({ title: "Persona Settings Saved", description: result.updatedPersonaDescription || "AI persona and avatar settings have been updated." });
+        let toastMessages = ["AI persona and avatar settings have been updated."];
+        if (avatarUpdated && newAvatarUrl !== currentData.avatarUrl) toastMessages.unshift("Static avatar updated.");
+        if (animatedAvatarUpdated && newAnimatedAvatarUrl !== currentData.animatedAvatarUrl) toastMessages.unshift("Animated avatar updated.");
+        if(dataToSave.publicEmbedUrl !== (currentData.publicEmbedUrl || DEFAULT_PUBLIC_EMBED_URL)) toastMessages.unshift("Public URL for embeds updated.");
+        
+        toast({ title: "Persona Settings Saved", description: result.updatedPersonaDescription + " " + toastMessages.join(" ") });
       } else {
         toast({ title: "No Changes", description: "No settings were changed." });
       }
@@ -221,28 +275,46 @@ export default function PersonaPage() {
     setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
     setSelectedAvatarFile(null);
     if (avatarInputRef.current) avatarInputRef.current.value = "";
-    toast({ title: "Static Avatar Preview Reset", description: "Preview reset. Click 'Save Settings' to make it permanent."});
+    toast({ title: "Static Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
   };
 
   const handleResetAnimatedAvatar = async () => {
     setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
     setSelectedAnimatedAvatarFile(null);
     if (animatedAvatarInputRef.current) animatedAvatarInputRef.current.value = "";
-    toast({ title: "Animated Avatar Preview Reset", description: "Preview reset. Click 'Save Settings' to make it permanent."});
+    toast({ title: "Animated Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
+  };
+
+  const generateIframeSnippet = (mode: 'audio-only' | 'audio-text' | 'text-only'): string => {
+    const baseUrl = currentPublicEmbedUrl.trim() || (typeof window !== 'undefined' ? window.location.origin : 'YOUR_APP_URL');
+    const src = `${baseUrl}/start/${mode}`;
+    const allowMic = (mode === 'audio-only' || mode === 'audio-text') ? ' allow="microphone"' : '';
+    // Using a common style, can be adjusted later if needed
+    const style = "border:1px solid #ccc; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); width:400px; height:600px;";
+    return `<iframe src="${src}" style="${style}"${allowMic}></iframe>`;
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({ title: "Copied to Clipboard!", description: "Iframe snippet copied." });
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+      toast({ title: "Copy Failed", description: "Could not copy snippet. See console.", variant: "destructive" });
+    });
   };
 
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <Card className="md:col-span-2">
+    <div className="space-y-6">
+      <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2"><Bot /> AI Persona & Personality</CardTitle>
+          <CardTitle className="font-headline flex items-center gap-2"><Bot /> AI Persona & Main Settings</CardTitle>
           <CardDescription>
-            Define AI Blair's conversational style, traits, and attributes. This shapes how the AI interacts with visitors.
-            Settings are saved in Firestore.
+            Define AI Blair's conversational style, traits, avatars, and other core interaction settings.
+            All settings here are saved together in Firestore.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           {isLoadingData ? (<p>Loading persona settings...</p>) : (
             <>
               <div>
@@ -252,12 +324,12 @@ export default function PersonaPage() {
                   value={personaTraits}
                   onChange={handlePersonaChange}
                   placeholder="Describe AI Blair's personality, tone, knowledge areas, etc."
-                  rows={10}
+                  rows={8}
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
               </div>
-              <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm mt-4">
+              <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
                 <MessageSquareText className="h-5 w-5 text-primary" />
                 <div className="flex-1 space-y-1">
                     <Label htmlFor="useKnowledgeInGreeting" className="font-medium">
@@ -275,7 +347,7 @@ export default function PersonaPage() {
                     aria-label="Toggle use of knowledge base in initial greeting"
                 />
               </div>
-              <div className="space-y-2 mt-4">
+              <div className="space-y-2">
                 <Label htmlFor="customGreetingMessage" className="font-medium flex items-center gap-1.5">
                   <Type className="h-4 w-4" />
                   Custom Scripted Greeting (Optional)
@@ -290,10 +362,9 @@ export default function PersonaPage() {
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
-                  Otherwise, a greeting will be generated based on the "Tailor Initial Greeting" toggle.
                 </p>
               </div>
-               <div className="space-y-2 mt-4">
+               <div className="space-y-2">
                 <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
                     <Timer className="h-4 w-4" />
                     User Speaking Pause Time (milliseconds)
@@ -312,103 +383,126 @@ export default function PersonaPage() {
                     Pause duration (after user stops speaking) before AI processes input in Audio Only mode. Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
                 </p>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                <div>
+                  <Label className="font-medium text-base block mb-2">Static Avatar Image</Label>
+                  <CardDescription className="mb-3">
+                    Default image for AI Blair. Optimal: Square (e.g., 300x300px).
+                  </CardDescription>
+                  <Card className="shadow-sm">
+                    <CardContent className="pt-6 flex flex-col items-center space-y-3">
+                       <Image
+                          src={avatarPreview} alt="AI Blair Static Avatar Preview" width={150} height={150}
+                          className="rounded-full border-2 border-primary shadow-md object-cover"
+                          data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
+                          unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https://')}
+                          onError={() => { console.warn("Custom static avatar failed to load, falling back."); setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);}}
+                        />
+                      <Input type="file" accept="image/png, image/jpeg, image/webp" ref={avatarInputRef} onChange={handleAvatarChange} className="hidden" id="avatar-upload"/>
+                      <Button variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/> Choose Image</Button>
+                      {selectedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAvatarFile.name}</p>}
+                      <Button variant="link" size="sm" onClick={handleResetAvatar} className="text-xs">Reset to default</Button>
+                    </CardContent>
+                  </Card>
+                </div>
+                <div>
+                  <Label className="font-medium text-base block mb-2 flex items-center gap-1.5"><Film /> Animated Speaking Avatar (GIF)</Label>
+                  <CardDescription className="mb-3">
+                    Upload an animated GIF for when AI Blair is speaking in audio modes.
+                  </CardDescription>
+                  <Card className="shadow-sm">
+                    <CardContent className="pt-6 flex flex-col items-center space-y-3">
+                       <Image
+                          src={animatedAvatarPreview} alt="AI Blair Animated Avatar Preview" width={150} height={150}
+                          className="rounded-full border-2 border-accent shadow-md object-cover"
+                          data-ai-hint={animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER || animatedAvatarPreview.includes("placehold.co") ? "animated face" : undefined}
+                          unoptimized={true} 
+                          onError={() => { console.warn("Custom animated avatar failed to load, falling back."); setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);}}
+                        />
+                      <Input type="file" accept="image/gif" ref={animatedAvatarInputRef} onChange={handleAnimatedAvatarChange} className="hidden" id="animated-avatar-upload"/>
+                      <Button variant="outline" size="sm" onClick={() => animatedAvatarInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/>Choose GIF</Button>
+                      {selectedAnimatedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAnimatedAvatarFile.name}</p>}
+                      <Button variant="link" size="sm" onClick={handleResetAnimatedAvatar} className="text-xs">Reset to default</Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
             </>
           )}
         </CardContent>
         <CardFooter>
-          <Button onClick={handleSave} disabled={isSaving || isLoadingData}>
-            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving...' : (isLoadingData ? 'Loading...' : 'Save Settings')}
+          <Button onClick={handleSaveAllSettings} disabled={isSaving || isLoadingData} size="lg">
+            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving All Persona Settings...' : (isLoadingData ? 'Loading...' : 'Save All Persona Settings')}
           </Button>
         </CardFooter>
       </Card>
 
-      <div className="md:col-span-1 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Static Avatar Image</CardTitle>
+      <Card>
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-code-xml"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+                Embeddable Chatbot Snippets
+            </CardTitle>
             <CardDescription>
-              Default image for AI Blair. Optimal: Square (e.g., 300x300px).
-              Stored in Firebase Storage.
+                Enter your site&apos;s public production URL below and save it. Then, copy and paste these HTML snippets
+                to embed AI Blair on other websites. The chatbot will appear without the header and footer, starting from a dedicated minimal page.
             </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center space-y-4">
-            {isLoadingData ? (
-              <div className="w-[150px] h-[150px] bg-muted rounded-full flex items-center justify-center">
-                <p className="text-xs text-muted-foreground">Loading...</p>
-              </div>
-            ) : (
-              <Image
-                src={avatarPreview}
-                alt="AI Blair Static Avatar Preview"
-                width={150}
-                height={150}
-                className="rounded-full border-2 border-primary shadow-md object-cover"
-                data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
-                unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https://')}
-                onError={() => { console.warn("Custom static avatar failed to load, falling back."); setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);}}
-              />
-            )}
-            <Input
-              type="file"
-              accept="image/png, image/jpeg, image/webp"
-              ref={avatarInputRef}
-              onChange={handleAvatarChange}
-              className="hidden"
-              id="avatar-upload"
-            />
-            <Button variant="outline" onClick={() => avatarInputRef.current?.click()} disabled={isLoadingData}>
-              <UploadCloud className="mr-2 h-4 w-4" /> Choose Image
-            </Button>
-            {selectedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAvatarFile.name}</p>}
-            <Button variant="link" size="sm" onClick={handleResetAvatar} className="text-xs" disabled={isLoadingData}>Reset to default</Button>
-          </CardContent>
-        </Card>
+        </CardHeader>
+        <CardContent className="space-y-6">
+            {isLoadingData ? (<p>Loading embed settings...</p>) : (
+            <>
+                <div className="space-y-2">
+                    <Label htmlFor="publicEmbedUrl" className="font-medium flex items-center gap-1.5"><LinkIcon className="h-4 w-4" /> Public URL for Embeds</Label>
+                    <div className="flex items-center gap-2">
+                        <Input
+                            id="publicEmbedUrl"
+                            value={publicEmbedUrlInput}
+                            onChange={handlePublicEmbedUrlChange}
+                            placeholder="e.g., https://your-app-name.web.app"
+                        />
+                        <Button onClick={handleSavePublicEmbedUrl} variant="outline" disabled={isSaving}>
+                            <Save className="mr-2 h-4 w-4" /> Save URL
+                        </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                        If left empty after saving, snippets will use the current browser URL (which might be the Studio URL when generating). For production, ensure this is your deployed app URL.
+                    </p>
+                </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><Film /> Animated Speaking Avatar (GIF)</CardTitle>
-            <CardDescription>
-              Upload an animated GIF for when AI Blair is speaking.
-              Will play in audio modes. Stored in Firebase Storage.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center space-y-4">
-            {isLoadingData ? (
-              <div className="w-[150px] h-[150px] bg-muted rounded-full flex items-center justify-center">
-                <p className="text-xs text-muted-foreground">Loading...</p>
-              </div>
-            ) : (
-              <Image
-                src={animatedAvatarPreview}
-                alt="AI Blair Animated Avatar Preview"
-                width={150}
-                height={150}
-                className="rounded-full border-2 border-accent shadow-md object-cover"
-                data-ai-hint={animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER || animatedAvatarPreview.includes("placehold.co") ? "animated face" : undefined}
-                unoptimized={true} // GIFs must be unoptimized to animate
-                onError={() => { console.warn("Custom animated avatar failed to load, falling back."); setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);}}
-              />
+                {[
+                    { title: "Audio Only Mode", mode: "audio-only" as const },
+                    { title: "Audio & Text Mode (Recommended)", mode: "audio-text" as const },
+                    { title: "Text Only Mode", mode: "text-only" as const }
+                ].map(({ title, mode }) => {
+                    const snippet = generateIframeSnippet(mode);
+                    return (
+                        <div key={mode} className="space-y-2">
+                            <Label className="font-medium">{title}</Label>
+                            <div className="relative group">
+                                <Textarea
+                                    value={snippet}
+                                    readOnly
+                                    rows={5}
+                                    className="bg-muted/50 font-mono text-xs pr-10"
+                                />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute top-2 right-2 h-7 w-7 opacity-50 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => copyToClipboard(snippet)}
+                                    aria-label={`Copy ${title} snippet`}
+                                >
+                                    <Copy className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </>
             )}
-            <Input
-              type="file"
-              accept="image/gif"
-              ref={animatedAvatarInputRef}
-              onChange={handleAnimatedAvatarChange}
-              className="hidden"
-              id="animated-avatar-upload"
-            />
-            <Button variant="outline" onClick={() => animatedAvatarInputRef.current?.click()} disabled={isLoadingData}>
-              <UploadCloud className="mr-2 h-4 w-4" /> Choose GIF
-            </Button>
-            {selectedAnimatedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAnimatedAvatarFile.name}</p>}
-            <Button variant="link" size="sm" onClick={handleResetAnimatedAvatar} className="text-xs" disabled={isLoadingData}>Reset to default</Button>
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-    
-
-    
-

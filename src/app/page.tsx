@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation'; // Import useSearchParams
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
@@ -97,8 +98,12 @@ const getUserNameFromHistory = (history: Message[]): string | null => {
 
 
 export default function HomePage() {
-  const [showSplashScreen, setShowSplashScreen] = useState(true);
-  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text');
+  const searchParams = useSearchParams(); // Get query parameters
+  const isEmbedded = searchParams.get('embedded') === 'true';
+  const initialModeFromQuery = searchParams.get('mode') as CommunicationMode | null;
+
+  const [showSplashScreen, setShowSplashScreen] = useState(!isEmbedded); // Don't show splash if embedded
+  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [splashScreenWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
@@ -116,7 +121,7 @@ export default function HomePage() {
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -180,7 +185,7 @@ export default function HomePage() {
         else window.dispatchEvent(new CustomEvent('splashScreenInactive'));
     };
     window.addEventListener('requestInitialSplashState', sendInitialState);
-    sendInitialState();
+    sendInitialState(); // Dispatch immediately for initial load
     return () => window.removeEventListener('requestInitialSplashState', sendInitialState);
   }, [showSplashScreen]);
 
@@ -337,6 +342,7 @@ export default function HomePage() {
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true); 
     } else if (communicationModeRef.current === 'audio-text' && !isEndingSessionRef.current && !hasConversationEnded) {
+        // In audio-text, don't automatically restart listening; user can click mic or type.
     }
   }, [hasConversationEnded]);
 
@@ -601,7 +607,7 @@ export default function HomePage() {
                sendTranscriptTimerRef.current = null;
              }, responsePauseTimeMs);
           }
-      } else { 
+      } else { // audio-only mode
          if (latestFinalUtteranceThisEvent) {
             accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
             setConsecutiveSilencePrompts(0);
@@ -802,6 +808,13 @@ export default function HomePage() {
   const handleStartNewChat = () => {
     resetConversation();
     setAiHasInitiatedConversation(false); 
+    if (isEmbedded) { // If embedded, re-initialize based on query param
+       if(initialModeFromQuery) {
+          setCommunicationMode(initialModeFromQuery);
+       } // else it keeps current mode or defaults if initialModeFromQuery was null
+    } else {
+        setShowSplashScreen(true); // For non-embedded, go back to splash
+    }
   };
 
 
@@ -954,8 +967,22 @@ export default function HomePage() {
       if (anyCorsError) setCorsErrorEncountered(true);
       setIsLoadingKnowledge(false);
     };
-    if(showSplashScreen) fetchAllData(); 
-  }, [toast, fetchAndProcessKnowledgeLevel, showSplashScreen]); 
+    // Only fetch all data if not embedded OR if embedded and no mode was passed (which shouldn't happen with new start pages)
+    // OR if it's the splash screen being shown
+    if (showSplashScreen || (isEmbedded && initialModeFromQuery)) {
+       fetchAllData();
+    } else if (!isEmbedded && !initialModeFromQuery) { // Normal non-embedded flow, show splash
+        fetchAllData();
+    } else { // This case might be if embedded=false but a mode is passed, which is unlikely. Assume non-splash data load is ok.
+        fetchAllData(); // Or at least fetch essentials. For now, fetch all.
+        setIsLoadingKnowledge(false); // Ensure loading stops if fetchAllData isn't hit
+    }
+    // If embedded and mode provided, we skip splash, so set communicationMode
+    if (isEmbedded && initialModeFromQuery) {
+        setCommunicationMode(initialModeFromQuery);
+    }
+
+  }, [toast, fetchAndProcessKnowledgeLevel, showSplashScreen, isEmbedded, initialModeFromQuery]); 
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => { performResetOnUnmountRef.current = resetConversation; }, [resetConversation]);
@@ -970,12 +997,20 @@ export default function HomePage() {
       }
       resetConversation();
       setAiHasInitiatedConversation(false);
-      setShowSplashScreen(true);
+      // For embedded mode, going "home" might mean re-evaluating query params,
+      // but practically it should go to its own start page, not the app's splash.
+      // For non-embedded, this is correct.
+      if (!isEmbedded) {
+        setShowSplashScreen(true);
+      } else {
+        // If embedded, "home" is tricky. We can't easily go "back" to the iframe start page from here.
+        // For now, ending the chat is the main action. The host page would control the iframe.
+      }
     };
     window.addEventListener('forceGoToSplashScreen', handleForceGoToSplash);
     return () => window.removeEventListener('forceGoToSplashScreen', handleForceGoToSplash);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetConversation, showSplashScreen]); 
+  }, [resetConversation, showSplashScreen, isEmbedded]); 
 
 
   const getDisplayedMessages = useCallback((): Message[] => {
@@ -988,22 +1023,26 @@ export default function HomePage() {
 
     const lastMessage = messages[messages.length - 1];
 
+    // Rule: AI's first greeting message, only that chat bubble would appear.
     if (messages.length === 1 && lastMessage.sender === 'ai') {
       return [lastMessage];
     }
-
+    
+    // Rule: When the user inputs his/her response, it would appear each time at the top
     if (lastMessage.sender === 'user') {
       return [lastMessage];
     }
     
+    // Rule: then AI Blair's would appear right under it.
     if (lastMessage.sender === 'ai' && messages.length > 1) {
       const secondLastMessage = messages[messages.length - 2];
       if (secondLastMessage.sender === 'user') {
         return [secondLastMessage, lastMessage];
-      } else { 
+      } else { // Handles cases like AI silence prompt after initial AI greeting
         return [lastMessage];
       }
     }
+    // Fallback if somehow conditions aren't met, show at least the last message if any.
     if (messages.length > 0) {
         return [messages[messages.length -1]];
     }
@@ -1041,7 +1080,7 @@ export default function HomePage() {
   );
 
 
-  if (showSplashScreen) {
+  if (showSplashScreen && !isEmbedded) { // Only show splash if not embedded
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-md shadow-2xl">
@@ -1092,8 +1131,8 @@ export default function HomePage() {
     height: communicationMode === 'audio-only' ? 200 : 120,
     className: cn(
       "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
-      isSpeaking && !isDisplayingAnimatedAvatar && "animate-pulse-speak", // For static image pulsing
-      isDisplayingAnimatedAvatar && "avatar-is-speaking-glow" // For animated GIF glowing
+       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak", // For static image pulsing
+       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow" // For animated GIF glowing
     ),
     priority: true,
     unoptimized: isDisplayingAnimatedAvatar || currentAvatarToDisplay.startsWith('data:image/') || currentAvatarToDisplay.startsWith('blob:') || !currentAvatarToDisplay.startsWith('https://'),
@@ -1118,7 +1157,7 @@ export default function HomePage() {
       return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
     }
      if (showAiTypingIndicator && !isSpeaking && !isListening) { 
-      return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> AI Blair is preparing... </div>;
+      return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> AI Blair is preparing... </div>;
     }
     return null;
   };
@@ -1134,7 +1173,7 @@ export default function HomePage() {
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
           {corsTroubleshootingAlert}
           {!hasConversationEnded && <Image {...imageProps} />}
-          {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask blAIr</h2>}
+          {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask AI Blair</h2>}
 
            <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {audioOnlyLiveIndicator()}
@@ -1171,7 +1210,7 @@ export default function HomePage() {
           <Card className="w-full shadow-xl">
             <CardContent className="pt-6 flex flex-col items-center">
               <Image {...imageProps} />
-              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">Ask blAIr</h2>
+              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">Ask AI Blair</h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
                 <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
                   Preparing greeting...
@@ -1236,5 +1275,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-    
