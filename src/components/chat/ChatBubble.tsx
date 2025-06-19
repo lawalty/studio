@@ -1,17 +1,49 @@
+
 import type { Message } from '@/app/page'; 
 import { cn } from "@/lib/utils";
 import { User, Bot } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import Image from 'next/image'; // Import NextImage
 
 interface ChatBubbleProps {
   message: Message;
   avatarSrc: string; 
+  textAnimationEnabled: boolean;
+  textAnimationSpeedMs: number;
+  isNewlyAddedAiMessage: boolean;
 }
 
-export default function ChatBubble({ message, avatarSrc }: ChatBubbleProps) {
+export default function ChatBubble({ 
+  message, 
+  avatarSrc,
+  textAnimationEnabled,
+  textAnimationSpeedMs,
+  isNewlyAddedAiMessage
+}: ChatBubbleProps) {
   const isUser = message.sender === 'user';
-  const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png"; // Smaller placeholder
+  const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png"; 
+
+  const renderTextContent = () => {
+    if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
+      const letters = message.text.split('');
+      const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800; // Default if 0 or less
+      // Ensure staggerDelay is reasonable, not too fast for very short animation durations
+      const baseStagger = Math.max(10, animationDuration / letters.length / 2); 
+
+      return letters.map((letter, index) => (
+        <span
+          key={`${message.id}-letter-${index}`}
+          className="scale-in-letter"
+          style={{
+            animationDuration: `${animationDuration}ms`,
+            animationDelay: `${index * baseStagger}ms`,
+          }}
+        >
+          {letter === ' ' ? '\u00A0' : letter} {/* Preserve spaces correctly */}
+        </span>
+      ));
+    }
+    return <p className="text-sm whitespace-pre-wrap">{message.text}</p>;
+  };
 
   return (
     <div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
@@ -33,7 +65,7 @@ export default function ChatBubble({ message, avatarSrc }: ChatBubbleProps) {
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+        {renderTextContent()}
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -46,3 +78,5 @@ export default function ChatBubble({ message, avatarSrc }: ChatBubbleProps) {
     </div>
   );
 }
+
+    

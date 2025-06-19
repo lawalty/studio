@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Film, Zap } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -18,11 +19,15 @@ const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP//
 const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
+const DEFAULT_ENABLE_TEXT_ANIMATION = false;
+const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800;
 
 export default function SiteSettingsPage() {
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
   const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
+  const [enableTextAnimation, setEnableTextAnimation] = useState<boolean>(DEFAULT_ENABLE_TEXT_ANIMATION);
+  const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<string>(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -39,14 +44,20 @@ export default function SiteSettingsPage() {
           const data = docSnap.data();
           setSplashImagePreview(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
+          setEnableTextAnimation(typeof data.enableTextAnimation === 'boolean' ? data.enableTextAnimation : DEFAULT_ENABLE_TEXT_ANIMATION);
+          setTextAnimationSpeedMs(data.textAnimationSpeedMs === undefined ? String(DEFAULT_TEXT_ANIMATION_SPEED_MS) : String(data.textAnimationSpeedMs));
         } else {
           setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
+          setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
+          setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
         setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
         setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
+        setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
+        setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
         toast({
           title: "Error Loading Settings",
           description: "Could not fetch site settings from the database. Using defaults.",
@@ -74,6 +85,13 @@ export default function SiteSettingsPage() {
     setSplashWelcomeMessage(event.target.value);
   };
 
+  const handleTextAnimationSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value === '' || /^\d*$/.test(value)) {
+      setTextAnimationSpeedMs(value);
+    }
+  };
+
   const handleSaveAllSiteSettings = async () => {
     setIsSaving(true);
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
@@ -94,8 +112,17 @@ export default function SiteSettingsPage() {
       }
     }
 
+    const speedMs = parseInt(textAnimationSpeedMs, 10);
+    const validAnimationSpeed = isNaN(speedMs) || speedMs <= 0 ? DEFAULT_TEXT_ANIMATION_SPEED_MS : speedMs;
+
+
     try {
-      const dataToSave: { splashImageUrl?: string; splashWelcomeMessage?: string } = {};
+      const dataToSave: { 
+        splashImageUrl?: string; 
+        splashWelcomeMessage?: string;
+        enableTextAnimation?: boolean;
+        textAnimationSpeedMs?: number;
+      } = {};
       const currentDocSnap = await getDoc(siteAssetsDocRef);
       const currentData = currentDocSnap.data() || {};
 
@@ -105,7 +132,6 @@ export default function SiteSettingsPage() {
         dataToSave.splashImageUrl = newSplashImageUrl;
         changesMade = true;
       } else if (!newSplashImageUrl && currentData.splashImageUrl !== DEFAULT_SPLASH_IMAGE_SRC) {
-        // Handles case where image was reset to default placeholder string and needs saving
         dataToSave.splashImageUrl = DEFAULT_SPLASH_IMAGE_SRC;
         changesMade = true;
       }
@@ -116,12 +142,22 @@ export default function SiteSettingsPage() {
         changesMade = true;
       }
 
+      if (enableTextAnimation !== (currentData.enableTextAnimation === undefined ? DEFAULT_ENABLE_TEXT_ANIMATION : currentData.enableTextAnimation)) {
+        dataToSave.enableTextAnimation = enableTextAnimation;
+        changesMade = true;
+      }
+
+      if (validAnimationSpeed !== (currentData.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : currentData.textAnimationSpeedMs)) {
+        dataToSave.textAnimationSpeedMs = validAnimationSpeed;
+        changesMade = true;
+      }
+
 
       if (changesMade) {
         await setDoc(siteAssetsDocRef, dataToSave, { merge: true });
-        toast({ title: "Site Settings Saved", description: "Your splash screen settings have been updated in Firebase." });
+        toast({ title: "Site Settings Saved", description: "Your site display and animation settings have been updated in Firebase." });
         if (imageUpdated) {
-          setSplashImagePreview(newSplashImageUrl); // Update preview to reflect saved URL
+          setSplashImagePreview(newSplashImageUrl); 
           setSelectedSplashFile(null);
         }
       } else {
@@ -144,6 +180,13 @@ export default function SiteSettingsPage() {
     setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
     toast({ title: "Welcome Message Reset", description: "Message reset to default. Click 'Save Site Settings' to make it permanent."});
   };
+
+  const handleResetAnimationSettings = () => {
+    setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
+    setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
+    toast({ title: "Animation Settings Reset", description: "Animation settings reset to default. Click 'Save Site Settings' to make them permanent."});
+  };
+
 
   return (
     <div className="space-y-6">
@@ -177,7 +220,7 @@ export default function SiteSettingsPage() {
         </CardContent>
         <CardFooter>
           <Button variant="outline" onClick={handleResetSplashWelcomeMessage} disabled={isLoadingData}>
-            <RotateCcw className="mr-2 h-4 w-4" /> Reset to Default
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset Message to Default
           </Button>
         </CardFooter>
       </Card>
@@ -231,6 +274,63 @@ export default function SiteSettingsPage() {
         </CardFooter>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><Film /> AI Speech Text Animation</CardTitle>
+          <CardDescription>
+            Configure the scale-in text animation effect when AI Blair starts speaking.
+            Settings are stored in Firestore.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {isLoadingData ? (
+            <p>Loading animation settings...</p>
+          ) : (
+            <>
+              <div className="flex items-center space-x-3 rounded-md border p-4 shadow-sm">
+                  <Zap className="h-5 w-5 text-primary" />
+                  <div className="flex-1 space-y-1">
+                      <Label htmlFor="enableTextAnimation" className="font-medium">
+                          Enable Scale-In Text Animation
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                          If ON, AI Blair's text will animate in letter by letter.
+                      </p>
+                  </div>
+                  <Switch
+                      id="enableTextAnimation"
+                      checked={enableTextAnimation}
+                      onCheckedChange={setEnableTextAnimation}
+                      aria-label="Toggle AI speech text animation"
+                  />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="textAnimationSpeedMs" className="font-medium">Animation Speed (milliseconds)</Label>
+                <Input 
+                  id="textAnimationSpeedMs" 
+                  type="number" 
+                  value={textAnimationSpeedMs} 
+                  onChange={handleTextAnimationSpeedChange} 
+                  placeholder="e.g., 800"
+                  min="100"
+                  step="50"
+                  disabled={!enableTextAnimation || isLoadingData}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Total duration for the text animation. Default: {DEFAULT_TEXT_ANIMATION_SPEED_MS}ms.
+                </p>
+              </div>
+            </>
+          )}
+        </CardContent>
+        <CardFooter>
+           <Button variant="outline" onClick={handleResetAnimationSettings} disabled={isLoadingData}>
+              <RotateCcw className="mr-2 h-4 w-4" /> Reset Animation Settings to Default
+           </Button>
+        </CardFooter>
+      </Card>
+
+
       <div className="flex justify-start py-4 mt-4 border-t pt-6">
         <Button onClick={handleSaveAllSiteSettings} disabled={isSaving || isLoadingData} size="lg">
           <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving Settings...' : (isLoadingData ? 'Loading...' : 'Save Site Settings')}
@@ -239,3 +339,5 @@ export default function SiteSettingsPage() {
     </div>
   );
 }
+
+    

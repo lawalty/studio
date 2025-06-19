@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,6 +53,8 @@ const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP//
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
+const DEFAULT_TEXT_ANIMATION_ENABLED = false;
+const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800;
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -119,6 +121,8 @@ export default function HomePage() {
   const [consecutiveSilencePrompts, setConsecutiveSilencePrompts] = useState(0);
   const [hasConversationEnded, setHasConversationEnded] = useState(false);
   const [showPreparingGreeting, setShowPreparingGreeting] = useState(false);
+  const [textAnimationEnabled, setTextAnimationEnabled] = useState<boolean>(DEFAULT_TEXT_ANIMATION_ENABLED);
+  const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<number>(DEFAULT_TEXT_ANIMATION_SPEED_MS);
 
 
   const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
@@ -428,7 +432,12 @@ export default function HomePage() {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
             const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
             if (mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) {
-            } else {
+                 // Benign interruption, likely due to new speech starting or programmatic stop.
+            } else if (mediaError?.code === mediaError?.MEDIA_ERR_SRC_NOT_SUPPORTED || (errorMessage && errorMessage.toLowerCase().includes("empty src attribute"))){
+                 console.warn("ElevenLabs Audio Playback Warning (SRC Issue):", errorMessage, mediaError);
+                 toast({ title: "TTS Playback Issue", description: "Using browser default due to audio source problem.", variant: "default" });
+            }
+            else {
                 console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
                 toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
             }
@@ -443,6 +452,7 @@ export default function HomePage() {
                 toast({ title: "TTS Play Error", description: "Using browser default.", variant: "destructive" });
             }
             browserSpeakInternal(textForSpeech, onSpeechStartCallback); 
+            return; 
           }
           return;
         } else {
@@ -572,7 +582,7 @@ export default function HomePage() {
             currentVisualTranscript += segmentTranscript;
         }
         if (event.results[i].isFinal) {
-            latestFinalUtteranceThisEvent = segmentTranscript.trim(); // Overwrite with the latest final
+            latestFinalUtteranceThisEvent = segmentTranscript.trim(); 
         }
       }
       
@@ -584,14 +594,12 @@ export default function HomePage() {
              if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
              sendTranscriptTimerRef.current = setTimeout(() => {
                if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
-                   // setIsListening(false); // No, let onend handle this, or manual toggle
-                   // if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch(e){ /* ignore */ } }
                    handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
                }
                sendTranscriptTimerRef.current = null;
              }, responsePauseTimeMs);
           }
-      } else { // audio-only mode
+      } else { 
          if (latestFinalUtteranceThisEvent) {
             accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
             setConsecutiveSilencePrompts(0);
@@ -920,6 +928,8 @@ export default function HomePage() {
           setUseKnowledgeInGreeting(typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true);
           setCustomGreeting(assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
+          setTextAnimationEnabled(typeof assets.enableTextAnimation === 'boolean' ? assets.enableTextAnimation : DEFAULT_TEXT_ANIMATION_ENABLED);
+          setTextAnimationSpeedMs(assets.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : Number(assets.textAnimationSpeedMs));
 
         } else {
             setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
@@ -929,6 +939,8 @@ export default function HomePage() {
             setUseKnowledgeInGreeting(true);
             setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
             setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
+            setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
+            setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
         }
       } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
 
@@ -960,6 +972,38 @@ export default function HomePage() {
     return () => window.removeEventListener('forceGoToSplashScreen', handleForceGoToSplash);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetConversation, showSplashScreen]); 
+
+
+  const getDisplayedMessages = useCallback((): Message[] => {
+    if (hasConversationEnded) {
+      return messages; 
+    }
+    if (messages.length === 0) {
+      return [];
+    }
+    const lastMessage = messages[messages.length - 1];
+    if (messages.length === 1 && lastMessage.sender === 'ai') {
+      return [lastMessage]; 
+    }
+    if (lastMessage.sender === 'user') {
+      return [lastMessage]; 
+    }
+    if (lastMessage.sender === 'ai' && messages.length > 1) {
+      const secondLastMessage = messages[messages.length - 2];
+      if (secondLastMessage.sender === 'user') {
+        return [secondLastMessage, lastMessage]; 
+      } else {
+        return [lastMessage]; 
+      }
+    }
+    if (messages.length > 0) {
+        return [messages[messages.length -1]];
+    }
+    return []; 
+  }, [messages, hasConversationEnded]);
+
+  const displayedMessages = useMemo(() => getDisplayedMessages(), [getDisplayedMessages]);
+  const lastOverallMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
 
   const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
@@ -1068,7 +1112,14 @@ export default function HomePage() {
           {hasConversationEnded && (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
-                 <ConversationLog messages={messages} avatarSrc={avatarSrc} />
+                 <ConversationLog 
+                    messages={displayedMessages} 
+                    avatarSrc={avatarSrc}
+                    textAnimationEnabled={textAnimationEnabled}
+                    textAnimationSpeedMs={textAnimationSpeedMs}
+                    lastOverallMessageId={lastOverallMessage?.id || null}
+                    hasConversationEnded={hasConversationEnded}
+                  />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                     <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
                     <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
@@ -1096,7 +1147,7 @@ export default function HomePage() {
                 </p>
               )}
               {showAiTypingIndicator && !isSpeaking && (
-                 <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
+                 <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">
                   AI Blair is typing...
                 </p>
               )}
@@ -1106,8 +1157,12 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messages}
+            messages={displayedMessages}
             avatarSrc={avatarSrc}
+            textAnimationEnabled={textAnimationEnabled}
+            textAnimationSpeedMs={textAnimationSpeedMs}
+            lastOverallMessageId={lastOverallMessage?.id || null}
+            hasConversationEnded={hasConversationEnded}
           />
           <MessageInput
             onSendMessage={handleSendMessageRef.current}
@@ -1150,3 +1205,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    
