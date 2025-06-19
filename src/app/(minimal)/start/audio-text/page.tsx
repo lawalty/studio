@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
-export default function StartAudioTextPage() {
+function AudioTextPageContent() {
   const router = useRouter();
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER_URL);
   const [isLoadingAvatar, setIsLoadingAvatar] = useState(true);
@@ -114,5 +114,13 @@ export default function StartAudioTextPage() {
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+export default function StartAudioTextPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen w-screen text-lg">Loading interface...</div>}>
+      <AudioTextPageContent />
+    </Suspense>
   );
 }

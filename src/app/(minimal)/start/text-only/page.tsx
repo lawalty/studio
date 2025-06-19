@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { doc, getDoc } from 'firebase/firestore';
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
-export default function StartTextOnlyPage() {
+function TextOnlyPageContent() {
   const router = useRouter();
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER_URL);
   const [isLoadingAvatar, setIsLoadingAvatar] = useState(true);
@@ -74,5 +74,13 @@ export default function StartTextOnlyPage() {
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+export default function StartTextOnlyPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-screen w-screen text-lg">Loading interface...</div>}>
+      <TextOnlyPageContent />
+    </Suspense>
   );
 }
