@@ -117,8 +117,8 @@ export default function SiteSettingsPage() {
 
 
     try {
-      const dataToSave: { 
-        splashImageUrl?: string; 
+      const dataToSave: {
+        splashImageUrl?: string;
         splashWelcomeMessage?: string;
         enableTextAnimation?: boolean;
         textAnimationSpeedMs?: number;
@@ -180,7 +180,7 @@ export default function SiteSettingsPage() {
         }
         toast({ title: "Site Settings Saved", description: "Your site display and animation settings have been updated in Firebase." });
         if (imageUpdated) {
-          setSplashImagePreview(newSplashImageUrl); 
+          setSplashImagePreview(newSplashImageUrl);
           setSelectedSplashFile(null);
         } else if (dataToSave.splashImageUrl === DEFAULT_SPLASH_IMAGE_SRC) {
           setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
@@ -331,18 +331,18 @@ export default function SiteSettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="textAnimationSpeedMs" className="font-medium">Animation Speed (milliseconds)</Label>
-                <Input 
-                  id="textAnimationSpeedMs" 
-                  type="number" 
-                  value={textAnimationSpeedMs} 
-                  onChange={handleTextAnimationSpeedChange} 
+                <Input
+                  id="textAnimationSpeedMs"
+                  type="number"
+                  value={textAnimationSpeedMs}
+                  onChange={handleTextAnimationSpeedChange}
                   placeholder="e.g., 800"
-                  min="100"
-                  step="50"
+                  min="10"
+                  step="10"
                   disabled={!enableTextAnimation || isLoadingData}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Total duration for the text animation. Default: {DEFAULT_TEXT_ANIMATION_SPEED_MS}ms.
+                  Total duration for each letter's animation. Default: {DEFAULT_TEXT_ANIMATION_SPEED_MS}ms. Lower values are faster.
                 </p>
               </div>
             </>
@@ -364,5 +364,6 @@ export default function SiteSettingsPage() {
     </div>
   );
 }
+    
 
     
