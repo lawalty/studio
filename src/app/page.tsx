@@ -1131,8 +1131,8 @@ export default function HomePage() {
     height: communicationMode === 'audio-only' ? 200 : 120,
     className: cn(
       "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
-       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak", // For static image pulsing
-       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow" // For animated GIF glowing
+       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak", 
+       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow" 
     ),
     priority: true,
     unoptimized: isDisplayingAnimatedAvatar || currentAvatarToDisplay.startsWith('data:image/') || currentAvatarToDisplay.startsWith('blob:') || !currentAvatarToDisplay.startsWith('https://'),
@@ -1275,3 +1275,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    
