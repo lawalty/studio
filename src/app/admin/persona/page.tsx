@@ -90,7 +90,7 @@ export default function PersonaPage() {
     fetchData();
   }, [toast]);
 
-  const handlePersonaChange = (e: React.ChangeEvent<Textarea>) => {
+  const handlePersonaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPersonaTraits(e.target.value);
   };
 

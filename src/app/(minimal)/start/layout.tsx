@@ -1,25 +1,14 @@
-
+// Minimal layout for /start/* to avoid build errors during rollback
 import type { ReactNode } from 'react';
-import { Suspense } from 'react'; // Import Suspense
-import { Toaster } from "@/components/ui/toaster"; // Keep toaster for any potential toasts on start pages
 
-// This layout is specifically for the /start/* iframe embed precursor pages.
-// It should be extremely minimal, without the main site Header or Footer.
-export default function MinimalStartLayout({ children }: { children: ReactNode }) {
+export default function MinimalLayoutPlaceholder({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning={true}>
+    <html lang="en">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet" />
+        <title>Placeholder</title>
       </head>
-      <body className="font-body antialiased bg-background text-foreground flex flex-col min-h-screen">
-        <main className="flex-grow container mx-auto px-4 py-8 flex flex-col items-center justify-center">
-          <Suspense fallback={<div className="flex items-center justify-center h-screen w-screen text-lg">Loading start page...</div>}>
-            {children}
-          </Suspense>
-        </main>
-        <Toaster />
+      <body>
+        <main>{children}</main>
       </body>
     </html>
   );
