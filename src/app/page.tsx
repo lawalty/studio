@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
-// Removed: import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
@@ -98,13 +97,8 @@ const getUserNameFromHistory = (history: Message[]): string | null => {
 
 
 export default function HomePage() {
-  // Removed: useSearchParams logic
-  // const searchParams = useSearchParams();
-  // const isEmbedded = searchParams.get('embedded') === 'true';
-  // const initialModeFromQuery = searchParams.get('mode') as CommunicationMode | null;
-
-  const [showSplashScreen, setShowSplashScreen] = useState(true); // Reverted to default true
-  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); // Default mode
+  const [showSplashScreen, setShowSplashScreen] = useState(true);
+  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text');
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [splashScreenWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
@@ -122,7 +116,7 @@ export default function HomePage() {
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text'); // Reverted to default
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -253,7 +247,7 @@ export default function HomePage() {
       if (hasConversationEnded) { setIsListening(false); return; }
       if (communicationModeRef.current === 'text-only') { setIsListening(false); return; }
 
-      if (typeof forceState === 'undefined') { 
+      if (typeof forceState === 'undefined') {
          if (isSpeakingRef.current) {
             toast({ title: "AI Speaking", description: "Please wait for AI Blair to finish speaking.", variant: "default"});
             setIsListening(false); return;
@@ -263,40 +257,40 @@ export default function HomePage() {
             setIsListening(false); return;
          }
       }
-      
+
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
-      
-      accumulatedTranscriptRef.current = ''; 
-      setInputValue(''); 
-      
+
+      accumulatedTranscriptRef.current = '';
+      setInputValue('');
+
       try {
         recognitionRef.current?.start();
         setIsListening(true);
       } catch (startError: any) {
-        if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') { 
+        if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
           toast({ variant: 'destructive', title: 'Microphone Start Error', description: `${startError.name}: ${startError.message || 'Could not start microphone.'}` });
         }
-        setIsListening(false); 
+        setIsListening(false);
       }
-    } else { 
+    } else {
       if (recognitionRef.current) {
          try { recognitionRef.current.stop(); } catch(e) { /* ignore - might already be stopped */ }
       } else {
-        setIsListening(false); 
+        setIsListening(false);
       }
 
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
-      
-      if (typeof forceState === 'undefined') { 
-        const textToSendFromStop = (communicationModeRef.current === 'audio-only') 
-            ? accumulatedTranscriptRef.current.trim() 
-            : inputValueRef.current.trim(); 
+
+      if (typeof forceState === 'undefined') {
+        const textToSendFromStop = (communicationModeRef.current === 'audio-only')
+            ? accumulatedTranscriptRef.current.trim()
+            : inputValueRef.current.trim();
 
         if (textToSendFromStop !== '') {
             handleSendMessageRef.current(textToSendFromStop, 'voice');
@@ -313,8 +307,8 @@ export default function HomePage() {
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
-    isAboutToSpeakForSilenceRef.current = false; 
-    setShowPreparingGreeting(false); 
+    isAboutToSpeakForSilenceRef.current = false;
+    setShowPreparingGreeting(false);
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {/*ignore*/}
     }
@@ -323,7 +317,7 @@ export default function HomePage() {
   const handleAudioProcessEnd = useCallback(() => {
     const wasSpeakingBeforeEnd = isSpeakingRef.current;
     setIsSpeaking(false);
-    setShowPreparingGreeting(false); 
+    setShowPreparingGreeting(false);
 
     if (elevenLabsAudioRef.current) {
         if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -336,12 +330,12 @@ export default function HomePage() {
     }
 
     if (isEndingSessionRef.current && wasSpeakingBeforeEnd) {
-        setHasConversationEnded(true); 
-        return; 
+        setHasConversationEnded(true);
+        return;
     }
 
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
-        toggleListeningRef.current(true); 
+        toggleListeningRef.current(true);
     } else if (communicationModeRef.current === 'audio-text' && !isEndingSessionRef.current && !hasConversationEnded) {
         // In audio-text, don't automatically restart listening; user can click mic or type.
     }
@@ -363,8 +357,8 @@ export default function HomePage() {
       if (selectedVoice) utterance.voice = selectedVoice;
 
       utterance.onstart = () => {
-        onSpeechStartCallback?.(); 
-        handleActualAudioStart(); 
+        onSpeechStartCallback?.();
+        handleActualAudioStart();
       };
       utterance.onend = handleAudioProcessEnd;
       utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
@@ -376,7 +370,7 @@ export default function HomePage() {
       window.speechSynthesis.speak(utterance);
     } else {
       console.warn("Browser TTS Not Supported.");
-      onSpeechStartCallback?.(); 
+      onSpeechStartCallback?.();
       handleAudioProcessEnd();
     }
   }, [handleActualAudioStart, handleAudioProcessEnd]);
@@ -409,7 +403,7 @@ export default function HomePage() {
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
        elevenLabsAudioRef.current.src = '';
     }
-    setIsSpeaking(false); 
+    setIsSpeaking(false);
     if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) {
         setShowPreparingGreeting(true);
     }
@@ -432,9 +426,9 @@ export default function HomePage() {
           if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
           const audio = elevenLabsAudioRef.current;
           audio.src = audioUrl;
-          audio.onplay = () => { 
-            onSpeechStartCallback?.(); 
-            handleActualAudioStart(); 
+          audio.onplay = () => {
+            onSpeechStartCallback?.();
+            handleActualAudioStart();
           };
           audio.onended = handleAudioProcessEnd;
           audio.onerror = (e: Event | string) => {
@@ -450,18 +444,18 @@ export default function HomePage() {
                 console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
                 toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
             }
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback); 
+            browserSpeakInternal(textForSpeech, onSpeechStartCallback);
           };
-          try { 
-            await audio.play(); 
+          try {
+            await audio.play();
           } catch (playError: any) {
             if (playError.name === 'AbortError' || playError.message.includes("interrupted")) { /* Already handled or benign */ }
             else {
                 console.error("ElevenLabs Audio Play Error:", playError);
                 toast({ title: "TTS Play Error", description: "Using browser default.", variant: "destructive" });
             }
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback); 
-            return; 
+            browserSpeakInternal(textForSpeech, onSpeechStartCallback);
+            return;
           }
           return;
         } else {
@@ -494,18 +488,18 @@ export default function HomePage() {
       clearTimeout(sendTranscriptTimerRef.current);
       sendTranscriptTimerRef.current = null;
     }
-    
+
     addMessage(text, 'user');
     setInputValue('');
-    accumulatedTranscriptRef.current = ''; 
+    accumulatedTranscriptRef.current = '';
 
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
 
 
-    const historyForGenkit = messagesRef.current 
-        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id)) 
+    const historyForGenkit = messagesRef.current
+        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
 
     const combinedLowPriorityText = [MOCK_KNOWLEDGE_BASE_CONTENT, dynamicKnowledgeContentLow].filter(Boolean).join('\n\n');
@@ -520,13 +514,13 @@ export default function HomePage() {
       };
 
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-      
+
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
           if (!isEndingSessionRef.current || (isEndingSessionRef.current && result.shouldEndConversation)) {
             addMessage(result.aiResponse, 'ai');
           }
-          setIsSendingMessage(false); 
+          setIsSendingMessage(false);
         }, 50);
       };
 
@@ -538,13 +532,13 @@ export default function HomePage() {
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
-      
+
       if (!isEndingSessionRef.current) {
         addMessage(errorMessage, 'ai');
-        setIsSendingMessage(false); 
+        setIsSendingMessage(false);
 
         if (communicationModeRef.current !== 'text-only') {
-          await speakTextRef.current(errorMessage); 
+          await speakTextRef.current(errorMessage);
         }
       } else {
         setHasConversationEnded(true);
@@ -572,7 +566,7 @@ export default function HomePage() {
       return null;
     }
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = communicationModeRef.current === 'audio-text'; 
+    recognition.continuous = communicationModeRef.current === 'audio-text';
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
@@ -581,7 +575,7 @@ export default function HomePage() {
         if(recognitionRef.current && isListeningRef.current) try { recognitionRef.current.abort(); } catch(e){}
         return;
       }
-      
+
       let currentVisualTranscript = '';
       let latestFinalUtteranceThisEvent = '';
 
@@ -591,15 +585,15 @@ export default function HomePage() {
             currentVisualTranscript += segmentTranscript;
         }
         if (event.results[i].isFinal) {
-            latestFinalUtteranceThisEvent = segmentTranscript.trim(); 
+            latestFinalUtteranceThisEvent = segmentTranscript.trim();
         }
       }
-      
+
       if (communicationModeRef.current === 'audio-text') {
-        setInputValue(currentVisualTranscript.trimStart()); 
+        setInputValue(currentVisualTranscript.trimStart());
         if (latestFinalUtteranceThisEvent && latestFinalUtteranceThisEvent !== accumulatedTranscriptRef.current) {
              accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
-             setConsecutiveSilencePrompts(0); 
+             setConsecutiveSilencePrompts(0);
              if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
              sendTranscriptTimerRef.current = setTimeout(() => {
                if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
@@ -617,7 +611,7 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      setIsListening(false); 
+      setIsListening(false);
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
@@ -627,38 +621,38 @@ export default function HomePage() {
       else if (event.error === 'no-speech') { /* Handled by onend for audio-only's silence prompts */ }
       else if (event.error === 'audio-capture') {
         toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
-      } else if (event.error !== 'network') { 
+      } else if (event.error !== 'network') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       }
     };
 
     recognition.onend = () => {
       const wasListeningWhenRecognitionEnded = isListeningRef.current;
-      setIsListening(false); 
+      setIsListening(false);
 
       if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current || sendTranscriptTimerRef.current) {
-        return; 
+        return;
       }
-      
+
       const transcriptToSend = accumulatedTranscriptRef.current.trim();
-      
-      if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) { 
+
+      if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) {
         handleSendMessageRef.current(transcriptToSend, 'voice');
       } else if (transcriptToSend === '' && wasListeningWhenRecognitionEnded && communicationModeRef.current === 'audio-only') {
-        isAboutToSpeakForSilenceRef.current = true; 
+        isAboutToSpeakForSilenceRef.current = true;
         setConsecutiveSilencePrompts(currentPrompts => {
           const newPromptCount = currentPrompts + 1;
           if (newPromptCount >= MAX_SILENCE_PROMPTS_AUDIO_ONLY) {
             isEndingSessionRef.current = true;
             const endMsg = "It looks like you might have stepped away. Let's end this chat.";
-            if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) { 
+            if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) {
                 addMessage(endMsg, 'ai');
             }
-            speakTextRef.current(endMsg); 
+            speakTextRef.current(endMsg);
           } else {
             const userName = getUserNameFromHistory(messagesRef.current);
             const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-            speakTextRef.current(promptMessage); 
+            speakTextRef.current(promptMessage);
           }
           return newPromptCount;
         });
@@ -667,12 +661,12 @@ export default function HomePage() {
       }
     };
     return recognition;
-  }, [toast, responsePauseTimeMs, addMessage, communicationMode]); 
+  }, [toast, responsePauseTimeMs, addMessage, communicationMode]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && SpeechRecognitionAPI) {
         if (recognitionRef.current) {
-            try { recognitionRef.current.abort(); } catch(e) {} 
+            try { recognitionRef.current.abort(); } catch(e) {}
         }
         const rec = initializeSpeechRecognition();
         recognitionRef.current = rec;
@@ -687,12 +681,12 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
     };
-  }, [initializeSpeechRecognition, communicationMode]); 
+  }, [initializeSpeechRecognition, communicationMode]);
 
 
   const handleModeSelectionSubmit = () => {
     resetConversation();
-    setCommunicationMode(selectedInitialMode); 
+    setCommunicationMode(selectedInitialMode);
     setShowSplashScreen(false);
   };
 
@@ -700,7 +694,7 @@ export default function HomePage() {
     isEndingSessionRef.current = true;
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingGreeting(false);
-    setIsSendingMessage(false); 
+    setIsSendingMessage(false);
 
     if (sendTranscriptTimerRef.current) {
       clearTimeout(sendTranscriptTimerRef.current);
@@ -724,10 +718,10 @@ export default function HomePage() {
         if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
             window.speechSynthesis.cancel();
         }
-        setIsSpeaking(false); 
-        setHasConversationEnded(true); 
+        setIsSpeaking(false);
+        setHasConversationEnded(true);
     } else {
-        setHasConversationEnded(true); 
+        setHasConversationEnded(true);
     }
   };
 
@@ -751,11 +745,11 @@ export default function HomePage() {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(conversationLogElement, {
-        scale: 2, 
-        useCORS: true, 
-        backgroundColor: '#FFFFFF', 
-        height: conversationLogElement.scrollHeight, 
-        windowHeight: conversationLogElement.scrollHeight 
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#FFFFFF',
+        height: conversationLogElement.scrollHeight,
+        windowHeight: conversationLogElement.scrollHeight
       });
 
       if (canvas.width === 0 || canvas.height === 0) {
@@ -766,25 +760,25 @@ export default function HomePage() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', 
+        unit: 'pt',
         format: 'a4',
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; 
+      const pageMargin = 20;
       const contentWidth = pdfWidth - (pageMargin * 2);
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; 
+      let position = pageMargin;
 
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); 
+      heightLeft -= (pdfHeight - (pageMargin * 2));
 
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)); 
+        position = position - (pdfHeight - (pageMargin * 2));
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -808,16 +802,15 @@ export default function HomePage() {
 
   const handleStartNewChat = () => {
     resetConversation();
-    setAiHasInitiatedConversation(false); 
-    // Reverted: if (isEmbedded) { ... }
-    setShowSplashScreen(true); // Always show splash for non-embedded new chat
+    setAiHasInitiatedConversation(false);
+    setShowSplashScreen(true);
   };
 
 
   useEffect(() => {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
-      setAiHasInitiatedConversation(true); 
-      isAboutToSpeakForSilenceRef.current = false; 
+      setAiHasInitiatedConversation(true);
+      isAboutToSpeakForSilenceRef.current = false;
 
       const initConversation = async () => {
         let greetingToUse: string | null = null;
@@ -831,7 +824,7 @@ export default function HomePage() {
               knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
               useKnowledgeInGreeting: useKnowledgeInGreeting,
             };
-            setShowPreparingGreeting(true); 
+            setShowPreparingGreeting(true);
             const result = await generateInitialGreeting(greetingInput);
             greetingToUse = result.greetingMessage;
           } catch (error) {
@@ -842,17 +835,17 @@ export default function HomePage() {
 
         if (greetingToUse) {
           const onGreetingSpeechActuallyStarting = () => {
-            setTimeout(() => { 
-                 if (!isEndingSessionRef.current) { 
+            setTimeout(() => {
+                 if (!isEndingSessionRef.current) {
                     addMessage(greetingToUse!, 'ai');
                  }
-            }, 50); 
+            }, 50);
           };
           await speakTextRef.current(greetingToUse, onGreetingSpeechActuallyStarting);
         } else {
              setShowPreparingGreeting(false);
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
-                toggleListeningRef.current(true); 
+                toggleListeningRef.current(true);
             }
         }
       };
@@ -885,7 +878,7 @@ export default function HomePage() {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
             if (source.extractedText && source.extractionStatus === 'success') {
                 textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
-            } else if (source.downloadURL) { 
+            } else if (source.downloadURL) {
                 try {
                     const response = await fetch(source.downloadURL);
                     if (response.ok) {
@@ -963,10 +956,9 @@ export default function HomePage() {
       if (anyCorsError) setCorsErrorEncountered(true);
       setIsLoadingKnowledge(false);
     };
-    // Reverted: Removed conditional logic for embedded mode
     fetchAllData();
 
-  }, [toast, fetchAndProcessKnowledgeLevel]); 
+  }, [toast, fetchAndProcessKnowledgeLevel]);
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => { performResetOnUnmountRef.current = resetConversation; }, [resetConversation]);
@@ -976,12 +968,12 @@ export default function HomePage() {
 
   useEffect(() => {
     const handleForceGoToSplash = () => {
-      if (!showSplashScreen) { 
-         handleEndChatManually(); 
+      if (!showSplashScreen) {
+         handleEndChatManually();
       }
       resetConversation();
       setAiHasInitiatedConversation(false);
-      setShowSplashScreen(true); // Directly show splash screen
+      setShowSplashScreen(true);
     };
     window.addEventListener('forceGoToSplashScreen', handleForceGoToSplash);
     return () => window.removeEventListener('forceGoToSplashScreen', handleForceGoToSplash);
@@ -991,7 +983,7 @@ export default function HomePage() {
 
   const getDisplayedMessages = useCallback((): Message[] => {
     if (hasConversationEnded) {
-      return messages; 
+      return messages;
     }
     if (messages.length === 0) {
       return [];
@@ -999,31 +991,27 @@ export default function HomePage() {
 
     const lastMessage = messages[messages.length - 1];
 
-    // Rule: AI's first greeting message, only that chat bubble would appear.
     if (messages.length === 1 && lastMessage.sender === 'ai') {
       return [lastMessage];
     }
-    
-    // Rule: When the user inputs his/her response, it would appear each time at the top
+
     if (lastMessage.sender === 'user') {
       return [lastMessage];
     }
-    
-    // Rule: then AI Blair's would appear right under it.
+
     if (lastMessage.sender === 'ai' && messages.length > 1) {
       const secondLastMessage = messages[messages.length - 2];
       if (secondLastMessage.sender === 'user') {
         return [secondLastMessage, lastMessage];
-      } else { // Handles cases like AI silence prompt after initial AI greeting
+      } else {
         return [lastMessage];
       }
     }
-    // Fallback if somehow conditions aren't met, show at least the last message if any.
     if (messages.length > 0) {
         return [messages[messages.length -1]];
     }
 
-    return []; 
+    return [];
   }, [messages, hasConversationEnded]);
 
   const displayedMessages = useMemo(() => getDisplayedMessages(), [getDisplayedMessages]);
@@ -1056,7 +1044,7 @@ export default function HomePage() {
   );
 
 
-  if (showSplashScreen) { // Reverted: Removed !isEmbedded condition
+  if (showSplashScreen) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-md shadow-2xl">
@@ -1107,8 +1095,8 @@ export default function HomePage() {
     height: communicationMode === 'audio-only' ? 200 : 120,
     className: cn(
       "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
-       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak", 
-       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow" 
+       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak",
+       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow"
     ),
     priority: true,
     unoptimized: isDisplayingAnimatedAvatar || currentAvatarToDisplay.startsWith('data:image/') || currentAvatarToDisplay.startsWith('blob:') || !currentAvatarToDisplay.startsWith('https://'),
@@ -1127,12 +1115,12 @@ export default function HomePage() {
   const showAiTypingIndicator = isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting;
 
   const audioOnlyLiveIndicator = () => {
-    if (hasConversationEnded) return null; 
+    if (hasConversationEnded) return null;
     if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
     if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
       return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
     }
-     if (showAiTypingIndicator && !isSpeaking && !isListening) { 
+     if (showAiTypingIndicator && !isSpeaking && !isListening) {
       return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> AI Blair is preparing... </div>;
     }
     return null;
@@ -1140,7 +1128,7 @@ export default function HomePage() {
 
 
   const mainContent = () => {
-    if (isLoadingKnowledge && !aiHasInitiatedConversation) { 
+    if (isLoadingKnowledge && !aiHasInitiatedConversation) {
         return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Bases</h2> <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p> </div> );
     }
 
@@ -1158,8 +1146,8 @@ export default function HomePage() {
           {hasConversationEnded && (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
-                 <ConversationLog 
-                    messages={displayedMessages} 
+                 <ConversationLog
+                    messages={displayedMessages}
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1226,7 +1214,7 @@ export default function HomePage() {
                 <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
                 <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
              </div>
-          ) : aiHasInitiatedConversation && ( 
+          ) : aiHasInitiatedConversation && (
              <div className="mt-3 flex justify-end">
                 <Button
                   onClick={handleEndChatManually}
@@ -1251,4 +1239,3 @@ export default function HomePage() {
     </div>
   );
 }
-    
