@@ -147,10 +147,18 @@ main {
 
 @keyframes avatarGlow {
   0%, 100% {
-    box-shadow: 0 0 8px 3px hsla(var(--primary), 0.5), 0 0 15px 5px hsla(var(--primary), 0.25);
+    /* Inner, brighter glow - less spread, more opaque */
+    box-shadow: 0 0 15px 5px hsla(50, 100%, 70%, 0.7), /* Bright Yellow */
+                /* Outer, softer, more spread glow - more spread, less opaque */
+                0 0 30px 15px hsla(45, 100%, 65%, 0.4), /* Golden Yellow */
+                /* Farthest, very soft glow - most spread, very transparent */
+                0 0 50px 25px hsla(40, 100%, 60%, 0.2); /* Soft Orange-Gold */
   }
   50% {
-    box-shadow: 0 0 15px 6px hsla(var(--primary), 0.7), 0 0 30px 10px hsla(var(--primary), 0.35);
+    /* Expand all glows */
+    box-shadow: 0 0 25px 10px hsla(50, 100%, 70%, 0.85), /* Brighter, slightly more spread */
+                0 0 50px 25px hsla(45, 100%, 65%, 0.55), /* More spread */
+                0 0 80px 40px hsla(40, 100%, 60%, 0.3); /* Much more spread */
   }
 }
 
