@@ -48,6 +48,7 @@ Focuses on rarity, condition, and provenance as key factors in pricing.
 `;
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
+const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
@@ -106,6 +107,7 @@ export default function HomePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER_URL);
+  const [animatedAvatarSrc, setAnimatedAvatarSrc] = useState<string>(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
@@ -922,6 +924,7 @@ export default function HomePage() {
         if (siteAssetsDocSnap.exists()) {
           const assets = siteAssetsDocSnap.data();
           setAvatarSrc(assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL);
+          setAnimatedAvatarSrc(assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS);
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
@@ -933,6 +936,7 @@ export default function HomePage() {
 
         } else {
             setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
+            setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
             setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
             setPersonaTraits(DEFAULT_PERSONA_TRAITS);
             setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
@@ -984,29 +988,22 @@ export default function HomePage() {
 
     const lastMessage = messages[messages.length - 1];
 
-    // Rule: AI Blair's first greeting message. Only that chat bubble would appear.
     if (messages.length === 1 && lastMessage.sender === 'ai') {
       return [lastMessage];
     }
 
-    // Rule: When the user inputs his/her response, it would appear each time at the top.
     if (lastMessage.sender === 'user') {
       return [lastMessage];
     }
     
-    // Rule: Then AI Blair's would appear right under it. (Max 2 bubbles)
     if (lastMessage.sender === 'ai' && messages.length > 1) {
       const secondLastMessage = messages[messages.length - 2];
       if (secondLastMessage.sender === 'user') {
         return [secondLastMessage, lastMessage];
       } else { 
-        // This can happen if an AI message follows another AI message (e.g. silence prompt after initial greeting)
-        // In this case, just show the latest AI message as per the "AI blairs first greeting" rule interpretation.
         return [lastMessage];
       }
     }
-    // Fallback, though above conditions should cover most active chat states.
-    // If messages exist but don't fit above, show the last one.
     if (messages.length > 0) {
         return [messages[messages.length -1]];
     }
@@ -1080,15 +1077,36 @@ export default function HomePage() {
     );
   }
 
+  let currentAvatarToDisplay = avatarSrc;
+  let isDisplayingAnimatedAvatar = false;
+  if (isSpeaking && (communicationMode === 'audio-only' || communicationMode === 'audio-text') && animatedAvatarSrc && animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) {
+    currentAvatarToDisplay = animatedAvatarSrc;
+    isDisplayingAnimatedAvatar = true;
+  }
+
+
   const imageProps: React.ComponentProps<typeof Image> = {
-    src: avatarSrc, alt: "AI Blair Avatar",
+    src: currentAvatarToDisplay,
+    alt: "AI Blair Avatar",
     width: communicationMode === 'audio-only' ? 200 : 120,
     height: communicationMode === 'audio-only' ? 200 : 120,
-    className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", isSpeaking && "animate-pulse-speak"),
-    priority: true, unoptimized: avatarSrc.startsWith('data:image/') || avatarSrc.startsWith('blob:') || !avatarSrc.startsWith('https://'),
-    onError: () => setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL)
+    className: cn(
+      "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
+      isSpeaking && !isDisplayingAnimatedAvatar && "animate-pulse-speak" // Pulse only if not showing GIF
+    ),
+    priority: true,
+    unoptimized: isDisplayingAnimatedAvatar || currentAvatarToDisplay.startsWith('data:image/') || currentAvatarToDisplay.startsWith('blob:') || !currentAvatarToDisplay.startsWith('https://'),
+    onError: () => {
+      if (isDisplayingAnimatedAvatar) setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
+      else setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
+    }
   };
-  if (avatarSrc === DEFAULT_AVATAR_PLACEHOLDER_URL || avatarSrc.includes("placehold.co")) { (imageProps as any)['data-ai-hint'] = "professional woman"; }
+  if (currentAvatarToDisplay === DEFAULT_AVATAR_PLACEHOLDER_URL || currentAvatarToDisplay.includes("placehold.co")) {
+    (imageProps as any)['data-ai-hint'] = "professional woman";
+  } else if (currentAvatarToDisplay === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) {
+    (imageProps as any)['data-ai-hint'] = "animated face";
+  }
+
 
   const showAiTypingIndicator = isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting;
 
