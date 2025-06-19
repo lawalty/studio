@@ -5,11 +5,11 @@ import ChatBubble from "./ChatBubble";
 import React, { useEffect, useRef } from 'react';
 
 interface ConversationLogProps {
-  messages: Message[]; // This will be displayedMessages from page.tsx
+  messages: Message[]; 
   avatarSrc: string;
   textAnimationEnabled: boolean;
   textAnimationSpeedMs: number;
-  lastOverallMessageId: string | null; // To help ChatBubble decide if it's the newest AI message
+  lastOverallMessageId: string | null; 
   hasConversationEnded: boolean;
 }
 
@@ -27,26 +27,26 @@ export default function ConversationLog({
     const viewport = viewportRef.current;
     if (!viewport) return;
 
-    // Always scroll to the bottom of the current content.
-    // For full log, this shows the latest messages.
-    // For 1-2 item view, this ensures they are visible if viewport is constrained.
     const scrollToBottom = () => {
       viewport.scrollTop = viewport.scrollHeight; 
     };
     
+    // Using requestAnimationFrame ensures scrolling happens after the DOM has updated
+    // If animations are involved for new messages, a slight delay might sometimes be needed,
+    // but usually, rAF is sufficient for post-render scroll adjustments.
     const animationFrameId = requestAnimationFrame(scrollToBottom);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [messages]); 
+  }, [messages]); // Scroll whenever displayed messages change
 
   return (
     <ScrollArea
       className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
     >
       <ScrollAreaPrimitive.Viewport
-        className="h-full w-full rounded-[inherit]" // Removed flex-col-reverse
+        className="h-full w-full rounded-[inherit]" 
         ref={viewportRef}
         data-testid="conversation-log-viewport"
       >

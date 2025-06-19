@@ -981,24 +981,36 @@ export default function HomePage() {
     if (messages.length === 0) {
       return [];
     }
+
     const lastMessage = messages[messages.length - 1];
+
+    // Rule: AI Blair's first greeting message. Only that chat bubble would appear.
     if (messages.length === 1 && lastMessage.sender === 'ai') {
-      return [lastMessage]; 
+      return [lastMessage];
     }
+
+    // Rule: When the user inputs his/her response, it would appear each time at the top.
     if (lastMessage.sender === 'user') {
-      return [lastMessage]; 
+      return [lastMessage];
     }
+    
+    // Rule: Then AI Blair's would appear right under it. (Max 2 bubbles)
     if (lastMessage.sender === 'ai' && messages.length > 1) {
       const secondLastMessage = messages[messages.length - 2];
       if (secondLastMessage.sender === 'user') {
-        return [secondLastMessage, lastMessage]; 
-      } else {
-        return [lastMessage]; 
+        return [secondLastMessage, lastMessage];
+      } else { 
+        // This can happen if an AI message follows another AI message (e.g. silence prompt after initial greeting)
+        // In this case, just show the latest AI message as per the "AI blairs first greeting" rule interpretation.
+        return [lastMessage];
       }
     }
+    // Fallback, though above conditions should cover most active chat states.
+    // If messages exist but don't fit above, show the last one.
     if (messages.length > 0) {
         return [messages[messages.length -1]];
     }
+
     return []; 
   }, [messages, hasConversationEnded]);
 

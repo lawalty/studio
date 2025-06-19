@@ -132,8 +132,14 @@ export default function SiteSettingsPage() {
         dataToSave.splashImageUrl = newSplashImageUrl;
         changesMade = true;
       } else if (!newSplashImageUrl && currentData.splashImageUrl !== DEFAULT_SPLASH_IMAGE_SRC) {
-        dataToSave.splashImageUrl = DEFAULT_SPLASH_IMAGE_SRC;
-        changesMade = true;
+        // This condition handles resetting to default if the preview is the default transparent GIF
+        // and the stored URL is something else.
+        // It also ensures that if the preview is the default, and it matches what's in DB (or DB is empty for this field),
+        // we don't unnecessarily write the default.
+        if (splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC && (currentData.splashImageUrl && currentData.splashImageUrl !== DEFAULT_SPLASH_IMAGE_SRC)){
+            dataToSave.splashImageUrl = DEFAULT_SPLASH_IMAGE_SRC;
+            changesMade = true;
+        }
       }
 
 
@@ -154,11 +160,30 @@ export default function SiteSettingsPage() {
 
 
       if (changesMade) {
-        await setDoc(siteAssetsDocRef, dataToSave, { merge: true });
+        if (currentDocSnap.exists()) {
+          await updateDoc(siteAssetsDocRef, dataToSave);
+        } else {
+          // Ensure all necessary fields are present for a new document creation
+          const fullDataForNewDoc = {
+            splashImageUrl: dataToSave.splashImageUrl !== undefined ? dataToSave.splashImageUrl : (currentData.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC),
+            splashWelcomeMessage: dataToSave.splashWelcomeMessage !== undefined ? dataToSave.splashWelcomeMessage : (currentData.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE),
+            enableTextAnimation: dataToSave.enableTextAnimation !== undefined ? dataToSave.enableTextAnimation : (currentData.enableTextAnimation === undefined ? DEFAULT_ENABLE_TEXT_ANIMATION : currentData.enableTextAnimation),
+            textAnimationSpeedMs: dataToSave.textAnimationSpeedMs !== undefined ? dataToSave.textAnimationSpeedMs : (currentData.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : currentData.textAnimationSpeedMs),
+            // Preserve other existing fields if any, like avatarUrl, personaTraits etc.
+            ...(currentData.avatarUrl && { avatarUrl: currentData.avatarUrl }),
+            ...(currentData.personaTraits && { personaTraits: currentData.personaTraits }),
+            ...(currentData.useKnowledgeInGreeting !== undefined && { useKnowledgeInGreeting: currentData.useKnowledgeInGreeting }),
+            ...(currentData.customGreetingMessage && { customGreetingMessage: currentData.customGreetingMessage }),
+            ...(currentData.responsePauseTimeMs !== undefined && { responsePauseTimeMs: currentData.responsePauseTimeMs }),
+          };
+          await setDoc(siteAssetsDocRef, fullDataForNewDoc);
+        }
         toast({ title: "Site Settings Saved", description: "Your site display and animation settings have been updated in Firebase." });
         if (imageUpdated) {
           setSplashImagePreview(newSplashImageUrl); 
           setSelectedSplashFile(null);
+        } else if (dataToSave.splashImageUrl === DEFAULT_SPLASH_IMAGE_SRC) {
+          setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
         }
       } else {
         toast({ title: "No Changes", description: "No changes detected to save." });

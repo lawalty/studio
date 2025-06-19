@@ -25,9 +25,9 @@ export default function ChatBubble({
   const renderTextContent = () => {
     if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
       const letters = message.text.split('');
-      const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800; // Default if 0 or less
-      // Ensure staggerDelay is reasonable, not too fast for very short animation durations
-      const baseStagger = Math.max(10, animationDuration / letters.length / 2); 
+      const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800; 
+      // Stagger delay: ensure it's not too fast for very short animation durations or very long text
+      const baseStagger = Math.max(10, Math.min(50, animationDuration / (letters.length * 2))); 
 
       return letters.map((letter, index) => (
         <span
