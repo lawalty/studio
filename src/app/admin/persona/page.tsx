@@ -10,21 +10,21 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, Link as LinkIcon, Copy } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film } from 'lucide-react'; // Removed LinkIcon, Copy
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
-const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?text=GIF"; // Placeholder for GIF
+const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?text=GIF";
 const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
-const DEFAULT_PUBLIC_EMBED_URL = "";
+// Removed: DEFAULT_PUBLIC_EMBED_URL
 
 export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
@@ -35,8 +35,7 @@ export default function PersonaPage() {
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
   const [responsePauseTime, setResponsePauseTime] = useState<string>(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
-  const [publicEmbedUrlInput, setPublicEmbedUrlInput] = useState<string>(DEFAULT_PUBLIC_EMBED_URL);
-  const [currentPublicEmbedUrl, setCurrentPublicEmbedUrl] = useState<string>(DEFAULT_PUBLIC_EMBED_URL);
+  // Removed: publicEmbedUrlInput, currentPublicEmbedUrl states
 
 
   const [isSaving, setIsSaving] = useState(false);
@@ -59,9 +58,7 @@ export default function PersonaPage() {
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
-          const fetchedPublicUrl = data?.publicEmbedUrl || DEFAULT_PUBLIC_EMBED_URL;
-          setPublicEmbedUrlInput(fetchedPublicUrl);
-          setCurrentPublicEmbedUrl(fetchedPublicUrl);
+          // Removed: publicEmbedUrl loading
         } else {
           // Set all to defaults if doc doesn't exist
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
@@ -70,8 +67,7 @@ export default function PersonaPage() {
           setUseKnowledgeInGreeting(true);
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
-          setPublicEmbedUrlInput(DEFAULT_PUBLIC_EMBED_URL);
-          setCurrentPublicEmbedUrl(DEFAULT_PUBLIC_EMBED_URL);
+          // Removed: publicEmbedUrl setting to default
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
@@ -82,8 +78,7 @@ export default function PersonaPage() {
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
-        setPublicEmbedUrlInput(DEFAULT_PUBLIC_EMBED_URL);
-        setCurrentPublicEmbedUrl(DEFAULT_PUBLIC_EMBED_URL);
+        // Removed: publicEmbedUrl fallback
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -130,30 +125,7 @@ export default function PersonaPage() {
     }
   };
 
-  const handlePublicEmbedUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPublicEmbedUrlInput(e.target.value);
-  };
-
-  const handleSavePublicEmbedUrl = async () => {
-     setIsSaving(true);
-     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
-     try {
-        const urlToSave = publicEmbedUrlInput.trim();
-        const currentDocSnap = await getDoc(siteAssetsDocRef);
-        if (currentDocSnap.exists()) {
-            await updateDoc(siteAssetsDocRef, { publicEmbedUrl: urlToSave });
-        } else {
-            await setDoc(siteAssetsDocRef, { publicEmbedUrl: urlToSave }, { merge: true }); // merge to not overwrite other fields if somehow created by another process
-        }
-        setCurrentPublicEmbedUrl(urlToSave);
-        toast({ title: "Public URL Saved", description: "The Public URL for embeds has been updated."});
-     } catch (error) {
-        console.error("Failed to save public embed URL:", error);
-        toast({ title: "Error Saving URL", description: "Could not save the Public URL for embeds.", variant: "destructive" });
-     }
-     setIsSaving(false);
-  };
-
+  // Removed: handlePublicEmbedUrlChange, handleSavePublicEmbedUrl
 
   const handleSaveAllSettings = async () => {
     setIsSaving(true);
@@ -202,7 +174,7 @@ export default function PersonaPage() {
 
     const pauseTimeMs = parseInt(responsePauseTime);
     const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
-    const finalPublicEmbedUrl = publicEmbedUrlInput.trim(); // Use the input state for saving
+    // Removed: finalPublicEmbedUrl
 
     try {
       const currentDocSnap = await getDoc(siteAssetsDocRef);
@@ -213,7 +185,7 @@ export default function PersonaPage() {
         useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
         responsePauseTimeMs: validPauseTime,
-        publicEmbedUrl: finalPublicEmbedUrl, // Save the current input value
+        // Removed: publicEmbedUrl from dataToSave
       };
 
       if (avatarUpdated || newAvatarUrl !== currentData.avatarUrl) {
@@ -224,22 +196,28 @@ export default function PersonaPage() {
       }
       
       let settingsChanged = false;
-      if (Object.keys(dataToSave).some(key => dataToSave[key] !== (currentData[key] ?? (key === 'publicEmbedUrl' ? DEFAULT_PUBLIC_EMBED_URL : undefined) ))) {
+      // Adjusted checks to not include publicEmbedUrl
+      if (Object.keys(dataToSave).some(key => dataToSave[key] !== (currentData[key] ))) {
         settingsChanged = true;
       }
-      // Explicit checks for default values if currentData doesn't have the key
       if (dataToSave.personaTraits !== (currentData.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT)) settingsChanged = true;
       if (dataToSave.useKnowledgeInGreeting !== (currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting)) settingsChanged = true;
       if (dataToSave.customGreetingMessage !== (currentData.customGreetingMessage || DEFAULT_CUSTOM_GREETING)) settingsChanged = true;
       if (dataToSave.responsePauseTimeMs !== (currentData.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : currentData.responsePauseTimeMs)) settingsChanged = true;
-      if (dataToSave.publicEmbedUrl !== (currentData.publicEmbedUrl || DEFAULT_PUBLIC_EMBED_URL)) settingsChanged = true;
 
 
       if (settingsChanged || avatarUpdated || animatedAvatarUpdated) {
         if (currentDocSnap.exists()) {
-          await updateDoc(siteAssetsDocRef, dataToSave);
+          // Ensure publicEmbedUrl is not accidentally removed if it existed from a previous version
+          const updatePayload = { ...dataToSave };
+          if (currentData.publicEmbedUrl !== undefined && dataToSave.publicEmbedUrl === undefined) {
+            // If we are strictly rolling back, we might want to explicitly remove it or ensure it's not set.
+            // For a safer rollback of *this specific feature*, we ensure it's not part of what this save function touches.
+            // However, if it was already there, updateDoc won't remove it unless explicitly set to delete/null.
+            // For this rollback, we simply don't include it in `dataToSave`.
+          }
+          await updateDoc(siteAssetsDocRef, updatePayload);
         } else {
-          // Default other fields that might be on site_display_assets from SiteSettingsPage
           await setDoc(siteAssetsDocRef, {
              ...dataToSave,
              avatarUrl: dataToSave.avatarUrl !== undefined ? dataToSave.avatarUrl : DEFAULT_AVATAR_PLACEHOLDER,
@@ -248,15 +226,16 @@ export default function PersonaPage() {
              splashWelcomeMessage: currentData.splashWelcomeMessage || "Welcome to AI Chat",
              enableTextAnimation: currentData.enableTextAnimation === undefined ? false : currentData.enableTextAnimation,
              textAnimationSpeedMs: currentData.textAnimationSpeedMs === undefined ? 800 : currentData.textAnimationSpeedMs,
+             // publicEmbedUrl would not be set here by default in this rolled-back version
           });
         }
-        setCurrentPublicEmbedUrl(finalPublicEmbedUrl); // Update the display URL after successful save
+        // Removed: setCurrentPublicEmbedUrl
         const input: AdjustAiPersonaAndPersonalityInput = { personaTraits };
         const result = await adjustAiPersonaAndPersonality(input);
         let toastMessages = ["AI persona and avatar settings have been updated."];
         if (avatarUpdated && newAvatarUrl !== currentData.avatarUrl) toastMessages.unshift("Static avatar updated.");
         if (animatedAvatarUpdated && newAnimatedAvatarUrl !== currentData.animatedAvatarUrl) toastMessages.unshift("Animated avatar updated.");
-        if(dataToSave.publicEmbedUrl !== (currentData.publicEmbedUrl || DEFAULT_PUBLIC_EMBED_URL)) toastMessages.unshift("Public URL for embeds updated.");
+        // Removed: Public URL update message
         
         toast({ title: "Persona Settings Saved", description: result.updatedPersonaDescription + " " + toastMessages.join(" ") });
       } else {
@@ -285,24 +264,7 @@ export default function PersonaPage() {
     toast({ title: "Animated Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
   };
 
-  const generateIframeSnippet = (mode: 'audio-only' | 'audio-text' | 'text-only'): string => {
-    const baseUrl = currentPublicEmbedUrl.trim() || (typeof window !== 'undefined' ? window.location.origin : 'YOUR_APP_URL');
-    const src = `${baseUrl}/start/${mode}`;
-    const allowMic = (mode === 'audio-only' || mode === 'audio-text') ? ' allow="microphone"' : '';
-    // Using a common style, can be adjusted later if needed
-    const style = "border:1px solid #ccc; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.1); width:400px; height:600px;";
-    return `<iframe src="${src}" style="${style}"${allowMic}></iframe>`;
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast({ title: "Copied to Clipboard!", description: "Iframe snippet copied." });
-    }).catch(err => {
-      console.error('Failed to copy text: ', err);
-      toast({ title: "Copy Failed", description: "Could not copy snippet. See console.", variant: "destructive" });
-    });
-  };
-
+  // Removed: generateIframeSnippet, copyToClipboard
 
   return (
     <div className="space-y-6">
@@ -437,72 +399,8 @@ export default function PersonaPage() {
           </Button>
         </CardFooter>
       </Card>
-
-      <Card>
-        <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-code-xml"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
-                Embeddable Chatbot Snippets
-            </CardTitle>
-            <CardDescription>
-                Enter your site&apos;s public production URL below and save it. Then, copy and paste these HTML snippets
-                to embed AI Blair on other websites. The chatbot will appear without the header and footer, starting from a dedicated minimal page.
-            </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-            {isLoadingData ? (<p>Loading embed settings...</p>) : (
-            <>
-                <div className="space-y-2">
-                    <Label htmlFor="publicEmbedUrl" className="font-medium flex items-center gap-1.5"><LinkIcon className="h-4 w-4" /> Public URL for Embeds</Label>
-                    <div className="flex items-center gap-2">
-                        <Input
-                            id="publicEmbedUrl"
-                            value={publicEmbedUrlInput}
-                            onChange={handlePublicEmbedUrlChange}
-                            placeholder="e.g., https://your-app-name.web.app"
-                        />
-                        <Button onClick={handleSavePublicEmbedUrl} variant="outline" disabled={isSaving}>
-                            <Save className="mr-2 h-4 w-4" /> Save URL
-                        </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                        If left empty after saving, snippets will use the current browser URL (which might be the Studio URL when generating). For production, ensure this is your deployed app URL.
-                    </p>
-                </div>
-
-                {[
-                    { title: "Audio Only Mode", mode: "audio-only" as const },
-                    { title: "Audio & Text Mode (Recommended)", mode: "audio-text" as const },
-                    { title: "Text Only Mode", mode: "text-only" as const }
-                ].map(({ title, mode }) => {
-                    const snippet = generateIframeSnippet(mode);
-                    return (
-                        <div key={mode} className="space-y-2">
-                            <Label className="font-medium">{title}</Label>
-                            <div className="relative group">
-                                <Textarea
-                                    value={snippet}
-                                    readOnly
-                                    rows={5}
-                                    className="bg-muted/50 font-mono text-xs pr-10"
-                                />
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="absolute top-2 right-2 h-7 w-7 opacity-50 group-hover:opacity-100 transition-opacity"
-                                    onClick={() => copyToClipboard(snippet)}
-                                    aria-label={`Copy ${title} snippet`}
-                                >
-                                    <Copy className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    );
-                })}
-            </>
-            )}
-        </CardContent>
-      </Card>
+      {/* Removed Embeddable Chatbot Snippets Card */}
     </div>
   );
 }
+    

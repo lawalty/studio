@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation'; // Import useSearchParams
+// Removed: import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
@@ -98,12 +98,13 @@ const getUserNameFromHistory = (history: Message[]): string | null => {
 
 
 export default function HomePage() {
-  const searchParams = useSearchParams(); // Get query parameters
-  const isEmbedded = searchParams.get('embedded') === 'true';
-  const initialModeFromQuery = searchParams.get('mode') as CommunicationMode | null;
+  // Removed: useSearchParams logic
+  // const searchParams = useSearchParams();
+  // const isEmbedded = searchParams.get('embedded') === 'true';
+  // const initialModeFromQuery = searchParams.get('mode') as CommunicationMode | null;
 
-  const [showSplashScreen, setShowSplashScreen] = useState(!isEmbedded); // Don't show splash if embedded
-  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
+  const [showSplashScreen, setShowSplashScreen] = useState(true); // Reverted to default true
+  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); // Default mode
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [splashScreenWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
@@ -121,7 +122,7 @@ export default function HomePage() {
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text'); // Reverted to default
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -808,13 +809,8 @@ export default function HomePage() {
   const handleStartNewChat = () => {
     resetConversation();
     setAiHasInitiatedConversation(false); 
-    if (isEmbedded) { // If embedded, re-initialize based on query param
-       if(initialModeFromQuery) {
-          setCommunicationMode(initialModeFromQuery);
-       } // else it keeps current mode or defaults if initialModeFromQuery was null
-    } else {
-        setShowSplashScreen(true); // For non-embedded, go back to splash
-    }
+    // Reverted: if (isEmbedded) { ... }
+    setShowSplashScreen(true); // Always show splash for non-embedded new chat
   };
 
 
@@ -967,22 +963,10 @@ export default function HomePage() {
       if (anyCorsError) setCorsErrorEncountered(true);
       setIsLoadingKnowledge(false);
     };
-    // Only fetch all data if not embedded OR if embedded and no mode was passed (which shouldn't happen with new start pages)
-    // OR if it's the splash screen being shown
-    if (showSplashScreen || (isEmbedded && initialModeFromQuery)) {
-       fetchAllData();
-    } else if (!isEmbedded && !initialModeFromQuery) { // Normal non-embedded flow, show splash
-        fetchAllData();
-    } else { // This case might be if embedded=false but a mode is passed, which is unlikely. Assume non-splash data load is ok.
-        fetchAllData(); // Or at least fetch essentials. For now, fetch all.
-        setIsLoadingKnowledge(false); // Ensure loading stops if fetchAllData isn't hit
-    }
-    // If embedded and mode provided, we skip splash, so set communicationMode
-    if (isEmbedded && initialModeFromQuery) {
-        setCommunicationMode(initialModeFromQuery);
-    }
+    // Reverted: Removed conditional logic for embedded mode
+    fetchAllData();
 
-  }, [toast, fetchAndProcessKnowledgeLevel, showSplashScreen, isEmbedded, initialModeFromQuery]); 
+  }, [toast, fetchAndProcessKnowledgeLevel]); 
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => { performResetOnUnmountRef.current = resetConversation; }, [resetConversation]);
@@ -997,20 +981,12 @@ export default function HomePage() {
       }
       resetConversation();
       setAiHasInitiatedConversation(false);
-      // For embedded mode, going "home" might mean re-evaluating query params,
-      // but practically it should go to its own start page, not the app's splash.
-      // For non-embedded, this is correct.
-      if (!isEmbedded) {
-        setShowSplashScreen(true);
-      } else {
-        // If embedded, "home" is tricky. We can't easily go "back" to the iframe start page from here.
-        // For now, ending the chat is the main action. The host page would control the iframe.
-      }
+      setShowSplashScreen(true); // Directly show splash screen
     };
     window.addEventListener('forceGoToSplashScreen', handleForceGoToSplash);
     return () => window.removeEventListener('forceGoToSplashScreen', handleForceGoToSplash);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetConversation, showSplashScreen, isEmbedded]); 
+  }, [resetConversation, showSplashScreen]);
 
 
   const getDisplayedMessages = useCallback((): Message[] => {
@@ -1080,7 +1056,7 @@ export default function HomePage() {
   );
 
 
-  if (showSplashScreen && !isEmbedded) { // Only show splash if not embedded
+  if (showSplashScreen) { // Reverted: Removed !isEmbedded condition
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <Card className="w-full max-w-md shadow-2xl">
@@ -1275,5 +1251,4 @@ export default function HomePage() {
     </div>
   );
 }
-
     
