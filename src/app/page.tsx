@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
@@ -180,7 +180,7 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
 
 
 export default function HomePage() {
-  const router = useRouter(); // Initialize useRouter
+  const router = useRouter();
   const [showSplashScreen, setShowSplashScreen] = useState(true); 
   const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); 
   
@@ -704,7 +704,7 @@ export default function HomePage() {
     tempContainer.style.left = '-9999px'; 
     tempContainer.style.top = '-9999px';
     tempContainer.style.fontFamily = 'Inter, sans-serif'; 
-    tempContainer.style.visibility = 'hidden'; // Keep it from flashing but allow rendering
+    tempContainer.style.visibility = 'hidden';
 
     const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
     tempContainer.innerHTML = chatLogHtml;
@@ -917,7 +917,7 @@ export default function HomePage() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key === 'A') {
         event.preventDefault();
-        router.push('/admin');
+        router.push('/admin/login'); // Updated to go to login page
       }
     };
     window.addEventListener('keydown', handleKeyDown);
