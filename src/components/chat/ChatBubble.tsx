@@ -29,7 +29,6 @@ export default function ChatBubble({
   const textContentRef = useRef<HTMLParagraphElement>(null);
   const [hasAnimationBeenForced, setHasAnimationBeenForced] = useState(false);
 
-  // Reset forced state if the message.id changes, ensuring clean state for new messages if component were reused.
   useEffect(() => {
     setHasAnimationBeenForced(false);
   }, [message.id]);
@@ -50,12 +49,14 @@ export default function ChatBubble({
 
 
   const renderTextContent = () => {
-    if (hasAnimationBeenForced) { // If animation was forced to end, render plain text.
-      return message.text;
+    const processedText = message.text.replace(/\*\*/g, '\n\n');
+
+    if (hasAnimationBeenForced) {
+      return processedText;
     }
 
     if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
-      const letters = message.text.split('');
+      const letters = processedText.split('');
       const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800;
       const staggerDelay = textPopulationStaggerMs > 0 ? textPopulationStaggerMs : 50;
 
@@ -72,7 +73,7 @@ export default function ChatBubble({
         </span>
       ));
     }
-    return message.text; // Default for user messages or non-animated/already-finished AI messages
+    return processedText;
   };
 
   return (
