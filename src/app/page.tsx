@@ -180,7 +180,6 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
 
 
 export default function HomePage() {
-  // NO useSearchParams or related variables like initialModeFromQuery, isEmbeddedFromQuery
   const [showSplashScreen, setShowSplashScreen] = useState(true); // Always true initially
   const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); // Default for splash screen
   
@@ -699,48 +698,69 @@ export default function HomePage() {
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
     const tempContainer = document.createElement('div');
-    tempContainer.style.width = '700px';
+    tempContainer.style.width = '700px'; // Standard page width for better layout
     tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px';
+    tempContainer.style.left = '-9999px'; // Position off-screen
     tempContainer.style.top = '-9999px';
-    tempContainer.style.fontFamily = 'Inter, sans-serif';
+    tempContainer.style.fontFamily = 'Inter, sans-serif'; // Ensure font consistency
+
     const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
     tempContainer.innerHTML = chatLogHtml;
     document.body.appendChild(tempContainer);
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased delay
+      // Increased delay to ensure all styles and images within the temp HTML are loaded
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
+
       const canvas = await html2canvas(tempContainer, {
-        scale: 2, useCORS: true, backgroundColor: '#FFFFFF',
+        scale: 2, // Increase scale for better quality
+        useCORS: true, // Important if avatars/images are from external sources
+        backgroundColor: '#FFFFFF', // Explicit white background
       });
-      document.body.removeChild(tempContainer);
+      
+      document.body.removeChild(tempContainer); // Clean up the temporary div
+
       if (canvas.width === 0 || canvas.height === 0) {
          toast({ title: "Canvas Capture Error", description: "Captured canvas is empty. PDF cannot be generated.", variant: "destructive" });
          console.error("html2canvas produced an empty or zero-dimension canvas from the temporary HTML container.");
          return;
       }
+
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt', // points
+        format: 'a4'
+      });
+
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20;
+      const pageMargin = 20; // Margin on all sides
       const contentWidth = pdfWidth - (pageMargin * 2);
+      
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin;
+      let position = pageMargin; // Initial y position for the image
+
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2));
+      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract usable page height
+
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin;
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; // Adjust position for the part of image already drawn
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
       }
+
       pdf.save('AI-Blair-Conversation.pdf');
       toast({ title: "PDF Generated", description: "Your conversation has been saved." });
+
     } catch (error) {
       console.error("Error generating PDF:", error);
-      if (tempContainer.parentElement) { document.body.removeChild(tempContainer); }
+      if (tempContainer.parentElement) { // Ensure tempContainer is still in DOM before trying to remove
+         document.body.removeChild(tempContainer);
+      }
       toast({ title: "PDF Generation Failed", description: "Could not save the conversation as PDF. See console for details.", variant: "destructive" });
     }
   };
@@ -1113,3 +1133,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    
