@@ -410,5 +410,3 @@ export default function PersonaPage() {
     </div>
   );
 }
-
-    
