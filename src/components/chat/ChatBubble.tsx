@@ -3,6 +3,7 @@ import type { Message } from '@/app/page';
 import { cn } from "@/lib/utils";
 import { User, Bot } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import React, { useEffect, useRef } from 'react';
 
 interface ChatBubbleProps {
   message: Message;
@@ -11,6 +12,7 @@ interface ChatBubbleProps {
   textAnimationSpeedMs: number;
   textPopulationStaggerMs: number;
   isNewlyAddedAiMessage: boolean;
+  forceFinishAnimation: boolean; 
 }
 
 export default function ChatBubble({ 
@@ -19,13 +21,26 @@ export default function ChatBubble({
   textAnimationEnabled,
   textAnimationSpeedMs,
   textPopulationStaggerMs,
-  isNewlyAddedAiMessage
+  isNewlyAddedAiMessage,
+  forceFinishAnimation 
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
   const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png"; 
+  const textContentRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (forceFinishAnimation && textContentRef.current && message.sender === 'ai') {
+      const letterSpans = textContentRef.current.querySelectorAll('.scale-in-letter');
+      letterSpans.forEach(span => {
+        (span as HTMLElement).style.opacity = '1';
+        (span as HTMLElement).style.transform = 'scale(1) translateX(0)';
+        (span as HTMLElement).style.animation = 'none';
+      });
+    }
+  }, [forceFinishAnimation, message.sender]);
 
   const renderTextContent = () => {
-    if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
+    if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage && !forceFinishAnimation) {
       const letters = message.text.split('');
       const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800; 
       const staggerDelay = textPopulationStaggerMs > 0 ? textPopulationStaggerMs : 50;
@@ -43,8 +58,6 @@ export default function ChatBubble({
         </span>
       ));
     }
-    // For non-animated AI messages or user messages, just return the plain text.
-    // The animated spans will be children of this p tag if animation occurs.
     return message.text; 
   };
 
@@ -68,8 +81,7 @@ export default function ChatBubble({
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        {/* Changed text-sm to text-xs for the paragraph wrapping the content */}
-        <p className="text-xs whitespace-pre-wrap">{renderTextContent()}</p>
+        <p ref={textContentRef} className="text-xs whitespace-pre-wrap">{renderTextContent()}</p>
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>

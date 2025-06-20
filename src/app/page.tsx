@@ -56,8 +56,8 @@ const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 const DEFAULT_TEXT_ANIMATION_ENABLED = false;
-const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800; // Duration of each letter's animation
-const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50; // Delay between letters starting animation
+const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800; 
+const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50; 
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -74,7 +74,6 @@ const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechReco
 const MAX_SILENCE_PROMPTS_AUDIO_ONLY = 2;
 
 
-// Helper function to generate HTML string for the chat log
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
   const primaryBg = 'hsl(210 13% 50%)'; 
   const primaryFg = 'hsl(0 0% 98%)'; 
@@ -118,7 +117,7 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
           </div>
         </div>
       `;
-    } else { // AI
+    } else { 
       html += `
         <div style="display: flex; justify-content: flex-start; margin-bottom: 16px; align-items: flex-start;">
           <img src="${aiAvatarSrc || DEFAULT_AVATAR_PLACEHOLDER_URL}" alt="AI Avatar" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; object-fit: cover;" />
@@ -211,6 +210,8 @@ export default function HomePage() {
   const [textAnimationEnabled, setTextAnimationEnabled] = useState<boolean>(DEFAULT_TEXT_ANIMATION_ENABLED);
   const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<number>(DEFAULT_TEXT_ANIMATION_SPEED_MS);
   const [textPopulationStaggerMs, setTextPopulationStaggerMs] = useState<number>(DEFAULT_TEXT_POPULATION_STAGGER_MS);
+  const [forceFinishAnimationForMessageId, setForceFinishAnimationForMessageId] = useState<string | null>(null);
+
 
   const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
   const [knowledgeFileSummaryMedium, setKnowledgeFileSummaryMedium] = useState<string>('');
@@ -244,14 +245,18 @@ export default function HomePage() {
   const messagesRef = useRef<Message[]>(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
+  const currentAiMessageIdRef = useRef<string | null>(null);
+
   const accumulatedTranscriptRef = useRef<string>('');
   const sendTranscriptTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
+  const addMessage = useCallback((text: string, sender: 'user' | 'ai'): string => {
+    const newMessageId = Date.now().toString() + Math.random();
     setMessages((prevMessages) => [
       ...prevMessages,
-      { id: Date.now().toString() + Math.random(), text, sender: sender, timestamp: Date.now() },
+      { id: newMessageId, text, sender: sender, timestamp: Date.now() },
     ]);
+    return newMessageId;
   }, []);
 
   const resetConversation = useCallback(() => {
@@ -266,6 +271,9 @@ export default function HomePage() {
     isAboutToSpeakForSilenceRef.current = false;
     setHasConversationEnded(false);
     setShowPreparingGreeting(false);
+    currentAiMessageIdRef.current = null;
+    setForceFinishAnimationForMessageId(null);
+
 
     if (sendTranscriptTimerRef.current) {
       clearTimeout(sendTranscriptTimerRef.current);
@@ -356,6 +364,7 @@ export default function HomePage() {
     setIsSpeaking(true);
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingGreeting(false);
+    setForceFinishAnimationForMessageId(null); 
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {/*ignore*/}
     }
@@ -363,8 +372,18 @@ export default function HomePage() {
 
   const handleAudioProcessEnd = useCallback(() => {
     const wasSpeakingBeforeEnd = isSpeakingRef.current;
+    const endedMessageId = currentAiMessageIdRef.current;
+
     setIsSpeaking(false);
     setShowPreparingGreeting(false);
+
+    if (endedMessageId) {
+        setForceFinishAnimationForMessageId(endedMessageId);
+        setTimeout(() => setForceFinishAnimationForMessageId(null), 50); 
+    }
+    currentAiMessageIdRef.current = null;
+
+
     if (elevenLabsAudioRef.current) {
         if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
             URL.revokeObjectURL(elevenLabsAudioRef.current.src);
@@ -381,7 +400,7 @@ export default function HomePage() {
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true);
     } else if (communicationModeRef.current === 'audio-text' && !isEndingSessionRef.current && !hasConversationEnded) {
-      // In audio-text, don't automatically restart listening
+      
     }
   }, [hasConversationEnded]);
 
@@ -415,12 +434,17 @@ export default function HomePage() {
     }
   }, [handleActualAudioStart, handleAudioProcessEnd]);
 
- const speakText = useCallback(async (text: string, onSpeechStartCallback?: () => void) => {
+ const speakText = useCallback(async (text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void) => {
+    currentAiMessageIdRef.current = messageIdForAnimationSync;
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
     if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
       onSpeechStartCallback?.();
       setIsSpeaking(false);
       setShowPreparingGreeting(false);
+      if (messageIdForAnimationSync) {
+        setForceFinishAnimationForMessageId(messageIdForAnimationSync);
+        setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
+      }
       if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
          setHasConversationEnded(true);
       }
@@ -438,7 +462,7 @@ export default function HomePage() {
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
        elevenLabsAudioRef.current.src = '';
     }
-    setIsSpeaking(false);
+    setIsSpeaking(false); 
     if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) {
         setShowPreparingGreeting(true);
     }
@@ -527,24 +551,26 @@ export default function HomePage() {
         personaTraits: personaTraits, chatHistory: historyForGenkit,
       };
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
+      let newAiMessageId: string | null = null;
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
           if (!isEndingSessionRef.current || (isEndingSessionRef.current && result.shouldEndConversation)) {
-            addMessage(result.aiResponse, 'ai');
+            newAiMessageId = addMessage(result.aiResponse, 'ai');
           }
           setIsSendingMessage(false);
         }, 50);
       };
       if (result.shouldEndConversation) { isEndingSessionRef.current = true; }
-      await speakTextRef.current(result.aiResponse, onSpeechActuallyStarting);
+      await speakTextRef.current(result.aiResponse, newAiMessageId, onSpeechActuallyStarting);
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
+      let errorAiMessageId: string | null = null;
       if (!isEndingSessionRef.current) {
-        addMessage(errorMessage, 'ai');
+        errorAiMessageId = addMessage(errorMessage, 'ai');
         setIsSendingMessage(false);
         if (communicationModeRef.current !== 'text-only') {
-          await speakTextRef.current(errorMessage);
+          await speakTextRef.current(errorMessage, errorAiMessageId);
         }
       } else {
         setHasConversationEnded(true);
@@ -599,7 +625,7 @@ export default function HomePage() {
                sendTranscriptTimerRef.current = null;
              }, responsePauseTimeMs);
           }
-      } else { // audio-only mode
+      } else { 
          if (latestFinalUtteranceThisEvent) {
             accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
             setConsecutiveSilencePrompts(0);
@@ -636,14 +662,15 @@ export default function HomePage() {
           if (newPromptCount >= MAX_SILENCE_PROMPTS_AUDIO_ONLY) {
             isEndingSessionRef.current = true;
             const endMsg = "It looks like you might have stepped away. Let's end this chat.";
+            let endMsgId: string | null = null;
             if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) {
-                addMessage(endMsg, 'ai');
+                endMsgId = addMessage(endMsg, 'ai');
             }
-            speakTextRef.current(endMsg);
+            speakTextRef.current(endMsg, endMsgId);
           } else {
             const userName = getUserNameFromHistory(messagesRef.current);
             const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-            speakTextRef.current(promptMessage);
+            speakTextRef.current(promptMessage, null); 
           }
           return newPromptCount;
         });
@@ -691,7 +718,7 @@ export default function HomePage() {
             window.speechSynthesis.cancel();
         }
         setIsSpeaking(false);
-        setHasConversationEnded(true);
+        setHasConversationEnded(true); 
     } else {
         setHasConversationEnded(true);
     }
@@ -706,7 +733,6 @@ export default function HomePage() {
     tempContainer.style.left = '-9999px'; 
     tempContainer.style.top = '-9999px';
     tempContainer.style.fontFamily = 'Inter, sans-serif'; 
-    // tempContainer.style.visibility = 'hidden'; // Removed this line
 
     const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
     tempContainer.innerHTML = chatLogHtml;
@@ -781,6 +807,7 @@ export default function HomePage() {
       isAboutToSpeakForSilenceRef.current = false;
       const initConversation = async () => {
         let greetingToUse: string | null = null;
+        let greetingMessageId: string | null = null;
         if (customGreeting && customGreeting.trim() !== "") {
           greetingToUse = customGreeting.trim();
         } else {
@@ -801,9 +828,14 @@ export default function HomePage() {
         }
         if (greetingToUse) {
           const onGreetingSpeechActuallyStarting = () => {
-            setTimeout(() => { if (!isEndingSessionRef.current) { addMessage(greetingToUse!, 'ai'); } }, 50);
+            setTimeout(() => { 
+              if (!isEndingSessionRef.current) { 
+                greetingMessageId = addMessage(greetingToUse!, 'ai');
+                currentAiMessageIdRef.current = greetingMessageId;
+              } 
+            }, 50);
           };
-          await speakTextRef.current(greetingToUse, onGreetingSpeechActuallyStarting);
+          await speakTextRef.current(greetingToUse, null, onGreetingSpeechActuallyStarting);
         } else {
              setShowPreparingGreeting(false);
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
@@ -1066,6 +1098,7 @@ export default function HomePage() {
                     textPopulationStaggerMs={textPopulationStaggerMs}
                     lastOverallMessageId={lastOverallMessage?.id || null}
                     hasConversationEnded={hasConversationEnded}
+                    forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
                   />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                     <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
@@ -1112,6 +1145,7 @@ export default function HomePage() {
             textPopulationStaggerMs={textPopulationStaggerMs}
             lastOverallMessageId={lastOverallMessage?.id || null}
             hasConversationEnded={hasConversationEnded}
+            forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
           />
           <MessageInput
             onSendMessage={handleSendMessageRef.current}

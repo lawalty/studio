@@ -9,9 +9,10 @@ interface ConversationLogProps {
   avatarSrc: string;
   textAnimationEnabled: boolean;
   textAnimationSpeedMs: number;
-  textPopulationStaggerMs: number; // New prop
+  textPopulationStaggerMs: number; 
   lastOverallMessageId: string | null; 
   hasConversationEnded: boolean;
+  forceFinishAnimationForMessageId: string | null; 
 }
 
 export default function ConversationLog({ 
@@ -19,9 +20,10 @@ export default function ConversationLog({
   avatarSrc,
   textAnimationEnabled,
   textAnimationSpeedMs,
-  textPopulationStaggerMs, // New prop
+  textPopulationStaggerMs, 
   lastOverallMessageId,
-  hasConversationEnded 
+  hasConversationEnded,
+  forceFinishAnimationForMessageId 
 }: ConversationLogProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
 
@@ -56,8 +58,9 @@ export default function ConversationLog({
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
-            textPopulationStaggerMs={textPopulationStaggerMs} // Pass down
+            textPopulationStaggerMs={textPopulationStaggerMs} 
             isNewlyAddedAiMessage={msg.sender === 'ai' && msg.id === lastOverallMessageId && !hasConversationEnded}
+            forceFinishAnimation={forceFinishAnimationForMessageId === msg.id}
           />
         ))}
         {messages.length === 0 && (

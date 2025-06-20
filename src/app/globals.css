@@ -145,6 +145,13 @@ main {
   animation-fill-mode: forwards; /* Keeps the 100% state after animation finishes */
 }
 
+.animation-force-finish .scale-in-letter {
+  opacity: 1 !important;
+  transform: scale(1) translateX(0) !important;
+  animation: none !important;
+}
+
+
 @keyframes avatarGlow {
   0%, 100% {
     /* Inner, brighter glow - less spread, more opaque */
