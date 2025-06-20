@@ -67,6 +67,15 @@ const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
 const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
 const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
 
+const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 180; // Characters
+const ACKNOWLEDGEMENT_PHRASES = [
+  "Okay, good question. Let me gather that information for you.",
+  "Just a moment, I'm preparing your detailed response.",
+  "That's an interesting point! This might take me a few seconds to look into.",
+  "Let me check on that for you.",
+  "One moment while I find the best answer.",
+];
+
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
@@ -551,6 +560,12 @@ export default function HomePage() {
         personaTraits: personaTraits, chatHistory: historyForGenkit,
       };
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
+      
+      if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
+        const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
+        await speakTextRef.current(randomAckPhrase, null, undefined);
+      }
+      
       let newAiMessageId: string | null = null;
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
@@ -1188,3 +1203,4 @@ export default function HomePage() {
     </div>
   );
 }
+
