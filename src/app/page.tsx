@@ -20,8 +20,6 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
 import type { FirebaseOptions } from 'firebase/app';
-import type jsPDF from 'jspdf';
-import type html2canvas from 'html2canvas';
 
 
 export interface Message {
@@ -418,132 +416,123 @@ export default function HomePage() {
     }
   }, [hasConversationEnded, toggleListeningRef]);
 
- const speakText = useCallback(async (text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false) => {
-    return new Promise<void>(async (resolveSpeakText) => {
-      currentAiMessageIdRef.current = messageIdForAnimationSync;
-      const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
+  const speakText = useCallback((text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false) => {
+    return new Promise<void>((resolveSpeakText) => {
+      const tryApiAndFallback = async () => {
+        currentAiMessageIdRef.current = messageIdForAnimationSync;
+        const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-      if (isAcknowledgement) {
-        isSpeakingAcknowledgementRef.current = true;
-      }
-
-      const commonCleanupAndResolve = () => {
-        if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
-          isSpeakingAcknowledgementRef.current = false;
+        if (isAcknowledgement) {
+          isSpeakingAcknowledgementRef.current = true;
         }
-        handleAudioProcessEnd();
-        resolveSpeakText();
-      };
 
-      if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
-        onSpeechStartCallback?.();
+        const commonCleanupAndResolve = () => {
+          if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
+            isSpeakingAcknowledgementRef.current = false;
+          }
+          handleAudioProcessEnd();
+          resolveSpeakText();
+        };
+
+        if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
+          onSpeechStartCallback?.();
+          setIsSpeaking(false);
+          setShowPreparingGreeting(false);
+          if (messageIdForAnimationSync) {
+            setForceFinishAnimationForMessageId(messageIdForAnimationSync);
+            setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
+          }
+          if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
+            setHasConversationEnded(true);
+          }
+          if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
+            isSpeakingAcknowledgementRef.current = false;
+          }
+          resolveSpeakText();
+          return;
+        }
+        
+        if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
+        if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
+        if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); }
+        if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
+          elevenLabsAudioRef.current.pause();
+          if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+          elevenLabsAudioRef.current.src = '';
+        }
         setIsSpeaking(false);
-        setShowPreparingGreeting(false);
-        if (messageIdForAnimationSync) {
-          setForceFinishAnimationForMessageId(messageIdForAnimationSync);
-          setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
-        }
-        if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
-           setHasConversationEnded(true);
-        }
-        if (isSpeakingAcknowledgementRef.current && isAcknowledgement) { // Ensure flag is reset if skipping speech
-          isSpeakingAcknowledgementRef.current = false;
-        }
-        resolveSpeakText();
-        return;
-      }
+        if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) { setShowPreparingGreeting(true); }
 
-      if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) { /* ignore */} }
-      if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
-      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); }
-      if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
-         elevenLabsAudioRef.current.pause();
-         if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-         elevenLabsAudioRef.current.src = '';
-      }
-      setIsSpeaking(false); // Reset speaking state before attempting to speak
-      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) { setShowPreparingGreeting(true); }
-
-
-      if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-        const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
-        const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
-        const body = JSON.stringify({ text: textForSpeech, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }});
-        let fallbackToBrowserTTS = false;
-        try {
-          const response = await fetch(ttsUrl, { method: "POST", headers, body });
-          if (response.ok) {
-            const audioBlob = await response.blob();
-            if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
-              toast({ title: "TTS Audio Issue", description: "Received invalid audio data. Using browser TTS.", variant: "default" });
-              fallbackToBrowserTTS = true;
-            } else {
-              const audioUrl = URL.createObjectURL(audioBlob);
-              if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-              const audio = elevenLabsAudioRef.current;
-              audio.src = audioUrl;
-              audio.onplay = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-              audio.onended = commonCleanupAndResolve;
-              audio.onerror = (e: Event | string) => {
-                const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
-                const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
-                 if (!(mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) &&
+        if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+          const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
+          const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
+          const body = JSON.stringify({ text: textForSpeech, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true } });
+          try {
+            const response = await fetch(ttsUrl, { method: "POST", headers, body });
+            if (response.ok) {
+              const audioBlob = await response.blob();
+              if (audioBlob.size > 0 && audioBlob.type.startsWith('audio/')) {
+                const audioUrl = URL.createObjectURL(audioBlob);
+                if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
+                const audio = elevenLabsAudioRef.current;
+                audio.src = audioUrl;
+                audio.onplay = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
+                audio.onended = commonCleanupAndResolve;
+                audio.onerror = (e: Event | string) => {
+                  const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
+                  const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
+                  if (!(mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) &&
                     !(mediaError?.code === mediaError?.MEDIA_ERR_SRC_NOT_SUPPORTED || (errorMessage && errorMessage.toLowerCase().includes("empty src attribute")))) {
                     console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
-                    toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
-                }
-                commonCleanupAndResolve();
-              };
-              try {
+                  }
+                  commonCleanupAndResolve();
+                };
                 await audio.play();
-                return; 
-              } catch (playError: any) {
-                if (!(playError.name === 'AbortError' || playError.message.includes("interrupted"))) {
-                  console.error("ElevenLabs Audio Play Error (catch block):", playError);
-                  toast({ title: "TTS Play Error", description: "Using browser default.", variant: "destructive" });
-                }
-                fallbackToBrowserTTS = true;
+                return; // Successfully started API audio, exit the function.
+              } else {
+                toast({ title: "TTS Audio Issue", description: "Received invalid audio data. Using browser TTS.", variant: "default" });
               }
+            } else {
+              const errorBody = await response.text();
+              toast({ title: `TTS API Error (${response.status})`, description: `ElevenLabs: ${errorBody.substring(0, 100)}. Using browser default.`, variant: "destructive", duration: 8000 });
             }
-          } else {
-            const errorBody = await response.text();
-            toast({ title: `TTS API Error (${response.status})`, description: `ElevenLabs: ${errorBody.substring(0,100)}. Using browser default.`, variant: "destructive", duration: 8000 });
-            fallbackToBrowserTTS = true;
+          } catch (error: any) {
+            toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
+            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
           }
-        } catch (error: any) {
-           toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
-           if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
-           fallbackToBrowserTTS = true;
         }
-        if (!fallbackToBrowserTTS) return; 
-      }
-
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(textForSpeech);
-        utterance.pitch = 1;
-        utterance.rate = 1;
-        const voices = window.speechSynthesis.getVoices();
-        let selectedVoice = voices.find(voice => voice.lang === 'en-US' && (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark') || voice.name.toLowerCase().includes('microsoft david') || voice.name.toLowerCase().includes('google us english male'))) ||
-                           voices.find(voice => voice.lang.startsWith('en-') && (voice.name.toLowerCase().includes('male'))) ||
-                           voices.find(voice => voice.lang === 'en-US');
-        if (selectedVoice) utterance.voice = selectedVoice;
-        utterance.onstart = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-        utterance.onend = commonCleanupAndResolve;
-        utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
-          if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
-            console.error("Browser TTS Error in speakText:", event.error, event);
-          }
+        
+        // This part is only reached if the API is disabled or fails.
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(textForSpeech);
+          utterance.pitch = 1;
+          utterance.rate = 1;
+          const voices = window.speechSynthesis.getVoices();
+          let selectedVoice = voices.find(voice => voice.lang === 'en-US' && (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark') || voice.name.toLowerCase().includes('microsoft david') || voice.name.toLowerCase().includes('google us english male'))) ||
+            voices.find(voice => voice.lang.startsWith('en-') && (voice.name.toLowerCase().includes('male'))) ||
+            voices.find(voice => voice.lang === 'en-US');
+          if (selectedVoice) utterance.voice = selectedVoice;
+          utterance.onstart = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
+          utterance.onend = commonCleanupAndResolve;
+          utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+            if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
+              console.error("Browser TTS Error in speakText:", event.error, event);
+            }
+            commonCleanupAndResolve();
+          };
+          window.speechSynthesis.speak(utterance);
+        } else {
+          console.warn("Browser TTS Not Supported during speakText.");
+          onSpeechStartCallback?.();
           commonCleanupAndResolve();
-        };
-        window.speechSynthesis.speak(utterance);
-      } else {
-        console.warn("Browser TTS Not Supported during speakText.");
-        onSpeechStartCallback?.();
-        commonCleanupAndResolve();
-      }
+        }
+      };
+
+      tryApiAndFallback();
     });
-  }, [ useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded, communicationMode ]);
+  }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded, communicationMode]);
+
 
   const speakTextRef = useRef(speakText);
   useEffect(() => { speakTextRef.current = speakText; }, [speakText]);
@@ -579,7 +568,7 @@ export default function HomePage() {
         personaTraits: personaTraits, chatHistory: historyForGenkit,
       };
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-
+      
       if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
         mainResponsePendingAfterAckRef.current = true;
         const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
@@ -740,14 +729,26 @@ export default function HomePage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} }
+      const initRecognition = () => {
+        if (recognitionRef.current) {
+          try { recognitionRef.current.abort(); } catch (e) { }
+        }
         recognitionRef.current = initializeSpeechRecognition();
+      };
+      initRecognition();
     }
     return () => {
-      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} recognitionRef.current = null; }
-      if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) { }
+        recognitionRef.current = null;
+      }
+      if (sendTranscriptTimerRef.current) {
+        clearTimeout(sendTranscriptTimerRef.current);
+        sendTranscriptTimerRef.current = null;
+      }
     };
   }, [initializeSpeechRecognition, communicationMode]);
+
 
   const handleModeSelectionSubmit = () => {
     resetConversation();
@@ -786,11 +787,8 @@ export default function HomePage() {
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
 
-    // Dynamically import libraries only on the client side
-    const jsPDFModule = await import('jspdf');
-    const html2canvasModule = await import('html2canvas');
-    const jsPDF = jsPDFModule.default;
-    const html2canvas = html2canvasModule.default;
+    const { default: jsPDF } = await import('jspdf');
+    const { default: html2canvas } = await import('html2canvas');
 
     const tempContainer = document.createElement('div');
     tempContainer.style.width = '700px';
@@ -804,7 +802,6 @@ export default function HomePage() {
     document.body.appendChild(tempContainer);
 
     try {
-      // Wait for images to load, especially if from external sources
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       const canvas = await html2canvas(tempContainer, {
