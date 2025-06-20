@@ -625,7 +625,8 @@ export default function HomePage() {
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
 
   const initializeSpeechRecognition = useCallback(() => {
-    const SpeechRecognitionAPI = (typeof window !== 'undefined') ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition : null;
+    if (typeof window === 'undefined') return null;
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
       if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
         toast({ title: "Mic Not Supported", description: "Speech recognition is not available in your browser.", variant: "destructive" });
@@ -785,6 +786,7 @@ export default function HomePage() {
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
 
+    // Dynamically import libraries only on the client side
     const jsPDFModule = await import('jspdf');
     const html2canvasModule = await import('html2canvas');
     const jsPDF = jsPDFModule.default;
@@ -802,6 +804,7 @@ export default function HomePage() {
     document.body.appendChild(tempContainer);
 
     try {
+      // Wait for images to load, especially if from external sources
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       const canvas = await html2canvas(tempContainer, {
@@ -1146,7 +1149,7 @@ export default function HomePage() {
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
           {corsTroubleshootingAlert}
           {!hasConversationEnded && <Image {...imageProps} />}
-          {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask AI Blair</h2>}
+          {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}</h2>}
            <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {audioOnlyLiveIndicator()}
           </div>
@@ -1184,7 +1187,7 @@ export default function HomePage() {
           <Card className="w-full shadow-xl">
             <CardContent className="pt-6 flex flex-col items-center">
               <Image {...imageProps} />
-              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">Ask AI Blair</h2>
+              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}</h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
                 <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
                   Preparing greeting...
