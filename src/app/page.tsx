@@ -20,6 +20,8 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
 import type { FirebaseOptions } from 'firebase/app';
+import type jsPDF from 'jspdf';
+import type html2canvas from 'html2canvas';
 
 
 export interface Message {
@@ -78,7 +80,6 @@ const ACKNOWLEDGEMENT_PHRASES = [
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
-const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechRecognition || (window as any).webkitSpeechRecognition : null;
 const MAX_SILENCE_PROMPTS_AUDIO_ONLY = 2;
 
 
@@ -580,8 +581,8 @@ export default function HomePage() {
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
 
       if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
-        const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
         mainResponsePendingAfterAckRef.current = true;
+        const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
         await speakTextRef.current(randomAckPhrase, null, undefined, true);
       }
 
@@ -624,6 +625,7 @@ export default function HomePage() {
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
 
   const initializeSpeechRecognition = useCallback(() => {
+    const SpeechRecognitionAPI = (typeof window !== 'undefined') ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition : null;
     if (!SpeechRecognitionAPI) {
       if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
         toast({ title: "Mic Not Supported", description: "Speech recognition is not available in your browser.", variant: "destructive" });
@@ -733,10 +735,10 @@ export default function HomePage() {
       }
     };
     return recognition;
-  }, [toast, responsePauseTimeMs, addMessage, communicationMode]);
+  }, [toast, responsePauseTimeMs, addMessage]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && SpeechRecognitionAPI) {
+    if (typeof window !== 'undefined') {
         if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} }
         recognitionRef.current = initializeSpeechRecognition();
     }
@@ -783,8 +785,10 @@ export default function HomePage() {
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
 
-    const { default: jsPDF } = await import('jspdf');
-    const { default: html2canvas } = await import('html2canvas');
+    const jsPDFModule = await import('jspdf');
+    const html2canvasModule = await import('html2canvas');
+    const jsPDF = jsPDFModule.default;
+    const html2canvas = html2canvasModule.default;
 
     const tempContainer = document.createElement('div');
     tempContainer.style.width = '700px';
