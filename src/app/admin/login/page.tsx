@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { LogIn, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added import
 
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_ADMIN_PASSWORD_FOR_LOGIN_CHECK = "admin123"; // Fallback if Firestore is inaccessible
