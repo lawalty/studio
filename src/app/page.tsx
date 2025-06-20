@@ -19,8 +19,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 
 export interface Message {
@@ -583,7 +581,7 @@ export default function HomePage() {
       if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
         const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
         mainResponsePendingAfterAckRef.current = true;
-        await speakTextRef.current(randomAckPhrase, null, undefined, true); // Pass true for isAcknowledgement
+        await speakTextRef.current(randomAckPhrase, null, undefined, true);
       }
 
       let newAiMessageId: string | null = null;
@@ -597,7 +595,7 @@ export default function HomePage() {
         }, 50);
       };
       if (result.shouldEndConversation) { isEndingSessionRef.current = true; }
-      await speakTextRef.current(result.aiResponse, null, onSpeechActuallyStarting, false); // Pass false for isAcknowledgement
+      await speakTextRef.current(result.aiResponse, null, onSpeechActuallyStarting, false);
       mainResponsePendingAfterAckRef.current = false;
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
@@ -701,8 +699,8 @@ export default function HomePage() {
           transcriptToSend === '' &&
           wasListeningWhenRecognitionEnded &&
           communicationModeRef.current === 'audio-only' &&
-          !isSpeakingAcknowledgementRef.current && // Don't prompt if ack is playing
-          !mainResponsePendingAfterAckRef.current // Don't prompt if main response is about to play after ack
+          !isSpeakingAcknowledgementRef.current &&
+          !mainResponsePendingAfterAckRef.current
         ) {
         isAboutToSpeakForSilenceRef.current = true;
         setConsecutiveSilencePrompts(currentPrompts => {
@@ -783,6 +781,9 @@ export default function HomePage() {
 
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
+
+    const { default: jsPDF } = await import('jspdf');
+    const { default: html2canvas } = await import('html2canvas');
 
     const tempContainer = document.createElement('div');
     tempContainer.style.width = '700px';
