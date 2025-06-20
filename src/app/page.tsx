@@ -73,6 +73,62 @@ const SpeechRecognitionAPI = (typeof window !== 'undefined') ? window.SpeechReco
 const MAX_SILENCE_PROMPTS_AUDIO_ONLY = 2;
 
 
+// Helper function to generate HTML string for the chat log
+function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string): string {
+  // Styles derived from globals.css (light theme for consistency in PDF)
+  const primaryBg = 'hsl(210 13% 50%)';
+  const primaryFg = 'hsl(0 0% 98%)';
+  const secondaryBg = 'hsl(205 70% 70%)';
+  const secondaryFg = 'hsl(212 60% 25%)';
+  const cardBg = 'hsl(0 0% 100%)'; // Canvas background
+  const defaultFg = 'hsl(212 68% 11%)';
+  const mutedFg = 'hsl(212 30% 40%)';
+  const userAvatarBg = 'hsl(0 0% 90%)';
+
+
+  let html = `<div style="background-color: ${cardBg}; color: ${defaultFg}; padding: 20px; font-family: Inter, sans-serif; width: 100%; box-sizing: border-box; max-width: 700px; margin: 0 auto;">`;
+
+  messagesToRender.forEach(message => {
+    const isUser = message.sender === 'user';
+    const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Sanitize message text
+    const sanitizedText = message.text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    if (isUser) {
+      html += `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; align-items: flex-start;">
+          <div style="max-width: 75%; background-color: ${primaryBg}; color: ${primaryFg}; padding: 10px 12px; border-radius: 12px; border-bottom-right-radius: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <p style="font-size: 14px; white-space: pre-wrap; margin: 0; word-wrap: break-word;">${sanitizedText}</p>
+            <p style="font-size: 10px; color: hsla(0,0%,98%,0.75); text-align: right; margin: 5px 0 0 0;">${time}</p>
+          </div>
+          <div style="width: 32px; height: 32px; margin-left: 8px; background-color: ${userAvatarBg}; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size:14px; font-weight: 500; color: ${defaultFg}; flex-shrink: 0;">
+            U
+          </div>
+        </div>
+      `;
+    } else { // AI
+      html += `
+        <div style="display: flex; justify-content: flex-start; margin-bottom: 16px; align-items: flex-start;">
+          <img src="${aiAvatarSrc || DEFAULT_AVATAR_PLACEHOLDER_URL}" alt="AI Avatar" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; object-fit: cover;" />
+          <div style="max-width: 75%; background-color: ${secondaryBg}; color: ${secondaryFg}; padding: 10px 12px; border-radius: 12px; border-bottom-left-radius: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <p style="font-size: 14px; white-space: pre-wrap; margin: 0; word-wrap: break-word;">${sanitizedText}</p>
+            <p style="font-size: 10px; color: ${mutedFg}; text-align: left; margin: 5px 0 0 0;">${time}</p>
+          </div>
+        </div>
+      `;
+    }
+  });
+
+  html += `</div>`;
+  return html;
+}
+
+
 const getUserNameFromHistory = (history: Message[]): string | null => {
   for (let i = history.length - 1; i >= 0; i--) {
     const message = history[i];
@@ -154,7 +210,7 @@ export default function HomePage() {
   useEffect(() => { 
     communicationModeRef.current = communicationMode; 
     if (isEmbeddedFromQuery && initialModeFromQuery) {
-      setShowSplashScreen(false); // Ensure splash is hidden for embedded mode
+      setShowSplashScreen(false); 
     }
   }, [communicationMode, isEmbeddedFromQuery, initialModeFromQuery]);
 
@@ -190,7 +246,7 @@ export default function HomePage() {
         else window.dispatchEvent(new CustomEvent('splashScreenInactive'));
     };
     window.addEventListener('requestInitialSplashState', sendInitialState);
-    sendInitialState(); // Dispatch immediately for initial load
+    sendInitialState(); 
     return () => window.removeEventListener('requestInitialSplashState', sendInitialState);
   }, [showSplashScreen]);
 
@@ -736,48 +792,39 @@ export default function HomePage() {
   };
 
   const handleSaveConversationAsPdf = async () => {
-    const conversationLogElement = document.querySelector('[data-testid="conversation-log-viewport"]');
-    if (!(conversationLogElement instanceof HTMLElement)) {
-      toast({
-        title: "Error",
-        description: "Could not find conversation log to export.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     toast({
       title: "Generating PDF...",
       description: "This may take a moment for long conversations.",
     });
 
+    const tempContainer = document.createElement('div');
+    tempContainer.style.width = '700px'; // A4-like width for rendering
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.left = '-9999px'; // Off-screen
+    tempContainer.style.top = '-9999px';
+    tempContainer.style.fontFamily = 'Inter, sans-serif'; // Ensure font consistency
+
+    // Use the full messages state for PDF generation
+    const chatLogHtml = generateChatLogHtml(messages, avatarSrc);
+    tempContainer.innerHTML = chatLogHtml;
+    document.body.appendChild(tempContainer);
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      // Give the browser a moment to render the off-screen div
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      const originalScrollTop = conversationLogElement.scrollTop;
-      conversationLogElement.scrollTop = 0; 
-      await new Promise(resolve => setTimeout(resolve, 100)); 
-      conversationLogElement.scrollTop = conversationLogElement.scrollHeight;
-      await new Promise(resolve => setTimeout(resolve, 100));
-      conversationLogElement.scrollTop = originalScrollTop; 
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Ensure it's scrolled to the top right before capture
-      conversationLogElement.scrollTop = 0;
-      await new Promise(resolve => setTimeout(resolve, 50)); // Short delay for final scroll to take effect
-
-
-      const canvas = await html2canvas(conversationLogElement, {
+      const canvas = await html2canvas(tempContainer, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#FFFFFF', 
-        height: conversationLogElement.scrollHeight, 
-        windowHeight: conversationLogElement.scrollHeight 
+        backgroundColor: '#FFFFFF', // Set explicit white background for canvas
+        // No need for scroll manipulations as we capture a self-contained element
       });
 
+      document.body.removeChild(tempContainer); // Clean up
+
       if (canvas.width === 0 || canvas.height === 0) {
-         toast({ title: "Canvas Capture Error", description: "Captured canvas is empty or has zero dimensions. PDF cannot be generated.", variant: "destructive" });
-         console.error("html2canvas produced an empty or zero-dimension canvas.", {width: canvas.width, height: canvas.height});
+         toast({ title: "Canvas Capture Error", description: "Captured canvas is empty. PDF cannot be generated.", variant: "destructive" });
+         console.error("html2canvas produced an empty or zero-dimension canvas.");
          return;
       }
 
@@ -790,19 +837,19 @@ export default function HomePage() {
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; 
+      const pageMargin = 20;
       const contentWidth = pdfWidth - (pageMargin * 2);
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; 
+      let position = pageMargin;
 
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); 
+      heightLeft -= (pdfHeight - (pageMargin * 2));
 
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; 
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -815,6 +862,9 @@ export default function HomePage() {
       });
     } catch (error) {
       console.error("Error generating PDF:", error);
+      if (tempContainer.parentElement) {
+        document.body.removeChild(tempContainer); // Ensure cleanup on error too
+      }
       toast({
         title: "PDF Generation Failed",
         description: "Could not save the conversation as PDF. See console for details.",
@@ -833,8 +883,8 @@ export default function HomePage() {
       // For embedded mode, re-initialize based on the original query params
       setSelectedInitialMode(initialModeFromQuery || 'audio-text');
       setCommunicationMode(initialModeFromQuery || 'audio-text');
-      setShowSplashScreen(false); // Should already be false, but ensure
-      setAiHasInitiatedConversation(false); // This will trigger re-greeting
+      setShowSplashScreen(false); 
+      setAiHasInitiatedConversation(false); 
     }
   };
 
@@ -1172,7 +1222,7 @@ export default function HomePage() {
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={messages}
+                    messages={messages} // Always use full messages here
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1217,7 +1267,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messages}
+            messages={messages} // Always use full messages here
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1266,4 +1316,3 @@ export default function HomePage() {
   );
 }
 
-    
