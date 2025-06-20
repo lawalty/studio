@@ -250,6 +250,9 @@ export default function HomePage() {
 
   const isEndingSessionRef = useRef(false);
   const isAboutToSpeakForSilenceRef = useRef(false);
+  const isSpeakingAcknowledgementRef = useRef(false);
+  const mainResponsePendingAfterAckRef = useRef(false);
+
 
   const messagesRef = useRef<Message[]>(messages);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -278,6 +281,8 @@ export default function HomePage() {
     setConsecutiveSilencePrompts(0);
     isEndingSessionRef.current = false;
     isAboutToSpeakForSilenceRef.current = false;
+    isSpeakingAcknowledgementRef.current = false;
+    mainResponsePendingAfterAckRef.current = false;
     setHasConversationEnded(false);
     setShowPreparingGreeting(false);
     currentAiMessageIdRef.current = null;
@@ -413,12 +418,19 @@ export default function HomePage() {
     }
   }, [hasConversationEnded, toggleListeningRef]);
 
- const speakText = useCallback(async (text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void) => {
+ const speakText = useCallback(async (text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false) => {
     return new Promise<void>(async (resolveSpeakText) => {
       currentAiMessageIdRef.current = messageIdForAnimationSync;
       const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
+      if (isAcknowledgement) {
+        isSpeakingAcknowledgementRef.current = true;
+      }
+
       const commonCleanupAndResolve = () => {
+        if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
+          isSpeakingAcknowledgementRef.current = false;
+        }
         handleAudioProcessEnd();
         resolveSpeakText();
       };
@@ -434,6 +446,9 @@ export default function HomePage() {
         if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
            setHasConversationEnded(true);
         }
+        if (isSpeakingAcknowledgementRef.current && isAcknowledgement) { // Ensure flag is reset if skipping speech
+          isSpeakingAcknowledgementRef.current = false;
+        }
         resolveSpeakText();
         return;
       }
@@ -446,8 +461,9 @@ export default function HomePage() {
          if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
          elevenLabsAudioRef.current.src = '';
       }
-      setIsSpeaking(false);
-      if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) { setShowPreparingGreeting(true); }
+      setIsSpeaking(false); // Reset speaking state before attempting to speak
+      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) { setShowPreparingGreeting(true); }
+
 
       if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
         const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
@@ -476,11 +492,11 @@ export default function HomePage() {
                     console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
                     toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
                 }
-                commonCleanupAndResolve(); // Still resolve, will fallback if browserTTS is called after this error
+                commonCleanupAndResolve();
               };
               try {
                 await audio.play();
-                return; // Successfully started ElevenLabs playback
+                return; 
               } catch (playError: any) {
                 if (!(playError.name === 'AbortError' || playError.message.includes("interrupted"))) {
                   console.error("ElevenLabs Audio Play Error (catch block):", playError);
@@ -499,10 +515,9 @@ export default function HomePage() {
            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
            fallbackToBrowserTTS = true;
         }
-        if (!fallbackToBrowserTTS) return; // If ElevenLabs was attempted and didn't set fallback, resolve.
+        if (!fallbackToBrowserTTS) return; 
       }
 
-      // Browser TTS as default or fallback
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(textForSpeech);
@@ -548,6 +563,7 @@ export default function HomePage() {
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
+    mainResponsePendingAfterAckRef.current = false;
 
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
@@ -566,7 +582,8 @@ export default function HomePage() {
 
       if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
         const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
-        await speakTextRef.current(randomAckPhrase, null, undefined);
+        mainResponsePendingAfterAckRef.current = true;
+        await speakTextRef.current(randomAckPhrase, null, undefined, true); // Pass true for isAcknowledgement
       }
 
       let newAiMessageId: string | null = null;
@@ -574,12 +591,14 @@ export default function HomePage() {
         setTimeout(() => {
           if (!isEndingSessionRef.current || (isEndingSessionRef.current && result.shouldEndConversation)) {
             newAiMessageId = addMessage(result.aiResponse, 'ai');
+            currentAiMessageIdRef.current = newAiMessageId;
           }
           setIsSendingMessage(false);
         }, 50);
       };
       if (result.shouldEndConversation) { isEndingSessionRef.current = true; }
-      await speakTextRef.current(result.aiResponse, newAiMessageId, onSpeechActuallyStarting);
+      await speakTextRef.current(result.aiResponse, null, onSpeechActuallyStarting, false); // Pass false for isAcknowledgement
+      mainResponsePendingAfterAckRef.current = false;
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
@@ -588,12 +607,14 @@ export default function HomePage() {
         errorAiMessageId = addMessage(errorMessage, 'ai');
         setIsSendingMessage(false);
         if (communicationModeRef.current !== 'text-only') {
-          await speakTextRef.current(errorMessage, errorAiMessageId);
+          await speakTextRef.current(errorMessage, errorAiMessageId, undefined, false);
         }
       } else {
         setHasConversationEnded(true);
         setIsSendingMessage(false);
       }
+      mainResponsePendingAfterAckRef.current = false;
+      isSpeakingAcknowledgementRef.current = false;
     }
   }, [addMessage, personaTraits, hasConversationEnded, isSendingMessage, setInputValue,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
@@ -667,13 +688,22 @@ export default function HomePage() {
     recognition.onend = () => {
       const wasListeningWhenRecognitionEnded = isListeningRef.current;
       setIsListening(false);
+
       if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current || sendTranscriptTimerRef.current) {
         return;
       }
+
       const transcriptToSend = accumulatedTranscriptRef.current.trim();
+
       if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) {
         handleSendMessageRef.current(transcriptToSend, 'voice');
-      } else if (transcriptToSend === '' && wasListeningWhenRecognitionEnded && communicationModeRef.current === 'audio-only') {
+      } else if (
+          transcriptToSend === '' &&
+          wasListeningWhenRecognitionEnded &&
+          communicationModeRef.current === 'audio-only' &&
+          !isSpeakingAcknowledgementRef.current && // Don't prompt if ack is playing
+          !mainResponsePendingAfterAckRef.current // Don't prompt if main response is about to play after ack
+        ) {
         isAboutToSpeakForSilenceRef.current = true;
         setConsecutiveSilencePrompts(currentPrompts => {
           const newPromptCount = currentPrompts + 1;
@@ -684,15 +714,22 @@ export default function HomePage() {
             if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) {
                 endMsgId = addMessage(endMsg, 'ai');
             }
-            speakTextRef.current(endMsg, endMsgId);
+            speakTextRef.current(endMsg, endMsgId, undefined, false);
           } else {
             const userName = getUserNameFromHistory(messagesRef.current);
             const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-            speakTextRef.current(promptMessage, null);
+            speakTextRef.current(promptMessage, null, undefined, false);
           }
           return newPromptCount;
         });
-      } else if (communicationModeRef.current === 'audio-only' && !hasConversationEnded && !isEndingSessionRef.current && !isAboutToSpeakForSilenceRef.current) {
+      } else if (
+          communicationModeRef.current === 'audio-only' &&
+          !hasConversationEnded &&
+          !isEndingSessionRef.current &&
+          !isAboutToSpeakForSilenceRef.current &&
+          !isSpeakingAcknowledgementRef.current &&
+          !mainResponsePendingAfterAckRef.current
+        ) {
          toggleListeningRef.current(true);
       }
     };
@@ -719,6 +756,8 @@ export default function HomePage() {
   const handleEndChatManually = () => {
     isEndingSessionRef.current = true;
     isAboutToSpeakForSilenceRef.current = false;
+    isSpeakingAcknowledgementRef.current = false;
+    mainResponsePendingAfterAckRef.current = false;
     setShowPreparingGreeting(false);
     setIsSendingMessage(false);
     if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
@@ -853,7 +892,7 @@ export default function HomePage() {
               }
             }, 50);
           };
-          await speakTextRef.current(greetingToUse, null, onGreetingSpeechActuallyStarting);
+          await speakTextRef.current(greetingToUse, null, onGreetingSpeechActuallyStarting, false);
         } else {
              setShowPreparingGreeting(false);
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
