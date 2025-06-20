@@ -417,119 +417,136 @@ export default function HomePage() {
   }, [hasConversationEnded, toggleListeningRef]);
 
   const speakText = useCallback((text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false) => {
-    return new Promise<void>((resolveSpeakText) => {
-      const tryApiAndFallback = async () => {
-        currentAiMessageIdRef.current = messageIdForAnimationSync;
-        const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
-
-        if (isAcknowledgement) {
-          isSpeakingAcknowledgementRef.current = true;
+    return new Promise<void>(async (resolve, reject) => {
+      // --- Universal Cleanup: Cancel any ongoing speech ---
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      if (elevenLabsAudioRef.current) {
+        elevenLabsAudioRef.current.pause();
+        if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(elevenLabsAudioRef.current.src);
         }
-
-        const commonCleanupAndResolve = () => {
-          if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
-            isSpeakingAcknowledgementRef.current = false;
-          }
-          handleAudioProcessEnd();
-          resolveSpeakText();
-        };
-
-        if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
-          onSpeechStartCallback?.();
-          setIsSpeaking(false);
-          setShowPreparingGreeting(false);
-          if (messageIdForAnimationSync) {
-            setForceFinishAnimationForMessageId(messageIdForAnimationSync);
-            setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
-          }
-          if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
-            setHasConversationEnded(true);
-          }
-          if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
-            isSpeakingAcknowledgementRef.current = false;
-          }
-          resolveSpeakText();
-          return;
-        }
-        
-        if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
-        if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
-        if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); }
-        if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
-          elevenLabsAudioRef.current.pause();
-          if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-          elevenLabsAudioRef.current.src = '';
-        }
+        elevenLabsAudioRef.current.src = '';
+      }
+      currentAiMessageIdRef.current = messageIdForAnimationSync;
+      if (isAcknowledgement) {
+        isSpeakingAcknowledgementRef.current = true;
+      }
+      
+      // --- Exit early if no speech is needed ---
+      if (communicationModeRef.current === 'text-only' || text.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
+        onSpeechStartCallback?.();
         setIsSpeaking(false);
-        if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) { setShowPreparingGreeting(true); }
+        setShowPreparingGreeting(false);
+        if (messageIdForAnimationSync) {
+          setForceFinishAnimationForMessageId(messageIdForAnimationSync);
+          setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
+        }
+        if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
+          setHasConversationEnded(true);
+        }
+        if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
+          isSpeakingAcknowledgementRef.current = false;
+        }
+        resolve();
+        return;
+      }
+      
+      if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
+      if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
+      setIsSpeaking(false);
+      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) { setShowPreparingGreeting(true); }
 
-        if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+      // --- Attempt API Speech ---
+      if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+        try {
           const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
           const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
-          const body = JSON.stringify({ text: textForSpeech, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true } });
-          try {
-            const response = await fetch(ttsUrl, { method: "POST", headers, body });
-            if (response.ok) {
-              const audioBlob = await response.blob();
-              if (audioBlob.size > 0 && audioBlob.type.startsWith('audio/')) {
-                const audioUrl = URL.createObjectURL(audioBlob);
-                if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-                const audio = elevenLabsAudioRef.current;
-                audio.src = audioUrl;
-                audio.onplay = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-                audio.onended = commonCleanupAndResolve;
-                audio.onerror = (e: Event | string) => {
-                  const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
-                  const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
-                  if (!(mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) &&
-                    !(mediaError?.code === mediaError?.MEDIA_ERR_SRC_NOT_SUPPORTED || (errorMessage && errorMessage.toLowerCase().includes("empty src attribute")))) {
-                    console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
-                  }
-                  commonCleanupAndResolve();
-                };
-                await audio.play();
-                return; // Successfully started API audio, exit the function.
-              } else {
-                toast({ title: "TTS Audio Issue", description: "Received invalid audio data. Using browser TTS.", variant: "default" });
-              }
-            } else {
-              const errorBody = await response.text();
-              toast({ title: `TTS API Error (${response.status})`, description: `ElevenLabs: ${errorBody.substring(0, 100)}. Using browser default.`, variant: "destructive", duration: 8000 });
-            }
-          } catch (error: any) {
-            toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
-            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
+          const body = JSON.stringify({ text: text.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true } });
+          
+          const response = await fetch(ttsUrl, { method: "POST", headers, body });
+          if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`API returned ${response.status}: ${errorBody.substring(0,100)}`);
           }
-        }
-        
-        // This part is only reached if the API is disabled or fails.
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-          if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(textForSpeech);
-          utterance.pitch = 1;
-          utterance.rate = 1;
-          const voices = window.speechSynthesis.getVoices();
-          let selectedVoice = voices.find(voice => voice.lang === 'en-US' && (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark') || voice.name.toLowerCase().includes('microsoft david') || voice.name.toLowerCase().includes('google us english male'))) ||
-            voices.find(voice => voice.lang.startsWith('en-') && (voice.name.toLowerCase().includes('male'))) ||
-            voices.find(voice => voice.lang === 'en-US');
-          if (selectedVoice) utterance.voice = selectedVoice;
-          utterance.onstart = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-          utterance.onend = commonCleanupAndResolve;
-          utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
-            if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
-              console.error("Browser TTS Error in speakText:", event.error, event);
-            }
-            commonCleanupAndResolve();
-          };
-          window.speechSynthesis.speak(utterance);
-        } else {
-          console.warn("Browser TTS Not Supported during speakText.");
-          onSpeechStartCallback?.();
-          commonCleanupAndResolve();
-        }
-      };
 
-      tryApiAndFallback();
+          const audioBlob = await response.blob();
+          if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
+            throw new Error('Received invalid or empty audio data from API.');
+          }
+          
+          const audioUrl = URL.createObjectURL(audioBlob);
+          if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
+          const audio = elevenLabsAudioRef.current;
+          audio.src = audioUrl;
+
+          audio.onplay = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
+          audio.onended = () => {
+            if (isSpeakingAcknowledgementRef.current && isAcknowledgement) isSpeakingAcknowledgementRef.current = false;
+            handleAudioProcessEnd();
+            resolve();
+          };
+          audio.onerror = (e) => {
+            const error = (e.target as HTMLAudioElement)?.error;
+            const errorMessage = error?.message || "Unknown audio playback error";
+            // IMPORTANT: If the error is an interruption, just resolve. Another speakText call is taking over.
+            if (error?.code === DOMException.ABORT_ERR || errorMessage.includes('interrupted')) {
+              console.log("Audio playback was interrupted by a new request. This is expected.");
+              resolve(); // Resolve this promise, as the interruption is not a failure of this call.
+            } else {
+              toast({ title: "TTS Playback Error", description: `Could not play API audio: ${errorMessage}`, variant: "destructive" });
+              reject(new Error(errorMessage)); // Reject for actual playback errors
+            }
+          };
+
+          await audio.play();
+          return; // Success: API audio is playing or will play. Exit the function.
+
+        } catch (error: any) {
+          console.error("Error in API speech path:", error);
+          const errorMessage = error?.message || "";
+          if (errorMessage.includes('interrupted')) {
+              // This can happen if the fetch itself is aborted, which is fine. Resolve and exit.
+              resolve();
+              return;
+          }
+          if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
+          toast({ title: `TTS API Error`, description: `Could not connect to ElevenLabs. Using browser default.`, variant: "destructive" });
+          // Do NOT return. Fall through to browser TTS.
+        }
+      }
+
+      // --- Fallback to Browser TTS ---
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance(text.replace(/EZCORP/gi, "easy corp"));
+        utterance.pitch = 1; utterance.rate = 1;
+        const voices = window.speechSynthesis.getVoices();
+        let selectedVoice = voices.find(voice => voice.lang === 'en-US' && (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark') || voice.name.toLowerCase().includes('microsoft david') || voice.name.toLowerCase().includes('google us english male'))) ||
+          voices.find(voice => voice.lang.startsWith('en-') && (voice.name.toLowerCase().includes('male'))) ||
+          voices.find(voice => voice.lang === 'en-US');
+        if (selectedVoice) utterance.voice = selectedVoice;
+        
+        utterance.onstart = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
+        utterance.onend = () => {
+          if (isSpeakingAcknowledgementRef.current && isAcknowledgement) isSpeakingAcknowledgementRef.current = false;
+          handleAudioProcessEnd();
+          resolve();
+        };
+        utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+          if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
+            console.error("Browser TTS Error:", event.error);
+            reject(new Error(`Browser TTS failed: ${event.error}`));
+          } else {
+             console.log("Browser TTS interrupted. This is expected.");
+             resolve();
+          }
+        };
+        window.speechSynthesis.speak(utterance);
+      } else {
+        console.warn("Browser TTS not supported.");
+        reject(new Error("Browser TTS not supported."));
+      }
     });
   }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded, communicationMode]);
 
@@ -586,7 +603,7 @@ export default function HomePage() {
         }, 50);
       };
       if (result.shouldEndConversation) { isEndingSessionRef.current = true; }
-      await speakTextRef.current(result.aiResponse, null, onSpeechActuallyStarting, false);
+      await speakTextRef.current(result.aiResponse, newAiMessageId, onSpeechActuallyStarting, false);
       mainResponsePendingAfterAckRef.current = false;
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
@@ -613,133 +630,129 @@ export default function HomePage() {
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
 
-  const initializeSpeechRecognition = useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognitionAPI) {
-      if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-        toast({ title: "Mic Not Supported", description: "Speech recognition is not available in your browser.", variant: "destructive" });
-      }
-      return null;
-    }
-    const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = communicationModeRef.current === 'audio-text';
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      if (isSpeakingRef.current || isSendingMessage) {
-        if(recognitionRef.current && isListeningRef.current) try { recognitionRef.current.abort(); } catch(e){}
-        return;
-      }
-      let currentVisualTranscript = '';
-      let latestFinalUtteranceThisEvent = '';
-      for (let i = 0; i < event.results.length; i++) {
-        const segmentTranscript = event.results[i][0].transcript;
-        if (communicationModeRef.current === 'audio-text') {
-            currentVisualTranscript += segmentTranscript;
-        }
-        if (event.results[i].isFinal) {
-            latestFinalUtteranceThisEvent = segmentTranscript.trim();
-        }
-      }
-      if (communicationModeRef.current === 'audio-text') {
-        setInputValue(currentVisualTranscript.trimStart());
-        if (latestFinalUtteranceThisEvent && latestFinalUtteranceThisEvent !== accumulatedTranscriptRef.current) {
-             accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
-             setConsecutiveSilencePrompts(0);
-             if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
-             sendTranscriptTimerRef.current = setTimeout(() => {
-               if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
-                   handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
-               }
-               sendTranscriptTimerRef.current = null;
-             }, responsePauseTimeMs);
-          }
-      } else {
-         if (latestFinalUtteranceThisEvent) {
-            accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
-            setConsecutiveSilencePrompts(0);
-          }
-      }
-    };
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      setIsListening(false);
-      if (sendTranscriptTimerRef.current) {
-        clearTimeout(sendTranscriptTimerRef.current);
-        sendTranscriptTimerRef.current = null;
-      }
-      if (event.error === 'aborted' || event.error === 'interrupted' || event.error === 'canceled') { /* Programmatic stops */ }
-      else if (event.error === 'no-speech') { /* Handled by onend for audio-only */ }
-      else if (event.error === 'audio-capture') {
-        toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
-      } else if (event.error !== 'network') {
-        toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
-      }
-    };
-    recognition.onend = () => {
-      const wasListeningWhenRecognitionEnded = isListeningRef.current;
-      setIsListening(false);
-
-      if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current || sendTranscriptTimerRef.current) {
-        return;
-      }
-
-      const transcriptToSend = accumulatedTranscriptRef.current.trim();
-
-      if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) {
-        handleSendMessageRef.current(transcriptToSend, 'voice');
-      } else if (
-          transcriptToSend === '' &&
-          wasListeningWhenRecognitionEnded &&
-          communicationModeRef.current === 'audio-only' &&
-          !isSpeakingAcknowledgementRef.current &&
-          !mainResponsePendingAfterAckRef.current
-        ) {
-        isAboutToSpeakForSilenceRef.current = true;
-        setConsecutiveSilencePrompts(currentPrompts => {
-          const newPromptCount = currentPrompts + 1;
-          if (newPromptCount >= MAX_SILENCE_PROMPTS_AUDIO_ONLY) {
-            isEndingSessionRef.current = true;
-            const endMsg = "It looks like you might have stepped away. Let's end this chat.";
-            let endMsgId: string | null = null;
-            if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) {
-                endMsgId = addMessage(endMsg, 'ai');
-            }
-            speakTextRef.current(endMsg, endMsgId, undefined, false);
-          } else {
-            const userName = getUserNameFromHistory(messagesRef.current);
-            const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-            speakTextRef.current(promptMessage, null, undefined, false);
-          }
-          return newPromptCount;
-        });
-      } else if (
-          communicationModeRef.current === 'audio-only' &&
-          !hasConversationEnded &&
-          !isEndingSessionRef.current &&
-          !isAboutToSpeakForSilenceRef.current &&
-          !isSpeakingAcknowledgementRef.current &&
-          !mainResponsePendingAfterAckRef.current
-        ) {
-         toggleListeningRef.current(true);
-      }
-    };
-    return recognition;
-  }, [toast, responsePauseTimeMs, addMessage]);
-
   useEffect(() => {
+    let recognition: SpeechRecognition | null = null;
     if (typeof window !== 'undefined') {
-      const initRecognition = () => {
-        if (recognitionRef.current) {
-          try { recognitionRef.current.abort(); } catch (e) { }
+      const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognitionAPI) {
+        if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
+          toast({ title: "Mic Not Supported", description: "Speech recognition is not available in your browser.", variant: "destructive" });
         }
-        recognitionRef.current = initializeSpeechRecognition();
-      };
-      initRecognition();
+      } else {
+        recognition = new SpeechRecognitionAPI();
+        recognitionRef.current = recognition;
+      }
     }
+    
+    const initializeSpeechRecognition = () => {
+      if (!recognition) return;
+      
+      recognition.continuous = communicationModeRef.current === 'audio-text';
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        if (isSpeakingRef.current || isSendingMessage) {
+          if(recognitionRef.current && isListeningRef.current) try { recognitionRef.current.abort(); } catch(e){}
+          return;
+        }
+        let currentVisualTranscript = '';
+        let latestFinalUtteranceThisEvent = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const segmentTranscript = event.results[i][0].transcript;
+          if (communicationModeRef.current === 'audio-text') {
+              currentVisualTranscript += segmentTranscript;
+          }
+          if (event.results[i].isFinal) {
+              latestFinalUtteranceThisEvent = segmentTranscript.trim();
+          }
+        }
+        if (communicationModeRef.current === 'audio-text') {
+          setInputValue(currentVisualTranscript.trimStart());
+          if (latestFinalUtteranceThisEvent && latestFinalUtteranceThisEvent !== accumulatedTranscriptRef.current) {
+              accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
+              setConsecutiveSilencePrompts(0);
+              if (sendTranscriptTimerRef.current) clearTimeout(sendTranscriptTimerRef.current);
+              sendTranscriptTimerRef.current = setTimeout(() => {
+                if (isListeningRef.current && accumulatedTranscriptRef.current.trim() !== '') {
+                    handleSendMessageRef.current(accumulatedTranscriptRef.current.trim(), 'voice');
+                }
+                sendTranscriptTimerRef.current = null;
+              }, responsePauseTimeMs);
+            }
+        } else {
+          if (latestFinalUtteranceThisEvent) {
+              accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
+              setConsecutiveSilencePrompts(0);
+            }
+        }
+      };
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        setIsListening(false);
+        if (sendTranscriptTimerRef.current) {
+          clearTimeout(sendTranscriptTimerRef.current);
+          sendTranscriptTimerRef.current = null;
+        }
+        if (event.error === 'aborted' || event.error === 'interrupted' || event.error === 'canceled') { /* Programmatic stops */ }
+        else if (event.error === 'no-speech') { /* Handled by onend for audio-only */ }
+        else if (event.error === 'audio-capture') {
+          toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
+        } else if (event.error !== 'network') {
+          toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
+        }
+      };
+      recognition.onend = () => {
+        const wasListeningWhenRecognitionEnded = isListeningRef.current;
+        setIsListening(false);
+
+        if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current || sendTranscriptTimerRef.current) {
+          return;
+        }
+
+        const transcriptToSend = accumulatedTranscriptRef.current.trim();
+
+        if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) {
+          handleSendMessageRef.current(transcriptToSend, 'voice');
+        } else if (
+            transcriptToSend === '' &&
+            wasListeningWhenRecognitionEnded &&
+            communicationModeRef.current === 'audio-only' &&
+            !isSpeakingAcknowledgementRef.current &&
+            !mainResponsePendingAfterAckRef.current
+          ) {
+          isAboutToSpeakForSilenceRef.current = true;
+          setConsecutiveSilencePrompts(currentPrompts => {
+            const newPromptCount = currentPrompts + 1;
+            if (newPromptCount >= MAX_SILENCE_PROMPTS_AUDIO_ONLY) {
+              isEndingSessionRef.current = true;
+              const endMsg = "It looks like you might have stepped away. Let's end this chat.";
+              let endMsgId: string | null = null;
+              if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) {
+                  endMsgId = addMessage(endMsg, 'ai');
+              }
+              speakTextRef.current(endMsg, endMsgId, undefined, false);
+            } else {
+              const userName = getUserNameFromHistory(messagesRef.current);
+              const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
+              speakTextRef.current(promptMessage, null, undefined, false);
+            }
+            return newPromptCount;
+          });
+        } else if (
+            communicationModeRef.current === 'audio-only' &&
+            !hasConversationEnded &&
+            !isEndingSessionRef.current &&
+            !isAboutToSpeakForSilenceRef.current &&
+            !isSpeakingAcknowledgementRef.current &&
+            !mainResponsePendingAfterAckRef.current
+          ) {
+          toggleListeningRef.current(true);
+        }
+      };
+    }
+    initializeSpeechRecognition();
     return () => {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (e) { }
+      if (recognition) {
+        try { recognition.abort(); } catch (e) { }
         recognitionRef.current = null;
       }
       if (sendTranscriptTimerRef.current) {
@@ -747,7 +760,7 @@ export default function HomePage() {
         sendTranscriptTimerRef.current = null;
       }
     };
-  }, [initializeSpeechRecognition, communicationMode]);
+  }, [communicationMode, responsePauseTimeMs, toast, addMessage]);
 
 
   const handleModeSelectionSubmit = () => {
@@ -786,10 +799,10 @@ export default function HomePage() {
 
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
-
+    
     const { default: jsPDF } = await import('jspdf');
     const { default: html2canvas } = await import('html2canvas');
-
+    
     const tempContainer = document.createElement('div');
     tempContainer.style.width = '700px';
     tempContainer.style.position = 'absolute';
@@ -898,7 +911,7 @@ export default function HomePage() {
               }
             }, 50);
           };
-          await speakTextRef.current(greetingToUse, null, onGreetingSpeechActuallyStarting, false);
+          await speakTextRef.current(greetingToUse, greetingMessageId, onGreetingSpeechActuallyStarting, false);
         } else {
              setShowPreparingGreeting(false);
              if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
