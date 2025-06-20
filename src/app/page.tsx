@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
@@ -97,8 +98,12 @@ const getUserNameFromHistory = (history: Message[]): string | null => {
 
 
 export default function HomePage() {
-  const [showSplashScreen, setShowSplashScreen] = useState(true);
-  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text');
+  const searchParams = useSearchParams();
+  const initialModeFromQuery = searchParams.get('mode') as CommunicationMode | null;
+  const isEmbeddedFromQuery = searchParams.get('embedded') === 'true';
+
+  const [showSplashScreen, setShowSplashScreen] = useState(!isEmbeddedFromQuery);
+  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [splashScreenWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
@@ -116,7 +121,7 @@ export default function HomePage() {
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -146,7 +151,12 @@ export default function HomePage() {
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
 
   const communicationModeRef = useRef(communicationMode);
-  useEffect(() => { communicationModeRef.current = communicationMode; }, [communicationMode]);
+  useEffect(() => { 
+    communicationModeRef.current = communicationMode; 
+    if (isEmbeddedFromQuery && initialModeFromQuery) {
+      setShowSplashScreen(false); // Ensure splash is hidden for embedded mode
+    }
+  }, [communicationMode, isEmbeddedFromQuery, initialModeFromQuery]);
 
   const inputValueRef = useRef(inputValue);
   useEffect(() => { inputValueRef.current = inputValue; }, [inputValue]);
@@ -742,28 +752,32 @@ export default function HomePage() {
     });
 
     try {
-      // Increased delay and added scroll manipulations to attempt to solve capture issues
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased initial delay
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
 
       const originalScrollTop = conversationLogElement.scrollTop;
-      conversationLogElement.scrollTop = 0; // Scroll to top
+      conversationLogElement.scrollTop = 0; 
+      await new Promise(resolve => setTimeout(resolve, 100)); 
+      conversationLogElement.scrollTop = conversationLogElement.scrollHeight;
       await new Promise(resolve => setTimeout(resolve, 100));
-      conversationLogElement.scrollTop = conversationLogElement.scrollHeight; // Scroll to bottom
+      conversationLogElement.scrollTop = originalScrollTop; 
       await new Promise(resolve => setTimeout(resolve, 100));
-      conversationLogElement.scrollTop = originalScrollTop; // Restore original scroll position
-      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Ensure it's scrolled to the top right before capture
+      conversationLogElement.scrollTop = 0;
+      await new Promise(resolve => setTimeout(resolve, 50)); // Short delay for final scroll to take effect
 
 
       const canvas = await html2canvas(conversationLogElement, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#FFFFFF', // Ensure a white background for the canvas
-        height: conversationLogElement.scrollHeight, // Capture the full scroll height
-        windowHeight: conversationLogElement.scrollHeight // Ensure window height matches scroll height for capture
+        backgroundColor: '#FFFFFF', 
+        height: conversationLogElement.scrollHeight, 
+        windowHeight: conversationLogElement.scrollHeight 
       });
 
       if (canvas.width === 0 || canvas.height === 0) {
-         toast({ title: "Canvas Error", description: "Captured canvas is empty or has zero dimensions. PDF cannot be generated.", variant: "destructive" });
+         toast({ title: "Canvas Capture Error", description: "Captured canvas is empty or has zero dimensions. PDF cannot be generated.", variant: "destructive" });
+         console.error("html2canvas produced an empty or zero-dimension canvas.", {width: canvas.width, height: canvas.height});
          return;
       }
 
@@ -776,21 +790,19 @@ export default function HomePage() {
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; // Margin around the content on each PDF page
+      const pageMargin = 20; 
       const contentWidth = pdfWidth - (pageMargin * 2);
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; // Initial y position for the image on the first page
+      let position = pageMargin; 
 
-      // Add the first page
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract the visible height of the first page
+      heightLeft -= (pdfHeight - (pageMargin * 2)); 
 
-      // Add more pages if needed
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; // Adjust position for the new page
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; 
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -814,8 +826,16 @@ export default function HomePage() {
 
   const handleStartNewChat = () => {
     resetConversation();
-    setAiHasInitiatedConversation(false);
-    setShowSplashScreen(true);
+    if (!isEmbeddedFromQuery) {
+      setAiHasInitiatedConversation(false);
+      setShowSplashScreen(true);
+    } else {
+      // For embedded mode, re-initialize based on the original query params
+      setSelectedInitialMode(initialModeFromQuery || 'audio-text');
+      setCommunicationMode(initialModeFromQuery || 'audio-text');
+      setShowSplashScreen(false); // Should already be false, but ensure
+      setAiHasInitiatedConversation(false); // This will trigger re-greeting
+    }
   };
 
 
@@ -994,30 +1014,19 @@ export default function HomePage() {
 
 
   const getDisplayedMessages = useCallback((): Message[] => {
-    // This function is primarily for the "Audio Only" mode's final display.
-    // For Text/Audio-Text modes, the ConversationLog directly uses the full `messages` state.
     if (hasConversationEnded) {
-      return messages; // If conversation ended, always show all messages.
+      return messages;
     }
-
-    // The following logic for showing a subset (last user + last AI, or just last AI)
-    // is relevant if we were to display a limited log *during* an audio-only session,
-    // but since the PDF capture targets the main log which gets full messages,
-    // this subset logic doesn't impact PDF generation from text/audio-text modes.
     if (messages.length === 0) {
       return [];
     }
-
     const lastMessage = messages[messages.length - 1];
-
     if (messages.length === 1 && lastMessage.sender === 'ai') {
       return [lastMessage];
     }
-
     if (lastMessage.sender === 'user') {
       return [lastMessage];
     }
-
     if (lastMessage.sender === 'ai' && messages.length > 1) {
       const secondLastMessage = messages[messages.length - 2];
       if (secondLastMessage.sender === 'user') {
@@ -1029,11 +1038,9 @@ export default function HomePage() {
     if (lastMessage.sender === 'ai') {
         return [lastMessage];
     }
-
     return [];
   }, [messages, hasConversationEnded]);
 
-  const displayedMessages = useMemo(() => getDisplayedMessages(), [getDisplayedMessages]);
   const lastOverallMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
 
@@ -1165,7 +1172,7 @@ export default function HomePage() {
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={messages} // Use full messages for Audio-Only ended view as well
+                    messages={messages}
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1210,7 +1217,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messages} // Use full messages for Text/Audio-Text chat view
+            messages={messages}
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1259,3 +1266,4 @@ export default function HomePage() {
   );
 }
 
+    
