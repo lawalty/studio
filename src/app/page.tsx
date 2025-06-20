@@ -56,8 +56,8 @@ const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 const DEFAULT_TEXT_ANIMATION_ENABLED = false;
-const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800; 
-const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50; 
+const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800;
+const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50;
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -67,7 +67,7 @@ const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
 const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
 const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
 
-const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 180; // Characters
+const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 300; // Characters - Increased from 180
 const ACKNOWLEDGEMENT_PHRASES = [
   "Okay, good question. Let me gather that information for you.",
   "Just a moment, I'm preparing your detailed response.",
@@ -84,8 +84,8 @@ const MAX_SILENCE_PROMPTS_AUDIO_ONLY = 2;
 
 
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
-  const primaryBg = 'hsl(210 13% 50%)'; 
-  const primaryFg = 'hsl(0 0% 98%)'; 
+  const primaryBg = 'hsl(210 13% 50%)';
+  const primaryFg = 'hsl(0 0% 98%)';
   const secondaryBg = 'hsl(205 70% 70%)';
   const secondaryFg = 'hsl(212 60% 25%)';
   const cardBg = 'hsl(0 0% 100%)';
@@ -101,7 +101,7 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
     .replace(/'/g, '&#039;');
 
   let html = `<div style="background-color: ${cardBg}; color: ${defaultFg}; padding: 20px; font-family: Inter, sans-serif; width: 100%; box-sizing: border-box; max-width: 700px; margin: 0 auto;">`;
-  
+
   html += `<h1 style="font-size: 20px; font-weight: bold; color: ${defaultFg}; text-align: center; margin-bottom: 20px; border-bottom: 1px solid ${mutedFg}; padding-bottom: 10px;">${sanitizedTitle}</h1>`;
 
   messagesToRender.forEach(message => {
@@ -126,7 +126,7 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
           </div>
         </div>
       `;
-    } else { 
+    } else {
       html += `
         <div style="display: flex; justify-content: flex-start; margin-bottom: 16px; align-items: flex-start;">
           <img src="${aiAvatarSrc || DEFAULT_AVATAR_PLACEHOLDER_URL}" alt="AI Avatar" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; object-fit: cover;" />
@@ -179,10 +179,10 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
   if (lastMessage.sender === 'ai') {
     if (secondLastMessage.sender === 'user') {
       return [secondLastMessage, lastMessage];
-    } else { 
+    } else {
       return [lastMessage];
     }
-  } else { 
+  } else {
     return [lastMessage];
   }
 };
@@ -190,9 +190,9 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
 
 export default function HomePage() {
   const router = useRouter();
-  const [showSplashScreen, setShowSplashScreen] = useState(true); 
-  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); 
-  
+  const [showSplashScreen, setShowSplashScreen] = useState(true);
+  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text');
+
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [splashScreenWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
@@ -209,7 +209,7 @@ export default function HomePage() {
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text'); 
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text');
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -373,7 +373,7 @@ export default function HomePage() {
     setIsSpeaking(true);
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingGreeting(false);
-    setForceFinishAnimationForMessageId(null); 
+    setForceFinishAnimationForMessageId(null);
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch (e) {/*ignore*/}
     }
@@ -388,7 +388,7 @@ export default function HomePage() {
 
     if (endedMessageId) {
         setForceFinishAnimationForMessageId(endedMessageId);
-        setTimeout(() => setForceFinishAnimationForMessageId(null), 50); 
+        setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
     }
     currentAiMessageIdRef.current = null;
 
@@ -409,7 +409,7 @@ export default function HomePage() {
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true);
     } else if (communicationModeRef.current === 'audio-text' && !isEndingSessionRef.current && !hasConversationEnded) {
-      
+
     }
   }, [hasConversationEnded]);
 
@@ -471,7 +471,7 @@ export default function HomePage() {
        if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
        elevenLabsAudioRef.current.src = '';
     }
-    setIsSpeaking(false); 
+    setIsSpeaking(false);
     if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) {
         setShowPreparingGreeting(true);
     }
@@ -560,12 +560,12 @@ export default function HomePage() {
         personaTraits: personaTraits, chatHistory: historyForGenkit,
       };
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-      
+
       if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
         const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
         await speakTextRef.current(randomAckPhrase, null, undefined);
       }
-      
+
       let newAiMessageId: string | null = null;
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
@@ -640,7 +640,7 @@ export default function HomePage() {
                sendTranscriptTimerRef.current = null;
              }, responsePauseTimeMs);
           }
-      } else { 
+      } else {
          if (latestFinalUtteranceThisEvent) {
             accumulatedTranscriptRef.current = latestFinalUtteranceThisEvent;
             setConsecutiveSilencePrompts(0);
@@ -685,7 +685,7 @@ export default function HomePage() {
           } else {
             const userName = getUserNameFromHistory(messagesRef.current);
             const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-            speakTextRef.current(promptMessage, null); 
+            speakTextRef.current(promptMessage, null);
           }
           return newPromptCount;
         });
@@ -705,12 +705,12 @@ export default function HomePage() {
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} recognitionRef.current = null; }
       if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
     };
-  }, [initializeSpeechRecognition, communicationMode]); 
+  }, [initializeSpeechRecognition, communicationMode]);
 
   const handleModeSelectionSubmit = () => {
-    resetConversation(); 
-    setCommunicationMode(selectedInitialMode); 
-    setShowSplashScreen(false); 
+    resetConversation();
+    setCommunicationMode(selectedInitialMode);
+    setShowSplashScreen(false);
   };
 
   const handleEndChatManually = () => {
@@ -733,7 +733,7 @@ export default function HomePage() {
             window.speechSynthesis.cancel();
         }
         setIsSpeaking(false);
-        setHasConversationEnded(true); 
+        setHasConversationEnded(true);
     } else {
         setHasConversationEnded(true);
     }
@@ -741,29 +741,29 @@ export default function HomePage() {
 
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
-    
+
     const tempContainer = document.createElement('div');
-    tempContainer.style.width = '700px'; 
+    tempContainer.style.width = '700px';
     tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px'; 
+    tempContainer.style.left = '-9999px';
     tempContainer.style.top = '-9999px';
-    tempContainer.style.fontFamily = 'Inter, sans-serif'; 
+    tempContainer.style.fontFamily = 'Inter, sans-serif';
 
     const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
     tempContainer.innerHTML = chatLogHtml;
     document.body.appendChild(tempContainer);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       const canvas = await html2canvas(tempContainer, {
-        scale: 2, 
-        useCORS: true, 
-        backgroundColor: '#FFFFFF', 
-        logging: false, 
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#FFFFFF',
+        logging: false,
       });
-      
-      document.body.removeChild(tempContainer); 
+
+      document.body.removeChild(tempContainer);
 
       if (canvas.width === 0 || canvas.height === 0) {
          toast({ title: "Canvas Capture Error", description: "Captured canvas is empty. PDF cannot be generated.", variant: "destructive" });
@@ -774,25 +774,25 @@ export default function HomePage() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', 
+        unit: 'pt',
         format: 'a4'
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; 
+      const pageMargin = 20;
       const contentWidth = pdfWidth - (pageMargin * 2);
-      
+
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; 
+      let position = pageMargin;
 
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); 
+      heightLeft -= (pdfHeight - (pageMargin * 2));
 
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; 
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -803,7 +803,7 @@ export default function HomePage() {
 
     } catch (error) {
       console.error("Error generating PDF:", error);
-      if (tempContainer.parentElement) { 
+      if (tempContainer.parentElement) {
          document.body.removeChild(tempContainer);
       }
       toast({ title: "PDF Generation Failed", description: "Could not save the conversation as PDF. See console for details.", variant: "destructive" });
@@ -813,7 +813,7 @@ export default function HomePage() {
   const handleStartNewChat = () => {
     resetConversation();
     setAiHasInitiatedConversation(false);
-    setShowSplashScreen(true); 
+    setShowSplashScreen(true);
   };
 
   useEffect(() => {
@@ -843,11 +843,11 @@ export default function HomePage() {
         }
         if (greetingToUse) {
           const onGreetingSpeechActuallyStarting = () => {
-            setTimeout(() => { 
-              if (!isEndingSessionRef.current) { 
+            setTimeout(() => {
+              if (!isEndingSessionRef.current) {
                 greetingMessageId = addMessage(greetingToUse!, 'ai');
                 currentAiMessageIdRef.current = greetingMessageId;
-              } 
+              }
             }, 50);
           };
           await speakTextRef.current(greetingToUse, null, onGreetingSpeechActuallyStarting);
@@ -884,7 +884,7 @@ export default function HomePage() {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
             if (source.extractedText && source.extractionStatus === 'success') {
                 textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
-            } else if (source.downloadURL) { 
+            } else if (source.downloadURL) {
                 try {
                     const response = await fetch(source.downloadURL);
                     if (response.ok) {
@@ -967,7 +967,7 @@ export default function HomePage() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key === 'A') {
         event.preventDefault();
-        router.push('/admin/login'); 
+        router.push('/admin/login');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1106,7 +1106,7 @@ export default function HomePage() {
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={messages}  
+                    messages={messages}
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1153,7 +1153,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messagesForLog} 
+            messages={messagesForLog}
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
