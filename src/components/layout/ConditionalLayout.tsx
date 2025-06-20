@@ -2,24 +2,19 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Header from '@/components/layout/Header';
-import Footer from '@/components/layout/Footer';
-import { Toaster } from "@/components/ui/toaster";
-// No longer importing useSearchParams
+// Header and Footer are no longer imported or used here
+// Toaster is also removed as it's now in RootLayout
 
 export default function ConditionalLayout({ children }: { children: ReactNode }) {
-  // Logic for isEmbedded based on useSearchParams is removed.
-  // It will now always render Header and Footer as if not embedded.
-  const isEmbedded = false; 
+  // The distinction for admin routes is no longer needed here for Header/Footer,
+  // as they are removed globally from this layout component.
+  // Admin pages will use their own layout defined in src/app/admin/layout.tsx,
+  // and front-end pages will simply not have a header or footer.
+  // All pages will be wrapped in a 'main' tag for consistent structure & styling.
 
   return (
-    <>
-      {!isEmbedded && <Header />}
-      <main className="flex-grow container mx-auto px-4 py-8">
-        {children}
-      </main>
-      {!isEmbedded && <Footer />}
-      <Toaster />
-    </>
+    <main className="flex-grow container mx-auto px-4 py-8">
+      {children}
+    </main>
   );
 }

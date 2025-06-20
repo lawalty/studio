@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
-// DO NOT import useSearchParams
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
@@ -170,18 +170,19 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
   if (lastMessage.sender === 'ai') {
     if (secondLastMessage.sender === 'user') {
       return [secondLastMessage, lastMessage];
-    } else { // AI followed by AI (e.g. initial greeting if it were somehow the 2nd last)
+    } else { 
       return [lastMessage];
     }
-  } else { // lastMessage.sender === 'user'
+  } else { 
     return [lastMessage];
   }
 };
 
 
 export default function HomePage() {
-  const [showSplashScreen, setShowSplashScreen] = useState(true); // Always true initially
-  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); // Default for splash screen
+  const router = useRouter(); // Initialize useRouter
+  const [showSplashScreen, setShowSplashScreen] = useState(true); 
+  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); 
   
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [splashScreenWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
@@ -199,7 +200,7 @@ export default function HomePage() {
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text'); // Default, will be set by splash
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text'); 
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -660,13 +661,12 @@ export default function HomePage() {
       if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} recognitionRef.current = null; }
       if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
     };
-  }, [initializeSpeechRecognition, communicationMode]); // Re-init if mode changes
+  }, [initializeSpeechRecognition, communicationMode]); 
 
   const handleModeSelectionSubmit = () => {
-    resetConversation(); // Reset existing state
-    setCommunicationMode(selectedInitialMode); // Set the new mode
-    setShowSplashScreen(false); // Hide splash screen
-    // Initial greeting will be triggered by useEffect below due to showSplashScreen=false and new communicationMode
+    resetConversation(); 
+    setCommunicationMode(selectedInitialMode); 
+    setShowSplashScreen(false); 
   };
 
   const handleEndChatManually = () => {
@@ -697,28 +697,30 @@ export default function HomePage() {
 
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
+    
     const tempContainer = document.createElement('div');
-    tempContainer.style.width = '700px'; // Standard page width for better layout
+    tempContainer.style.width = '700px'; 
     tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px'; // Position off-screen
+    tempContainer.style.left = '-9999px'; 
     tempContainer.style.top = '-9999px';
-    tempContainer.style.fontFamily = 'Inter, sans-serif'; // Ensure font consistency
+    tempContainer.style.fontFamily = 'Inter, sans-serif'; 
+    tempContainer.style.visibility = 'hidden'; // Keep it from flashing but allow rendering
 
     const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
     tempContainer.innerHTML = chatLogHtml;
     document.body.appendChild(tempContainer);
 
     try {
-      // Increased delay to ensure all styles and images within the temp HTML are loaded
       await new Promise(resolve => setTimeout(resolve, 1500)); 
 
       const canvas = await html2canvas(tempContainer, {
-        scale: 2, // Increase scale for better quality
-        useCORS: true, // Important if avatars/images are from external sources
-        backgroundColor: '#FFFFFF', // Explicit white background
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#FFFFFF', 
+        logging: false,
       });
       
-      document.body.removeChild(tempContainer); // Clean up the temporary div
+      document.body.removeChild(tempContainer); 
 
       if (canvas.width === 0 || canvas.height === 0) {
          toast({ title: "Canvas Capture Error", description: "Captured canvas is empty. PDF cannot be generated.", variant: "destructive" });
@@ -729,25 +731,25 @@ export default function HomePage() {
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
-        unit: 'pt', // points
+        unit: 'pt', 
         format: 'a4'
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; // Margin on all sides
+      const pageMargin = 20; 
       const contentWidth = pdfWidth - (pageMargin * 2);
       
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; // Initial y position for the image
+      let position = pageMargin; 
 
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract usable page height
+      heightLeft -= (pdfHeight - (pageMargin * 2)); 
 
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; // Adjust position for the part of image already drawn
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; 
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -758,7 +760,7 @@ export default function HomePage() {
 
     } catch (error) {
       console.error("Error generating PDF:", error);
-      if (tempContainer.parentElement) { // Ensure tempContainer is still in DOM before trying to remove
+      if (tempContainer.parentElement) { 
          document.body.removeChild(tempContainer);
       }
       toast({ title: "PDF Generation Failed", description: "Could not save the conversation as PDF. See console for details.", variant: "destructive" });
@@ -768,7 +770,7 @@ export default function HomePage() {
   const handleStartNewChat = () => {
     resetConversation();
     setAiHasInitiatedConversation(false);
-    setShowSplashScreen(true); // Go back to splash screen for mode selection
+    setShowSplashScreen(true); 
   };
 
   useEffect(() => {
@@ -833,7 +835,7 @@ export default function HomePage() {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
             if (source.extractedText && source.extractionStatus === 'success') {
                 textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
-            } else if (source.downloadURL) { // Fallback to fetch if extractedText not available/valid
+            } else if (source.downloadURL) { 
                 try {
                     const response = await fetch(source.downloadURL);
                     if (response.ok) {
@@ -909,6 +911,20 @@ export default function HomePage() {
     };
     fetchAllData();
   }, [toast, fetchAndProcessKnowledgeLevel]);
+
+  // Keyboard shortcut for admin panel
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key === 'A') {
+        event.preventDefault();
+        router.push('/admin');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [router]);
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => { performResetOnUnmountRef.current = resetConversation; }, [resetConversation]);
@@ -1040,7 +1056,7 @@ export default function HomePage() {
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={messages}  // Full log for ended audio-only
+                    messages={messages}  
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1085,7 +1101,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messagesForLog} // Uses getVisibleChatBubbles output
+            messages={messagesForLog} 
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
