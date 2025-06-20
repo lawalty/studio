@@ -9,7 +9,7 @@ interface ChatBubbleProps {
   avatarSrc: string; 
   textAnimationEnabled: boolean;
   textAnimationSpeedMs: number;
-  textPopulationStaggerMs: number; // New prop
+  textPopulationStaggerMs: number;
   isNewlyAddedAiMessage: boolean;
 }
 
@@ -18,7 +18,7 @@ export default function ChatBubble({
   avatarSrc,
   textAnimationEnabled,
   textAnimationSpeedMs,
-  textPopulationStaggerMs, // New prop
+  textPopulationStaggerMs,
   isNewlyAddedAiMessage
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
@@ -28,7 +28,6 @@ export default function ChatBubble({
     if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
       const letters = message.text.split('');
       const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800; 
-      // Use the new prop for stagger, ensuring a minimum reasonable delay
       const staggerDelay = textPopulationStaggerMs > 0 ? textPopulationStaggerMs : 50;
 
       return letters.map((letter, index) => (
@@ -37,14 +36,16 @@ export default function ChatBubble({
           className="scale-in-letter"
           style={{
             animationDuration: `${animationDuration}ms`,
-            animationDelay: `${index * staggerDelay}ms`, // Use new stagger prop
+            animationDelay: `${index * staggerDelay}ms`,
           }}
         >
           {letter === ' ' ? '\u00A0' : letter} 
         </span>
       ));
     }
-    return <p className="text-sm whitespace-pre-wrap">{message.text}</p>;
+    // For non-animated AI messages or user messages, just return the plain text.
+    // The animated spans will be children of this p tag if animation occurs.
+    return message.text; 
   };
 
   return (
@@ -67,7 +68,8 @@ export default function ChatBubble({
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        {renderTextContent()}
+        {/* Changed text-sm to text-xs for the paragraph wrapping the content */}
+        <p className="text-xs whitespace-pre-wrap">{renderTextContent()}</p>
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
