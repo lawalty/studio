@@ -419,10 +419,7 @@ export default function HomePage() {
 
   const speakText = useCallback((text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false) => {
     return new Promise<void>((resolveSpeakText) => {
-      // --- Universal Cleanup: Cancel any ongoing speech ---
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-      }
+      if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
       if (elevenLabsAudioRef.current) {
         elevenLabsAudioRef.current.pause();
         if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
@@ -431,19 +428,14 @@ export default function HomePage() {
         elevenLabsAudioRef.current.src = '';
       }
       currentAiMessageIdRef.current = messageIdForAnimationSync;
-      if (isAcknowledgement) {
-        isSpeakingAcknowledgementRef.current = true;
-      }
-      
+      if (isAcknowledgement) isSpeakingAcknowledgementRef.current = true;
+
       const commonCleanupAndResolve = () => {
-        if (isSpeakingAcknowledgementRef.current && isAcknowledgement) {
-          isSpeakingAcknowledgementRef.current = false;
-        }
+        if (isSpeakingAcknowledgementRef.current && isAcknowledgement) isSpeakingAcknowledgementRef.current = false;
         handleAudioProcessEnd();
         resolveSpeakText();
       };
       
-      // --- Exit early if no speech is needed ---
       if (communicationModeRef.current === 'text-only' || text.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
         onSpeechStartCallback?.();
         handleAudioProcessEnd();
@@ -451,9 +443,7 @@ export default function HomePage() {
           setForceFinishAnimationForMessageId(messageIdForAnimationSync);
           setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
         }
-        if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
-          setHasConversationEnded(true);
-        }
+        if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) setHasConversationEnded(true);
         resolveSpeakText();
         return;
       }
@@ -461,7 +451,7 @@ export default function HomePage() {
       if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
       if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
       setIsSpeaking(false);
-      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) { setShowPreparingGreeting(true); }
+      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) setShowPreparingGreeting(true);
 
       const tryBrowserFallback = () => {
         if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -474,11 +464,9 @@ export default function HomePage() {
           if (selectedVoice) utterance.voice = selectedVoice;
           
           utterance.onstart = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-          utterance.onend = () => { commonCleanupAndResolve(); };
+          utterance.onend = () => commonCleanupAndResolve();
           utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
-            if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
-              console.error("Browser TTS Error:", event.error);
-            }
+            if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') console.error("Browser TTS Error:", event.error);
             commonCleanupAndResolve();
           };
           window.speechSynthesis.speak(utterance);
@@ -488,59 +476,43 @@ export default function HomePage() {
         }
       };
 
-      // --- Attempt API Speech ---
       if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
         const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
         const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
         const body = JSON.stringify({ text: text.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true } });
         
         fetch(ttsUrl, { method: "POST", headers, body })
-          .then(response => {
-            if (!response.ok) { throw new Error(`API returned ${response.status}`); }
-            return response.blob();
-          })
+          .then(response => { if (!response.ok) throw new Error(`API returned ${response.status}`); return response.blob(); })
           .then(audioBlob => {
-            if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) { throw new Error('Received invalid or empty audio data from API.'); }
-            
+            if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) throw new Error('Received invalid or empty audio data from API.');
             const audioUrl = URL.createObjectURL(audioBlob);
             if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
             const audio = elevenLabsAudioRef.current;
             audio.src = audioUrl;
-
             audio.onplay = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-            audio.onended = () => { commonCleanupAndResolve(); };
+            audio.onended = () => commonCleanupAndResolve();
             audio.onerror = (e) => {
-              const error = (e.target as HTMLAudioElement)?.error;
-              console.warn("HTMLAudioElement.onerror triggered:", error?.message);
-              toast({ title: "TTS Playback Error", description: `An unexpected audio error occurred.`, variant: "destructive" });
+              console.warn("HTMLAudioElement.onerror triggered:", (e.target as HTMLAudioElement)?.error?.message);
               tryBrowserFallback();
             };
-
             const playPromise = audio.play();
-            if (playPromise !== undefined) {
-              playPromise.catch(error => {
-                if (error.name === 'AbortError') {
-                   resolveSpeakText();
-                } else {
-                  console.error("Error during audio.play():", error);
-                  toast({ title: "Playback Start Error", description: `Could not start playing audio: ${error.message}`, variant: "destructive" });
-                  tryBrowserFallback();
-                }
-              });
-            }
+            playPromise?.catch(error => {
+              if (error.name === 'AbortError') { resolveSpeakText(); }
+              else {
+                console.error("Error during audio.play():", error);
+                toast({ title: "Playback Start Error", description: `Could not start playing audio: ${error.message}`, variant: "destructive" });
+                tryBrowserFallback();
+              }
+            });
           })
           .catch(error => {
             console.error("Error in API speech path:", error);
-            const errorMessage = error?.message || "";
-            if (error.name === 'TypeError' && errorMessage.includes('Failed to fetch')) {
-              setCorsErrorEncountered(true);
-            }
+            if ((error?.message || "").includes('Failed to fetch')) setCorsErrorEncountered(true);
             toast({ title: `TTS API Error`, description: `Using browser default.`, variant: "destructive" });
             tryBrowserFallback();
           });
           return;
       }
-      
       tryBrowserFallback();
     });
   }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, communicationMode]);
@@ -628,23 +600,21 @@ export default function HomePage() {
   useEffect(() => {
     let recognition: SpeechRecognition | null = null;
     const initializeSpeechRecognition = () => {
-        if (typeof window === 'undefined') return;
+        if (typeof window === 'undefined') { return; }
         const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognitionAPI) {
-            recognition = new SpeechRecognitionAPI();
-            recognitionRef.current = recognition;
-        } else {
+        if (!SpeechRecognitionAPI) {
             if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
               toast({ title: "Mic Not Supported", description: "Speech recognition is not available in your browser.", variant: "destructive" });
             }
             return;
         }
-        
-        if (!recognition) return;
+        recognition = new SpeechRecognitionAPI();
+        recognitionRef.current = recognition;
         
         recognition.continuous = communicationModeRef.current === 'audio-text';
         recognition.interimResults = true;
         recognition.lang = 'en-US';
+
         recognition.onresult = (event: SpeechRecognitionEvent) => {
           if (isSpeakingRef.current || isSendingMessage) {
             if(recognitionRef.current && isListeningRef.current) try { recognitionRef.current.abort(); } catch(e){}
@@ -681,20 +651,22 @@ export default function HomePage() {
               }
           }
         };
+
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
           setIsListening(false);
           if (sendTranscriptTimerRef.current) {
             clearTimeout(sendTranscriptTimerRef.current);
             sendTranscriptTimerRef.current = null;
           }
-          if (event.error === 'aborted' || event.error === 'interrupted' || event.error === 'canceled') { /* Programmatic stops */ }
-          else if (event.error === 'no-speech') { /* Handled by onend for audio-only */ }
-          else if (event.error === 'audio-capture') {
+          if (['aborted', 'interrupted', 'canceled'].includes(event.error)) return;
+          if (event.error === 'no-speech') return; // Handled by onend for audio-only
+          if (event.error === 'audio-capture') {
             toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
           } else if (event.error !== 'network') {
             toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
           }
         };
+
         recognition.onend = () => {
           const wasListeningWhenRecognitionEnded = isListeningRef.current;
           setIsListening(false);
@@ -721,14 +693,26 @@ export default function HomePage() {
                 isEndingSessionRef.current = true;
                 const endMsg = "It looks like you might have stepped away. Let's end this chat.";
                 let endMsgId: string | null = null;
-                if (!messagesRef.current.find(m => m.text === endMsg && m.sender === 'ai')) {
-                    endMsgId = addMessage(endMsg, 'ai');
-                }
-                speakTextRef.current(endMsg, endMsgId, undefined, false);
+                const onEndSpeechStart = () => {
+                    setTimeout(() => {
+                        if (!messagesRef.current.some(m => m.text === endMsg && m.sender === 'ai')) {
+                            endMsgId = addMessage(endMsg, 'ai');
+                            currentAiMessageIdRef.current = endMsgId;
+                        }
+                    }, 50);
+                };
+                speakTextRef.current(endMsg, null, onEndSpeechStart, false);
               } else {
                 const userName = getUserNameFromHistory(messagesRef.current);
                 const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
-                speakTextRef.current(promptMessage, null, undefined, false);
+                let promptMsgId: string | null = null;
+                const onPromptSpeechStart = () => {
+                    setTimeout(() => {
+                        promptMsgId = addMessage(promptMessage, 'ai');
+                        currentAiMessageIdRef.current = promptMsgId;
+                    }, 50);
+                };
+                speakTextRef.current(promptMessage, null, onPromptSpeechStart, false);
               }
               return newPromptCount;
             });
@@ -746,8 +730,8 @@ export default function HomePage() {
     }
     initializeSpeechRecognition();
     return () => {
-      if (recognition) {
-        try { recognition.abort(); } catch (e) { }
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort(); } catch (e) { }
         recognitionRef.current = null;
       }
       if (sendTranscriptTimerRef.current) {
@@ -795,8 +779,8 @@ export default function HomePage() {
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
     
-    const { default: jsPDF } = await import('jspdf');
-    const { default: html2canvas } = await import('html2canvas');
+    const jsPDF = (await import('jspdf')).default;
+    const html2canvas = (await import('html2canvas')).default;
     
     const tempContainer = document.createElement('div');
     tempContainer.style.width = '700px';
