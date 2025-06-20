@@ -497,8 +497,9 @@ export default function HomePage() {
             };
             const playPromise = audio.play();
             playPromise?.catch(error => {
-              if (error.name === 'AbortError') { resolveSpeakText(); }
-              else {
+              if (error.name === 'AbortError') { 
+                resolveSpeakText(); 
+              } else {
                 console.error("Error during audio.play():", error);
                 toast({ title: "Playback Start Error", description: `Could not start playing audio: ${error.message}`, variant: "destructive" });
                 tryBrowserFallback();
@@ -708,8 +709,10 @@ export default function HomePage() {
                 let promptMsgId: string | null = null;
                 const onPromptSpeechStart = () => {
                     setTimeout(() => {
-                        promptMsgId = addMessage(promptMessage, 'ai');
-                        currentAiMessageIdRef.current = promptMsgId;
+                       if (!messagesRef.current.some(m => m.text === promptMessage && m.sender === 'ai')) {
+                           promptMsgId = addMessage(promptMessage, 'ai');
+                           currentAiMessageIdRef.current = promptMsgId;
+                        }
                     }, 50);
                 };
                 speakTextRef.current(promptMessage, null, onPromptSpeechStart, false);
