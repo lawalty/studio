@@ -1,48 +1,62 @@
 
-import type { Message } from '@/app/page'; 
+import type { Message } from '@/app/page';
 import { cn } from "@/lib/utils";
 import { User, Bot } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface ChatBubbleProps {
   message: Message;
-  avatarSrc: string; 
+  avatarSrc: string;
   textAnimationEnabled: boolean;
   textAnimationSpeedMs: number;
   textPopulationStaggerMs: number;
   isNewlyAddedAiMessage: boolean;
-  forceFinishAnimation: boolean; 
+  forceFinishAnimation: boolean;
 }
 
-export default function ChatBubble({ 
-  message, 
+export default function ChatBubble({
+  message,
   avatarSrc,
   textAnimationEnabled,
   textAnimationSpeedMs,
   textPopulationStaggerMs,
   isNewlyAddedAiMessage,
-  forceFinishAnimation 
+  forceFinishAnimation
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
-  const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png"; 
+  const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png";
   const textContentRef = useRef<HTMLParagraphElement>(null);
+  const [hasAnimationBeenForced, setHasAnimationBeenForced] = useState(false);
+
+  // Reset forced state if the message.id changes, ensuring clean state for new messages if component were reused.
+  useEffect(() => {
+    setHasAnimationBeenForced(false);
+  }, [message.id]);
 
   useEffect(() => {
-    if (forceFinishAnimation && textContentRef.current && message.sender === 'ai') {
-      const letterSpans = textContentRef.current.querySelectorAll('.scale-in-letter');
-      letterSpans.forEach(span => {
-        (span as HTMLElement).style.opacity = '1';
-        (span as HTMLElement).style.transform = 'scale(1) translateX(0)';
-        (span as HTMLElement).style.animation = 'none';
-      });
+    if (forceFinishAnimation && message.sender === 'ai' && !hasAnimationBeenForced) {
+      if (textContentRef.current) {
+        const letterSpans = textContentRef.current.querySelectorAll('.scale-in-letter');
+        letterSpans.forEach(span => {
+          (span as HTMLElement).style.opacity = '1';
+          (span as HTMLElement).style.transform = 'scale(1) translateX(0)';
+          (span as HTMLElement).style.animation = 'none';
+        });
+      }
+      setHasAnimationBeenForced(true);
     }
-  }, [forceFinishAnimation, message.sender]);
+  }, [forceFinishAnimation, message.id, message.sender, hasAnimationBeenForced]);
+
 
   const renderTextContent = () => {
-    if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage && !forceFinishAnimation) {
+    if (hasAnimationBeenForced) { // If animation was forced to end, render plain text.
+      return message.text;
+    }
+
+    if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
       const letters = message.text.split('');
-      const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800; 
+      const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800;
       const staggerDelay = textPopulationStaggerMs > 0 ? textPopulationStaggerMs : 50;
 
       return letters.map((letter, index) => (
@@ -54,11 +68,11 @@ export default function ChatBubble({
             animationDelay: `${index * staggerDelay}ms`,
           }}
         >
-          {letter === ' ' ? '\u00A0' : letter} 
+          {letter === ' ' ? '\u00A0' : letter}
         </span>
       ));
     }
-    return message.text; 
+    return message.text; // Default for user messages or non-animated/already-finished AI messages
   };
 
   return (
