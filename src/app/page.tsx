@@ -704,7 +704,7 @@ export default function HomePage() {
     tempContainer.style.left = '-9999px'; 
     tempContainer.style.top = '-9999px';
     tempContainer.style.fontFamily = 'Inter, sans-serif'; 
-    tempContainer.style.visibility = 'hidden';
+    // tempContainer.style.visibility = 'hidden'; // Removed this line
 
     const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
     tempContainer.innerHTML = chatLogHtml;
@@ -717,7 +717,7 @@ export default function HomePage() {
         scale: 2, 
         useCORS: true, 
         backgroundColor: '#FFFFFF', 
-        logging: false,
+        logging: false, // Set to true for debugging html2canvas if needed
       });
       
       document.body.removeChild(tempContainer); 
@@ -917,7 +917,7 @@ export default function HomePage() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key === 'A') {
         event.preventDefault();
-        router.push('/admin/login'); // Updated to go to login page
+        router.push('/admin/login'); 
       }
     };
     window.addEventListener('keydown', handleKeyDown);
