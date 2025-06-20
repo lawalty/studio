@@ -743,7 +743,7 @@ export default function HomePage() {
 
     try {
       // Increased delay and added scroll manipulations to attempt to solve capture issues
-      await new Promise(resolve => setTimeout(resolve, 750));
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased initial delay
 
       const originalScrollTop = conversationLogElement.scrollTop;
       conversationLogElement.scrollTop = 0; // Scroll to top
@@ -757,9 +757,9 @@ export default function HomePage() {
       const canvas = await html2canvas(conversationLogElement, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#FFFFFF',
-        height: conversationLogElement.scrollHeight,
-        windowHeight: conversationLogElement.scrollHeight
+        backgroundColor: '#FFFFFF', // Ensure a white background for the canvas
+        height: conversationLogElement.scrollHeight, // Capture the full scroll height
+        windowHeight: conversationLogElement.scrollHeight // Ensure window height matches scroll height for capture
       });
 
       if (canvas.width === 0 || canvas.height === 0) {
@@ -776,19 +776,21 @@ export default function HomePage() {
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20;
+      const pageMargin = 20; // Margin around the content on each PDF page
       const contentWidth = pdfWidth - (pageMargin * 2);
 
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin;
+      let position = pageMargin; // Initial y position for the image on the first page
 
+      // Add the first page
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2));
+      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract the visible height of the first page
 
+      // Add more pages if needed
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin;
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; // Adjust position for the new page
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -1112,8 +1114,7 @@ export default function HomePage() {
     height: communicationMode === 'audio-only' ? 200 : 120,
     className: cn(
       "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
-       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak",
-       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow"
+       isDisplayingAnimatedAvatar ? "avatar-is-speaking-glow" : ((isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak")
     ),
     priority: true,
     unoptimized: isDisplayingAnimatedAvatar || currentAvatarToDisplay.startsWith('data:image/') || currentAvatarToDisplay.startsWith('blob:') || !currentAvatarToDisplay.startsWith('https://'),
@@ -1164,7 +1165,7 @@ export default function HomePage() {
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={displayedMessages} 
+                    messages={messages} // Use full messages for Audio-Only ended view as well
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1209,7 +1210,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messages} 
+            messages={messages} // Use full messages for Text/Audio-Text chat view
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
