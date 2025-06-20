@@ -747,11 +747,11 @@ export default function HomePage() {
 
       const originalScrollTop = conversationLogElement.scrollTop;
       conversationLogElement.scrollTop = 0; // Scroll to top
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
       conversationLogElement.scrollTop = conversationLogElement.scrollHeight; // Scroll to bottom
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
       conversationLogElement.scrollTop = originalScrollTop; // Restore original scroll position
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
 
 
       const canvas = await html2canvas(conversationLogElement, {
@@ -788,7 +788,7 @@ export default function HomePage() {
       heightLeft -= (pdfHeight - (pageMargin * 2));
 
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2));
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
@@ -992,9 +992,16 @@ export default function HomePage() {
 
 
   const getDisplayedMessages = useCallback((): Message[] => {
+    // This function is primarily for the "Audio Only" mode's final display.
+    // For Text/Audio-Text modes, the ConversationLog directly uses the full `messages` state.
     if (hasConversationEnded) {
-      return messages;
+      return messages; // If conversation ended, always show all messages.
     }
+
+    // The following logic for showing a subset (last user + last AI, or just last AI)
+    // is relevant if we were to display a limited log *during* an audio-only session,
+    // but since the PDF capture targets the main log which gets full messages,
+    // this subset logic doesn't impact PDF generation from text/audio-text modes.
     if (messages.length === 0) {
       return [];
     }
@@ -1014,15 +1021,14 @@ export default function HomePage() {
       if (secondLastMessage.sender === 'user') {
         return [secondLastMessage, lastMessage];
       } else {
-        return [lastMessage]; // Handles AI -> AI (e.g. silence prompt after greeting)
+        return [lastMessage];
       }
     }
-    // Fallback for single AI message if not caught above, or other edge cases.
     if (lastMessage.sender === 'ai') {
         return [lastMessage];
     }
 
-    return []; // Should ideally not be reached if messages.length > 0
+    return [];
   }, [messages, hasConversationEnded]);
 
   const displayedMessages = useMemo(() => getDisplayedMessages(), [getDisplayedMessages]);
@@ -1106,8 +1112,8 @@ export default function HomePage() {
     height: communicationMode === 'audio-only' ? 200 : 120,
     className: cn(
       "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300",
-       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak", // Pulse static avatar
-       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow" // Glow animated avatar
+       (isSpeaking && !isDisplayingAnimatedAvatar) && "animate-pulse-speak",
+       isDisplayingAnimatedAvatar && "avatar-is-speaking-glow"
     ),
     priority: true,
     unoptimized: isDisplayingAnimatedAvatar || currentAvatarToDisplay.startsWith('data:image/') || currentAvatarToDisplay.startsWith('blob:') || !currentAvatarToDisplay.startsWith('https://'),
@@ -1158,7 +1164,7 @@ export default function HomePage() {
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={displayedMessages} // Uses potentially filtered if not all desired
+                    messages={displayedMessages} 
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1203,7 +1209,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={messages} // Ensure full message history is passed here
+            messages={messages} 
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1251,3 +1257,4 @@ export default function HomePage() {
     </div>
   );
 }
+
