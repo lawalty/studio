@@ -9,6 +9,7 @@ interface ChatBubbleProps {
   avatarSrc: string; 
   textAnimationEnabled: boolean;
   textAnimationSpeedMs: number;
+  textPopulationStaggerMs: number; // New prop
   isNewlyAddedAiMessage: boolean;
 }
 
@@ -17,6 +18,7 @@ export default function ChatBubble({
   avatarSrc,
   textAnimationEnabled,
   textAnimationSpeedMs,
+  textPopulationStaggerMs, // New prop
   isNewlyAddedAiMessage
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
@@ -26,8 +28,8 @@ export default function ChatBubble({
     if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
       const letters = message.text.split('');
       const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800; 
-      // Stagger delay: ensure it's not too fast for very short animation durations or very long text
-      const baseStagger = Math.max(10, Math.min(50, animationDuration / (letters.length * 2))); 
+      // Use the new prop for stagger, ensuring a minimum reasonable delay
+      const staggerDelay = textPopulationStaggerMs > 0 ? textPopulationStaggerMs : 50;
 
       return letters.map((letter, index) => (
         <span
@@ -35,10 +37,10 @@ export default function ChatBubble({
           className="scale-in-letter"
           style={{
             animationDuration: `${animationDuration}ms`,
-            animationDelay: `${index * baseStagger}ms`,
+            animationDelay: `${index * staggerDelay}ms`, // Use new stagger prop
           }}
         >
-          {letter === ' ' ? '\u00A0' : letter} {/* Preserve spaces correctly */}
+          {letter === ' ' ? '\u00A0' : letter} 
         </span>
       ));
     }

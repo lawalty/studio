@@ -56,7 +56,8 @@ const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 const DEFAULT_TEXT_ANIMATION_ENABLED = false;
-const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800;
+const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800; // Duration of each letter's animation
+const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50; // Delay between letters starting animation
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -209,6 +210,7 @@ export default function HomePage() {
   const [showPreparingGreeting, setShowPreparingGreeting] = useState(false);
   const [textAnimationEnabled, setTextAnimationEnabled] = useState<boolean>(DEFAULT_TEXT_ANIMATION_ENABLED);
   const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<number>(DEFAULT_TEXT_ANIMATION_SPEED_MS);
+  const [textPopulationStaggerMs, setTextPopulationStaggerMs] = useState<number>(DEFAULT_TEXT_POPULATION_STAGGER_MS);
 
   const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
   const [knowledgeFileSummaryMedium, setKnowledgeFileSummaryMedium] = useState<string>('');
@@ -717,7 +719,7 @@ export default function HomePage() {
         scale: 2, 
         useCORS: true, 
         backgroundColor: '#FFFFFF', 
-        logging: false, // Set to true for debugging html2canvas if needed
+        logging: false, 
       });
       
       document.body.removeChild(tempContainer); 
@@ -890,6 +892,7 @@ export default function HomePage() {
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
           setTextAnimationEnabled(typeof assets.enableTextAnimation === 'boolean' ? assets.enableTextAnimation : DEFAULT_TEXT_ANIMATION_ENABLED);
           setTextAnimationSpeedMs(assets.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : Number(assets.textAnimationSpeedMs));
+          setTextPopulationStaggerMs(assets.textPopulationStaggerMs === undefined ? DEFAULT_TEXT_POPULATION_STAGGER_MS : Number(assets.textPopulationStaggerMs));
         } else {
             setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
             setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
@@ -901,6 +904,7 @@ export default function HomePage() {
             setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
             setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
             setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
+            setTextPopulationStaggerMs(DEFAULT_TEXT_POPULATION_STAGGER_MS);
         }
       } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh); if (highError) anyCorsError = true;
@@ -912,7 +916,6 @@ export default function HomePage() {
     fetchAllData();
   }, [toast, fetchAndProcessKnowledgeLevel]);
 
-  // Keyboard shortcut for admin panel
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key === 'A') {
@@ -1060,6 +1063,7 @@ export default function HomePage() {
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
+                    textPopulationStaggerMs={textPopulationStaggerMs}
                     lastOverallMessageId={lastOverallMessage?.id || null}
                     hasConversationEnded={hasConversationEnded}
                   />
@@ -1105,6 +1109,7 @@ export default function HomePage() {
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
+            textPopulationStaggerMs={textPopulationStaggerMs}
             lastOverallMessageId={lastOverallMessage?.id || null}
             hasConversationEnded={hasConversationEnded}
           />

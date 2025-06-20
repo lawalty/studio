@@ -9,6 +9,7 @@ interface ConversationLogProps {
   avatarSrc: string;
   textAnimationEnabled: boolean;
   textAnimationSpeedMs: number;
+  textPopulationStaggerMs: number; // New prop
   lastOverallMessageId: string | null; 
   hasConversationEnded: boolean;
 }
@@ -18,6 +19,7 @@ export default function ConversationLog({
   avatarSrc,
   textAnimationEnabled,
   textAnimationSpeedMs,
+  textPopulationStaggerMs, // New prop
   lastOverallMessageId,
   hasConversationEnded 
 }: ConversationLogProps) {
@@ -31,15 +33,12 @@ export default function ConversationLog({
       viewport.scrollTop = viewport.scrollHeight; 
     };
     
-    // Using requestAnimationFrame ensures scrolling happens after the DOM has updated
-    // If animations are involved for new messages, a slight delay might sometimes be needed,
-    // but usually, rAF is sufficient for post-render scroll adjustments.
     const animationFrameId = requestAnimationFrame(scrollToBottom);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [messages]); // Scroll whenever displayed messages change
+  }, [messages]); 
 
   return (
     <ScrollArea
@@ -57,6 +56,7 @@ export default function ConversationLog({
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
+            textPopulationStaggerMs={textPopulationStaggerMs} // Pass down
             isNewlyAddedAiMessage={msg.sender === 'ai' && msg.id === lastOverallMessageId && !hasConversationEnded}
           />
         ))}

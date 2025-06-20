@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Film, Zap, KeyRound, ShieldCheck } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Film, Zap, KeyRound, ShieldCheck, Clock } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -32,7 +32,8 @@ const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
 const DEFAULT_ENABLE_TEXT_ANIMATION = false;
-const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800;
+const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800; // Duration of each letter's animation
+const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50; // Delay between letters starting animation
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 
 export default function SiteSettingsPage() {
@@ -41,7 +42,8 @@ export default function SiteSettingsPage() {
   const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
   const [enableTextAnimation, setEnableTextAnimation] = useState<boolean>(DEFAULT_ENABLE_TEXT_ANIMATION);
   const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<string>(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
-  const [adminPassword, setAdminPassword] = useState<string>(''); // Initialize as empty, fetch will populate
+  const [textPopulationStaggerMs, setTextPopulationStaggerMs] = useState<string>(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
+  const [adminPassword, setAdminPassword] = useState<string>('');
   const [newAdminPassword, setNewAdminPassword] = useState<string>('');
 
 
@@ -63,23 +65,23 @@ export default function SiteSettingsPage() {
           setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
           setEnableTextAnimation(typeof data.enableTextAnimation === 'boolean' ? data.enableTextAnimation : DEFAULT_ENABLE_TEXT_ANIMATION);
           setTextAnimationSpeedMs(data.textAnimationSpeedMs === undefined ? String(DEFAULT_TEXT_ANIMATION_SPEED_MS) : String(data.textAnimationSpeedMs));
+          setTextPopulationStaggerMs(data.textPopulationStaggerMs === undefined ? String(DEFAULT_TEXT_POPULATION_STAGGER_MS) : String(data.textPopulationStaggerMs));
           
           if (!data.adminPassword || data.adminPassword.trim() === '') {
-            setAdminPassword(DEFAULT_ADMIN_PASSWORD); // For UI display if fetched is empty
+            setAdminPassword(DEFAULT_ADMIN_PASSWORD); 
             await updateDoc(docRef, { adminPassword: DEFAULT_ADMIN_PASSWORD });
             toast({ title: "Admin Password Initialized", description: "A default admin password has been set." });
           } else {
             setAdminPassword(data.adminPassword);
           }
         } else {
-          // Document doesn't exist, create it with all defaults including admin password
           const defaultSettings = {
             splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             splashWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE,
             enableTextAnimation: DEFAULT_ENABLE_TEXT_ANIMATION,
             textAnimationSpeedMs: DEFAULT_TEXT_ANIMATION_SPEED_MS,
+            textPopulationStaggerMs: DEFAULT_TEXT_POPULATION_STAGGER_MS,
             adminPassword: DEFAULT_ADMIN_PASSWORD,
-            // Preserve other potential default fields if added in future from persona page
             avatarUrl: "https://placehold.co/150x150.png",
             animatedAvatarUrl: "https://placehold.co/150x150.png?text=GIF",
             personaTraits: "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.",
@@ -92,17 +94,18 @@ export default function SiteSettingsPage() {
           setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
           setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
           setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
+          setTextPopulationStaggerMs(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
           setAdminPassword(DEFAULT_ADMIN_PASSWORD);
           toast({ title: "Initial Settings Created", description: "Default site settings and admin password have been saved." });
         }
       } catch (error) {
         console.error("Error fetching/initializing site assets from Firestore:", error);
-        // Fallback to UI defaults if critical error
         setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
         setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
         setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
         setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
-        setAdminPassword(DEFAULT_ADMIN_PASSWORD); // Show default in UI on error
+        setTextPopulationStaggerMs(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
+        setAdminPassword(DEFAULT_ADMIN_PASSWORD); 
         toast({
           title: "Error Loading Settings",
           description: "Could not fetch site settings. Defaults shown. Please check console.",
@@ -126,7 +129,7 @@ export default function SiteSettingsPage() {
     }
   };
 
-  const handleSplashWelcomeMessageChange = (event: React.ChangeEvent<Textarea>) => {
+  const handleSplashWelcomeMessageChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSplashWelcomeMessage(event.target.value);
   };
 
@@ -134,6 +137,13 @@ export default function SiteSettingsPage() {
     const value = e.target.value;
     if (value === '' || /^\d*$/.test(value)) {
       setTextAnimationSpeedMs(value);
+    }
+  };
+  
+  const handleTextPopulationStaggerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (value === '' || /^\d*$/.test(value)) {
+      setTextPopulationStaggerMs(value);
     }
   };
 
@@ -159,6 +169,8 @@ export default function SiteSettingsPage() {
 
     const speedMs = parseInt(textAnimationSpeedMs, 10);
     const validAnimationSpeed = isNaN(speedMs) || speedMs <= 0 ? DEFAULT_TEXT_ANIMATION_SPEED_MS : speedMs;
+    const staggerMs = parseInt(textPopulationStaggerMs, 10);
+    const validPopulationStagger = isNaN(staggerMs) || staggerMs < 0 ? DEFAULT_TEXT_POPULATION_STAGGER_MS : staggerMs;
 
 
     try {
@@ -193,19 +205,23 @@ export default function SiteSettingsPage() {
         dataToUpdate.textAnimationSpeedMs = validAnimationSpeed;
         changesMade = true;
       }
+      
+      if (validPopulationStagger !== (currentData.textPopulationStaggerMs === undefined ? DEFAULT_TEXT_POPULATION_STAGGER_MS : currentData.textPopulationStaggerMs)) {
+        dataToUpdate.textPopulationStaggerMs = validPopulationStagger;
+        changesMade = true;
+      }
 
       if (changesMade) {
         if (currentDocSnap.exists()) {
           await updateDoc(siteAssetsDocRef, dataToUpdate);
         } else {
-          // This case should be rare due to useEffect initialization, but handle defensively
           const fullDataForNewDoc = {
             splashImageUrl: dataToUpdate.splashImageUrl !== undefined ? dataToUpdate.splashImageUrl : DEFAULT_SPLASH_IMAGE_SRC,
             splashWelcomeMessage: dataToUpdate.splashWelcomeMessage !== undefined ? dataToUpdate.splashWelcomeMessage : DEFAULT_SPLASH_WELCOME_MESSAGE,
             enableTextAnimation: dataToUpdate.enableTextAnimation !== undefined ? dataToUpdate.enableTextAnimation : DEFAULT_ENABLE_TEXT_ANIMATION,
             textAnimationSpeedMs: dataToUpdate.textAnimationSpeedMs !== undefined ? dataToUpdate.textAnimationSpeedMs : DEFAULT_TEXT_ANIMATION_SPEED_MS,
-            adminPassword: currentData.adminPassword || DEFAULT_ADMIN_PASSWORD, // Preserve existing or default password
-             // Preserve other potential default fields
+            textPopulationStaggerMs: dataToUpdate.textPopulationStaggerMs !== undefined ? dataToUpdate.textPopulationStaggerMs : DEFAULT_TEXT_POPULATION_STAGGER_MS,
+            adminPassword: currentData.adminPassword || DEFAULT_ADMIN_PASSWORD, 
             avatarUrl: currentData.avatarUrl || "https://placehold.co/150x150.png",
             animatedAvatarUrl: currentData.animatedAvatarUrl || "https://placehold.co/150x150.png?text=GIF",
             personaTraits: currentData.personaTraits || "You are AI Blair...",
@@ -241,8 +257,8 @@ export default function SiteSettingsPage() {
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     try {
       await updateDoc(siteAssetsDocRef, { adminPassword: newAdminPassword.trim() });
-      setAdminPassword(newAdminPassword.trim()); // Update current password display if needed (though not shown)
-      setNewAdminPassword(''); // Clear the input field
+      setAdminPassword(newAdminPassword.trim()); 
+      setNewAdminPassword(''); 
       toast({ title: "Admin Password Updated", description: "The admin panel password has been successfully changed." });
     } catch (error) {
       console.error("Error updating admin password:", error);
@@ -266,6 +282,7 @@ export default function SiteSettingsPage() {
   const handleResetAnimationSettings = () => {
     setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
     setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
+    setTextPopulationStaggerMs(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
     toast({ title: "Animation Settings Reset", description: "Animation settings reset to default. Click 'Save Site Settings' to make them permanent."});
   };
 
@@ -421,7 +438,9 @@ export default function SiteSettingsPage() {
                   />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="textAnimationSpeedMs" className="font-medium">Animation Speed (milliseconds)</Label>
+                <Label htmlFor="textAnimationSpeedMs" className="font-medium flex items-center gap-1.5">
+                   <Clock className="h-4 w-4" /> Letter Animation Duration (ms)
+                </Label>
                 <Input
                   id="textAnimationSpeedMs"
                   type="number"
@@ -433,7 +452,25 @@ export default function SiteSettingsPage() {
                   disabled={!enableTextAnimation || isLoadingData}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Total duration for each letter's animation. Default: {DEFAULT_TEXT_ANIMATION_SPEED_MS}ms. Lower values are faster.
+                  Duration for each letter's individual animation. Default: {DEFAULT_TEXT_ANIMATION_SPEED_MS}ms. Lower values are faster per letter.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="textPopulationStaggerMs" className="font-medium flex items-center gap-1.5">
+                    <Zap className="h-4 w-4" /> Text Population Stagger (ms)
+                </Label>
+                <Input
+                  id="textPopulationStaggerMs"
+                  type="number"
+                  value={textPopulationStaggerMs}
+                  onChange={handleTextPopulationStaggerChange}
+                  placeholder="e.g., 50"
+                  min="0"
+                  step="5"
+                  disabled={!enableTextAnimation || isLoadingData}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Delay between each letter starting its animation. Default: {DEFAULT_TEXT_POPULATION_STAGGER_MS}ms. Lower values make text appear faster overall.
                 </p>
               </div>
             </>
