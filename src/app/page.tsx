@@ -19,6 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
+import type { FirebaseOptions } from 'firebase/app';
 
 
 export interface Message {
@@ -1151,7 +1152,7 @@ export default function HomePage() {
                  <ConversationLog
                     messages={messages}
                     avatarSrc={avatarSrc}
-                    textAnimationEnabled={textAnimationEnabled}
+                    textAnimationEnabled={textAnimationEnabled && communicationMode !== 'text-only'}
                     textAnimationSpeedMs={textAnimationSpeedMs}
                     textPopulationStaggerMs={textPopulationStaggerMs}
                     lastOverallMessageId={lastOverallMessage?.id || null}
@@ -1198,7 +1199,7 @@ export default function HomePage() {
           <ConversationLog
             messages={messagesForLog}
             avatarSrc={avatarSrc}
-            textAnimationEnabled={textAnimationEnabled}
+            textAnimationEnabled={textAnimationEnabled && communicationMode !== 'text-only'}
             textAnimationSpeedMs={textAnimationSpeedMs}
             textPopulationStaggerMs={textPopulationStaggerMs}
             lastOverallMessageId={lastOverallMessage?.id || null}
