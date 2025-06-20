@@ -67,7 +67,7 @@ const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
 const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
 const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
 
-const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 300; // Characters - Increased from 180
+const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 300; 
 const ACKNOWLEDGEMENT_PHRASES = [
   "Okay, good question. Let me gather that information for you.",
   "Just a moment, I'm preparing your detailed response.",
@@ -411,121 +411,124 @@ export default function HomePage() {
     } else if (communicationModeRef.current === 'audio-text' && !isEndingSessionRef.current && !hasConversationEnded) {
 
     }
-  }, [hasConversationEnded]);
-
- const browserSpeakInternal = useCallback((textForSpeech: string, onSpeechStartCallback?: () => void) => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(textForSpeech);
-      utterance.pitch = 1;
-      utterance.rate = 1;
-      const voices = window.speechSynthesis.getVoices();
-      let selectedVoice = voices.find(voice => voice.lang === 'en-US' && (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark') || voice.name.toLowerCase().includes('microsoft david') || voice.name.toLowerCase().includes('google us english male'))) ||
-                         voices.find(voice => voice.lang.startsWith('en-') && (voice.name.toLowerCase().includes('male'))) ||
-                         voices.find(voice => voice.lang === 'en-US');
-      if (selectedVoice) utterance.voice = selectedVoice;
-      utterance.onstart = () => {
-        onSpeechStartCallback?.();
-        handleActualAudioStart();
-      };
-      utterance.onend = handleAudioProcessEnd;
-      utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
-        if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
-          console.error("Browser TTS Error:", event.error, event);
-        }
-        handleAudioProcessEnd();
-      };
-      window.speechSynthesis.speak(utterance);
-    } else {
-      console.warn("Browser TTS Not Supported.");
-      onSpeechStartCallback?.();
-      handleAudioProcessEnd();
-    }
-  }, [handleActualAudioStart, handleAudioProcessEnd]);
+  }, [hasConversationEnded, toggleListeningRef]);
 
  const speakText = useCallback(async (text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void) => {
-    currentAiMessageIdRef.current = messageIdForAnimationSync;
-    const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
-    if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
-      onSpeechStartCallback?.();
-      setIsSpeaking(false);
-      setShowPreparingGreeting(false);
-      if (messageIdForAnimationSync) {
-        setForceFinishAnimationForMessageId(messageIdForAnimationSync);
-        setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
-      }
-      if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
-         setHasConversationEnded(true);
-      }
-      return;
-    }
-    if (isListeningRef.current && recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch(e) { /* ignore */}
-    }
-    if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); }
-    if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-    }
-    if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
-       elevenLabsAudioRef.current.pause();
-       if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-       elevenLabsAudioRef.current.src = '';
-    }
-    setIsSpeaking(false);
-    if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) {
-        setShowPreparingGreeting(true);
-    }
+    return new Promise<void>(async (resolveSpeakText) => {
+      currentAiMessageIdRef.current = messageIdForAnimationSync;
+      const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
 
-    if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-      const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
-      const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
-      const body = JSON.stringify({ text: textForSpeech, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }});
-      try {
-        const response = await fetch(ttsUrl, { method: "POST", headers, body });
-        if (response.ok) {
-          const audioBlob = await response.blob();
-          if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
-            toast({ title: "TTS Audio Issue", description: "Received invalid audio data. Using browser TTS.", variant: "default" });
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback); return;
-          }
-          const audioUrl = URL.createObjectURL(audioBlob);
-          if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-          const audio = elevenLabsAudioRef.current;
-          audio.src = audioUrl;
-          audio.onplay = () => {
-            onSpeechStartCallback?.();
-            handleActualAudioStart();
-          };
-          audio.onended = handleAudioProcessEnd;
-          audio.onerror = (e: Event | string) => {
-            const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
-            const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
-            if (!(mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) &&
-                !(mediaError?.code === mediaError?.MEDIA_ERR_SRC_NOT_SUPPORTED || (errorMessage && errorMessage.toLowerCase().includes("empty src attribute")))) {
-                console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
-                toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
-            }
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback);
-          };
-          try { await audio.play(); } catch (playError: any) {
-            if (!(playError.name === 'AbortError' || playError.message.includes("interrupted"))) {
-                console.error("ElevenLabs Audio Play Error:", playError);
-                toast({ title: "TTS Play Error", description: "Using browser default.", variant: "destructive" });
-            }
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback); return;
-          }
-          return;
-        } else {
-          const errorBody = await response.text();
-          toast({ title: `TTS API Error (${response.status})`, description: `ElevenLabs: ${errorBody.substring(0,100)}. Using browser default.`, variant: "destructive", duration: 8000 });
+      const commonCleanupAndResolve = () => {
+        handleAudioProcessEnd();
+        resolveSpeakText();
+      };
+
+      if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
+        onSpeechStartCallback?.();
+        setIsSpeaking(false);
+        setShowPreparingGreeting(false);
+        if (messageIdForAnimationSync) {
+          setForceFinishAnimationForMessageId(messageIdForAnimationSync);
+          setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
         }
-      } catch (error: any) {
-         toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
-         if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
+        if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
+           setHasConversationEnded(true);
+        }
+        resolveSpeakText();
+        return;
       }
-    }
-    browserSpeakInternal(textForSpeech, onSpeechStartCallback);
-  }, [ useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeakInternal, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded ]);
+
+      if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) { /* ignore */} }
+      if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
+      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); }
+      if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
+         elevenLabsAudioRef.current.pause();
+         if (elevenLabsAudioRef.current.src.startsWith('blob:')) URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+         elevenLabsAudioRef.current.src = '';
+      }
+      setIsSpeaking(false);
+      if (messagesRef.current.length <= 1 && messagesRef.current.find(m=>m.sender==='ai')) { setShowPreparingGreeting(true); }
+
+      if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+        const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
+        const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
+        const body = JSON.stringify({ text: textForSpeech, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }});
+        let fallbackToBrowserTTS = false;
+        try {
+          const response = await fetch(ttsUrl, { method: "POST", headers, body });
+          if (response.ok) {
+            const audioBlob = await response.blob();
+            if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) {
+              toast({ title: "TTS Audio Issue", description: "Received invalid audio data. Using browser TTS.", variant: "default" });
+              fallbackToBrowserTTS = true;
+            } else {
+              const audioUrl = URL.createObjectURL(audioBlob);
+              if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
+              const audio = elevenLabsAudioRef.current;
+              audio.src = audioUrl;
+              audio.onplay = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
+              audio.onended = commonCleanupAndResolve;
+              audio.onerror = (e: Event | string) => {
+                const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
+                const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
+                 if (!(mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) &&
+                    !(mediaError?.code === mediaError?.MEDIA_ERR_SRC_NOT_SUPPORTED || (errorMessage && errorMessage.toLowerCase().includes("empty src attribute")))) {
+                    console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
+                    toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
+                }
+                commonCleanupAndResolve(); // Still resolve, will fallback if browserTTS is called after this error
+              };
+              try {
+                await audio.play();
+                return; // Successfully started ElevenLabs playback
+              } catch (playError: any) {
+                if (!(playError.name === 'AbortError' || playError.message.includes("interrupted"))) {
+                  console.error("ElevenLabs Audio Play Error (catch block):", playError);
+                  toast({ title: "TTS Play Error", description: "Using browser default.", variant: "destructive" });
+                }
+                fallbackToBrowserTTS = true;
+              }
+            }
+          } else {
+            const errorBody = await response.text();
+            toast({ title: `TTS API Error (${response.status})`, description: `ElevenLabs: ${errorBody.substring(0,100)}. Using browser default.`, variant: "destructive", duration: 8000 });
+            fallbackToBrowserTTS = true;
+          }
+        } catch (error: any) {
+           toast({ title: "TTS Connection Error", description: `Could not connect to ElevenLabs: ${error.message || 'Unknown'}. Using browser default.`, variant: "destructive", duration: 8000 });
+           if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) setCorsErrorEncountered(true);
+           fallbackToBrowserTTS = true;
+        }
+        if (!fallbackToBrowserTTS) return; // If ElevenLabs was attempted and didn't set fallback, resolve.
+      }
+
+      // Browser TTS as default or fallback
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(textForSpeech);
+        utterance.pitch = 1;
+        utterance.rate = 1;
+        const voices = window.speechSynthesis.getVoices();
+        let selectedVoice = voices.find(voice => voice.lang === 'en-US' && (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark') || voice.name.toLowerCase().includes('microsoft david') || voice.name.toLowerCase().includes('google us english male'))) ||
+                           voices.find(voice => voice.lang.startsWith('en-') && (voice.name.toLowerCase().includes('male'))) ||
+                           voices.find(voice => voice.lang === 'en-US');
+        if (selectedVoice) utterance.voice = selectedVoice;
+        utterance.onstart = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
+        utterance.onend = commonCleanupAndResolve;
+        utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+          if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') {
+            console.error("Browser TTS Error in speakText:", event.error, event);
+          }
+          commonCleanupAndResolve();
+        };
+        window.speechSynthesis.speak(utterance);
+      } else {
+        console.warn("Browser TTS Not Supported during speakText.");
+        onSpeechStartCallback?.();
+        commonCleanupAndResolve();
+      }
+    });
+  }, [ useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded, communicationMode ]);
 
   const speakTextRef = useRef(speakText);
   useEffect(() => { speakTextRef.current = speakText; }, [speakText]);
