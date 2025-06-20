@@ -537,6 +537,13 @@ export default function HomePage() {
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
 
+    // Speak a brief acknowledgment if not in text-only mode
+    if (communicationModeRef.current !== 'text-only') {
+      // This call to speakText is for the acknowledgment; it won't have a messageId for animation.
+      // It won't be added to the chat log.
+      speakTextRef.current("Okay, one moment while I check on that.", null, () => {});
+    }
+
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
