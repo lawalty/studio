@@ -67,7 +67,7 @@ const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
 const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
 const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
 
-const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 300; 
+const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 500;
 const ACKNOWLEDGEMENT_PHRASES = [
   "Okay, good question. Let me gather that information for you.",
   "Just a moment, I'm preparing your detailed response.",
@@ -1206,4 +1206,3 @@ export default function HomePage() {
     </div>
   );
 }
-
