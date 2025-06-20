@@ -4,8 +4,11 @@
 import Link from 'next/link';
 import { Bot } from 'lucide-react';
 import React, { useEffect } from 'react';
+// No longer importing useRouter or usePathname
 
 export default function Header() {
+  // Removed complex useEffect logic related to embedded mode.
+  // The 'splashScreenActive' event can still be useful if other components listen to it.
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('splashScreenActive'));
   }, []);
@@ -18,8 +21,8 @@ export default function Header() {
           <Bot size={28} />
           <h1 className="text-2xl font-bold font-headline">AI Chat</h1>
         </Link>
+        {/* Removed the conditional "Home / Restart" button */}
       </div>
     </header>
   );
 }
-    

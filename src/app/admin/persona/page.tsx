@@ -58,6 +58,7 @@ export default function PersonaPage() {
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
         } else {
+          // If doc doesn't exist, set all to defaults
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
@@ -67,6 +68,7 @@ export default function PersonaPage() {
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
+        // Fallback to defaults on error
         setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
         setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
@@ -114,7 +116,7 @@ export default function PersonaPage() {
 
   const handleResponsePauseTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    if (value === '' || /^\d*$/.test(value)) {
+    if (value === '' || /^\d*$/.test(value)) { // Allow empty or only digits
       setResponsePauseTime(value);
     }
   };
@@ -129,31 +131,35 @@ export default function PersonaPage() {
     let avatarUpdated = false;
     let animatedAvatarUpdated = false;
 
+    // Handle static avatar upload/reset
     if (selectedAvatarFile) {
       const fileRef = storageRef(storage, AVATAR_FIREBASE_STORAGE_PATH);
       try {
         await uploadBytes(fileRef, selectedAvatarFile);
         newAvatarUrl = await getDownloadURL(fileRef);
-        setAvatarPreview(newAvatarUrl);
-        setSelectedAvatarFile(null);
+        setAvatarPreview(newAvatarUrl); // Update preview with Firebase URL
+        setSelectedAvatarFile(null); // Clear selected file
         avatarUpdated = true;
       } catch (uploadError: any) {
         toast({ title: "Static Avatar Upload Failed", description: `Could not upload: ${uploadError.message}`, variant: "destructive" });
         setIsSaving(false); return;
       }
     } else if (avatarPreview === DEFAULT_AVATAR_PLACEHOLDER) {
+       // If preview is placeholder, ensure we save the placeholder or an empty string if that's desired
+       // For now, let's ensure it's the actual placeholder URL if it was reset to it.
        newAvatarUrl = DEFAULT_AVATAR_PLACEHOLDER;
-       avatarUpdated = true;
+       avatarUpdated = true; // Consider it "updated" if it was reset to default
     }
 
 
+    // Handle animated avatar upload/reset
     if (selectedAnimatedAvatarFile) {
       const animatedFileRef = storageRef(storage, ANIMATED_AVATAR_FIREBASE_STORAGE_PATH);
       try {
         await uploadBytes(animatedFileRef, selectedAnimatedAvatarFile);
         newAnimatedAvatarUrl = await getDownloadURL(animatedFileRef);
-        setAnimatedAvatarPreview(newAnimatedAvatarUrl);
-        setSelectedAnimatedAvatarFile(null);
+        setAnimatedAvatarPreview(newAnimatedAvatarUrl); // Update preview with Firebase URL
+        setSelectedAnimatedAvatarFile(null); // Clear selected file
         animatedAvatarUpdated = true;
       } catch (uploadError: any) {
         toast({ title: "Animated Avatar Upload Failed", description: `Could not upload GIF: ${uploadError.message}`, variant: "destructive" });
@@ -161,7 +167,7 @@ export default function PersonaPage() {
       }
     } else if (animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER) {
        newAnimatedAvatarUrl = DEFAULT_ANIMATED_AVATAR_PLACEHOLDER;
-       animatedAvatarUpdated = true;
+       animatedAvatarUpdated = true; // Consider it "updated" if it was reset to default
     }
 
 
@@ -172,13 +178,16 @@ export default function PersonaPage() {
       const currentDocSnap = await getDoc(siteAssetsDocRef);
       const currentData = currentDocSnap.data() || {};
 
+      // Prepare data to save, only including fields that have changed or are new.
       const dataToSave: { [key: string]: any } = {
+        // Always include these as they might change from their text fields
         personaTraits,
         useKnowledgeInGreeting,
-        customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
+        customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage, // Store empty string if cleared
         responsePauseTimeMs: validPauseTime,
       };
 
+      // Only add avatar URLs if they've been updated or are different from stored
       if (avatarUpdated || newAvatarUrl !== currentData.avatarUrl) {
         dataToSave.avatarUrl = newAvatarUrl;
       }
@@ -186,33 +195,46 @@ export default function PersonaPage() {
         dataToSave.animatedAvatarUrl = newAnimatedAvatarUrl;
       }
 
-      let settingsChanged = false;
+
+      // Determine if any actual settings changed to avoid unnecessary writes/AI calls
+      let settingsActuallyChanged = false;
       if (Object.keys(dataToSave).some(key => dataToSave[key] !== (currentData[key] ))) {
-        settingsChanged = true;
+        settingsActuallyChanged = true;
       }
-      if (dataToSave.personaTraits !== (currentData.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT)) settingsChanged = true;
-      if (dataToSave.useKnowledgeInGreeting !== (currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting)) settingsChanged = true;
-      if (dataToSave.customGreetingMessage !== (currentData.customGreetingMessage || DEFAULT_CUSTOM_GREETING)) settingsChanged = true;
-      if (dataToSave.responsePauseTimeMs !== (currentData.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : currentData.responsePauseTimeMs)) settingsChanged = true;
+      // More explicit checks for defaults might be needed if currentData[key] could be undefined vs. default
+      if (dataToSave.personaTraits !== (currentData.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT)) settingsActuallyChanged = true;
+      if (dataToSave.useKnowledgeInGreeting !== (currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting)) settingsActuallyChanged = true;
+      if (dataToSave.customGreetingMessage !== (currentData.customGreetingMessage || DEFAULT_CUSTOM_GREETING)) settingsActuallyChanged = true;
+      if (dataToSave.responsePauseTimeMs !== (currentData.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : currentData.responsePauseTimeMs)) settingsActuallyChanged = true;
 
 
-      if (settingsChanged || avatarUpdated || animatedAvatarUpdated) {
+      if (settingsActuallyChanged || avatarUpdated || animatedAvatarUpdated) {
         if (currentDocSnap.exists()) {
+          // Only update the fields that are part of this page's concerns
           const updatePayload = { ...dataToSave };
+          // Ensure we don't accidentally wipe other fields from site_display_assets
+          // by explicitly merging only what this page manages.
           await updateDoc(siteAssetsDocRef, updatePayload);
         } else {
+          // If document doesn't exist, create it with all fields this page manages + defaults for others
           await setDoc(siteAssetsDocRef, {
-             ...dataToSave,
+             // Fields managed by this page
+             ...dataToSave, // This includes personaTraits, avatars, greeting settings, pause time
              avatarUrl: dataToSave.avatarUrl !== undefined ? dataToSave.avatarUrl : DEFAULT_AVATAR_PLACEHOLDER,
              animatedAvatarUrl: dataToSave.animatedAvatarUrl !== undefined ? dataToSave.animatedAvatarUrl : DEFAULT_ANIMATED_AVATAR_PLACEHOLDER,
-             splashImageUrl: currentData.splashImageUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+             // Default values for fields NOT managed by this page but potentially in the same doc
+             splashImageUrl: currentData.splashImageUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", // Default transparent GIF
              splashWelcomeMessage: currentData.splashWelcomeMessage || "Welcome to AI Chat",
              enableTextAnimation: currentData.enableTextAnimation === undefined ? false : currentData.enableTextAnimation,
              textAnimationSpeedMs: currentData.textAnimationSpeedMs === undefined ? 800 : currentData.textAnimationSpeedMs,
+             // Removed Public URL for Embeds as per rollback
           });
         }
+
+        // Call the AI flow to update persona
         const input: AdjustAiPersonaAndPersonalityInput = { personaTraits };
         const result = await adjustAiPersonaAndPersonality(input);
+
         let toastMessages = ["AI persona and avatar settings have been updated."];
         if (avatarUpdated && newAvatarUrl !== currentData.avatarUrl) toastMessages.unshift("Static avatar updated.");
         if (animatedAvatarUpdated && newAnimatedAvatarUrl !== currentData.animatedAvatarUrl) toastMessages.unshift("Animated avatar updated.");
@@ -232,15 +254,15 @@ export default function PersonaPage() {
 
   const handleResetAvatar = async () => {
     setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
-    setSelectedAvatarFile(null);
-    if (avatarInputRef.current) avatarInputRef.current.value = "";
+    setSelectedAvatarFile(null); // Clear any selected file
+    if (avatarInputRef.current) avatarInputRef.current.value = ""; // Reset file input
     toast({ title: "Static Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
   };
 
   const handleResetAnimatedAvatar = async () => {
     setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
-    setSelectedAnimatedAvatarFile(null);
-    if (animatedAvatarInputRef.current) animatedAvatarInputRef.current.value = "";
+    setSelectedAnimatedAvatarFile(null); // Clear any selected file
+    if (animatedAvatarInputRef.current) animatedAvatarInputRef.current.value = ""; // Reset file input
     toast({ title: "Animated Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
   };
 
@@ -269,6 +291,7 @@ export default function PersonaPage() {
                 />
                 <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
               </div>
+
               <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
                 <MessageSquareText className="h-5 w-5 text-primary" />
                 <div className="flex-1 space-y-1">
@@ -287,6 +310,7 @@ export default function PersonaPage() {
                     aria-label="Toggle use of knowledge base in initial greeting"
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="customGreetingMessage" className="font-medium flex items-center gap-1.5">
                   <Type className="h-4 w-4" />
@@ -304,6 +328,7 @@ export default function PersonaPage() {
                   If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
                 </p>
               </div>
+
                <div className="space-y-2">
                 <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
                     <Timer className="h-4 w-4" />
@@ -311,12 +336,12 @@ export default function PersonaPage() {
                 </Label>
                 <Input
                     id="responsePauseTime"
-                    type="number"
+                    type="number" // Changed to number for better input control, though state is string
                     value={responsePauseTime}
                     onChange={handleResponsePauseTimeChange}
                     placeholder="e.g., 750"
-                    min="0"
-                    step="50"
+                    min="0" // Min value for number input
+                    step="50" // Step for number input
                     className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -336,6 +361,8 @@ export default function PersonaPage() {
                           src={avatarPreview} alt="AI Blair Static Avatar Preview" width={150} height={150}
                           className="rounded-full border-2 border-primary shadow-md object-cover"
                           data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
+                          // Key for re-rendering if src changes between data URI and placeholder
+                          key={`static-avatar-${avatarPreview.substring(0,30)}`}
                           unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https://')}
                           onError={() => { console.warn("Custom static avatar failed to load, falling back."); setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);}}
                         />
@@ -346,6 +373,7 @@ export default function PersonaPage() {
                     </CardContent>
                   </Card>
                 </div>
+
                 <div>
                   <Label className="font-medium text-base block mb-2 flex items-center gap-1.5"><Film /> Animated Speaking Avatar (GIF)</Label>
                   <CardDescription className="mb-3">
@@ -357,7 +385,8 @@ export default function PersonaPage() {
                           src={animatedAvatarPreview} alt="AI Blair Animated Avatar Preview" width={150} height={150}
                           className="rounded-full border-2 border-accent shadow-md object-cover"
                           data-ai-hint={animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER || animatedAvatarPreview.includes("placehold.co") ? "animated face" : undefined}
-                          unoptimized={true}
+                          key={`animated-avatar-${animatedAvatarPreview.substring(0,30)}`}
+                          unoptimized={true} // GIFs are always unoptimized with next/image
                           onError={() => { console.warn("Custom animated avatar failed to load, falling back."); setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);}}
                         />
                       <Input type="file" accept="image/gif" ref={animatedAvatarInputRef} onChange={handleAnimatedAvatarChange} className="hidden" id="animated-avatar-upload"/>
@@ -368,6 +397,7 @@ export default function PersonaPage() {
                   </Card>
                 </div>
               </div>
+              {/* Removed Public URL for Embeds section */}
             </>
           )}
         </CardContent>

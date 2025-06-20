@@ -5,9 +5,12 @@ import type { ReactNode } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
+// No longer importing useSearchParams
 
 export default function ConditionalLayout({ children }: { children: ReactNode }) {
-  const isEmbedded = false; // Reverted to always false for non-embedded experience
+  // Logic for isEmbedded based on useSearchParams is removed.
+  // It will now always render Header and Footer as if not embedded.
+  const isEmbedded = false; 
 
   return (
     <>
@@ -20,4 +23,3 @@ export default function ConditionalLayout({ children }: { children: ReactNode })
     </>
   );
 }
-    

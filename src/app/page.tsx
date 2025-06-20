@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+// DO NOT import useSearchParams
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
@@ -75,15 +75,14 @@ const MAX_SILENCE_PROMPTS_AUDIO_ONLY = 2;
 
 // Helper function to generate HTML string for the chat log
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
-  // Styles derived from globals.css (light theme for consistency in PDF)
-  const primaryBg = 'hsl(210 13% 50%)'; // primary
-  const primaryFg = 'hsl(0 0% 98%)'; // primary-foreground
-  const secondaryBg = 'hsl(205 70% 70%)'; // secondary
-  const secondaryFg = 'hsl(212 60% 25%)'; // secondary-foreground
-  const cardBg = 'hsl(0 0% 100%)'; // card (used as canvas background)
-  const defaultFg = 'hsl(212 68% 11%)'; // foreground
-  const mutedFg = 'hsl(212 30% 40%)'; // muted-foreground
-  const userAvatarBg = 'hsl(0 0% 90%)'; // Similar to muted
+  const primaryBg = 'hsl(210 13% 50%)'; 
+  const primaryFg = 'hsl(0 0% 98%)'; 
+  const secondaryBg = 'hsl(205 70% 70%)';
+  const secondaryFg = 'hsl(212 60% 25%)';
+  const cardBg = 'hsl(0 0% 100%)';
+  const defaultFg = 'hsl(212 68% 11%)';
+  const mutedFg = 'hsl(212 30% 40%)';
+  const userAvatarBg = 'hsl(0 0% 90%)';
 
   const sanitizedTitle = titleMessage
     .replace(/&/g, '&amp;')
@@ -99,7 +98,6 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
   messagesToRender.forEach(message => {
     const isUser = message.sender === 'user';
     const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    // Sanitize message text
     const sanitizedText = message.text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -131,11 +129,9 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
       `;
     }
   });
-
   html += `</div>`;
   return html;
 }
-
 
 const getUserNameFromHistory = (history: Message[]): string | null => {
   for (let i = history.length - 1; i >= 0; i--) {
@@ -174,7 +170,7 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
   if (lastMessage.sender === 'ai') {
     if (secondLastMessage.sender === 'user') {
       return [secondLastMessage, lastMessage];
-    } else {
+    } else { // AI followed by AI (e.g. initial greeting if it were somehow the 2nd last)
       return [lastMessage];
     }
   } else { // lastMessage.sender === 'user'
@@ -184,16 +180,13 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
 
 
 export default function HomePage() {
-  const searchParams = useSearchParams();
-  const initialModeFromQuery = searchParams.get('mode') as CommunicationMode | null;
-  const isEmbeddedFromQuery = searchParams.get('embedded') === 'true';
-
-  const [showSplashScreen, setShowSplashScreen] = useState(!isEmbeddedFromQuery);
-  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
+  // NO useSearchParams or related variables like initialModeFromQuery, isEmbeddedFromQuery
+  const [showSplashScreen, setShowSplashScreen] = useState(true); // Always true initially
+  const [selectedInitialMode, setSelectedInitialMode] = useState<CommunicationMode>('audio-text'); // Default for splash screen
+  
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [splashScreenWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
-
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -207,7 +200,7 @@ export default function HomePage() {
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>(initialModeFromQuery || 'audio-text');
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>('audio-text'); // Default, will be set by splash
   const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [inputValue, setInputValue] = useState('');
@@ -216,7 +209,6 @@ export default function HomePage() {
   const [showPreparingGreeting, setShowPreparingGreeting] = useState(false);
   const [textAnimationEnabled, setTextAnimationEnabled] = useState<boolean>(DEFAULT_TEXT_ANIMATION_ENABLED);
   const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<number>(DEFAULT_TEXT_ANIMATION_SPEED_MS);
-
 
   const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
   const [knowledgeFileSummaryMedium, setKnowledgeFileSummaryMedium] = useState<string>('');
@@ -228,7 +220,6 @@ export default function HomePage() {
   const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
   const [corsErrorEncountered, setCorsErrorEncountered] = useState(false);
 
-
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
@@ -237,9 +228,7 @@ export default function HomePage() {
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
 
   const communicationModeRef = useRef(communicationMode);
-  useEffect(() => { 
-    communicationModeRef.current = communicationMode; 
-  }, [communicationMode]);
+  useEffect(() => { communicationModeRef.current = communicationMode; }, [communicationMode]);
 
   const inputValueRef = useRef(inputValue);
   useEffect(() => { inputValueRef.current = inputValue; }, [inputValue]);
@@ -255,7 +244,6 @@ export default function HomePage() {
 
   const accumulatedTranscriptRef = useRef<string>('');
   const sendTranscriptTimerRef = useRef<NodeJS.Timeout | null>(null);
-
 
   const addMessage = useCallback((text: string, sender: 'user' | 'ai') => {
     setMessages((prevMessages) => [
@@ -277,17 +265,14 @@ export default function HomePage() {
     setHasConversationEnded(false);
     setShowPreparingGreeting(false);
 
-
     if (sendTranscriptTimerRef.current) {
       clearTimeout(sendTranscriptTimerRef.current);
       sendTranscriptTimerRef.current = null;
     }
-
     if (isListeningRef.current && recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
     }
     setIsListening(false);
-
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
       window.speechSynthesis.cancel();
     }
@@ -306,19 +291,16 @@ export default function HomePage() {
     setIsSpeaking(false);
   }, [dismissAllToasts]);
 
-
  const toggleListening = useCallback((forceState?: boolean) => {
     if (!recognitionRef.current && (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text')) {
       toast({ title: "Mic Not Ready", description: "Speech recognition not available. Try refreshing.", variant: "destructive" });
       return;
     }
-
     const targetIsListeningState = typeof forceState === 'boolean' ? forceState : !isListeningRef.current;
 
     if (targetIsListeningState === true) {
       if (hasConversationEnded) { setIsListening(false); return; }
       if (communicationModeRef.current === 'text-only') { setIsListening(false); return; }
-
       if (typeof forceState === 'undefined') {
          if (isSpeakingRef.current) {
             toast({ title: "AI Speaking", description: "Please wait for AI Blair to finish speaking.", variant: "default"});
@@ -329,15 +311,12 @@ export default function HomePage() {
             setIsListening(false); return;
          }
       }
-
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
-
       accumulatedTranscriptRef.current = '';
       setInputValue('');
-
       try {
         recognitionRef.current?.start();
         setIsListening(true);
@@ -353,17 +332,14 @@ export default function HomePage() {
       } else {
         setIsListening(false);
       }
-
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
-
       if (typeof forceState === 'undefined') {
         const textToSendFromStop = (communicationModeRef.current === 'audio-only')
             ? accumulatedTranscriptRef.current.trim()
             : inputValueRef.current.trim();
-
         if (textToSendFromStop !== '') {
             handleSendMessageRef.current(textToSendFromStop, 'voice');
         }
@@ -372,10 +348,7 @@ export default function HomePage() {
   }, [toast, hasConversationEnded, isSendingMessage]);
 
   const toggleListeningRef = useRef(toggleListening);
-  useEffect(() => {
-    toggleListeningRef.current = toggleListening;
-  }, [toggleListening]);
-
+  useEffect(() => { toggleListeningRef.current = toggleListening; }, [toggleListening]);
 
   const handleActualAudioStart = useCallback(() => {
     setIsSpeaking(true);
@@ -390,7 +363,6 @@ export default function HomePage() {
     const wasSpeakingBeforeEnd = isSpeakingRef.current;
     setIsSpeaking(false);
     setShowPreparingGreeting(false);
-
     if (elevenLabsAudioRef.current) {
         if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
             URL.revokeObjectURL(elevenLabsAudioRef.current.src);
@@ -400,34 +372,28 @@ export default function HomePage() {
         elevenLabsAudioRef.current.onended = null;
         elevenLabsAudioRef.current.onerror = null;
     }
-
     if (isEndingSessionRef.current && wasSpeakingBeforeEnd) {
         setHasConversationEnded(true);
         return;
     }
-
     if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
         toggleListeningRef.current(true);
     } else if (communicationModeRef.current === 'audio-text' && !isEndingSessionRef.current && !hasConversationEnded) {
-        // In audio-text, don't automatically restart listening; user can click mic or type.
+      // In audio-text, don't automatically restart listening
     }
   }, [hasConversationEnded]);
-
 
  const browserSpeakInternal = useCallback((textForSpeech: string, onSpeechStartCallback?: () => void) => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-
       const utterance = new SpeechSynthesisUtterance(textForSpeech);
       utterance.pitch = 1;
       utterance.rate = 1;
-
       const voices = window.speechSynthesis.getVoices();
       let selectedVoice = voices.find(voice => voice.lang === 'en-US' && (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark') || voice.name.toLowerCase().includes('microsoft david') || voice.name.toLowerCase().includes('google us english male'))) ||
                          voices.find(voice => voice.lang.startsWith('en-') && (voice.name.toLowerCase().includes('male'))) ||
                          voices.find(voice => voice.lang === 'en-US');
       if (selectedVoice) utterance.voice = selectedVoice;
-
       utterance.onstart = () => {
         onSpeechStartCallback?.();
         handleActualAudioStart();
@@ -449,7 +415,6 @@ export default function HomePage() {
 
  const speakText = useCallback(async (text: string, onSpeechStartCallback?: () => void) => {
     const textForSpeech = text.replace(/EZCORP/gi, "easy corp");
-
     if (communicationModeRef.current === 'text-only' || textForSpeech.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
       onSpeechStartCallback?.();
       setIsSpeaking(false);
@@ -459,14 +424,10 @@ export default function HomePage() {
       }
       return;
     }
-
     if (isListeningRef.current && recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch(e) {/* ignore */}
+      try { recognitionRef.current.abort(); } catch(e) { /* ignore */}
     }
-    if (sendTranscriptTimerRef.current) {
-      clearTimeout(sendTranscriptTimerRef.current);
-    }
-
+    if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); }
     if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
     }
@@ -480,12 +441,10 @@ export default function HomePage() {
         setShowPreparingGreeting(true);
     }
 
-
     if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
       const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`;
       const headers = { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey };
       const body = JSON.stringify({ text: textForSpeech, model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true }});
-
       try {
         const response = await fetch(ttsUrl, { method: "POST", headers, body });
         if (response.ok) {
@@ -506,28 +465,19 @@ export default function HomePage() {
           audio.onerror = (e: Event | string) => {
             const mediaError = e instanceof Event ? (e.target as HTMLAudioElement)?.error : null;
             const errorMessage = typeof e === 'string' ? e : (mediaError?.message || 'Unknown audio error');
-            if (mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) {
-                 // Benign interruption, likely due to new speech starting or programmatic stop.
-            } else if (mediaError?.code === mediaError?.MEDIA_ERR_SRC_NOT_SUPPORTED || (errorMessage && errorMessage.toLowerCase().includes("empty src attribute"))){
-                 console.warn("ElevenLabs Audio Playback Warning (SRC Issue):", errorMessage, mediaError);
-                 toast({ title: "TTS Playback Issue", description: "Using browser default due to audio source problem.", variant: "default" });
-            }
-            else {
+            if (!(mediaError?.code === mediaError?.MEDIA_ERR_ABORTED || errorMessage.includes("interrupted") || errorMessage.includes("The play() request was interrupted")) &&
+                !(mediaError?.code === mediaError?.MEDIA_ERR_SRC_NOT_SUPPORTED || (errorMessage && errorMessage.toLowerCase().includes("empty src attribute")))) {
                 console.error("ElevenLabs Audio Playback Error:", errorMessage, mediaError);
                 toast({ title: "TTS Playback Error", description: "Using browser default.", variant: "destructive" });
             }
             browserSpeakInternal(textForSpeech, onSpeechStartCallback);
           };
-          try {
-            await audio.play();
-          } catch (playError: any) {
-            if (playError.name === 'AbortError' || playError.message.includes("interrupted")) { /* Already handled or benign */ }
-            else {
+          try { await audio.play(); } catch (playError: any) {
+            if (!(playError.name === 'AbortError' || playError.message.includes("interrupted"))) {
                 console.error("ElevenLabs Audio Play Error:", playError);
                 toast({ title: "TTS Play Error", description: "Using browser default.", variant: "destructive" });
             }
-            browserSpeakInternal(textForSpeech, onSpeechStartCallback);
-            return;
+            browserSpeakInternal(textForSpeech, onSpeechStartCallback); return;
           }
           return;
         } else {
@@ -540,19 +490,13 @@ export default function HomePage() {
       }
     }
     browserSpeakInternal(textForSpeech, onSpeechStartCallback);
-  }, [
-      useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeakInternal,
-      handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded
-    ]);
+  }, [ useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, browserSpeakInternal, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded ]);
 
   const speakTextRef = useRef(speakText);
-  useEffect(() => {
-    speakTextRef.current = speakText;
-  }, [speakText]);
+  useEffect(() => { speakTextRef.current = speakText; }, [speakText]);
 
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     if (text.trim() === '' || hasConversationEnded || isSendingMessage) return;
-
     if (isListeningRef.current && recognitionRef.current) {
         try { recognitionRef.current.abort(); } catch(e) {/* ignore */}
     }
@@ -560,20 +504,16 @@ export default function HomePage() {
       clearTimeout(sendTranscriptTimerRef.current);
       sendTranscriptTimerRef.current = null;
     }
-
     addMessage(text, 'user');
     setInputValue('');
     accumulatedTranscriptRef.current = '';
-
     setIsSendingMessage(true);
     setConsecutiveSilencePrompts(0);
     isAboutToSpeakForSilenceRef.current = false;
 
-
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
-
     const combinedLowPriorityText = [MOCK_KNOWLEDGE_BASE_CONTENT, dynamicKnowledgeContentLow].filter(Boolean).join('\n\n');
 
     try {
@@ -584,9 +524,7 @@ export default function HomePage() {
         knowledgeBaseLow: { summary: knowledgeFileSummaryLow || undefined, textContent: combinedLowPriorityText || undefined },
         personaTraits: personaTraits, chatHistory: historyForGenkit,
       };
-
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
           if (!isEndingSessionRef.current || (isEndingSessionRef.current && result.shouldEndConversation)) {
@@ -595,20 +533,14 @@ export default function HomePage() {
           setIsSendingMessage(false);
         }, 50);
       };
-
-      if (result.shouldEndConversation) {
-        isEndingSessionRef.current = true;
-      }
+      if (result.shouldEndConversation) { isEndingSessionRef.current = true; }
       await speakTextRef.current(result.aiResponse, onSpeechActuallyStarting);
-
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
       const errorMessage = "Sorry, I encountered an error. Please try again.";
-
       if (!isEndingSessionRef.current) {
         addMessage(errorMessage, 'ai');
         setIsSendingMessage(false);
-
         if (communicationModeRef.current !== 'text-only') {
           await speakTextRef.current(errorMessage);
         }
@@ -617,18 +549,13 @@ export default function HomePage() {
         setIsSendingMessage(false);
       }
     }
-
   }, [addMessage, personaTraits, hasConversationEnded, isSendingMessage, setInputValue,
       knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
       knowledgeFileSummaryMedium, dynamicKnowledgeContentMedium,
-      knowledgeFileSummaryLow, dynamicKnowledgeContentLow
-    ]);
+      knowledgeFileSummaryLow, dynamicKnowledgeContentLow ]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
-  useEffect(() => {
-    handleSendMessageRef.current = handleSendMessage;
-  }, [handleSendMessage]);
-
+  useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
 
   const initializeSpeechRecognition = useCallback(() => {
     if (!SpeechRecognitionAPI) {
@@ -641,16 +568,13 @@ export default function HomePage() {
     recognition.continuous = communicationModeRef.current === 'audio-text';
     recognition.interimResults = true;
     recognition.lang = 'en-US';
-
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       if (isSpeakingRef.current || isSendingMessage) {
         if(recognitionRef.current && isListeningRef.current) try { recognitionRef.current.abort(); } catch(e){}
         return;
       }
-
       let currentVisualTranscript = '';
       let latestFinalUtteranceThisEvent = '';
-
       for (let i = 0; i < event.results.length; i++) {
         const segmentTranscript = event.results[i][0].transcript;
         if (communicationModeRef.current === 'audio-text') {
@@ -660,7 +584,6 @@ export default function HomePage() {
             latestFinalUtteranceThisEvent = segmentTranscript.trim();
         }
       }
-
       if (communicationModeRef.current === 'audio-text') {
         setInputValue(currentVisualTranscript.trimStart());
         if (latestFinalUtteranceThisEvent && latestFinalUtteranceThisEvent !== accumulatedTranscriptRef.current) {
@@ -681,33 +604,27 @@ export default function HomePage() {
           }
       }
     };
-
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setIsListening(false);
       if (sendTranscriptTimerRef.current) {
         clearTimeout(sendTranscriptTimerRef.current);
         sendTranscriptTimerRef.current = null;
       }
-
-      if (event.error === 'aborted' || event.error === 'interrupted' || event.error === 'canceled') { /* Programmatic stops or expected interruptions */ }
-      else if (event.error === 'no-speech') { /* Handled by onend for audio-only's silence prompts */ }
+      if (event.error === 'aborted' || event.error === 'interrupted' || event.error === 'canceled') { /* Programmatic stops */ }
+      else if (event.error === 'no-speech') { /* Handled by onend for audio-only */ }
       else if (event.error === 'audio-capture') {
         toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
       } else if (event.error !== 'network') {
         toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
       }
     };
-
     recognition.onend = () => {
       const wasListeningWhenRecognitionEnded = isListeningRef.current;
       setIsListening(false);
-
       if (isSpeakingRef.current || isSendingMessage || hasConversationEnded || isEndingSessionRef.current || isAboutToSpeakForSilenceRef.current || sendTranscriptTimerRef.current) {
         return;
       }
-
       const transcriptToSend = accumulatedTranscriptRef.current.trim();
-
       if (transcriptToSend !== '' && wasListeningWhenRecognitionEnded) {
         handleSendMessageRef.current(transcriptToSend, 'voice');
       } else if (transcriptToSend === '' && wasListeningWhenRecognitionEnded && communicationModeRef.current === 'audio-only') {
@@ -737,29 +654,20 @@ export default function HomePage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && SpeechRecognitionAPI) {
-        if (recognitionRef.current) {
-            try { recognitionRef.current.abort(); } catch(e) {}
-        }
-        const rec = initializeSpeechRecognition();
-        recognitionRef.current = rec;
+        if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} }
+        recognitionRef.current = initializeSpeechRecognition();
     }
     return () => {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch(e) {}
-        recognitionRef.current = null;
-      }
-      if (sendTranscriptTimerRef.current) {
-        clearTimeout(sendTranscriptTimerRef.current);
-        sendTranscriptTimerRef.current = null;
-      }
+      if (recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} recognitionRef.current = null; }
+      if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
     };
-  }, [initializeSpeechRecognition, communicationMode]);
-
+  }, [initializeSpeechRecognition, communicationMode]); // Re-init if mode changes
 
   const handleModeSelectionSubmit = () => {
-    resetConversation();
-    setCommunicationMode(selectedInitialMode);
-    setShowSplashScreen(false);
+    resetConversation(); // Reset existing state
+    setCommunicationMode(selectedInitialMode); // Set the new mode
+    setShowSplashScreen(false); // Hide splash screen
+    // Initial greeting will be triggered by useEffect below due to showSplashScreen=false and new communicationMode
   };
 
   const handleEndChatManually = () => {
@@ -767,20 +675,11 @@ export default function HomePage() {
     isAboutToSpeakForSilenceRef.current = false;
     setShowPreparingGreeting(false);
     setIsSendingMessage(false);
-
-    if (sendTranscriptTimerRef.current) {
-      clearTimeout(sendTranscriptTimerRef.current);
-      sendTranscriptTimerRef.current = null;
-    }
+    if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
     accumulatedTranscriptRef.current = '';
     setInputValue('');
-
-
-    if (isListeningRef.current && recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
-    }
+    if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch(e) {} }
     setIsListening(false);
-
     if (isSpeakingRef.current) {
         if (elevenLabsAudioRef.current && elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
             elevenLabsAudioRef.current.pause();
@@ -798,102 +697,64 @@ export default function HomePage() {
   };
 
   const handleSaveConversationAsPdf = async () => {
-    toast({
-      title: "Generating PDF...",
-      description: "This may take a moment for long conversations.",
-    });
-
-    // Create a temporary, off-screen container for the HTML
+    toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });
     const tempContainer = document.createElement('div');
-    tempContainer.style.width = '700px'; // Standard page width for layout
+    tempContainer.style.width = '700px';
     tempContainer.style.position = 'absolute';
-    tempContainer.style.left = '-9999px'; // Position off-screen
+    tempContainer.style.left = '-9999px';
     tempContainer.style.top = '-9999px';
-    tempContainer.style.fontFamily = 'Inter, sans-serif'; // Ensure font consistency
-
-    // Generate HTML string from the full messages array
+    tempContainer.style.fontFamily = 'Inter, sans-serif';
     const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
     tempContainer.innerHTML = chatLogHtml;
     document.body.appendChild(tempContainer);
-
     try {
-      // Give browser a moment to render the off-screen div
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased delay
       const canvas = await html2canvas(tempContainer, {
-        scale: 2, // Higher scale for better quality
-        useCORS: true, // Important if avatars are from external sources
-        backgroundColor: '#FFFFFF', // Explicit white background for PDF
+        scale: 2, useCORS: true, backgroundColor: '#FFFFFF',
       });
-
-      // Remove the temporary container once the canvas is generated
       document.body.removeChild(tempContainer);
-      
       if (canvas.width === 0 || canvas.height === 0) {
          toast({ title: "Canvas Capture Error", description: "Captured canvas is empty. PDF cannot be generated.", variant: "destructive" });
          console.error("html2canvas produced an empty or zero-dimension canvas from the temporary HTML container.");
          return;
       }
-
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'a4', // Standard A4 size
-      });
-
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const pageMargin = 20; // Margin for the PDF page
+      const pageMargin = 20;
       const contentWidth = pdfWidth - (pageMargin * 2);
-
       const imgProps = pdf.getImageProperties(imgData);
       const imgHeight = (imgProps.height * contentWidth) / imgProps.width;
       let heightLeft = imgHeight;
-      let position = pageMargin; // Initial Y position for the image
-
+      let position = pageMargin;
       pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
-      heightLeft -= (pdfHeight - (pageMargin * 2)); // Subtract visible height on first page
-
-      // Add new pages if content exceeds one page
+      heightLeft -= (pdfHeight - (pageMargin * 2));
       while (heightLeft > 0) {
-        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin; // Correct Y offset for subsequent pages
+        position = position - (pdfHeight - (pageMargin * 2)) + pageMargin;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', pageMargin, position, contentWidth, imgHeight);
         heightLeft -= (pdfHeight - (pageMargin * 2));
       }
-
       pdf.save('AI-Blair-Conversation.pdf');
-      toast({
-        title: "PDF Generated",
-        description: "Your conversation has been saved.",
-      });
+      toast({ title: "PDF Generated", description: "Your conversation has been saved." });
     } catch (error) {
       console.error("Error generating PDF:", error);
-      if (tempContainer.parentElement) {
-        document.body.removeChild(tempContainer); // Ensure cleanup on error too
-      }
-      toast({
-        title: "PDF Generation Failed",
-        description: "Could not save the conversation as PDF. See console for details.",
-        variant: "destructive",
-      });
+      if (tempContainer.parentElement) { document.body.removeChild(tempContainer); }
+      toast({ title: "PDF Generation Failed", description: "Could not save the conversation as PDF. See console for details.", variant: "destructive" });
     }
   };
-
 
   const handleStartNewChat = () => {
     resetConversation();
     setAiHasInitiatedConversation(false);
-    setShowSplashScreen(true);
+    setShowSplashScreen(true); // Go back to splash screen for mode selection
   };
-
 
   useEffect(() => {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false;
-
       const initConversation = async () => {
         let greetingToUse: string | null = null;
         if (customGreeting && customGreeting.trim() !== "") {
@@ -914,14 +775,9 @@ export default function HomePage() {
             greetingToUse = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
           }
         }
-
         if (greetingToUse) {
           const onGreetingSpeechActuallyStarting = () => {
-            setTimeout(() => {
-                 if (!isEndingSessionRef.current) {
-                    addMessage(greetingToUse!, 'ai');
-                 }
-            }, 50);
+            setTimeout(() => { if (!isEndingSessionRef.current) { addMessage(greetingToUse!, 'ai'); } }, 50);
           };
           await speakTextRef.current(greetingToUse, onGreetingSpeechActuallyStarting);
         } else {
@@ -933,10 +789,7 @@ export default function HomePage() {
       };
       initConversation();
     }
-  }, [
-      showSplashScreen, aiHasInitiatedConversation, personaTraits, messages, isSendingMessage, isLoadingKnowledge, hasConversationEnded,
-      knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, useKnowledgeInGreeting, customGreeting, addMessage
-    ]);
+  }, [ showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge, hasConversationEnded, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, useKnowledgeInGreeting, customGreeting, addMessage ]);
 
   const fetchAndProcessKnowledgeLevel = useCallback(async (
     levelPath: string, levelName: string,
@@ -960,7 +813,7 @@ export default function HomePage() {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
             if (source.extractedText && source.extractionStatus === 'success') {
                 textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
-            } else if (source.downloadURL) {
+            } else if (source.downloadURL) { // Fallback to fetch if extractedText not available/valid
                 try {
                     const response = await fetch(source.downloadURL);
                     if (response.ok) {
@@ -978,7 +831,6 @@ export default function HomePage() {
     } catch (e: any) { toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge. ${e.message || ''}`.trim(), variant: "destructive"}); levelCorsError = true; }
     return levelCorsError;
   }, [toast]);
-
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -1002,7 +854,6 @@ export default function HomePage() {
           setElevenLabsApiKey(null); setElevenLabsVoiceId(null); setUseTtsApi(true);
           toast({ title: "TTS Configuration Missing", description: `API keys not found. Custom TTS may not work. Configure in Admin.`, variant: "default", duration: 8000 });
         }
-
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
         const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
         if (siteAssetsDocSnap.exists()) {
@@ -1017,7 +868,6 @@ export default function HomePage() {
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
           setTextAnimationEnabled(typeof assets.enableTextAnimation === 'boolean' ? assets.enableTextAnimation : DEFAULT_TEXT_ANIMATION_ENABLED);
           setTextAnimationSpeedMs(assets.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : Number(assets.textAnimationSpeedMs));
-
         } else {
             setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
             setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
@@ -1031,7 +881,6 @@ export default function HomePage() {
             setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
         }
       } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
-
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh); if (highError) anyCorsError = true;
       const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium); if (mediumError) anyCorsError = true;
       const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setKnowledgeFileSummaryLow, setDynamicKnowledgeContentLow); if (lowError) anyCorsError = true;
@@ -1039,19 +888,14 @@ export default function HomePage() {
       setIsLoadingKnowledge(false);
     };
     fetchAllData();
-
   }, [toast, fetchAndProcessKnowledgeLevel]);
 
   const performResetOnUnmountRef = useRef(resetConversation);
   useEffect(() => { performResetOnUnmountRef.current = resetConversation; }, [resetConversation]);
   useEffect(() => { const performResetOnUnmount = performResetOnUnmountRef.current; return () => { performResetOnUnmount(); }; }, []);
-
   useEffect(() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(false); else setIsSplashImageLoaded(true); }, [splashImageSrc]);
 
-
   const lastOverallMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-
-
   const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
       <Alert variant="destructive" className="my-4">
         <AlertTriangle className="h-4 w-4" />
@@ -1060,9 +904,9 @@ export default function HomePage() {
           <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
            <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
           <ul className="list-disc list-inside space-y-1 text-xs pl-4">
-              <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked (e.g., <code>https://6000-firebase-studio-1749487647018.cluster-joak5ukfbnbyqspg4tewa33d24.cloudworkstation.dev</code>).</li>
+              <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked.</li>
               <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
-              <li>Verify with <code>gsutil cors get gs://your-storage-bucket-id.appspot.com</code> that the active policy on the bucket includes this exact Studio origin. Replace <code>your-storage-bucket-id.appspot.com</code> with your actual bucket ID.</li>
+              <li>Verify with <code>gsutil cors get gs://YOUR_BUCKET_ID.appspot.com</code> that the active policy on the bucket includes this exact Studio origin. Replace <code>YOUR_BUCKET_ID</code> with your actual bucket ID.</li>
           </ul>
           <p className="font-semibold mt-2">General CORS Troubleshooting for Firebase Storage:</p>
           <ol className="list-decimal list-inside space-y-1 text-xs">
@@ -1076,7 +920,6 @@ export default function HomePage() {
         </AlertDescription>
       </Alert>
   );
-
 
   if (showSplashScreen) {
     return (
@@ -1121,7 +964,6 @@ export default function HomePage() {
     isDisplayingAnimatedAvatar = true;
   }
 
-
   const imageProps: React.ComponentProps<typeof Image> = {
     src: currentAvatarToDisplay,
     alt: "AI Blair Avatar",
@@ -1144,9 +986,7 @@ export default function HomePage() {
     (imageProps as any)['data-ai-hint'] = "animated face";
   }
 
-
   const showAiTypingIndicator = isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting;
-
   const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null;
     if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
@@ -1159,32 +999,28 @@ export default function HomePage() {
     return null;
   };
 
-  const displayedMessagesForLog = (communicationMode === 'audio-text' || communicationMode === 'text-only') && !hasConversationEnded
+  const messagesForLog = (communicationMode === 'audio-text' || communicationMode === 'text-only') && !hasConversationEnded
     ? getVisibleChatBubbles(messages)
     : messages;
-
 
   const mainContent = () => {
     if (isLoadingKnowledge && !aiHasInitiatedConversation) {
         return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Bases</h2> <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p> </div> );
     }
-
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
           {corsTroubleshootingAlert}
           {!hasConversationEnded && <Image {...imageProps} />}
           {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Ask AI Blair</h2>}
-
            <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {audioOnlyLiveIndicator()}
           </div>
-
           {hasConversationEnded && (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
                  <ConversationLog
-                    messages={displayedMessagesForLog} 
+                    messages={messages}  // Full log for ended audio-only
                     avatarSrc={avatarSrc}
                     textAnimationEnabled={textAnimationEnabled}
                     textAnimationSpeedMs={textAnimationSpeedMs}
@@ -1229,7 +1065,7 @@ export default function HomePage() {
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            messages={displayedMessagesForLog} 
+            messages={messagesForLog} // Uses getVisibleChatBubbles output
             avatarSrc={avatarSrc}
             textAnimationEnabled={textAnimationEnabled}
             textAnimationSpeedMs={textAnimationSpeedMs}
