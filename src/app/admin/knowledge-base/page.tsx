@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, AlertTriangle, Brain, SearchCheck } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
@@ -34,7 +34,7 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { extractTextFromPdfUrl, type ExtractTextFromPdfUrlInput } from '@/ai/flows/extract-text-from-pdf-url-flow';
+import { extractTextFromPdfUrl } from '@/ai/flows/extract-text-from-pdf-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 
 
@@ -209,10 +209,7 @@ export default function KnowledgeBasePage() {
   }, [toast, getIsLoadingSetter, getSourcesSetter]); 
 
   useEffect(() => {
-    fetchSourcesForLevel('High');
-    fetchSourcesForLevel('Medium');
-    fetchSourcesForLevel('Low');
-    fetchSourcesForLevel('Archive');
+    KB_LEVELS.forEach(level => fetchSourcesForLevel(level));
   }, [fetchSourcesForLevel]);
 
 
@@ -228,12 +225,15 @@ export default function KnowledgeBasePage() {
     const setSources = getSourcesSetter(level);
 
     try {
-        let extractedText = textContent;
+        let extractedText = textContent || sourceToProcess.extractedText;
+
+        // Step 1: Extract text if it's a PDF and we don't have text yet
         if (sourceToProcess.type === 'pdf' && !extractedText) {
             toast({ title: "PDF Extraction Started", description: `Requesting text extraction for ${sourceToProcess.name}...` });
             setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
             const result = await extractTextFromPdfUrl({ pdfUrl: sourceToProcess.downloadURL });
             extractedText = result.extractedText;
+            setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractedText, extractionStatus: 'success', extractionError: '' } : s));
             toast({ title: "PDF Text Extracted", description: `Now indexing ${sourceToProcess.name}...` });
         } else {
              toast({ title: "Indexing Started", description: `Indexing ${sourceToProcess.name}...` });
@@ -241,6 +241,7 @@ export default function KnowledgeBasePage() {
 
         if (!extractedText) throw new Error("Text content is empty, cannot index.");
 
+        // Step 2: Index the document content
         await indexDocument({
             sourceId: sourceToProcess.id,
             sourceName: sourceToProcess.name,
@@ -248,6 +249,7 @@ export default function KnowledgeBasePage() {
             level: level,
         });
 
+        // Step 3: Update final status
         setSources(prev => {
             const updated = prev.map(s => s.id === sourceToProcess.id ? { 
                 ...s, 
@@ -396,6 +398,7 @@ export default function KnowledgeBasePage() {
             const batch = writeBatch(db);
             chunksSnapshot.forEach(doc => batch.delete(doc.ref));
             await batch.commit();
+            toast({ title: "Indexed Data Removed", description: `${chunksSnapshot.size} associated chunks deleted.` });
         }
 
         const updatedSources = sources.filter(source => source.id !== id);
@@ -498,6 +501,7 @@ export default function KnowledgeBasePage() {
             const batch = writeBatch(db);
             chunksSnapshot.forEach(doc => batch.update(doc.ref, { level: targetLevel }));
             await batch.commit();
+            toast({ title: "Indexed Data Updated", description: `Level updated for ${chunksSnapshot.size} chunks.` });
         }
         
         await deleteObject(storageRef(storage, source.storagePath));
@@ -771,7 +775,7 @@ export default function KnowledgeBasePage() {
         </CardFooter>
       </Card>
 
-      <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb', 'low-kb', 'archive-kb']} className="w-full">
+      <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb']} className="w-full">
         {KB_LEVELS.map(level => (
             <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
             <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
