@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text,
@@ -81,11 +80,15 @@ const indexDocumentFlow = ai.defineFlow(
       return { chunksIndexed: 0, sourceId };
     }
 
-    // 2. Generate embeddings for each chunk
-    const { embeddings } = await ai.embed({
-      embedder: 'googleai/text-embedding-004',
-      content: chunks.map((chunk) => ({ text: chunk })),
-    });
+    // 2. Generate embeddings for each chunk individually to avoid batching issues.
+    const embeddings: number[][] = [];
+    for (const chunk of chunks) {
+      const { embedding } = await ai.embed({
+        embedder: 'googleai/text-embedding-004',
+        content: chunk,
+      });
+      embeddings.push(embedding);
+    }
 
     if (embeddings.length !== chunks.length) {
       throw new Error('Mismatch between number of chunks and generated embeddings.');
