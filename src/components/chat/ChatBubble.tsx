@@ -1,7 +1,7 @@
 
 import type { Message } from '@/app/page';
 import { cn } from "@/lib/utils";
-import { User, Bot } from 'lucide-react';
+import { User, Bot, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import React, { useEffect, useRef, useState } from 'react';
 
@@ -75,6 +75,25 @@ export default function ChatBubble({
     }
     return processedText;
   };
+  
+  const renderPdfLink = () => {
+    if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
+      return (
+        <a
+          href={message.pdfReference.downloadURL}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={message.pdfReference.fileName}
+          className="mt-2 inline-flex items-center gap-2 rounded-md bg-accent/50 px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent"
+        >
+          <Download className="h-3 w-3" />
+          Download: {message.pdfReference.fileName}
+        </a>
+      );
+    }
+    return null;
+  };
+
 
   return (
     <div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
@@ -90,13 +109,14 @@ export default function ChatBubble({
       )}
       <div
         className={cn(
-          "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg shadow",
+          "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg shadow flex flex-col",
           isUser
             ? "bg-primary text-primary-foreground rounded-br-none"
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        <p ref={textContentRef} className="text-xs whitespace-pre-wrap">{renderTextContent()}</p>
+        <p ref={textContentRef} className="text-sm whitespace-pre-wrap">{renderTextContent()}</p>
+        {renderPdfLink()}
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>

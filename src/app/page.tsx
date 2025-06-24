@@ -26,6 +26,10 @@ export interface Message {
   text: string;
   sender: 'user' | 'ai';
   timestamp: number;
+  pdfReference?: {
+    fileName: string;
+    downloadURL: string;
+  };
 }
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
@@ -242,11 +246,11 @@ export default function HomePage() {
   const accumulatedTranscriptRef = useRef<string>('');
   const sendTranscriptTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const addMessage = useCallback((text: string, sender: 'user' | 'ai'): string => {
+  const addMessage = useCallback((text: string, sender: 'user' | 'ai', pdfReference?: Message['pdfReference']): string => {
     const newMessageId = Date.now().toString() + Math.random();
     setMessages((prevMessages) => [
       ...prevMessages,
-      { id: newMessageId, text, sender: sender, timestamp: Date.now() },
+      { id: newMessageId, text, sender: sender, timestamp: Date.now(), pdfReference },
     ]);
     return newMessageId;
   }, []);
@@ -545,7 +549,7 @@ export default function HomePage() {
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
           if (!isEndingSessionRef.current || (isEndingSessionRef.current && result.shouldEndConversation)) {
-            newAiMessageId = addMessage(result.aiResponse, 'ai');
+            newAiMessageId = addMessage(result.aiResponse, 'ai', result.pdfReference);
             currentAiMessageIdRef.current = newAiMessageId;
           }
           setIsSendingMessage(false);
@@ -907,18 +911,18 @@ export default function HomePage() {
         for (const source of sourcesFromDb) {
           if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
             if (source.extractedText && source.extractionStatus === 'success') {
-                textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${source.extractedText}\n---`);
+                textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file, URL: ${source.downloadURL}):\n${source.extractedText}\n---`);
             } else if (source.downloadURL) {
                 try {
                     const response = await fetch(source.downloadURL);
                     if (response.ok) {
                         const textContent = await response.text();
-                        textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file):\n${textContent}\n---`);
+                        textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file, URL: ${source.downloadURL}):\n${textContent}\n---`);
                     } else { if (response.type === 'opaque' || response.status === 0) levelCorsError = true; }
                 } catch (fetchError: any) { levelCorsError = true; }
             }
-          } else if (source.type === 'pdf' && source.extractedText && source.extractionStatus === 'success') {
-            textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text):\n${source.extractedText}\n---`);
+          } else if (source.type === 'pdf' && source.extractedText && source.extractionStatus === 'success' && source.downloadURL) {
+            textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text, URL: ${source.downloadURL}):\n${source.extractedText}\n---`);
           }
         }
         setContent(textFileContents.join('\n\n'));

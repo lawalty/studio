@@ -40,9 +40,16 @@ const GenerateChatResponseInputSchema = z.object({
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
+// NEW: Schema for PDF reference in output
+const PdfSourceReferenceSchema = z.object({
+  fileName: z.string().describe('The name of the PDF file being referenced.'),
+  downloadURL: z.string().url().describe('The public download URL for the PDF file.'),
+});
+
 const GenerateChatResponseOutputSchema = z.object({
   aiResponse: z.string().describe("AI Blair's generated response."),
-  shouldEndConversation: z.boolean().optional().describe("True if the AI detected the user wants to end the conversation and has provided a closing remark. This signals the client that the session can be concluded.")
+  shouldEndConversation: z.boolean().optional().describe("True if the AI detected the user wants to end the conversation and has provided a closing remark. This signals the client that the session can be concluded."),
+  pdfReference: PdfSourceReferenceSchema.optional().describe('If the response directly uses information from a specific PDF, provide its details here. Do not populate this if the information is from a .txt file or general knowledge.'),
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
@@ -64,7 +71,16 @@ Your goal is to provide a clear, conversational, and helpful answer to the user'
 
 Use the information provided below. This information is prioritized: information listed under "Recent & Important Details" should be preferred. If the answer is found there, you generally don't need to consult "Supporting Information" or "Foundational or Older Information" unless necessary for full context or if the user asks for historical/less recent details.
 
-Synthesize the information seamlessly into your response. DO NOT mention specific file names, and DO NOT explicitly state that you are retrieving information (e.g., avoid phrases like "According to the document..." or "I found this in..."). Make it sound like you inherently know this information.
+Synthesize the information seamlessly into your response. DO NOT mention specific file names UNLESS you are citing a PDF source as instructed below. DO NOT explicitly state that you are retrieving information (e.g., avoid phrases like "According to the document..." or "I found this in..."). Make it sound like you inherently know this information.
+
+**NEW: Citing PDF Sources**
+If your answer is primarily based on information from a file identified with "(Extracted PDF Text, URL: ...)" in the 'Available Information' sections, you MUST do two things:
+1.  **Populate the \`pdfReference\` field in your output.**
+    -   Extract the file name (e.g., "document.pdf") and the full URL from the context string and put them into the \`fileName\` and \`downloadURL\` fields respectively.
+2.  **Modify your \`aiResponse\` text.**
+    -   After providing the information from the PDF, add a helpful, natural-sounding sentence offering a download link. For example: "I found these details in a document, you can download it here if you'd like to see more." or "If you need the full document, here is a link to it."
+    -   DO NOT include the raw URL in the \`aiResponse\` text itself. The UI will create the link from the \`pdfReference\` data.
+- **Only do this for PDF files.** Do not create a \`pdfReference\` for answers based on ".txt" files or general knowledge.
 
 If the available information (across all priority levels) doesn't sufficiently answer the question *or provide the specific details the user is now asking for (especially after you've already given a general statement on the topic)*:
 1.  Indicate this naturally. For example, "I understand you're looking for more specifics on that, but I don't seem to recall those particular details right now," or "While I'm familiar with the general topic, that specific piece of information isn't in my current memory."
@@ -190,5 +206,3 @@ const generateChatResponseFlow = ai.defineFlow(
     }
   }
 );
-
-    
