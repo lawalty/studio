@@ -15,77 +15,63 @@ import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
- * A robust text chunker.
- * It aggressively cleans text to remove non-printable/unsupported characters,
- * then splits the text into chunks by line, combining lines where possible,
- * and force-splitting lines that are too long.
+ * A robust text chunker that recursively splits text to respect
+ * paragraph and line boundaries as much as possible.
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-  // 1. Aggressively clean the text to remove non-printable/control characters.
-  // This is a common source of errors for embedding APIs.
+  // 1. Initial cleaning of the text
   const cleanedText = text
     .replace(/^\uFEFF/, '') // Remove Byte Order Mark (BOM)
-    .replace(/[\p{C}]/gu, '') // Remove all Unicode control characters
-    .replace(/\r\n/g, '\n') // Normalize line endings
+    .replace(/\r/g, '')     // Remove all carriage returns
+    .replace(/[\p{C}]+/gu, ' ') // Replace control characters with a space
+    .replace(/ {2,}/g, ' ') // Collapse multiple spaces
     .trim();
 
-  if (!cleanedText) {
-    return [];
+  if (cleanedText.length <= chunkSize) {
+    return cleanedText.length > 0 ? [cleanedText] : [];
   }
 
-  // 2. Split into individual lines. This is a more reliable delimiter than paragraphs.
-  const lines = cleanedText.split('\n');
-  
-  const finalChunks: string[] = [];
-  let currentChunk = "";
+  // 2. Define splitters in order of preference
+  const splitters = ['\n\n', '\n', '. ', '? ', '! ', ' '];
+  let currentChunks: string[] = [cleanedText];
+  let finalChunks: string[] = [];
 
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    if (trimmedLine.length === 0) {
-        // If we encounter an empty line, and there's content in the current chunk,
-        // treat it as a paragraph break and push the chunk.
-        if(currentChunk.length > 0) {
-            finalChunks.push(currentChunk);
-            currentChunk = "";
-        }
+  for (const splitter of splitters) {
+    const newChunks: string[] = [];
+    let splittable = false;
+
+    for (const chunk of currentChunks) {
+      if (chunk.length > chunkSize && chunk.includes(splitter)) {
+        newChunks.push(...chunk.split(splitter));
+        splittable = true;
+      } else {
+        newChunks.push(chunk);
+      }
+    }
+    currentChunks = newChunks;
+    if (!splittable) { // If we can't split any further with this splitter, move to the next
         continue;
     }
-
-    // 3. If a single line is longer than the chunk size, it must be split.
-    if (trimmedLine.length > chunkSize) {
-      // First, push any existing content as its own chunk.
-      if (currentChunk.length > 0) {
-        finalChunks.push(currentChunk);
-        currentChunk = "";
-      }
-      // Then, split the oversized line and add its parts as new chunks.
-      for (let i = 0; i < trimmedLine.length; i += chunkSize) {
-        finalChunks.push(trimmedLine.substring(i, i + chunkSize));
-      }
-    } 
-    // 4. If adding the next line would make the chunk too big...
-    else if ((currentChunk.length + trimmedLine.length + 1) > chunkSize) {
-      // ...finalize the current chunk and start a new one with the current line.
-      if (currentChunk.length > 0) {
-        finalChunks.push(currentChunk);
-      }
-      currentChunk = trimmedLine;
-    } 
-    // 5. Otherwise, add the line to the current chunk.
-    else {
-      currentChunk += (currentChunk.length > 0 ? "\n" : "") + trimmedLine;
-    }
   }
+  
+  // If after all splitters, some chunks are still too large, hard split them
+  finalChunks = currentChunks.flatMap(chunk => {
+      if (chunk.length > chunkSize) {
+          const hardSplits: string[] = [];
+          for (let i = 0; i < chunk.length; i += chunkSize) {
+              hardSplits.push(chunk.substring(i, i + chunkSize));
+          }
+          return hardSplits;
+      }
+      return [chunk];
+  });
 
-  // Add the last remaining chunk if it exists.
-  if (currentChunk.length > 0) {
-    finalChunks.push(currentChunk);
-  }
 
-  return finalChunks.filter(chunk => chunk.trim().length > 0); // Final safety filter
+  // Final filter for any empty chunks that might have been created
+  return finalChunks.map(c => c.trim()).filter(chunk => chunk.length > 0);
 }
 
 
