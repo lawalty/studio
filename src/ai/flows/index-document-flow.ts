@@ -34,44 +34,60 @@ function chunkText(text: string, chunkSize: number = 1500): string[] {
     return cleanedText.length > 0 ? [cleanedText] : [];
   }
 
-  // 2. Define splitters in order of preference
+  // 2. Define splitters in order of preference (from largest to smallest structure)
   const splitters = ['\n\n', '\n', '. ', '? ', '! ', ' '];
-  let currentChunks: string[] = [cleanedText];
-  let finalChunks: string[] = [];
-
-  for (const splitter of splitters) {
-    const newChunks: string[] = [];
-    let splittable = false;
-
-    for (const chunk of currentChunks) {
-      if (chunk.length > chunkSize && chunk.includes(splitter)) {
-        newChunks.push(...chunk.split(splitter));
-        splittable = true;
-      } else {
-        newChunks.push(chunk);
+  
+  function splitRecursively(textToSplit: string, currentSplitters: string[]): string[] {
+    if (textToSplit.length <= chunkSize) {
+      return [textToSplit];
+    }
+    if (currentSplitters.length === 0) {
+      // Base case: If we've run out of splitters, hard-split the remaining text
+      const hardSplits: string[] = [];
+      for (let i = 0; i < textToSplit.length; i += chunkSize) {
+          hardSplits.push(textToSplit.substring(i, i + chunkSize));
       }
+      return hardSplits;
     }
-    currentChunks = newChunks;
-    if (!splittable) { // If we can't split any further with this splitter, move to the next
-        continue;
+
+    const currentSplitter = currentSplitters[0];
+    const remainingSplitters = currentSplitters.slice(1);
+    const parts = textToSplit.split(currentSplitter);
+    
+    const finalChunks: string[] = [];
+    let tempChunk = "";
+
+    for (const part of parts) {
+        if (part.trim().length === 0) continue;
+
+        const prospectiveChunk = tempChunk.length > 0 ? tempChunk + currentSplitter + part : part;
+
+        if (prospectiveChunk.length > chunkSize) {
+            // If the current tempChunk is not empty, it must be valid. Push it.
+            if (tempChunk.length > 0) {
+                finalChunks.push(...splitRecursively(tempChunk, remainingSplitters));
+            }
+            // The new part itself is too long, so we must split it further.
+            finalChunks.push(...splitRecursively(part, remainingSplitters));
+            tempChunk = ""; // Reset tempChunk
+        } else {
+            // The prospective chunk is valid, so we can continue building on it.
+            tempChunk = prospectiveChunk;
+        }
     }
+    
+    // Add the last remaining tempChunk if it exists
+    if (tempChunk.length > 0) {
+        finalChunks.push(tempChunk);
+    }
+    
+    return finalChunks;
   }
   
-  // If after all splitters, some chunks are still too large, hard split them
-  finalChunks = currentChunks.flatMap(chunk => {
-      if (chunk.length > chunkSize) {
-          const hardSplits: string[] = [];
-          for (let i = 0; i < chunk.length; i += chunkSize) {
-              hardSplits.push(chunk.substring(i, i + chunkSize));
-          }
-          return hardSplits;
-      }
-      return [chunk];
-  });
-
+  const chunks = splitRecursively(cleanedText, splitters);
 
   // Final filter for any empty chunks that might have been created
-  return finalChunks.map(c => c.trim()).filter(chunk => chunk.length > 0);
+  return chunks.map(c => c.trim()).filter(chunk => chunk.length > 0);
 }
 
 
