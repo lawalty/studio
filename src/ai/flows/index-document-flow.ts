@@ -16,8 +16,8 @@ import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
  * A robust text chunker.
- * It normalizes text and splits it into logical blocks, ensuring no chunk
- * exceeds the specified size. Oversized blocks are split further.
+ * It normalizes text, splits it into paragraphs, and then splits any
+ * oversized paragraphs into smaller chunks to ensure they are under the size limit.
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
@@ -26,53 +26,39 @@ function chunkText(text: string, chunkSize: number = 1500): string[] {
   // 1. Normalize and clean up text
   const cleanedText = text
     .replace(/\r\n/g, '\n') // Normalize line endings
-    .replace(/(\n\s*){2,}/g, '\n\n') // Collapse multiple newlines
+    .replace(/(\n\s*){2,}/g, '\n\n') // Collapse multiple newlines to a standard paragraph break
     .trim();
 
   if (!cleanedText) {
     return [];
   }
 
-  // 2. Split into logical blocks (e.g., paragraphs or lines)
-  const logicalBlocks = cleanedText.split(/\n+/).filter(p => p.trim().length > 0);
+  // 2. Split into paragraphs. This is a safer primary delimiter.
+  const paragraphs = cleanedText.split('\n\n');
   
-  const chunks: string[] = [];
-  let currentChunk = '';
+  const finalChunks: string[] = [];
 
-  for (const block of logicalBlocks) {
-    // If a single block is too large, split it further.
-    if (block.length > chunkSize) {
-      if (currentChunk.trim().length > 0) {
-        chunks.push(currentChunk.trim());
-        currentChunk = '';
-      }
-      
-      // Simple splitting for oversized blocks.
-      for (let i = 0; i < block.length; i += chunkSize) {
-        const subChunk = block.substring(i, i + chunkSize);
-        if (subChunk.trim().length > 0) {
-          chunks.push(subChunk.trim());
+  for (const paragraph of paragraphs) {
+    const trimmedParagraph = paragraph.trim();
+    if (trimmedParagraph.length === 0) {
+      continue; // Skip empty paragraphs
+    }
+
+    // 3. If a paragraph is larger than the chunk size, split it by force.
+    if (trimmedParagraph.length > chunkSize) {
+      for (let i = 0; i < trimmedParagraph.length; i += chunkSize) {
+        const subChunk = trimmedParagraph.substring(i, i + chunkSize).trim();
+        if (subChunk.length > 0) {
+          finalChunks.push(subChunk);
         }
       }
-      continue; // Move to the next block
+    } else {
+      // 4. Otherwise, the paragraph is a valid chunk on its own.
+      finalChunks.push(trimmedParagraph);
     }
-
-    // If adding the new block makes the chunk too large, push the current one.
-    if (currentChunk.length + block.length + 1 > chunkSize && currentChunk.length > 0) {
-      chunks.push(currentChunk.trim());
-      currentChunk = '';
-    }
-
-    // Add the block to the current chunk.
-    currentChunk += (currentChunk.length > 0 ? '\n' : '') + block;
   }
 
-  // Push the last remaining chunk if it exists.
-  if (currentChunk.trim().length > 0) {
-    chunks.push(currentChunk.trim());
-  }
-
-  return chunks;
+  return finalChunks;
 }
 
 
