@@ -87,6 +87,14 @@ const indexDocumentFlow = ai.defineFlow(
         embedder: 'googleai/text-embedding-004',
         content: chunk,
       });
+
+      // FIX: Check for undefined embedding and throw a clear error.
+      // This prevents the Firestore error "Unsupported field value: undefined".
+      if (!embedding) {
+        throw new Error(
+          `Failed to generate embedding for a chunk in document '${sourceName}'. The chunk may be empty or contain unsupported content.`
+        );
+      }
       embeddings.push(embedding);
     }
 
@@ -105,7 +113,7 @@ const indexDocumentFlow = ai.defineFlow(
         sourceName,
         level,
         text: chunks[index],
-        embedding: embedding, // Store the vector
+        embedding: embedding, // This is now guaranteed to be a valid array.
         createdAt: new Date().toISOString(),
         downloadURL,
       });
