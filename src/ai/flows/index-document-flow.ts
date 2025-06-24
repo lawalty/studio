@@ -84,7 +84,7 @@ const indexDocumentFlow = ai.defineFlow(
     // 2. Generate embeddings for each chunk
     const { embeddings } = await ai.embed({
       embedder: 'googleai/text-embedding-004',
-      content: chunks,
+      content: chunks.map((chunk) => ({ text: chunk })),
     });
 
     if (embeddings.length !== chunks.length) {
