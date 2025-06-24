@@ -134,6 +134,16 @@ const indexDocumentFlow = ai.defineFlow(
         const { embedding } = await ai.embed({
           embedder: 'googleai/text-embedding-004',
           content: chunk,
+          // Relax the dangerous content filter to allow indexing of policy documents.
+          // This does not affect the safety settings for generating responses.
+          config: {
+            safetySettings: [
+              {
+                category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+                threshold: 'BLOCK_NONE',
+              },
+            ],
+          },
         });
 
         if (embedding) {
