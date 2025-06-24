@@ -1,8 +1,8 @@
 
 import type { Metadata } from 'next';
 import './globals.css';
+import { Toaster } from "@/components/ui/toaster";
 import ConditionalLayout from '@/components/layout/ConditionalLayout';
-import { Toaster } from "@/components/ui/toaster"; // Added Toaster import
 
 export const metadata: Metadata = {
   title: 'AI Blair',
@@ -25,7 +25,7 @@ export default function RootLayout({
         <ConditionalLayout>
           {children}
         </ConditionalLayout>
-        <Toaster /> {/* Moved Toaster here */}
+        <Toaster />
       </body>
     </html>
   );
