@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
 import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
-import { generateInitialGreeting, type GenerateInitialGreetingInput } from '@/ai/flows/generate-initial-greeting';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -182,7 +181,6 @@ export default function HomePage() {
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
   const [useTtsApi, setUseTtsApi] = useState<boolean>(true);
-  const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [customGreeting, setCustomGreeting] = useState<string>(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
   const [responsePauseTimeMs, setResponsePauseTimeMs] = useState<number>(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -828,46 +826,33 @@ export default function HomePage() {
     if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingConfig && !hasConversationEnded) {
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false;
+      
       const initConversation = async () => {
-        let greetingToUse: string | null = null;
+        setShowPreparingGreeting(true);
+        const greetingToUse = customGreeting && customGreeting.trim() !== "" 
+          ? customGreeting.trim()
+          : "Hello! How can I help you today?";
+
         let greetingMessageId: string | null = null;
-        if (customGreeting && customGreeting.trim() !== "") {
-          greetingToUse = customGreeting.trim();
-        } else {
-          try {
-            // Initial greeting no longer uses KB summaries. It's now more generic.
-            const greetingInput: GenerateInitialGreetingInput = {
-              personaTraits,
-              useKnowledgeInGreeting: useKnowledgeInGreeting,
-            };
-            setShowPreparingGreeting(true);
-            const result = await generateInitialGreeting(greetingInput);
-            greetingToUse = result.greetingMessage;
-          } catch (error) {
-            console.error("Error generating initial greeting:", error);
-            greetingToUse = "Hello! I had a little trouble starting up. Please try changing modes or refreshing.";
-          }
-        }
-        if (greetingToUse) {
-          const onGreetingSpeechActuallyStarting = () => {
-            setTimeout(() => {
-              if (!isEndingSessionRef.current) {
-                greetingMessageId = addMessage(greetingToUse!, 'ai');
-                currentAiMessageIdRef.current = greetingMessageId;
-              }
-            }, 50);
-          };
-          await speakTextRef.current(greetingToUse, greetingMessageId, onGreetingSpeechActuallyStarting, false);
-        } else {
-             setShowPreparingGreeting(false);
-             if (communicationModeRef.current === 'audio-only' && !isEndingSessionRef.current && !hasConversationEnded) {
-                toggleListeningRef.current(true);
+        const onGreetingSpeechActuallyStarting = () => {
+          setTimeout(() => {
+            if (!isEndingSessionRef.current) {
+              greetingMessageId = addMessage(greetingToUse, 'ai');
+              currentAiMessageIdRef.current = greetingMessageId;
             }
+          }, 50);
+        };
+
+        await speakTextRef.current(greetingToUse, greetingMessageId, onGreetingSpeechActuallyStarting, false);
+
+        if(communicationModeRef.current === 'text-only') {
+          setShowPreparingGreeting(false);
         }
       };
+      
       initConversation();
     }
-  }, [ showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingConfig, hasConversationEnded, useKnowledgeInGreeting, customGreeting, addMessage ]);
+  }, [showSplashScreen, aiHasInitiatedConversation, customGreeting, messages.length, addMessage, isSendingMessage, isLoadingConfig, hasConversationEnded, personaTraits]);
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -898,7 +883,6 @@ export default function HomePage() {
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS);
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
-          setUseKnowledgeInGreeting(typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true);
           setCustomGreeting(assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
           setTextAnimationEnabled(typeof assets.enableTextAnimation === 'boolean' ? assets.enableTextAnimation : DEFAULT_TEXT_ANIMATION_ENABLED);
@@ -910,7 +894,6 @@ export default function HomePage() {
             setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
             setPersonaTraits(DEFAULT_PERSONA_TRAITS);
             setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
-            setUseKnowledgeInGreeting(true);
             setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
             setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
             setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
