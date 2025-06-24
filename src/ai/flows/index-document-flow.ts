@@ -17,52 +17,75 @@ import { collection, writeBatch, doc } from 'firebase/firestore';
 /**
  * A robust text chunker.
  * It aggressively cleans text to remove non-printable/unsupported characters,
- * normalizes whitespace and line endings, then splits the text into chunks
- * by paragraph, respecting a maximum chunk size.
+ * then splits the text into chunks by line, combining lines where possible,
+ * and force-splitting lines that are too long.
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-  // 1. Aggressively clean the text to remove non-printable characters, weird whitespace, and control chars.
+  // 1. Aggressively clean the text to remove non-printable/control characters.
   // This is a common source of errors for embedding APIs.
-  // We keep letters, numbers, standard punctuation, and basic whitespace.
   const cleanedText = text
-    .replace(/[^\p{L}\p{N}\p{P}\p{Z}\r\n]/gu, '') // Remove non-standard characters
+    .replace(/^\uFEFF/, '') // Remove Byte Order Mark (BOM)
+    .replace(/[\p{C}]/gu, '') // Remove all Unicode control characters
     .replace(/\r\n/g, '\n') // Normalize line endings
-    .replace(/(\n\s*){2,}/g, '\n\n') // Collapse multiple newlines to a standard paragraph break
     .trim();
 
   if (!cleanedText) {
     return [];
   }
 
-  // 2. Split into paragraphs. This is a safer primary delimiter.
-  const paragraphs = cleanedText.split('\n\n');
+  // 2. Split into individual lines. This is a more reliable delimiter than paragraphs.
+  const lines = cleanedText.split('\n');
   
   const finalChunks: string[] = [];
+  let currentChunk = "";
 
-  for (const paragraph of paragraphs) {
-    const trimmedParagraph = paragraph.trim();
-    if (trimmedParagraph.length === 0) {
-      continue; // Skip empty paragraphs
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (trimmedLine.length === 0) {
+        // If we encounter an empty line, and there's content in the current chunk,
+        // treat it as a paragraph break and push the chunk.
+        if(currentChunk.length > 0) {
+            finalChunks.push(currentChunk);
+            currentChunk = "";
+        }
+        continue;
     }
 
-    // 3. If a paragraph is larger than the chunk size, split it by force.
-    if (trimmedParagraph.length > chunkSize) {
-      for (let i = 0; i < trimmedParagraph.length; i += chunkSize) {
-        const subChunk = trimmedParagraph.substring(i, i + chunkSize).trim();
-        if (subChunk.length > 0) {
-          finalChunks.push(subChunk);
-        }
+    // 3. If a single line is longer than the chunk size, it must be split.
+    if (trimmedLine.length > chunkSize) {
+      // First, push any existing content as its own chunk.
+      if (currentChunk.length > 0) {
+        finalChunks.push(currentChunk);
+        currentChunk = "";
       }
-    } else {
-      // 4. Otherwise, the paragraph is a valid chunk on its own.
-      finalChunks.push(trimmedParagraph);
+      // Then, split the oversized line and add its parts as new chunks.
+      for (let i = 0; i < trimmedLine.length; i += chunkSize) {
+        finalChunks.push(trimmedLine.substring(i, i + chunkSize));
+      }
+    } 
+    // 4. If adding the next line would make the chunk too big...
+    else if ((currentChunk.length + trimmedLine.length + 1) > chunkSize) {
+      // ...finalize the current chunk and start a new one with the current line.
+      if (currentChunk.length > 0) {
+        finalChunks.push(currentChunk);
+      }
+      currentChunk = trimmedLine;
+    } 
+    // 5. Otherwise, add the line to the current chunk.
+    else {
+      currentChunk += (currentChunk.length > 0 ? "\n" : "") + trimmedLine;
     }
   }
 
-  return finalChunks;
+  // Add the last remaining chunk if it exists.
+  if (currentChunk.length > 0) {
+    finalChunks.push(currentChunk);
+  }
+
+  return finalChunks.filter(chunk => chunk.trim().length > 0); // Final safety filter
 }
 
 
