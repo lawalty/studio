@@ -54,6 +54,7 @@ const IndexDocumentInputSchema = z.object({
   sourceName: z.string().describe('The original filename of the source document.'),
   text: z.string().describe('The full text content of the document to be indexed.'),
   level: z.string().describe('The priority level of the knowledge base (e.g., High, Medium).'),
+  downloadURL: z.string().url().describe('The public download URL for the source file.'),
 });
 export type IndexDocumentInput = z.infer<typeof IndexDocumentInputSchema>;
 
@@ -73,7 +74,7 @@ const indexDocumentFlow = ai.defineFlow(
     inputSchema: IndexDocumentInputSchema,
     outputSchema: IndexDocumentOutputSchema,
   },
-  async ({ sourceId, sourceName, text, level }) => {
+  async ({ sourceId, sourceName, text, level, downloadURL }) => {
     // 1. Chunk the text
     const chunks = chunkText(text);
     if (chunks.length === 0) {
@@ -103,6 +104,7 @@ const indexDocumentFlow = ai.defineFlow(
         text: chunks[index],
         embedding: embedding, // Store the vector
         createdAt: new Date().toISOString(),
+        downloadURL,
       });
     });
 

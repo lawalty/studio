@@ -18,7 +18,6 @@ import { Mic, Square as SquareIcon, CheckCircle, Power, DatabaseZap, AlertTriang
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
 
 
 export interface Message {
@@ -46,10 +45,6 @@ const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50;
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-
-const FIRESTORE_KB_HIGH_PATH = "configurations/kb_high_meta_v1";
-const FIRESTORE_KB_MEDIUM_PATH = "configurations/kb_medium_meta_v1";
-const FIRESTORE_KB_LOW_PATH = "configurations/kb_low_meta_v1";
 
 const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 500;
 const ACKNOWLEDGEMENT_PHRASES = [
@@ -203,16 +198,7 @@ export default function HomePage() {
   const [textPopulationStaggerMs, setTextPopulationStaggerMs] = useState<number>(DEFAULT_TEXT_POPULATION_STAGGER_MS);
   const [forceFinishAnimationForMessageId, setForceFinishAnimationForMessageId] = useState<string | null>(null);
 
-
-  const [knowledgeFileSummaryHigh, setKnowledgeFileSummaryHigh] = useState<string>('');
-  const [knowledgeFileSummaryMedium, setKnowledgeFileSummaryMedium] = useState<string>('');
-  const [knowledgeFileSummaryLow, setKnowledgeFileSummaryLow] = useState<string>('');
-  const [dynamicKnowledgeContentHigh, setDynamicKnowledgeContentHigh] = useState<string>('');
-  const [dynamicKnowledgeContentMedium, setDynamicKnowledgeContentMedium] = useState<string>('');
-  const [dynamicKnowledgeContentLow, setDynamicKnowledgeContentLow] = useState<string>('');
-
-  const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(true);
-  const [corsErrorEncountered, setCorsErrorEncountered] = useState(false);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   
   const router = useRouter();
 
@@ -493,7 +479,6 @@ export default function HomePage() {
           })
           .catch(error => {
             console.error("Error in API speech path:", error);
-            if ((error?.message || "").includes('Failed to fetch')) setCorsErrorEncountered(true);
             toast({ title: `TTS API Error`, description: `Using browser default.`, variant: "destructive" });
             tryBrowserFallback();
           });
@@ -531,12 +516,6 @@ export default function HomePage() {
     try {
       const flowInput: GenerateChatResponseInput = {
         userMessage: text,
-        knowledgeBaseHighSummary: knowledgeFileSummaryHigh || undefined,
-        knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
-        knowledgeBaseMediumSummary: knowledgeFileSummaryMedium || undefined,
-        knowledgeBaseMediumTextContent: dynamicKnowledgeContentMedium || undefined,
-        knowledgeBaseLowSummary: knowledgeFileSummaryLow || undefined,
-        knowledgeBaseLowTextContent: dynamicKnowledgeContentLow || undefined,
         personaTraits: personaTraits,
         chatHistory: historyForGenkit,
       };
@@ -579,10 +558,7 @@ export default function HomePage() {
       mainResponsePendingAfterAckRef.current = false;
       isSpeakingAcknowledgementRef.current = false;
     }
-  }, [addMessage, personaTraits, hasConversationEnded, isSendingMessage, setInputValue,
-      knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh,
-      knowledgeFileSummaryMedium, dynamicKnowledgeContentMedium,
-      knowledgeFileSummaryLow, dynamicKnowledgeContentLow ]);
+  }, [addMessage, personaTraits, hasConversationEnded, isSendingMessage, setInputValue]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
@@ -849,7 +825,7 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingKnowledge && !hasConversationEnded) {
+    if (!showSplashScreen && !aiHasInitiatedConversation && personaTraits && messages.length === 0 && !isSpeakingRef.current && !isSendingMessage && !isLoadingConfig && !hasConversationEnded) {
       setAiHasInitiatedConversation(true);
       isAboutToSpeakForSilenceRef.current = false;
       const initConversation = async () => {
@@ -859,10 +835,9 @@ export default function HomePage() {
           greetingToUse = customGreeting.trim();
         } else {
           try {
+            // Initial greeting no longer uses KB summaries. It's now more generic.
             const greetingInput: GenerateInitialGreetingInput = {
               personaTraits,
-              knowledgeBaseHighSummary: knowledgeFileSummaryHigh || undefined,
-              knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
               useKnowledgeInGreeting: useKnowledgeInGreeting,
             };
             setShowPreparingGreeting(true);
@@ -892,54 +867,11 @@ export default function HomePage() {
       };
       initConversation();
     }
-  }, [ showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingKnowledge, hasConversationEnded, knowledgeFileSummaryHigh, dynamicKnowledgeContentHigh, useKnowledgeInGreeting, customGreeting, addMessage ]);
-
-  const fetchAndProcessKnowledgeLevel = useCallback(async (
-    levelPath: string, levelName: string,
-    setSummary: React.Dispatch<React.SetStateAction<string>>,
-    setContent: React.Dispatch<React.SetStateAction<string>>
-  ): Promise<boolean> => {
-    let levelCorsError = false;
-    try {
-      const kbMetaDocRef = doc(db, levelPath);
-      const kbMetaDocSnap = await getDoc(kbMetaDocRef);
-      let sourcesFromDb: KnowledgeSource[] = [];
-      if (kbMetaDocSnap.exists() && kbMetaDocSnap.data()?.sources) {
-        sourcesFromDb = kbMetaDocSnap.data().sources as KnowledgeSource[];
-      }
-      if (sourcesFromDb.length > 0) {
-        const summary = `The ${levelName.toLowerCase()} priority knowledge base includes these files: ` +
-                        sourcesFromDb.map(s => `${s.name} (Type: ${s.type})`).join(', ') + ".";
-        setSummary(summary);
-        const textFileContents: string[] = [];
-        for (const source of sourcesFromDb) {
-          if (source.type === 'text' && source.downloadURL && typeof source.downloadURL === 'string' && source.downloadURL.trim() !== '') {
-            if (source.extractedText && source.extractionStatus === 'success') {
-                textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file, URL: ${source.downloadURL}):\n${source.extractedText}\n---`);
-            } else if (source.downloadURL) {
-                try {
-                    const response = await fetch(source.downloadURL);
-                    if (response.ok) {
-                        const textContent = await response.text();
-                        textFileContents.push(`Content from ${source.name} (${levelName} Priority - .txt file, URL: ${source.downloadURL}):\n${textContent}\n---`);
-                    } else { if (response.type === 'opaque' || response.status === 0) levelCorsError = true; }
-                } catch (fetchError: any) { levelCorsError = true; }
-            }
-          } else if (source.type === 'pdf' && source.extractedText && source.extractionStatus === 'success' && source.downloadURL) {
-            textFileContents.push(`Content from ${source.name} (${levelName} Priority - Extracted PDF Text, URL: ${source.downloadURL}):\n${source.extractedText}\n---`);
-          }
-        }
-        setContent(textFileContents.join('\n\n'));
-      } else { setSummary(''); setContent(''); }
-    } catch (e: any) { toast({ title: `Error Loading ${levelName} KB`, description: `Could not load ${levelName} knowledge. ${e.message || ''}`.trim(), variant: "destructive"}); levelCorsError = true; }
-    return levelCorsError;
-  }, [toast]);
+  }, [ showSplashScreen, aiHasInitiatedConversation, personaTraits, messages.length, isSendingMessage, isLoadingConfig, hasConversationEnded, useKnowledgeInGreeting, customGreeting, addMessage ]);
 
   useEffect(() => {
     const fetchAllData = async () => {
-      setIsLoadingKnowledge(true);
-      setCorsErrorEncountered(false);
-      let anyCorsError = false;
+      setIsLoadingConfig(true);
       try {
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
@@ -986,14 +918,10 @@ export default function HomePage() {
             setTextPopulationStaggerMs(DEFAULT_TEXT_POPULATION_STAGGER_MS);
         }
       } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
-      const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh); if (highError) anyCorsError = true;
-      const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium); if (mediumError) anyCorsError = true;
-      const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setDynamicKnowledgeContentLow, setDynamicKnowledgeContentLow); if (lowError) anyCorsError = true;
-      if (anyCorsError) setCorsErrorEncountered(true);
-      setIsLoadingKnowledge(false);
+      setIsLoadingConfig(false);
     };
     fetchAllData();
-  }, [toast, fetchAndProcessKnowledgeLevel]);
+  }, [toast]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1014,30 +942,6 @@ export default function HomePage() {
   useEffect(() => { if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(false); else setIsSplashImageLoaded(true); }, [splashImageSrc]);
 
   const lastOverallMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-  const corsTroubleshootingAlert = corsErrorEncountered && !isLoadingKnowledge && (
-      <Alert variant="destructive" className="my-4">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertTitle>Critical: Knowledge Base Access Issue (CORS)</AlertTitle>
-        <AlertDescription className="space-y-2 text-left">
-          <p>AI Blair cannot access some text files from your Firebase Storage due to a <strong>CORS (Cross-Origin Resource Sharing) configuration error</strong>. This means your storage bucket is not allowing this application (origin) to fetch files.</p>
-           <p className="font-semibold">If your DEPLOYED app version works but Firebase Studio DOES NOT:</p>
-          <ul className="list-disc list-inside space-y-1 text-xs pl-4">
-              <li>The issue is almost certainly with the Firebase Studio origin. Open your browser's developer console (F12, Console tab) while running in Studio. Find the CORS error message. It will state the <strong>exact "origin"</strong> that was blocked.</li>
-              <li>Ensure this <strong>exact Firebase Studio origin</strong> is present in your <code>cors-config.json</code> file.</li>
-              <li>Verify with <code>gsutil cors get gs://YOUR_BUCKET_ID.appspot.com</code> that the active policy on the bucket includes this exact Studio origin. Replace <code>YOUR_BUCKET_ID</code> with your actual bucket ID.</li>
-          </ul>
-          <p className="font-semibold mt-2">General CORS Troubleshooting for Firebase Storage:</p>
-          <ol className="list-decimal list-inside space-y-1 text-xs">
-            <li><strong>Identify ALL Your App's Origins</strong> (Studio, Deployed, Local).</li>
-            <li><strong>Create/Update <code>cors-config.json</code> file with ALL origins.</strong></li>
-            <li><strong>Identify Your GCS Bucket ID.</strong></li>
-            <li><strong>Use \`gsutil\` to set and verify the policy on your bucket.</strong></li>
-            <li><strong>Wait &amp; Test:</strong> Allow 5-10 min. Clear browser cache/cookies. Test in Incognito.</li>
-          </ol>
-          <p className="mt-2">AI Blair's knowledge base functionality will be limited until this is resolved.</p>
-        </AlertDescription>
-      </Alert>
-  );
 
   if (showSplashScreen) {
     return (
@@ -1045,7 +949,7 @@ export default function HomePage() {
         <Card className="w-full max-w-md shadow-2xl">
           <CardHeader className="text-center">
             <CardTitle className="text-3xl font-headline text-primary">
-              {isLoadingKnowledge ? "Connecting..." : splashScreenWelcomeMessage}
+              {isLoadingConfig ? "Connecting..." : splashScreenWelcomeMessage}
             </CardTitle>
             <CardDescription className="text-base">Let&apos;s have a conversation.</CardDescription>
           </CardHeader>
@@ -1059,16 +963,15 @@ export default function HomePage() {
               data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
             />
             <p className="text-base font-semibold text-foreground">Choose your preferred way to interact:</p>
-             {isLoadingKnowledge && ( <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30"> <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" /> Connecting to knowledge bases... </div> )}
+             {isLoadingConfig && ( <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30"> <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" /> Connecting... </div> )}
             <RadioGroup value={selectedInitialMode} onValueChange={(value: CommunicationMode) => setSelectedInitialMode(value)} className="w-full space-y-2">
-              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="audio-only" id="r1" disabled={isLoadingKnowledge}/> <Label htmlFor="r1" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio Only</Label> </div>
-              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="audio-text" id="r2" disabled={isLoadingKnowledge}/> <Label htmlFor="r2" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Audio &amp; Text (Recommended)</Label> </div>
-              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="text-only" id="r3" disabled={isLoadingKnowledge}/> <Label htmlFor="r3" className={cn("flex-grow cursor-pointer text-base", isLoadingKnowledge && "cursor-not-allowed opacity-50")}>Text Only</Label> </div>
+              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="audio-only" id="r1" disabled={isLoadingConfig}/> <Label htmlFor="r1" className={cn("flex-grow cursor-pointer text-base", isLoadingConfig && "cursor-not-allowed opacity-50")}>Audio Only</Label> </div>
+              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="audio-text" id="r2" disabled={isLoadingConfig}/> <Label htmlFor="r2" className={cn("flex-grow cursor-pointer text-base", isLoadingConfig && "cursor-not-allowed opacity-50")}>Audio &amp; Text (Recommended)</Label> </div>
+              <div className="flex items-center space-x-2 p-3 border rounded-md hover:bg-accent/50 transition-colors"> <RadioGroupItem value="text-only" id="r3" disabled={isLoadingConfig}/> <Label htmlFor="r3" className={cn("flex-grow cursor-pointer text-base", isLoadingConfig && "cursor-not-allowed opacity-50")}>Text Only</Label> </div>
             </RadioGroup>
-            <Button onClick={handleModeSelectionSubmit} size="lg" className="w-full" disabled={isLoadingKnowledge}> <CheckCircle className="mr-2"/> {isLoadingKnowledge ? "Loading..." : "Start Chatting"} </Button>
-             {!isLoadingKnowledge && useTtsApi && (elevenLabsApiKey === null || elevenLabsVoiceId === null) && ( <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2"> <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" /> <span>Custom TTS is ON, but API key/Voice ID may be missing or empty. Voice features might be limited. Using browser default TTS if needed.</span> </div> )}
-             {!isLoadingKnowledge && !useTtsApi && ( <div className="flex items-start text-xs text-muted-foreground p-2 border border-border rounded-md mt-2 bg-secondary/20"> <Info className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" /> <span>Custom TTS API is currently OFF. Using browser default voice.</span> </div> )}
-            {corsTroubleshootingAlert}
+            <Button onClick={handleModeSelectionSubmit} size="lg" className="w-full" disabled={isLoadingConfig}> <CheckCircle className="mr-2"/> {isLoadingConfig ? "Loading..." : "Start Chatting"} </Button>
+             {!isLoadingConfig && useTtsApi && (elevenLabsApiKey === null || elevenLabsVoiceId === null) && ( <div className="flex items-start text-xs text-destructive/80 p-2 border border-destructive/30 rounded-md mt-2"> <AlertTriangle className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" /> <span>Custom TTS is ON, but API key/Voice ID may be missing or empty. Voice features might be limited. Using browser default TTS if needed.</span> </div> )}
+             {!isLoadingConfig && !useTtsApi && ( <div className="flex items-start text-xs text-muted-foreground p-2 border border-border rounded-md mt-2 bg-secondary/20"> <Info className="h-4 w-4 mr-1.5 mt-0.5 shrink-0" /> <span>Custom TTS API is currently OFF. Using browser default voice.</span> </div> )}
           </CardContent>
         </Card>
       </div>
@@ -1122,13 +1025,12 @@ export default function HomePage() {
     : messages;
 
   const mainContent = () => {
-    if (isLoadingKnowledge && !aiHasInitiatedConversation) {
-        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Knowledge Bases</h2> <p className="mt-2 text-muted-foreground">Please wait while AI Blair gathers the latest information...</p> </div> );
+    if (isLoadingConfig && !aiHasInitiatedConversation) {
+        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading App Configuration</h2> <p className="mt-2 text-muted-foreground">Please wait a moment...</p> </div> );
     }
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
-          {corsTroubleshootingAlert}
           {!hasConversationEnded && <Image {...imageProps} />}
           {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}</h2>}
            <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
@@ -1181,7 +1083,6 @@ export default function HomePage() {
               )}
             </CardContent>
           </Card>
-           {corsTroubleshootingAlert}
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog

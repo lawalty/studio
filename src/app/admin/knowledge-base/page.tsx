@@ -247,6 +247,7 @@ export default function KnowledgeBasePage() {
             sourceName: sourceToProcess.name,
             text: extractedText,
             level: level,
+            downloadURL: sourceToProcess.downloadURL,
         });
 
         // Step 3: Update final status
