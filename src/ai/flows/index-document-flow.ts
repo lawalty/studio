@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text,
@@ -14,36 +15,63 @@ import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
- * A simple text chunker.
- * It splits text by paragraphs first, then combines them into chunks of a target size.
+ * A robust text chunker.
+ * It normalizes text and splits it into logical blocks, ensuring no chunk
+ * exceeds the specified size. Oversized blocks are split further.
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-  const paragraphs = text.split(/(\n\s*){2,}/).filter(p => p.trim().length > 0);
+  // 1. Normalize and clean up text
+  const cleanedText = text
+    .replace(/\r\n/g, '\n') // Normalize line endings
+    .replace(/(\n\s*){2,}/g, '\n\n') // Collapse multiple newlines
+    .trim();
+
+  if (!cleanedText) {
+    return [];
+  }
+
+  // 2. Split into logical blocks (e.g., paragraphs or lines)
+  const logicalBlocks = cleanedText.split(/\n+/).filter(p => p.trim().length > 0);
+  
   const chunks: string[] = [];
   let currentChunk = '';
 
-  for (const paragraph of paragraphs) {
-    if (currentChunk.length + paragraph.length + 1 > chunkSize && currentChunk.length > 0) {
-      chunks.push(currentChunk);
+  for (const block of logicalBlocks) {
+    // If a single block is too large, split it further.
+    if (block.length > chunkSize) {
+      if (currentChunk.trim().length > 0) {
+        chunks.push(currentChunk.trim());
+        currentChunk = '';
+      }
+      
+      // Simple splitting for oversized blocks.
+      for (let i = 0; i < block.length; i += chunkSize) {
+        const subChunk = block.substring(i, i + chunkSize);
+        if (subChunk.trim().length > 0) {
+          chunks.push(subChunk.trim());
+        }
+      }
+      continue; // Move to the next block
+    }
+
+    // If adding the new block makes the chunk too large, push the current one.
+    if (currentChunk.length + block.length + 1 > chunkSize && currentChunk.length > 0) {
+      chunks.push(currentChunk.trim());
       currentChunk = '';
     }
-    // If a single paragraph is larger than the chunk size, it becomes its own chunk.
-    if (paragraph.length > chunkSize) {
-       if (currentChunk.length > 0) {
-         chunks.push(currentChunk);
-         currentChunk = '';
-       }
-       chunks.push(paragraph);
-    } else {
-      currentChunk += (currentChunk.length > 0 ? '\n\n' : '') + paragraph;
-    }
+
+    // Add the block to the current chunk.
+    currentChunk += (currentChunk.length > 0 ? '\n' : '') + block;
   }
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
+
+  // Push the last remaining chunk if it exists.
+  if (currentChunk.trim().length > 0) {
+    chunks.push(currentChunk.trim());
   }
+
   return chunks;
 }
 
