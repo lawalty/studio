@@ -227,28 +227,28 @@ export default function KnowledgeBasePage() {
     try {
         let extractedText = textContent;
 
-        // For PDF files, always re-extract the text to ensure it's fresh and correctly formatted.
-        // For initial .txt file uploads, textContent will be provided.
-        // For reprocessing a .txt file, we'll use its already-stored text.
         if (sourceToProcess.type === 'pdf') {
             toast({ title: "PDF Extraction Started", description: `Requesting text extraction for ${sourceToProcess.name}...` });
             setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
             const result = await extractTextFromPdfUrl({ pdfUrl: sourceToProcess.downloadURL });
-            extractedText = result.extractedText; // This now has the \\n fix from the flow
+            extractedText = result.extractedText;
             setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractedText, extractionStatus: 'success', extractionError: '' } : s));
             toast({ title: "PDF Text Extracted", description: `Now indexing ${sourceToProcess.name}...` });
         } else if (sourceToProcess.type === 'text') {
-             extractedText = textContent || sourceToProcess.extractedText;
+             if (!textContent && sourceToProcess.storagePath) {
+                toast({ title: "Reading File for Reprocessing", description: `Fetching content of ${sourceToProcess.name}...` });
+                const blob = await getBlob(storageRef(storage, sourceToProcess.storagePath));
+                extractedText = await blob.text();
+             } else {
+                extractedText = textContent;
+             }
              toast({ title: "Indexing Started", description: `Indexing ${sourceToProcess.name}...` });
         }
 
         if (!extractedText) {
-            // This case handles a text file being reprocessed that somehow has no stored text,
-            // or a new upload that failed to read.
             throw new Error("Text content is missing or empty, cannot index.");
         }
 
-        // Step 2: Index the document content
         await indexDocument({
             sourceId: sourceToProcess.id,
             sourceName: sourceToProcess.name,
@@ -257,7 +257,6 @@ export default function KnowledgeBasePage() {
             downloadURL: sourceToProcess.downloadURL,
         });
 
-        // Step 3: Update final status
         setSources(prev => {
             const updated = prev.map(s => s.id === sourceToProcess.id ? { 
                 ...s, 
