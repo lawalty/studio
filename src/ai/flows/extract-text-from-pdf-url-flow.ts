@@ -62,6 +62,10 @@ const extractTextFromPdfUrlFlow = ai.defineFlow(
         console.error('[extractTextFromPdfUrlFlow] Invalid or malformed output from prompt. Expected { extractedText: string }, received:', output);
         throw new Error('Extraction failed: The AI model returned an unexpected data structure. The PDF might be incompatible or an issue occurred with the model.');
       }
+      
+      // Unescape newline characters that may have been escaped in the JSON output from the LLM.
+      output.extractedText = output.extractedText.replace(/\\n/g, '\n');
+      
       return output;
     } catch (e: any) {
       console.error('[extractTextFromPdfUrlFlow] Error during text extraction flow:', e);
