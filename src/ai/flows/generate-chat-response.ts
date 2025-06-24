@@ -53,6 +53,16 @@ const GenerateChatResponseOutputSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
+// Define a new schema specifically for the prompt's input, with a more robust chat history structure
+const ProcessedChatMessageSchema = z.object({
+  user: z.string().optional(),
+  model: z.string().optional(),
+});
+const PromptInputSchema = GenerateChatResponseInputSchema.extend({
+  chatHistory: z.array(ProcessedChatMessageSchema).optional(),
+});
+
+
 export async function generateChatResponse(
   input: GenerateChatResponseInput
 ): Promise<GenerateChatResponseOutput> {
@@ -61,7 +71,7 @@ export async function generateChatResponse(
 
 const prompt = ai.definePrompt({
   name: 'generateChatResponsePrompt',
-  input: {schema: GenerateChatResponseInputSchema},
+  input: {schema: PromptInputSchema}, // Use the new, more robust schema
   output: {schema: GenerateChatResponseOutputSchema},
   prompt: `You are AI Blair. Your personality and style are defined by the following traits:
 {{{personaTraits}}}
@@ -121,8 +131,8 @@ If a user asks for very specific details from files like Word documents or audio
 {{#if chatHistory.length}}
 Previous turn(s) in this conversation:
 {{#each chatHistory}}
-{{#if this.isUser}}User: {{this.parts.[0].text}}{{/if}}
-{{#if this.isModel}}AI Blair: {{this.parts.[0].text}}{{/if}}
+{{#if user}}User: {{{user}}}{{/if}}
+{{#if model}}AI Blair: {{{model}}}{{/if}}
 {{/each}}
 {{/if}}
 
@@ -163,18 +173,17 @@ const generateChatResponseFlow = ai.defineFlow(
     outputSchema: GenerateChatResponseOutputSchema,
   },
   async (input) => {
-    const processedChatHistory = (input.chatHistory || []).map(msg => ({
-      ...msg,
-      isUser: msg.role === 'user',
-      isModel: msg.role === 'model',
-    }));
+    // Transform the chat history into a structure that the Handlebars template can easily and safely use.
+    const processedChatHistory = (input.chatHistory || []).map(msg => {
+      if (msg.role === 'user') {
+        return { user: msg.parts[0].text };
+      }
+      return { model: msg.parts[0].text };
+    });
 
+    // Construct the input for the prompt, ensuring it matches the new PromptInputSchema.
     const promptInput = {
-        userMessage: input.userMessage,
-        knowledgeBaseHigh: input.knowledgeBaseHigh,
-        knowledgeBaseMedium: input.knowledgeBaseMedium,
-        knowledgeBaseLow: input.knowledgeBaseLow,
-        personaTraits: input.personaTraits,
+        ...input,
         chatHistory: processedChatHistory,
     };
 
