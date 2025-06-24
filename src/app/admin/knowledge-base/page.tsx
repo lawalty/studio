@@ -225,21 +225,28 @@ export default function KnowledgeBasePage() {
     const setSources = getSourcesSetter(level);
 
     try {
-        let extractedText = textContent || sourceToProcess.extractedText;
+        let extractedText = textContent;
 
-        // Step 1: Extract text if it's a PDF and we don't have text yet
-        if (sourceToProcess.type === 'pdf' && !extractedText) {
+        // For PDF files, always re-extract the text to ensure it's fresh and correctly formatted.
+        // For initial .txt file uploads, textContent will be provided.
+        // For reprocessing a .txt file, we'll use its already-stored text.
+        if (sourceToProcess.type === 'pdf') {
             toast({ title: "PDF Extraction Started", description: `Requesting text extraction for ${sourceToProcess.name}...` });
             setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
             const result = await extractTextFromPdfUrl({ pdfUrl: sourceToProcess.downloadURL });
-            extractedText = result.extractedText;
+            extractedText = result.extractedText; // This now has the \\n fix from the flow
             setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractedText, extractionStatus: 'success', extractionError: '' } : s));
             toast({ title: "PDF Text Extracted", description: `Now indexing ${sourceToProcess.name}...` });
-        } else {
+        } else if (sourceToProcess.type === 'text') {
+             extractedText = textContent || sourceToProcess.extractedText;
              toast({ title: "Indexing Started", description: `Indexing ${sourceToProcess.name}...` });
         }
 
-        if (!extractedText) throw new Error("Text content is empty, cannot index.");
+        if (!extractedText) {
+            // This case handles a text file being reprocessed that somehow has no stored text,
+            // or a new upload that failed to read.
+            throw new Error("Text content is missing or empty, cannot index.");
+        }
 
         // Step 2: Index the document content
         await indexDocument({
@@ -585,7 +592,7 @@ export default function KnowledgeBasePage() {
             return (
                 <div className="flex items-center gap-1">
                     <span className="text-xs text-red-600" title={source.indexingError || 'Indexing failed'}>Indexing Failed</span>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => triggerProcessing(source, level, source.extractedText)} disabled={anyOperationGloballyInProgress}>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress}>
                         <RefreshCw className="h-3 w-3 text-red-600" />
                     </Button>
                 </div>
