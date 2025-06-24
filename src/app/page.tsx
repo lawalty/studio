@@ -19,7 +19,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { KnowledgeSource } from '@/app/admin/knowledge-base/page';
-import type { FirebaseOptions } from 'firebase/app';
 
 
 export interface Message {
@@ -28,24 +27,6 @@ export interface Message {
   sender: 'user' | 'ai';
   timestamp: number;
 }
-
-const MOCK_KNOWLEDGE_BASE_CONTENT = `
-Pawn Store Operations Handbook:
-This document covers daily operations, security procedures, and customer service best practices for pawn stores.
-Key sections include inventory management, loan processing, and compliance with local and federal regulations.
-
-Jewelry Appraisal Guide:
-A comprehensive guide to appraising various types of jewelry, including diamonds, gold, silver, and gemstones.
-Includes information on identifying hallmarks, assessing quality, and determining market value.
-
-Pawn Loan Regulations Overview:
-Details on legal requirements for pawn loans, including interest rates, holding periods, and customer identification.
-Covers state-specific regulations and federal laws like the Truth in Lending Act.
-
-Antique Collectibles Pricing:
-Information on valuing antique items, collectibles, and memorabilia commonly found in pawn stores.
-Focuses on rarity, condition, and provenance as key factors in pricing.
-`;
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
@@ -542,7 +523,7 @@ export default function HomePage() {
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
-    const combinedLowPriorityText = [MOCK_KNOWLEDGE_BASE_CONTENT, dynamicKnowledgeContentLow].filter(Boolean).join('\n\n');
+    const combinedLowPriorityText = dynamicKnowledgeContentLow;
 
     try {
       const flowInput: GenerateChatResponseInput = {
