@@ -16,15 +16,19 @@ import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
  * A robust text chunker.
- * It normalizes text, splits it into paragraphs, and then splits any
- * oversized paragraphs into smaller chunks to ensure they are under the size limit.
+ * It aggressively cleans text to remove non-printable/unsupported characters,
+ * normalizes whitespace and line endings, then splits the text into chunks
+ * by paragraph, respecting a maximum chunk size.
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-  // 1. Normalize and clean up text
+  // 1. Aggressively clean the text to remove non-printable characters, weird whitespace, and control chars.
+  // This is a common source of errors for embedding APIs.
+  // We keep letters, numbers, standard punctuation, and basic whitespace.
   const cleanedText = text
+    .replace(/[^\p{L}\p{N}\p{P}\p{Z}\r\n]/gu, '') // Remove non-standard characters
     .replace(/\r\n/g, '\n') // Normalize line endings
     .replace(/(\n\s*){2,}/g, '\n\n') // Collapse multiple newlines to a standard paragraph break
     .trim();
