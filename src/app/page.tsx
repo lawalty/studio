@@ -36,6 +36,7 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful as
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
+const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 const DEFAULT_TEXT_ANIMATION_ENABLED = false;
 const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800;
@@ -178,6 +179,7 @@ export default function HomePage() {
   const [avatarSrc, setAvatarSrc] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER_URL);
   const [animatedAvatarSrc, setAnimatedAvatarSrc] = useState<string>(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
   const [personaTraits, setPersonaTraits] = useState<string>(DEFAULT_PERSONA_TRAITS);
+  const [conversationalTopics, setConversationalTopics] = useState<string>(DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE);
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState<string | null>(null);
   const [elevenLabsVoiceId, setElevenLabsVoiceId] = useState<string | null>(null);
   const [useTtsApi, setUseTtsApi] = useState<boolean>(true);
@@ -515,6 +517,7 @@ export default function HomePage() {
       const flowInput: GenerateChatResponseInput = {
         userMessage: text,
         personaTraits: personaTraits,
+        conversationalTopics: conversationalTopics,
         chatHistory: historyForGenkit,
       };
       
@@ -556,7 +559,7 @@ export default function HomePage() {
       mainResponsePendingAfterAckRef.current = false;
       isSpeakingAcknowledgementRef.current = false;
     }
-  }, [addMessage, personaTraits, hasConversationEnded, isSendingMessage, setInputValue]);
+  }, [addMessage, personaTraits, conversationalTopics, hasConversationEnded, isSendingMessage, setInputValue]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
@@ -882,6 +885,7 @@ export default function HomePage() {
           setAnimatedAvatarSrc(assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setPersonaTraits(assets.personaTraits || DEFAULT_PERSONA_TRAITS);
+          setConversationalTopics(assets.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE);
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
           setCustomGreeting(assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
@@ -893,6 +897,7 @@ export default function HomePage() {
             setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
             setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
             setPersonaTraits(DEFAULT_PERSONA_TRAITS);
+            setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE);
             setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
             setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
             setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);

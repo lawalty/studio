@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -22,12 +22,14 @@ const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const DEFAULT_CONVERSATIONAL_TOPICS = "- Pawn industry regulations\n- Customer service best practices\n- Product valuation (jewelry, electronics, etc.)\n- Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
 
 
 export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
+  const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
   const [avatarPreview, setAvatarPreview] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [animatedAvatarPreview, setAnimatedAvatarPreview] = useState<string>(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
@@ -54,6 +56,7 @@ export default function PersonaPage() {
           setAvatarPreview(data?.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER);
           setAnimatedAvatarPreview(data?.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
+          setConversationalTopics(data?.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS);
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
@@ -62,6 +65,7 @@ export default function PersonaPage() {
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
+          setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS);
           setUseKnowledgeInGreeting(true);
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
@@ -72,6 +76,7 @@ export default function PersonaPage() {
         setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
         setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
+        setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS);
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
@@ -182,6 +187,7 @@ export default function PersonaPage() {
       const dataToSave: { [key: string]: any } = {
         // Always include these as they might change from their text fields
         personaTraits,
+        conversationalTopics,
         useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage, // Store empty string if cleared
         responsePauseTimeMs: validPauseTime,
@@ -203,6 +209,7 @@ export default function PersonaPage() {
       }
       // More explicit checks for defaults might be needed if currentData[key] could be undefined vs. default
       if (dataToSave.personaTraits !== (currentData.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT)) settingsActuallyChanged = true;
+      if (dataToSave.conversationalTopics !== (currentData.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS)) settingsActuallyChanged = true;
       if (dataToSave.useKnowledgeInGreeting !== (currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting)) settingsActuallyChanged = true;
       if (dataToSave.customGreetingMessage !== (currentData.customGreetingMessage || DEFAULT_CUSTOM_GREETING)) settingsActuallyChanged = true;
       if (dataToSave.responsePauseTimeMs !== (currentData.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : currentData.responsePauseTimeMs)) settingsActuallyChanged = true;
@@ -290,6 +297,21 @@ export default function PersonaPage() {
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
+              </div>
+
+              <div>
+                <Label htmlFor="conversationalTopics" className="font-medium flex items-center gap-1.5"><ListOrdered className="h-4 w-4" /> Conversational Topics</Label>
+                <Textarea
+                  id="conversationalTopics"
+                  value={conversationalTopics}
+                  onChange={(e) => setConversationalTopics(e.target.value)}
+                  placeholder="List the topics the AI is an expert on, one per line..."
+                  rows={5}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  List the core topics AI Blair should focus on. This helps keep the conversation relevant and accurate.
+                </p>
               </div>
 
               <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">

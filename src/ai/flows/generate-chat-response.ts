@@ -23,6 +23,10 @@ const GenerateChatResponseInputSchema = z.object({
   personaTraits: z
     .string()
     .describe("The persona traits that define AI Blair's conversational style."),
+  conversationalTopics: z
+    .string()
+    .optional()
+    .describe('A list of topics the AI should consider its area of expertise.'),
   chatHistory: z.array(ChatMessageSchema).describe('The history of the conversation so far.').optional(),
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
@@ -48,6 +52,7 @@ const ProcessedChatMessageSchema = z.object({
 const PromptInputSchema = z.object({
     userMessage: z.string(),
     personaTraits: z.string(),
+    conversationalTopics: z.string().optional(),
     chatHistory: z.array(ProcessedChatMessageSchema).optional(),
     context: z.string().describe("Relevant information retrieved from the knowledge base to help answer the user's question."),
 });
@@ -65,6 +70,11 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateChatResponseOutputSchema},
   prompt: `You are AI Blair. Your personality and style are defined by the following traits:
 {{{personaTraits}}}
+
+{{#if conversationalTopics}}
+You are an expert in the following topics. Frame your answers from this perspective, and stay focused on these areas:
+{{{conversationalTopics}}}
+{{/if}}
 
 Your goal is to provide a clear, conversational, and helpful answer to the user's question.
 You have been provided with relevant context retrieved from a knowledge base.
