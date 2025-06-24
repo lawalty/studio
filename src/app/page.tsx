@@ -527,16 +527,20 @@ export default function HomePage() {
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
         .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
-    const combinedLowPriorityText = dynamicKnowledgeContentLow;
 
     try {
       const flowInput: GenerateChatResponseInput = {
         userMessage: text,
-        knowledgeBaseHigh: { summary: knowledgeFileSummaryHigh || undefined, textContent: dynamicKnowledgeContentHigh || undefined },
-        knowledgeBaseMedium: { summary: knowledgeFileSummaryMedium || undefined, textContent: dynamicKnowledgeContentMedium || undefined },
-        knowledgeBaseLow: { summary: knowledgeFileSummaryLow || undefined, textContent: combinedLowPriorityText || undefined },
-        personaTraits: personaTraits, chatHistory: historyForGenkit,
+        knowledgeBaseHighSummary: knowledgeFileSummaryHigh || undefined,
+        knowledgeBaseHighTextContent: dynamicKnowledgeContentHigh || undefined,
+        knowledgeBaseMediumSummary: knowledgeFileSummaryMedium || undefined,
+        knowledgeBaseMediumTextContent: dynamicKnowledgeContentMedium || undefined,
+        knowledgeBaseLowSummary: knowledgeFileSummaryLow || undefined,
+        knowledgeBaseLowTextContent: dynamicKnowledgeContentLow || undefined,
+        personaTraits: personaTraits,
+        chatHistory: historyForGenkit,
       };
+      
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       
       if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
@@ -984,7 +988,7 @@ export default function HomePage() {
       } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
       const highError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_HIGH_PATH, 'High', setKnowledgeFileSummaryHigh, setDynamicKnowledgeContentHigh); if (highError) anyCorsError = true;
       const mediumError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_MEDIUM_PATH, 'Medium', setKnowledgeFileSummaryMedium, setDynamicKnowledgeContentMedium); if (mediumError) anyCorsError = true;
-      const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setKnowledgeFileSummaryLow, setDynamicKnowledgeContentLow); if (lowError) anyCorsError = true;
+      const lowError = await fetchAndProcessKnowledgeLevel(FIRESTORE_KB_LOW_PATH, 'Low', setDynamicKnowledgeContentLow, setDynamicKnowledgeContentLow); if (lowError) anyCorsError = true;
       if (anyCorsError) setCorsErrorEncountered(true);
       setIsLoadingKnowledge(false);
     };

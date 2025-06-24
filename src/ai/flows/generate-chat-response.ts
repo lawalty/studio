@@ -17,22 +17,32 @@ const ChatMessageSchema = z.object({
   parts: z.array(z.object({ text: z.string() })),
 });
 
-const KBContentSchema = z.object({
-  summary: z.string().optional().describe('Summary of non-text/non-PDF files (e.g., DOC, audio).'),
-  textContent: z.string().optional().describe('Full text content from .txt files and extracted from PDF files.'),
-});
-
 const GenerateChatResponseInputSchema = z.object({
   userMessage: z.string().describe('The latest message from the user.'),
-  knowledgeBaseHigh: KBContentSchema.describe(
-    'High priority knowledge base content. This is the most recent and important information AI Blair has learned. Includes .txt content and extracted PDF text.'
-  ),
-  knowledgeBaseMedium: KBContentSchema.describe(
-    'Medium priority knowledge base content. This information was typically learned or updated 6 months to a year ago. Includes .txt content and extracted PDF text.'
-  ),
-  knowledgeBaseLow: KBContentSchema.describe(
-    'Low priority knowledge base content. This is foundational or older information, learned over a year ago. It may include general handbooks or less frequently updated topics. Includes .txt content and extracted PDF text.'
-  ),
+  knowledgeBaseHighSummary: z
+    .string()
+    .optional()
+    .describe('Summary of non-text/non-PDF files in the High Priority KB.'),
+  knowledgeBaseHighTextContent: z
+    .string()
+    .optional()
+    .describe('Full text content from .txt and extracted PDF files in the High Priority KB.'),
+  knowledgeBaseMediumSummary: z
+    .string()
+    .optional()
+    .describe('Summary of non-text/non-PDF files in the Medium Priority KB.'),
+  knowledgeBaseMediumTextContent: z
+    .string()
+    .optional()
+    .describe('Full text content from .txt and extracted PDF files in the Medium Priority KB.'),
+  knowledgeBaseLowSummary: z
+    .string()
+    .optional()
+    .describe('Summary of non-text/non-PDF files in the Low Priority KB.'),
+  knowledgeBaseLowTextContent: z
+    .string()
+    .optional()
+    .describe('Full text content from .txt and extracted PDF files in the Low Priority KB.'),
   personaTraits: z
     .string()
     .describe("The persona traits that define AI Blair's conversational style."),
@@ -100,30 +110,30 @@ If the available information (across all priority levels) doesn't sufficiently a
 Available Information:
 
 Recent & Important Details (Primarily use this if relevant and textContent is available):
-{{#if knowledgeBaseHigh.textContent}}
-{{{knowledgeBaseHigh.textContent}}}
+{{#if knowledgeBaseHighTextContent}}
+{{{knowledgeBaseHighTextContent}}}
 {{/if}}
-{{#if knowledgeBaseHigh.summary}}
+{{#if knowledgeBaseHighSummary}}
 General topics recently covered (You are aware these topics exist from file names/types, but for detailed content, prioritize any textContent above or in other sections. Only refer to these summary points if no specific textContent answers the query):
-{{{knowledgeBaseHigh.summary}}}
+{{{knowledgeBaseHighSummary}}}
 {{/if}}
 
 Supporting Information (Consult if needed and textContent is available):
-{{#if knowledgeBaseMedium.textContent}}
-{{{knowledgeBaseMedium.textContent}}}
+{{#if knowledgeBaseMediumTextContent}}
+{{{knowledgeBaseMediumTextContent}}}
 {{/if}}
-{{#if knowledgeBaseMedium.summary}}
+{{#if knowledgeBaseMediumSummary}}
 General topics covered some time ago (Awareness of topics, prioritize textContent):
-{{{knowledgeBaseMedium.summary}}}
+{{{knowledgeBaseMediumSummary}}}
 {{/if}}
 
 Foundational or Older Information (Consult as a last resort, for historical context, or if textContent is available):
-{{#if knowledgeBaseLow.textContent}}
-{{{knowledgeBaseLow.textContent}}}
+{{#if knowledgeBaseLowTextContent}}
+{{{knowledgeBaseLowTextContent}}}
 {{/if}}
-{{#if knowledgeBaseLow.summary}}
+{{#if knowledgeBaseLowSummary}}
 General foundational topics (Awareness of topics, prioritize textContent):
-{{{knowledgeBaseLow.summary}}}
+{{{knowledgeBaseLowSummary}}}
 {{/if}}
 
 If a user asks for very specific details from files like Word documents or audio files (which would only be implied by the "General topics" sections above if no corresponding textContent was provided), and you have no specific textContent to draw from, politely inform them you're aware of the topic the file likely covers but can't access its specific internal content for direct quoting, using natural phrasing like "I recall that topic, but the specific details aren't immediately available to me right now."
