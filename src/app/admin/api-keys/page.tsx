@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, AlertTriangle, Speech } from 'lucide-react';
+import { Save, AlertTriangle, Speech, MessageSquare } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
   gemini: string;
@@ -18,12 +19,24 @@ interface ApiKeys {
   stt: string;
   voiceId: string;
   useTtsApi: boolean;
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioPhoneNumber: string;
 }
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
-  const [apiKeys, setApiKeys] = useState<ApiKeys>({ gemini: '', tts: '', stt: '', voiceId: '', useTtsApi: true });
+  const [apiKeys, setApiKeys] = useState<ApiKeys>({
+    gemini: '',
+    tts: '',
+    stt: '',
+    voiceId: '',
+    useTtsApi: true,
+    twilioAccountSid: '',
+    twilioAuthToken: '',
+    twilioPhoneNumber: '',
+  });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -40,10 +53,16 @@ export default function ApiKeysPage() {
             tts: data.tts || '',
             stt: data.stt || '',
             voiceId: data.voiceId || '',
-            useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true, // Default to true if not set
+            useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
+            twilioAccountSid: data.twilioAccountSid || '',
+            twilioAuthToken: data.twilioAuthToken || '',
+            twilioPhoneNumber: data.twilioPhoneNumber || '',
           });
         } else {
-          setApiKeys({ gemini: '', tts: '', stt: '', voiceId: '', useTtsApi: true });
+          setApiKeys({
+            gemini: '', tts: '', stt: '', voiceId: '', useTtsApi: true,
+            twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
+          });
            toast({
             title: "API Keys Not Configured",
             description: "Please enter and save your API keys. They will be stored in Firestore.",
@@ -57,7 +76,10 @@ export default function ApiKeysPage() {
           description: "Could not fetch API keys from the database. Please try again.",
           variant: "destructive",
         });
-        setApiKeys({ gemini: '', tts: '', stt: '', voiceId: '', useTtsApi: true });
+        setApiKeys({
+            gemini: '', tts: '', stt: '', voiceId: '', useTtsApi: true,
+            twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
+        });
       }
       setIsLoading(false);
     };
@@ -76,8 +98,8 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      await setDoc(docRef, apiKeys); // Save the entire apiKeys object including useTtsApi
-      toast({ title: "API Keys Saved", description: "Your API keys and TTS preference have been saved to the database." });
+      await setDoc(docRef, apiKeys);
+      toast({ title: "API Keys Saved", description: "Your API keys and settings have been saved to the database." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
       toast({
@@ -94,8 +116,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key Management</CardTitle>
         <CardDescription>
-          Manage API keys for Gemini (AI Model), Text-to-Speech (TTS), Speech-to-Text (STT), and the TTS Voice ID.
-          You can also toggle whether to use the configured Custom TTS API or fall back to the browser's default voice.
+          Manage API keys for Gemini, TTS/STT, and Twilio SMS services.
           <span className="block mt-2 font-semibold text-destructive/80 flex items-start">
             <AlertTriangle className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
             <span>Security Warning: Storing API keys in a client-accessible database is not recommended for production. For optimal security, manage sensitive keys server-side using environment variables or a dedicated secrets manager.</span>
@@ -111,6 +132,28 @@ export default function ApiKeysPage() {
               <Label htmlFor="geminiKey" className="font-medium">Gemini API Key</Label>
               <Input id="geminiKey" name="gemini" type="password" value={apiKeys.gemini} onChange={handleChange} placeholder="Enter Gemini API Key" />
             </div>
+            
+            <Separator className="my-6" />
+
+            <div className="flex items-center gap-2 mb-2">
+                <MessageSquare className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">Twilio SMS Configuration</h3>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="twilioAccountSid" className="font-medium">Twilio Account SID</Label>
+                <Input id="twilioAccountSid" name="twilioAccountSid" value={apiKeys.twilioAccountSid} onChange={handleChange} placeholder="Enter Twilio Account SID" />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="twilioAuthToken" className="font-medium">Twilio Auth Token</Label>
+                <Input id="twilioAuthToken" name="twilioAuthToken" type="password" value={apiKeys.twilioAuthToken} onChange={handleChange} placeholder="Enter Twilio Auth Token" />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="twilioPhoneNumber" className="font-medium">Twilio Phone Number</Label>
+                <Input id="twilioPhoneNumber" name="twilioPhoneNumber" value={apiKeys.twilioPhoneNumber} onChange={handleChange} placeholder="Enter your Twilio phone number (e.g., +15551234567)" />
+            </div>
+
+            <Separator className="my-6" />
+            
             <div className="space-y-2">
               <Label htmlFor="ttsKey" className="font-medium">Custom TTS API Key (e.g., Elevenlabs)</Label>
               <Input id="ttsKey" name="tts" type="password" value={apiKeys.tts} onChange={handleChange} placeholder="Enter TTS API Key" />
