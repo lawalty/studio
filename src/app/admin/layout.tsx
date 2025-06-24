@@ -3,15 +3,15 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation'; // Import usePathname
+import { useRouter, usePathname } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, Loader2 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname(); // Get the current path
+  const pathname = usePathname();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -64,17 +64,45 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  const pageTitle = (() => {
+    switch (pathname) {
+      case '/admin':
+        return 'Admin Dashboard';
+      case '/admin/knowledge-base':
+        return 'Knowledge Base';
+      case '/admin/api-keys':
+        return 'API Keys';
+      case '/admin/persona':
+        return 'Persona & Avatar';
+      case '/admin/site-settings':
+        return 'Site Settings';
+      default:
+        return 'Admin Panel';
+    }
+  })();
+
+
   // If authenticated, not loading, and not on the login page:
   return (
     <div className="space-y-6">
       <Card className="shadow-lg">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-2xl font-headline">Admin Panel</CardTitle>
-          <Button variant="outline" asChild>
-            <Link href="/">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Home / AI Blair
-            </Link>
-          </Button>
+          <CardTitle className="text-2xl font-headline">{pageTitle}</CardTitle>
+          <div className="flex items-center gap-2">
+            {pathname !== '/admin' && (
+              <Button variant="outline" asChild>
+                <Link href="/admin">
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  Back to Dashboard
+                </Link>
+              </Button>
+            )}
+            <Button variant="outline" asChild>
+              <Link href="/">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Go to App
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
       </Card>
       {children}
