@@ -352,7 +352,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     setIsSpeaking(false);
     setShowPreparingGreeting(false);
 
-    if (endedMessageId) {
+    if (endedMessageId && communicationModeRef.current !== 'text-only') {
         setForceFinishAnimationForMessageId(endedMessageId);
         setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
     }
@@ -401,11 +401,9 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       if (communicationModeRef.current === 'text-only' || text.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
         onSpeechStartCallback?.();
         handleAudioProcessEnd();
-        if (messageIdForAnimationSync) {
-          setForceFinishAnimationForMessageId(messageIdForAnimationSync);
-          setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
+        if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
+            setHasConversationEnded(true);
         }
-        if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) setHasConversationEnded(true);
         resolveSpeakText();
         return;
       }
