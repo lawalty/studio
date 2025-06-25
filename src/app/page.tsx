@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from "@/lib/utils";
@@ -19,6 +20,24 @@ export default function StartPage() {
   const [splashWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Ctrl + Shift + A to navigate to the admin login page
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        router.push('/admin/login');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup the event listener on component unmount
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [router]);
 
   useEffect(() => {
     const fetchMinimalConfig = async () => {
