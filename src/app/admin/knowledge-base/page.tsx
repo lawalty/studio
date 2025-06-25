@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
@@ -37,6 +37,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
+import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -129,6 +130,11 @@ export default function KnowledgeBasePage() {
   const [pastedTextDescription, setPastedTextDescription] = useState('');
   const [selectedKBTargetForPastedText, setSelectedKBTargetForPastedText] = useState<KnowledgeBaseLevel>('Medium');
   const [isIndexingPastedText, setIsIndexingPastedText] = useState(false);
+
+  // State for testing RAG
+  const [testQuery, setTestQuery] = useState('');
+  const [testResult, setTestResult] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
 
 
   const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
@@ -640,10 +646,30 @@ export default function KnowledgeBasePage() {
     }
   }, [pastedText, pastedTextSourceName, pastedTextDescription, selectedKBTargetForPastedText, toast, getSourcesSetter, saveSourcesToFirestore, getSourcesState, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
 
+  const handleTestKnowledgeBase = async () => {
+    if (!testQuery.trim()) {
+      toast({ title: "No query provided", description: "Please enter a question to test.", variant: "destructive" });
+      return;
+    }
+    setIsTesting(true);
+    setTestResult('');
+    try {
+      const result = await testKnowledgeBase({ query: testQuery });
+      setTestResult(result.retrievedContext);
+      toast({ title: "Test Complete", description: "Retrieved context is shown below." });
+    } catch (error: any) {
+      console.error("[KBPage - Test] Error:", error);
+      const errorMessage = error.message || 'An unknown error occurred.';
+      setTestResult(`Error retrieving context: ${errorMessage}`);
+      toast({ title: "Test Failed", description: errorMessage, variant: "destructive" });
+    }
+    setIsTesting(false);
+  };
+
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isProcessingThisFile = isProcessingId === source.id;
-    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText;
+    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting;
 
     if (!['pdf', 'text', 'document'].includes(source.type)) {
       return <span className="text-xs text-muted-foreground">N/A</span>;
@@ -705,7 +731,7 @@ export default function KnowledgeBasePage() {
       ? "Archived sources. Files here are not used by AI Blair for responses but are kept for record-keeping."
       : `View and manage sources. For PDF and text files, content is extracted and indexed as vector embeddings for semantic search. Other file types are stored for reference.`;
     
-    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText;
+    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting;
 
     return (
       <Card className="mt-6">
@@ -788,10 +814,46 @@ export default function KnowledgeBasePage() {
   };
 
   const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText;
+  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting;
 
   return (
     <div className="space-y-6">
+      <Card>
+          <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
+              <CardDescription>
+                  Enter a question to see what context the AI would retrieve from the knowledge base. This helps verify that your sources are indexed and retrieved correctly.
+              </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+              <div className="space-y-2">
+                  <Label htmlFor="test-query">Test Question</Label>
+                  <Input
+                      id="test-query"
+                      value={testQuery}
+                      onChange={(e) => setTestQuery(e.target.value)}
+                      placeholder="e.g., What are the regulations for jewelry?"
+                      disabled={anyOperationGloballyInProgress}
+                  />
+              </div>
+              <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery.trim()}>
+                  {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
+                  {isTesting ? 'Retrieving Context...' : 'Test Retrieval'}
+              </Button>
+              {testResult && (
+                  <div className="space-y-2 pt-4">
+                      <Label>Retrieved Context for AI</Label>
+                      <Textarea
+                          readOnly
+                          value={testResult}
+                          className="h-64 font-mono text-xs bg-muted"
+                          placeholder="Context will be displayed here..."
+                      />
+                  </div>
+              )}
+          </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Upload New Source</CardTitle>
