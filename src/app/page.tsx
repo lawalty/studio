@@ -21,6 +21,7 @@ export default function StartPage() {
   const [splashWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+  const [isClient, setIsClient] = useState(false);
   
   const [showGreeting, setShowGreeting] = useState(false);
   const [animatedGreeting, setAnimatedGreeting] = useState('');
@@ -28,6 +29,11 @@ export default function StartPage() {
   const router = useRouter();
   
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // This ensures that any client-specific logic runs only after the component has mounted.
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -73,7 +79,7 @@ export default function StartPage() {
   }, [splashImageSrc]);
 
   useEffect(() => {
-    if (isLoadingConfig) {
+    if (isLoadingConfig || !isClient) {
       return; 
     }
 
@@ -107,7 +113,7 @@ export default function StartPage() {
         clearTimeout(typingTimerRef.current);
       }
     };
-  }, [isLoadingConfig]);
+  }, [isLoadingConfig, isClient]);
 
 
   return (
@@ -123,8 +129,8 @@ export default function StartPage() {
               showGreeting ? "opacity-100" : "opacity-0"
             )}
           >
-            {animatedGreeting}
-            {showGreeting && <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />}
+            {isClient && animatedGreeting}
+            {isClient && showGreeting && <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-6">
