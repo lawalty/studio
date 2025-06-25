@@ -1,4 +1,3 @@
-
 'use client';
 
 import { ReactNode, useState, useEffect } from 'react';
@@ -17,13 +16,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     setIsClient(true);
   }, []);
 
-  // For the login page, we don't want the admin header/layout shell.
-  // By returning only the children, we prevent layout-related errors on this specific page.
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
-
-  // For all other admin pages, render the layout with a loading state to prevent hydration errors.
+  // Simplified layout that always shows the header for all admin routes.
+  // The logic for a separate login page view has been removed.
   return (
     <div className="space-y-6">
       <Card className="shadow-lg">

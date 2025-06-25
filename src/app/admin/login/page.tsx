@@ -1,27 +1,30 @@
 'use client';
 
-import Link from 'next/link';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { LogIn } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
-export default function AdminLoginPage() {
+// This page is no longer in use and now simply redirects to the admin dashboard.
+export default function LoginPageRedirect() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace('/admin');
+  }, [router]);
+
+  // Return a loading state while redirecting
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-headline">Admin Panel</CardTitle>
+          <CardTitle className="text-2xl font-headline">Redirecting</CardTitle>
           <CardDescription>
-            Password protection is temporarily disabled. Click below to enter the admin area.
+            Please wait...
           </CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
-          <Button asChild size="lg">
-            <Link href="/admin">
-              <LogIn className="mr-2 h-4 w-4" />
-              Enter Admin Panel
-            </Link>
-          </Button>
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </CardContent>
       </Card>
     </div>

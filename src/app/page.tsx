@@ -39,7 +39,7 @@ export default function StartPage() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a') {
         event.preventDefault();
-        router.push('/admin/login');
+        router.push('/admin');
       }
     };
 
