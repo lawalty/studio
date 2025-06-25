@@ -118,7 +118,7 @@ export default function StartPage() {
 
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+    <div className="flex flex-col items-center justify-center flex-grow">
       <Card className="w-full max-w-md p-6 space-y-6 text-center shadow-2xl border">
         <div className="space-y-2">
             <h1 className="text-3xl font-headline text-primary">
