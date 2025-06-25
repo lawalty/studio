@@ -40,13 +40,18 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
+    // Final, robust cleaning step before chunking.
+    // This removes the UTF-8 BOM and other non-printable control characters that can
+    // cause the embedding model to fail, while preserving essential whitespace.
+    const cleanText = text.replace(/^\uFEFF/, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
     // 1. Chunk the text using a semantic splitter
     const splitter = new RecursiveCharacterTextSplitter({
       chunkSize: 1800,
       chunkOverlap: 200,
     });
 
-    const chunks = await splitter.splitText(text);
+    const chunks = await splitter.splitText(cleanText);
 
     if (chunks.length === 0) {
       console.error(`[indexDocumentFlow] No text chunks found in document '${sourceName}'. Aborting.`);
@@ -60,14 +65,11 @@ const indexDocumentFlow = ai.defineFlow(
 
     for (const chunk of chunks) {
       try {
-        // Perform a safe cleaning of each chunk before it's sent for embedding.
-        // This removes the UTF-8 Byte Order Mark (BOM) which can corrupt text for AI processing.
-        // The previous aggressive stripping of all non-ASCII characters was causing errors and has been removed.
-        const cleanedChunk = chunk.replace(/^\uFEFF/, ''); 
-
-        if (cleanedChunk.trim().length === 0) {
+        // The main cleaning is now done before chunking.
+        // We only need to check for empty chunks here.
+        if (chunk.trim().length === 0) {
           failedChunks++;
-          const errorMsg = 'Chunk became empty after cleaning, indicating it may have only contained unsupported characters.';
+          const errorMsg = 'Chunk was empty or contained only whitespace.';
           if (!firstError) firstError = errorMsg;
           console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it was empty after cleaning.`);
           continue;
@@ -75,7 +77,7 @@ const indexDocumentFlow = ai.defineFlow(
         
         const { embedding } = await ai.embed({
           embedder: 'googleai/text-embedding-004',
-          content: cleanedChunk, // Use the cleaned chunk
+          content: chunk, // Use the chunk directly
           config: {
             safetySettings: [
               { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
@@ -92,7 +94,7 @@ const indexDocumentFlow = ai.defineFlow(
             sourceId,
             sourceName,
             level,
-            text: cleanedChunk, // IMPORTANT: Save the cleaned chunk to ensure data consistency
+            text: chunk, // Use the original chunk from the splitter
             embedding: embedding,
             createdAt: new Date().toISOString(),
             downloadURL,
@@ -102,7 +104,7 @@ const indexDocumentFlow = ai.defineFlow(
           const errorMsg = 'Embedding call returned no embedding.';
           if (!firstError) firstError = errorMsg;
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate an embedding. The chunk may be empty or contain unsupported content. Content: "${cleanedChunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate an embedding. The chunk may be empty or contain unsupported content. Content: "${chunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
