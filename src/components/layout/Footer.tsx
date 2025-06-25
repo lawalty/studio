@@ -1,12 +1,21 @@
 
+'use client';
+
 import Link from 'next/link';
+import { useState, useEffect } from 'react';
 
 export default function Footer() {
+  const [year, setYear] = useState(new Date().getFullYear());
+
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
+
   return (
     <footer className="bg-card border-t border-border mt-auto">
       <div className="container mx-auto px-4 py-4 text-center text-muted-foreground">
         <p className="text-sm">
-          © {new Date().getFullYear()} AI Chat. All rights reserved.
+          © {year} AI Chat. All rights reserved.
           <Link href="/admin" className="ml-4 text-xs text-accent hover:underline">
             Admin Area
           </Link>
