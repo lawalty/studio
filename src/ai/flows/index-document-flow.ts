@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text,
@@ -136,6 +137,9 @@ const indexDocumentFlow = ai.defineFlow(
     if (chunksToSave.length === 0) {
       console.log(`[indexDocumentFlow] No chunks were successfully embedded for '${sourceName}'. Nothing to save to Firestore.`);
       if (failedChunks > 0) {
+          if (firstError.includes('API_KEY_INVALID')) {
+              throw new Error(`Failed to index '${sourceName}' due to an invalid Gemini API Key. Please verify your key in the Admin Panel's API Keys page. Original error: ${firstError}`);
+          }
           throw new Error(`Failed to index '${sourceName}'. All ${failedChunks} text chunks failed. First error: ${firstError}`);
       }
       return { chunksIndexed: 0, sourceId };
