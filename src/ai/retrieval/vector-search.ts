@@ -6,7 +6,7 @@
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
  */
 
-import { ai } from '@/ai/genkit';
+import { embedderAi } from '@/ai/genkit';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
@@ -51,8 +51,8 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  // 1. Generate an embedding for the user's query
-  const { embedding } = await ai.embed({
+  // 1. Generate an embedding for the user's query using the dedicated embedder instance
+  const { embedding } = await embedderAi.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });

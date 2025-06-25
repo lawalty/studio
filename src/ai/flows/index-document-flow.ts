@@ -9,7 +9,7 @@
  * - IndexDocumentOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai, embedderAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
@@ -97,7 +97,8 @@ const indexDocumentFlow = ai.defineFlow(
           continue;
         }
         
-        const { embedding } = await ai.embed({
+        // Use the dedicated embedderAi instance
+        const { embedding } = await embedderAi.embed({
           embedder: 'googleai/text-embedding-004',
           content: chunk,
         });

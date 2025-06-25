@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, AlertTriangle, Speech, MessageSquare } from 'lucide-react';
+import { Save, AlertTriangle, Speech, MessageSquare, BrainCircuit } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
-  gemini: string;
+  geminiGenerative: string;
+  geminiEmbedding: string;
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -27,7 +28,8 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
-    gemini: '',
+    geminiGenerative: '',
+    geminiEmbedding: '',
     tts: '',
     voiceId: '',
     useTtsApi: true,
@@ -47,7 +49,8 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setApiKeys({
-            gemini: data.gemini || '',
+            geminiGenerative: data.geminiGenerative || data.gemini || '',
+            geminiEmbedding: data.geminiEmbedding || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
@@ -57,7 +60,7 @@ export default function ApiKeysPage() {
           });
         } else {
           setApiKeys({
-            gemini: '', tts: '', voiceId: '', useTtsApi: true,
+            geminiGenerative: '', geminiEmbedding: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
           });
            toast({
@@ -74,7 +77,7 @@ export default function ApiKeysPage() {
           variant: "destructive",
         });
         setApiKeys({
-            gemini: '', tts: '', voiceId: '', useTtsApi: true,
+            geminiGenerative: '', geminiEmbedding: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
         });
       }
@@ -95,7 +98,15 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      await setDoc(docRef, apiKeys);
+      // Construct the object to save, excluding the old 'gemini' key
+      const { geminiGenerative, geminiEmbedding, ...restOfKeys } = apiKeys;
+      const dataToSave = {
+        geminiGenerative,
+        geminiEmbedding,
+        ...restOfKeys,
+      };
+
+      await setDoc(docRef, dataToSave);
       toast({ title: "API Keys Saved", description: "Your API keys and settings have been saved to the database." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
@@ -125,11 +136,21 @@ export default function ApiKeysPage() {
           <p>Loading API keys...</p>
         ) : (
           <>
-            <div className="space-y-2">
-              <Label htmlFor="geminiKey" className="font-medium">Gemini API Key</Label>
-              <Input id="geminiKey" name="gemini" type="password" value={apiKeys.gemini} onChange={handleChange} placeholder="Enter Gemini API Key" />
+            <div className="flex items-center gap-2 mb-2">
+                <BrainCircuit className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">Gemini AI Keys</h3>
             </div>
-            
+            <div className="space-y-2">
+              <Label htmlFor="geminiGenerative" className="font-medium">Gemini Generative API Key</Label>
+              <Input id="geminiGenerative" name="geminiGenerative" type="password" value={apiKeys.geminiGenerative} onChange={handleChange} placeholder="Enter key for chat, summarization, etc." />
+              <p className="text-xs text-muted-foreground">Used for all conversational and generative AI tasks.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="geminiEmbedding" className="font-medium">Gemini Embedding API Key</Label>
+              <Input id="geminiEmbedding" name="geminiEmbedding" type="password" value={apiKeys.geminiEmbedding} onChange={handleChange} placeholder="Enter key for knowledge base indexing" />
+              <p className="text-xs text-muted-foreground">Used for indexing documents in the knowledge base. If left blank, the Generative key will be used as a fallback.</p>
+            </div>
+
             <Separator className="my-6" />
 
             <div className="flex items-center gap-2 mb-2">
