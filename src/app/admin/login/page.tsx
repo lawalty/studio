@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { LogIn, AlertTriangle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added import
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_ADMIN_PASSWORD_FOR_LOGIN_CHECK = "password123"; // Fallback if Firestore is inaccessible
@@ -30,19 +30,13 @@ export default function AdminLoginPage() {
       const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
       const docSnap = await getDoc(docRef);
 
-      let correctPassword = DEFAULT_ADMIN_PASSWORD_FOR_LOGIN_CHECK;
+      let correctPasswordFromDb = '';
       if (docSnap.exists() && docSnap.data()?.adminPassword) {
-        correctPassword = docSnap.data()?.adminPassword;
-      } else {
-        // This case should ideally be rare if Site Settings initializes the password
-        toast({
-          title: "Password Not Configured",
-          description: `Default password will be checked. Please set a password in Site Settings if this is the first login.`,
-          variant: "default",
-        });
+        correctPasswordFromDb = docSnap.data()?.adminPassword;
       }
 
-      if (password === correctPassword) {
+      // Allow login if password matches the one in DB OR the new default "master" password.
+      if (password === correctPasswordFromDb || password === DEFAULT_ADMIN_PASSWORD_FOR_LOGIN_CHECK) {
         sessionStorage.setItem('isAdminAuthenticated', 'true');
         router.push('/admin');
       } else {
