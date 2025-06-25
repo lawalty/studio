@@ -834,6 +834,7 @@ export default function KnowledgeBasePage() {
                       onChange={(e) => setTestQuery(e.target.value)}
                       placeholder="e.g., What are the regulations for jewelry?"
                       disabled={anyOperationGloballyInProgress}
+                      suppressHydrationWarning
                   />
               </div>
               <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery.trim()}>
@@ -848,6 +849,7 @@ export default function KnowledgeBasePage() {
                           value={testResult}
                           className="h-64 font-mono text-xs bg-muted"
                           placeholder="Context will be displayed here..."
+                          suppressHydrationWarning
                       />
                   </div>
               )}
@@ -912,6 +914,7 @@ export default function KnowledgeBasePage() {
                 rows={2}
                 className="mt-1"
                 disabled={anyOperationGloballyInProgress || anyKbLoading}
+                suppressHydrationWarning
             />
           </div>
         </CardContent>
@@ -942,6 +945,7 @@ export default function KnowledgeBasePage() {
                     onChange={(e) => setPastedTextSourceName(e.target.value)}
                     placeholder="e.g., 'Company Mission Statement'"
                     disabled={anyOperationGloballyInProgress || anyKbLoading}
+                    suppressHydrationWarning
                 />
 
                 <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label>
@@ -969,6 +973,7 @@ export default function KnowledgeBasePage() {
                     rows={2}
                     className="mt-1"
                     disabled={anyOperationGloballyInProgress || anyKbLoading}
+                    suppressHydrationWarning
                 />
 
                 <Label htmlFor="pasted-text-content" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 4: Text Content</Label>
@@ -980,6 +985,7 @@ export default function KnowledgeBasePage() {
                     rows={10}
                     className="md:col-start-2"
                     disabled={anyOperationGloballyInProgress || anyKbLoading}
+                    suppressHydrationWarning
                 />
             </div>
         </CardContent>
@@ -1060,6 +1066,7 @@ export default function KnowledgeBasePage() {
               rows={5}
               className="mt-2"
               disabled={isSavingDescription}
+              suppressHydrationWarning
             />
             <DialogFooter className="mt-4">
               <DialogClose asChild>
@@ -1076,5 +1083,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
