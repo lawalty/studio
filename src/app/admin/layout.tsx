@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { ReactNode } from 'react';
@@ -12,30 +11,29 @@ import { ArrowLeft, LayoutDashboard, Loader2 } from 'lucide-react';
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isLoading, setIsLoading] = useState(true);
+  // This state now tracks if the authentication check is complete.
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
-    // This effect runs on the client after the component mounts.
-    // It checks for the authentication token in sessionStorage.
     const isAuthenticated = sessionStorage.getItem('isAdminAuthenticated') === 'true';
 
-    if (!isAuthenticated) {
-      // If not authenticated, redirect to the login page.
+    // If the user is not authenticated and not already on the login page, redirect them.
+    if (!isAuthenticated && pathname !== '/admin/login') {
       router.replace('/admin/login');
     } else {
-      // If authenticated, stop loading and allow content to render.
-      setIsLoading(false);
+      // Otherwise, the check is complete, and we can proceed.
+      setIsVerified(true);
     }
-  }, [pathname, router]); // Re-run this check if the user navigates to a new admin page.
+  }, [pathname, router]);
 
-  // The login page does not need the admin layout, so we render its children directly.
+  // The login page is a special case and does not need the admin layout or auth check.
   if (pathname === '/admin/login') {
     return <>{children}</>;
   }
 
-  // If we are still verifying the token, show the loading screen.
-  // This prevents rendering the admin UI before access is confirmed.
-  if (isLoading) {
+  // For all other admin pages, show a loading screen until the verification is complete.
+  // This prevents rendering children until we know the user is authenticated.
+  if (!isVerified) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -43,8 +41,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  
-  // If we reach here, the user is authenticated and not loading. Render the full admin layout.
+
+  // If we reach here, the user is verified and authenticated. Render the full admin layout.
   const pageTitle = (() => {
     switch (pathname) {
       case '/admin':
