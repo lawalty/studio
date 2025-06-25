@@ -16,32 +16,34 @@ import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
  * A robust text chunker that cleans text while preserving structure.
- * This function cleans text of problematic characters, normalizes whitespace and newlines,
- * and then performs a simple split by character count. This approach is more reliable
- * than complex regex and preserves document structure for better embedding.
+ * This function is designed to be highly resilient. It aggressively cleans text
+ * of problematic characters (including the BOM) and normalizes whitespace, then
+ * performs a simple character-based split. This approach is more reliable than
+ * complex regex for ensuring that chunks are valid for embedding.
  *
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-    // 1. More nuanced cleaning.
-    // - Remove null characters and other non-printable control characters.
-    // - Normalize various whitespace characters to a standard space, but preserve newlines.
-    // - Normalize line endings to a single newline character.
-    // - Collapse multiple newlines to a maximum of two to represent paragraph breaks.
+    // 1. Aggressive cleaning and normalization.
+    // - Remove BOM (Byte Order Mark), which often causes parsing issues.
+    // - Remove null characters and other non-printable control characters except for standard whitespace.
+    // - Normalize all line endings to a single newline character.
+    // - Collapse multiple spaces and newlines to preserve paragraph structure but avoid messy whitespace.
     const cleanedText = text
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove most control chars, but not \t, \n, \r
-        .replace(/ +/g, ' ') // Collapse multiple spaces to a single space
-        .replace(/\r\n?/g, '\n') // Normalize line endings to \n
-        .replace(/\n{3,}/g, '\n\n') // Collapse 3+ newlines to 2
+        .replace(/^\uFEFF/, '') // Remove BOM
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove most control chars
+        .replace(/\r\n?/g, '\n') // Normalize line endings
+        .replace(/[ \t]{2,}/g, ' ') // Collapse spaces and tabs
+        .replace(/\n{3,}/g, '\n\n') // Collapse newlines to paragraph breaks
         .trim();
 
     if (cleanedText.length === 0) {
         return [];
     }
 
-    // 2. Simple, hard splitting.
+    // 2. Simple, hard splitting. This is robust and prevents oversized chunks.
     const chunks: string[] = [];
     for (let i = 0; i < cleanedText.length; i += chunkSize) {
         chunks.push(cleanedText.substring(i, i + chunkSize));
