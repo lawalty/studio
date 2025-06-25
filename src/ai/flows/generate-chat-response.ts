@@ -123,8 +123,14 @@ const generateChatResponseFlow = ai.defineFlow(
     outputSchema: GenerateChatResponseOutputSchema,
   },
   async (input) => {
-    // 1. Search the knowledge base for relevant context
-    const context = await searchKnowledgeBase(input.userMessage);
+    // 1. Search the knowledge base for relevant context, with error handling.
+    let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
+    try {
+        context = await searchKnowledgeBase(input.userMessage);
+    } catch (error: any) {
+        console.warn(`[generateChatResponseFlow] Knowledge base search failed: ${error.message}. The AI will respond without external context. This is non-fatal.`);
+        // The default context string above will be used.
+    }
 
     // 2. Prepare chat history
     const processedChatHistory = (input.chatHistory || []).map(msg => {
