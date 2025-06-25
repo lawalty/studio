@@ -11,16 +11,12 @@ import { ArrowLeft, LayoutDashboard } from 'lucide-react';
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  // The login page is a special case and does not need the admin layout.
-  // This prevents the layout from showing on the now-simplified entry page.
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
-
   const pageTitle = (() => {
     switch (pathname) {
       case '/admin':
         return 'Admin Dashboard';
+      case '/admin/login':
+        return 'Admin Login';
       case '/admin/knowledge-base':
         return 'Knowledge Base';
       case '/admin/api-keys':
@@ -40,7 +36,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-2xl font-headline">{pageTitle}</CardTitle>
           <div className="flex items-center gap-2">
-            {pathname !== '/admin' && (
+            {pathname !== '/admin' && pathname !== '/admin/login' && (
               <Button variant="outline" asChild>
                 <Link href="/admin">
                   <LayoutDashboard className="mr-2 h-4 w-4" />
