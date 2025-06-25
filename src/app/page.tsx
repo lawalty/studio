@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -94,7 +93,7 @@ export default function StartPage() {
             </Button>
             <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
               <Link href="/chat/audio-text">
-                <MessageSquareText className="mr-2"/> Audio & Text (Recommended)
+                <MessageSquareText className="mr-2"/> Audio & Text
               </Link>
             </Button>
              <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
