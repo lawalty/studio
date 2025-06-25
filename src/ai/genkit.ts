@@ -19,21 +19,23 @@ async function getGeminiApiKey(): Promise<string | undefined> {
     if (docSnap.exists()) {
       const firestoreKey = docSnap.data()?.gemini;
       if (firestoreKey && firestoreKey.trim() !== '') {
-        // Successfully found the key in Firestore
-        return firestoreKey;
+        const key = firestoreKey.trim();
+        // Log the sanitized key for debugging purposes
+        console.log(`[Genkit] Found Gemini Key in Firestore. Starts with: ${key.substring(0, 4)}, Ends with: ${key.substring(key.length - 4)}`);
+        return key;
       } else {
         // Document exists, but the key is empty or missing
-        console.warn("Gemini API key is empty or not found in the Firestore document. An API key must be configured in the admin panel.");
+        console.warn("[Genkit] Gemini API key is empty or not found in the Firestore document. An API key must be configured in the admin panel.");
         return undefined;
       }
     } else {
       // The configuration document itself does not exist
-      console.warn("API keys configuration document does not exist in Firestore. An API key must be configured in the admin panel.");
+      console.warn("[Genkit] API keys configuration document does not exist in Firestore. An API key must be configured in the admin panel.");
       return undefined;
     }
   } catch (error) {
     // A critical error occurred trying to read from Firestore
-    console.error("Critical error fetching Gemini API key from Firestore. Cannot proceed with authenticated calls. Error:", error);
+    console.error("[Genkit] Critical error fetching Gemini API key from Firestore. Cannot proceed with authenticated calls. Error:", error);
     return undefined;
   }
 }
