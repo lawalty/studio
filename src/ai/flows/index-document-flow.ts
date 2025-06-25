@@ -12,25 +12,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
-
-/**
- * Splits a given text into chunks of a specified size.
- * This is a simple, robust splitter that works on pre-cleaned text.
- * @param text The text to chunk.
- * @param chunkSize The maximum size for each chunk in characters.
- * @returns An array of text chunks.
- */
-function chunkText(text: string, chunkSize: number = 1800): string[] {
-    if (!text || text.trim().length === 0) {
-        return [];
-    }
-    const chunks: string[] = [];
-    for (let i = 0; i < text.length; i += chunkSize) {
-        chunks.push(text.substring(i, i + chunkSize));
-    }
-    return chunks;
-}
-
+import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -58,8 +40,14 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    // 1. Chunk the text (which is now pre-cleaned by the new AI extraction flow)
-    const chunks = chunkText(text);
+    // 1. Chunk the text using a semantic splitter
+    const splitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 1800,
+      chunkOverlap: 200,
+    });
+
+    const chunks = await splitter.splitText(text);
+
     if (chunks.length === 0) {
       console.error(`[indexDocumentFlow] No text chunks found in document '${sourceName}'. Aborting.`);
       throw new Error("No readable text content was found in the document after processing. Indexing aborted.");
