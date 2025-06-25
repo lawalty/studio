@@ -7,18 +7,10 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, LayoutDashboard } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
   const isLoginPage = pathname === '/admin/login';
 
   const pageTitle = (() => {
@@ -37,23 +29,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         return 'Admin Panel';
     }
   })();
-
-  if (!isClient) {
-    return (
-      <div className="space-y-6">
-        <Card className="shadow-lg">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <Skeleton className="h-8 w-48" />
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-10 w-44 hidden md:flex" />
-              <Skeleton className="h-10 w-32" />
-            </div>
-          </CardHeader>
-        </Card>
-        {children}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
