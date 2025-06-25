@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -11,33 +12,30 @@ import { ArrowLeft, LayoutDashboard, Loader2 } from 'lucide-react';
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [authStatus, setAuthStatus] = useState<'pending' | 'authenticated' | 'unauthenticated'>('pending');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // This effect runs once on mount to determine auth status from client-side storage.
-    const token = sessionStorage.getItem('isAdminAuthenticated');
-    if (token === 'true') {
-      setAuthStatus('authenticated');
-    } else {
-      setAuthStatus('unauthenticated');
-    }
-  }, []);
+    // This effect runs on the client after the component mounts.
+    // It checks for the authentication token in sessionStorage.
+    const isAuthenticated = sessionStorage.getItem('isAdminAuthenticated') === 'true';
 
-  useEffect(() => {
-    // This effect handles redirection based on the authentication status.
-    if (authStatus === 'unauthenticated' && pathname !== '/admin/login') {
+    if (!isAuthenticated) {
+      // If not authenticated, redirect to the login page.
       router.replace('/admin/login');
+    } else {
+      // If authenticated, stop loading and allow content to render.
+      setIsLoading(false);
     }
-  }, [authStatus, pathname, router]);
+  }, [pathname, router]); // Re-run this check if the user navigates to a new admin page.
 
-  // For the login page itself, we don't need the admin layout, just the page content.
+  // The login page does not need the admin layout, so we render its children directly.
   if (pathname === '/admin/login') {
     return <>{children}</>;
   }
 
-  // If authentication status is not yet confirmed, or if the user is unauthenticated
-  // and waiting for the redirect to happen, show a loader.
-  if (authStatus !== 'authenticated') {
+  // If we are still verifying the token, show the loading screen.
+  // This prevents rendering the admin UI before access is confirmed.
+  if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -46,7 +44,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
   
-  // If we reach here, the status is 'authenticated'. Render the full admin layout.
+  // If we reach here, the user is authenticated and not loading. Render the full admin layout.
   const pageTitle = (() => {
     switch (pathname) {
       case '/admin':
