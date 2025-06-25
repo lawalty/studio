@@ -1,7 +1,6 @@
-
 'use client';
 
-import type { Message } from '@/components/chat/ChatInterface';
+import type { Message, CommunicationMode } from '@/components/chat/ChatInterface';
 import { cn } from "@/lib/utils";
 import { User, Bot, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,20 +10,20 @@ import React, { useEffect, useRef, useState } from 'react';
 const renderTextWithMarkdown = (text: string): JSX.Element => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return (
-    <>
+    &lt;>
       {parts.map((part, index) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={index}>{part.slice(2, -2)}</strong>;
+          return &lt;strong key={index}>{part.slice(2, -2)}&lt;/strong>;
         }
         // Handle newlines within normal text parts
         return part.split('\n').map((line, lineIndex, arr) => (
-          <React.Fragment key={`${index}-${lineIndex}`}>
+          &lt;React.Fragment key={`${index}-${lineIndex}`}>
             {line}
-            {lineIndex < arr.length - 1 && <br />}
-          </React.Fragment>
+            {lineIndex &lt; arr.length - 1 && &lt;br />}
+          &lt;/React.Fragment>
         ));
       })}
-    </>
+    &lt;/>
   );
 };
 
@@ -33,6 +32,8 @@ interface ChatBubbleProps {
   message: Message;
   avatarSrc: string;
   typingSpeedMs: number;
+  animationSyncFactor: number;
+  communicationMode: CommunicationMode;
   isNewlyAddedAiMessage: boolean;
   forceFinishAnimation: boolean;
 }
@@ -41,15 +42,17 @@ export default function ChatBubble({
   message,
   avatarSrc,
   typingSpeedMs,
+  animationSyncFactor,
+  communicationMode,
   isNewlyAddedAiMessage,
   forceFinishAnimation
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
   const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png";
 
-  const [displayedContent, setDisplayedContent] = useState<React.ReactNode>(null);
+  const [displayedContent, setDisplayedContent] = useState&lt;React.ReactNode>(null);
   const [isAnimationComplete, setIsAnimationComplete] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef&lt;NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const shouldAnimate = message.sender === 'ai' && isNewlyAddedAiMessage;
@@ -60,7 +63,19 @@ export default function ChatBubble({
     setIsAnimationComplete(false);
 
     if (shouldAnimate) {
-      setDisplayedContent(<></>);
+      setDisplayedContent(&lt;>&lt;/>);
+
+      let effectiveTypingSpeed = typingSpeedMs;
+      if (
+        communicationMode === 'audio-text' &&
+        message.audioDurationMs &&
+        message.audioDurationMs > 0
+      ) {
+          const textLength = message.text.replace(/\s/g, '').length || 1;
+          const rawSpeed = message.audioDurationMs / textLength;
+          effectiveTypingSpeed = rawSpeed * animationSyncFactor;
+      }
+
 
       const parts = message.text.split(/(\*\*.*?\*\*)/g).filter(p => p);
       const characterQueue: { char: string; isBold: boolean; isNewline: boolean }[] = [];
@@ -82,40 +97,40 @@ export default function ChatBubble({
       let fullContent: React.ReactNode[] = [];
 
       const type = () => {
-        if (index < characterQueue.length) {
+        if (index &lt; characterQueue.length) {
           const { char, isBold, isNewline } = characterQueue[index];
 
           if (isNewline) {
-            fullContent.push(<br key={`br-${index}`} />);
+            fullContent.push(&lt;br key={`br-${index}`} />);
           } else if (isBold) {
             const lastElement = fullContent[fullContent.length - 1] as React.ReactElement;
-            if (lastElement && lastElement.type === 'strong') {
+            if (lastElement && lastElement.type === 'strong' && React.isValidElement(lastElement)) {
               fullContent[fullContent.length - 1] = React.cloneElement(lastElement, {
                 children: lastElement.props.children + char,
               });
             } else {
-              fullContent.push(<strong key={`str-${index}`}>{char}</strong>);
+              fullContent.push(&lt;strong key={`str-${index}`}>{char}&lt;/strong>);
             }
           } else {
-            const lastElement = fullContent[fullContent.length - 1];
-            if (lastElement && typeof lastElement === 'string') {
-              fullContent[fullContent.length - 1] = lastElement + char;
+             // Check if the last element is a plain string
+            if (fullContent.length > 0 && typeof fullContent[fullContent.length - 1] === 'string') {
+              fullContent[fullContent.length - 1] += char;
             } else {
               fullContent.push(char);
             }
           }
           
-          setDisplayedContent(<>{fullContent}</>);
+          setDisplayedContent(&lt;>{fullContent}&lt;/>);
           index++;
 
-          const randomDelay = typingSpeedMs + (Math.random() - 0.5) * (typingSpeedMs * 0.5);
+          const randomDelay = effectiveTypingSpeed + (Math.random() - 0.5) * (effectiveTypingSpeed * 0.5);
           timeoutRef.current = setTimeout(type, Math.max(10, randomDelay));
         } else {
           setIsAnimationComplete(true);
         }
       };
 
-      timeoutRef.current = setTimeout(type, typingSpeedMs);
+      timeoutRef.current = setTimeout(type, effectiveTypingSpeed);
     } else {
       setDisplayedContent(renderTextWithMarkdown(message.text));
       setIsAnimationComplete(true);
@@ -127,21 +142,21 @@ export default function ChatBubble({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message, isNewlyAddedAiMessage, typingSpeedMs]);
+  }, [message, isNewlyAddedAiMessage, typingSpeedMs, animationSyncFactor, communicationMode]);
 
   const renderPdfLink = () => {
     if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
       return (
-        <a
+        &lt;a
           href={message.pdfReference.downloadURL}
           target="_blank"
           rel="noopener noreferrer"
           download={message.pdfReference.fileName}
           className="mt-2 inline-flex items-center gap-2 rounded-md bg-accent/50 px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent"
         >
-          <Download className="h-3 w-3" />
+          &lt;Download className="h-3 w-3" />
           Download: {message.pdfReference.fileName}
-        </a>
+        &lt;/a>
       );
     }
     return null;
@@ -150,18 +165,18 @@ export default function ChatBubble({
   const finalContent = renderTextWithMarkdown(message.text);
 
   return (
-    <div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
+    &lt;div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
-        <Avatar className="h-8 w-8 mr-2 self-start">
+        &lt;Avatar className="h-8 w-8 mr-2 self-start">
           {avatarSrc && !avatarSrc.startsWith('https://placehold.co') ? (
-             <AvatarImage src={avatarSrc} alt="AI Avatar" className="object-cover"/>
+             &lt;AvatarImage src={avatarSrc} alt="AI Avatar" className="object-cover"/>
           ) : (
-             <AvatarImage src={DEFAULT_AVATAR_PLACEHOLDER} alt="AI Avatar Placeholder" data-ai-hint="professional woman" />
+             &lt;AvatarImage src={DEFAULT_AVATAR_PLACEHOLDER} alt="AI Avatar Placeholder" data-ai-hint="professional woman" />
           )}
-          <AvatarFallback><Bot size={20}/></AvatarFallback>
-        </Avatar>
+          &lt;AvatarFallback>&lt;Bot size={20}/>&lt;/AvatarFallback>
+        &lt;/Avatar>
       )}
-      <div
+      &lt;div
         className={cn(
           "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg shadow flex flex-col",
           isUser
@@ -169,19 +184,19 @@ export default function ChatBubble({
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        <div className="text-sm whitespace-pre-wrap">
+        &lt;div className="text-sm whitespace-pre-wrap">
           {isAnimationComplete || forceFinishAnimation ? finalContent : displayedContent}
-        </div>
+        &lt;/div>
         {renderPdfLink()}
-        <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
+        &lt;p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </p>
-      </div>
+        &lt;/p>
+      &lt;/div>
       {isUser && (
-         <Avatar className="h-8 w-8 ml-2 self-start">
-          <AvatarFallback><User size={20}/></AvatarFallback>
-        </Avatar>
+         &lt;Avatar className="h-8 w-8 ml-2 self-start">
+          &lt;AvatarFallback>&lt;User size={20}/>&lt;/AvatarFallback>
+        &lt;/Avatar>
       )}
-    </div>
+    &lt;/div>
   );
 }

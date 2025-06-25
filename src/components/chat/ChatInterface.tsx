@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -26,6 +25,7 @@ export interface Message {
     fileName: string;
     downloadURL: string;
   };
+  audioDurationMs?: number;
 }
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
@@ -36,6 +36,7 @@ const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 const DEFAULT_TYPING_SPEED_MS = 40;
+const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -187,6 +188,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const [hasConversationEnded, setHasConversationEnded] = useState(false);
   const [showPreparingGreeting, setShowPreparingGreeting] = useState(false);
   const [typingSpeedMs, setTypingSpeedMs] = useState<number>(DEFAULT_TYPING_SPEED_MS);
+  const [animationSyncFactor, setAnimationSyncFactor] = useState<number>(DEFAULT_ANIMATION_SYNC_FACTOR);
   const [forceFinishAnimationForMessageId, setForceFinishAnimationForMessageId] = useState<string | null>(null);
 
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
@@ -223,13 +225,19 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const accumulatedTranscriptRef = useRef<string>('');
   const sendTranscriptTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const addMessage = useCallback((text: string, sender: 'user' | 'ai', pdfReference?: Message['pdfReference']): string => {
+  const addMessage = useCallback((text: string, sender: 'user' | 'ai', pdfReference?: Message['pdfReference'], audioDurationMs?: number): string => {
     const newMessageId = Date.now().toString() + Math.random();
     setMessages((prevMessages) => [
       ...prevMessages,
-      { id: newMessageId, text, sender: sender, timestamp: Date.now(), pdfReference },
+      { id: newMessageId, text, sender: sender, timestamp: Date.now(), pdfReference, audioDurationMs },
     ]);
     return newMessageId;
+  }, []);
+  
+  const updateMessageDuration = useCallback((messageId: string, audioDurationMs: number) => {
+    setMessages(prev => prev.map(msg => 
+        msg.id === messageId ? { ...msg, audioDurationMs } : msg
+    ));
   }, []);
 
   const resetConversation = useCallback(() => {
@@ -379,8 +387,8 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     }
   }, [hasConversationEnded, toggleListeningRef]);
 
-  const speakText = useCallback((text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false) => {
-    return new Promise<void>((resolveSpeakText) => {
+  const speakText = useCallback((text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false): Promise<number> => {
+    return new Promise<number>((resolveSpeakText) => {
       if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
       if (elevenLabsAudioRef.current) {
         elevenLabsAudioRef.current.pause();
@@ -392,10 +400,10 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       currentAiMessageIdRef.current = messageIdForAnimationSync;
       if (isAcknowledgement) isSpeakingAcknowledgementRef.current = true;
 
-      const commonCleanupAndResolve = () => {
+      const commonCleanupAndResolve = (duration: number) => {
         if (isSpeakingAcknowledgementRef.current && isAcknowledgement) isSpeakingAcknowledgementRef.current = false;
         handleAudioProcessEnd();
-        resolveSpeakText();
+        resolveSpeakText(duration);
       };
       
       if (communicationModeRef.current === 'text-only' || text.trim() === "" || (hasConversationEnded && !isEndingSessionRef.current)) {
@@ -404,17 +412,18 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         if (isEndingSessionRef.current && (communicationModeRef.current === 'text-only' || hasConversationEnded)) {
             setHasConversationEnded(true);
         }
-        resolveSpeakText();
+        resolveSpeakText(0);
         return;
       }
       
       if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
       if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
       setIsSpeaking(false);
-      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) setShowPreparingGreeting(true);
+      if (!isAcknowledgement && messagesRef.current.length &lt;= 1 && messagesRef.current.find(m => m.sender === 'ai')) setShowPreparingGreeting(true);
 
       const tryBrowserFallback = () => {
         if (typeof window !== 'undefined' && window.speechSynthesis) {
+          let startTime = 0;
           const utterance = new SpeechSynthesisUtterance(text.replace(/EZCORP/gi, "easy corp"));
           utterance.pitch = 1; utterance.rate = 1;
           const voices = window.speechSynthesis.getVoices();
@@ -423,16 +432,23 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             voices.find(voice => voice.lang === 'en-US');
           if (selectedVoice) utterance.voice = selectedVoice;
           
-          utterance.onstart = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-          utterance.onend = () => commonCleanupAndResolve();
+          utterance.onstart = () => { 
+              startTime = Date.now();
+              onSpeechStartCallback?.(); 
+              handleActualAudioStart(); 
+          };
+          utterance.onend = () => {
+              const duration = Date.now() - startTime;
+              commonCleanupAndResolve(duration);
+          };
           utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
             if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') console.error("Browser TTS Error:", event.error);
-            commonCleanupAndResolve();
+            commonCleanupAndResolve(0);
           };
           window.speechSynthesis.speak(utterance);
         } else {
           console.warn("Browser TTS not supported.");
-          resolveSpeakText();
+          resolveSpeakText(0);
         }
       };
 
@@ -445,12 +461,20 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           .then(response => { if (!response.ok) throw new Error(`API returned ${response.status}`); return response.blob(); })
           .then(audioBlob => {
             if (audioBlob.size === 0 || !audioBlob.type.startsWith('audio/')) throw new Error('Received invalid or empty audio data from API.');
-            const audioUrl = URL.createObjectURL(audioBlob);
             if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
             const audio = elevenLabsAudioRef.current;
-            audio.src = audioUrl;
+            let durationMs = 0;
+
+            audio.onloadedmetadata = () => {
+              durationMs = audio.duration * 1000;
+            };
+            audio.src = URL.createObjectURL(audioBlob);
+
             audio.onplay = () => { onSpeechStartCallback?.(); handleActualAudioStart(); };
-            audio.onended = () => commonCleanupAndResolve();
+            audio.onended = () => {
+              commonCleanupAndResolve(durationMs);
+              if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
+            };
             audio.onerror = (e) => {
               console.warn("HTMLAudioElement.onerror triggered:", (e.target as HTMLAudioElement)?.error?.message);
               tryBrowserFallback();
@@ -458,7 +482,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             const playPromise = audio.play();
             playPromise?.catch(error => {
               if (error.name === 'AbortError') { 
-                resolveSpeakText(); 
+                resolveSpeakText(0); 
               } else {
                 console.error("Error during audio.play():", error);
                 toast({ title: "Playback Start Error", description: `Could not start playing audio: ${error.message}`, variant: "destructive" });
@@ -529,7 +553,13 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         }, 50);
       };
       if (result.shouldEndConversation) { isEndingSessionRef.current = true; }
-      await speakTextRef.current(result.aiResponse, newAiMessageId, onSpeechActuallyStarting, false);
+      
+      const audioDuration = await speakTextRef.current(result.aiResponse, newAiMessageId, onSpeechActuallyStarting, false);
+
+      if (newAiMessageId && audioDuration > 0) {
+        updateMessageDuration(newAiMessageId, audioDuration);
+      }
+
       mainResponsePendingAfterAckRef.current = false;
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
@@ -548,7 +578,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       mainResponsePendingAfterAckRef.current = false;
       isSpeakingAcknowledgementRef.current = false;
     }
-  }, [addMessage, personaTraits, conversationalTopics, hasConversationEnded, isSendingMessage, setInputValue]);
+  }, [addMessage, updateMessageDuration, personaTraits, conversationalTopics, hasConversationEnded, isSendingMessage, setInputValue]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
@@ -578,7 +608,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           }
           let currentVisualTranscript = '';
           let latestFinalUtteranceThisEvent = '';
-          for (let i = 0; i < event.results.length; i++) {
+          for (let i = 0; i &lt; event.results.length; i++) {
             const segmentTranscript = event.results[i][0].transcript;
             if (communicationModeRef.current === 'audio-text') {
                 currentVisualTranscript += segmentTranscript;
@@ -617,7 +647,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           if (['aborted', 'interrupted', 'canceled'].includes(event.error)) return;
           if (event.error === 'no-speech') return; // Handled by onend for audio-only
           if (event.error === 'audio-capture') {
-            toast({ title: "Microphone Issue", description: "No audio detected. Check mic & permissions.", variant: "destructive" });
+            toast({ title: "Microphone Issue", description: "No audio detected. Check mic &amp; permissions.", variant: "destructive" });
           } else if (event.error !== 'network') {
             toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
           }
@@ -875,6 +905,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           setCustomGreeting(assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
           setTypingSpeedMs(assets.typingSpeedMs === undefined ? DEFAULT_TYPING_SPEED_MS : Number(assets.typingSpeedMs));
+          setAnimationSyncFactor(assets.animationSyncFactor === undefined ? DEFAULT_ANIMATION_SYNC_FACTOR : Number(assets.animationSyncFactor));
         } else {
           // Set defaults if doc doesn't exist
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
@@ -885,6 +916,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
           setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
           setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
+          setAnimationSyncFactor(DEFAULT_ANIMATION_SYNC_FACTOR);
         }
       } catch (e: any) {
         toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive" });
@@ -897,6 +929,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
         setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
         setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
+        setAnimationSyncFactor(DEFAULT_ANIMATION_SYNC_FACTOR);
       } finally {
         setIsLoadingConfig(false);
       }
@@ -918,7 +951,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     isDisplayingAnimatedAvatar = true;
   }
 
-  const imageProps: React.ComponentProps<typeof Image> = {
+  const imageProps: React.ComponentProps&lt;typeof Image> = {
     src: currentAvatarToDisplay,
     alt: "AI Blair Avatar",
     width: communicationMode === 'audio-only' ? 200 : 120,
@@ -943,12 +976,12 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const showAiTypingIndicator = isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting;
   const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null;
-    if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
+    if (showPreparingGreeting) return &lt;div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> &lt;Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... &lt;/div>;
     if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
-      return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
+      return &lt;div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> &lt;Mic size={20} className="mr-2" /> Listening... &lt;/div>;
     }
      if (showAiTypingIndicator && !isSpeaking && !isListening) {
-      return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> AI Blair is preparing... </div>;
+      return &lt;div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> AI Blair is preparing... &lt;/div>;
     }
     return null;
   };
@@ -959,72 +992,76 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
   const mainContent = () => {
     if (isLoadingConfig && !aiHasInitiatedConversation) {
-        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Chat Configuration</h2> <p className="mt-2 text-muted-foreground">Please wait a moment...</p> </div> );
+        return ( &lt;div className="flex flex-col items-center justify-center h-full text-center py-8"> &lt;DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> &lt;h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Chat Configuration&lt;/h2> &lt;p className="mt-2 text-muted-foreground">Please wait a moment...&lt;/p> &lt;/div> );
     }
     if (communicationMode === 'audio-only') {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-center py-8">
-          {!hasConversationEnded && <Image {...imageProps} />}
-          {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}</h2>}
-           <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
+        &lt;div className="flex flex-col items-center justify-center h-full text-center py-8">
+          {!hasConversationEnded && &lt;Image {...imageProps} />}
+          {!hasConversationEnded && &lt;h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}&lt;/h2>}
+           &lt;div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {audioOnlyLiveIndicator()}
-          </div>
+          &lt;/div>
           {hasConversationEnded && (
-            <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
-                 <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
-                 <ConversationLog
+            &lt;div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
+                 &lt;h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended&lt;/h3>
+                 &lt;ConversationLog
                     messages={messages}
                     avatarSrc={avatarSrc}
                     typingSpeedMs={typingSpeedMs}
+                    animationSyncFactor={animationSyncFactor}
+                    communicationMode={communicationMode}
                     lastOverallMessageId={lastOverallMessage?.id || null}
                     hasConversationEnded={hasConversationEnded}
                     forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
                   />
-                 <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
-                    <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
-                    <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
-                 </div>
-            </div>
+                 &lt;div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
+                    &lt;Button onClick={handleSaveConversationAsPdf} variant="outline"> &lt;Save className="mr-2 h-4 w-4" /> Save as PDF &lt;/Button>
+                    &lt;Button onClick={handleStartNewChat} variant="outline"> &lt;RotateCcw className="mr-2 h-4 w-4" /> Start New Chat &lt;/Button>
+                 &lt;/div>
+            &lt;/div>
           )}
           {aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting && !isSpeaking && !isSendingMessage && (
-            <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8">
-                <Power className="mr-2 h-5 w-5" /> End Chat
-            </Button>
+            &lt;Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8">
+                &lt;Power className="mr-2 h-5 w-5" /> End Chat
+            &lt;/Button>
           )}
-        </div>
+        &lt;/div>
       );
     }
     // For 'audio-text' and 'text-only' modes:
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-        <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
-          <Card className="w-full shadow-xl">
-            <CardContent className="pt-6 flex flex-col items-center">
-              <Image {...imageProps} />
-              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}</h2>
+      &lt;div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
+        &lt;div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
+          &lt;Card className="w-full shadow-xl">
+            &lt;CardContent className="pt-6 flex flex-col items-center">
+              &lt;Image {...imageProps} />
+              &lt;h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}&lt;/h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
-                <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
+                &lt;p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
                   Preparing greeting...
-                </p>
+                &lt;/p>
               )}
               {showAiTypingIndicator && !isSpeaking && (
-                 <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">
+                 &lt;p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">
                   AI Blair is typing...
-                </p>
+                &lt;/p>
               )}
-            </CardContent>
-          </Card>
-        </div>
-        <div className="md:col-span-2 flex flex-col h-full">
-          <ConversationLog
+            &lt;/CardContent>
+          &lt;/Card>
+        &lt;/div>
+        &lt;div className="md:col-span-2 flex flex-col h-full">
+          &lt;ConversationLog
             messages={messagesForLog}
             avatarSrc={avatarSrc}
             typingSpeedMs={typingSpeedMs}
+            animationSyncFactor={animationSyncFactor}
+            communicationMode={communicationMode}
             lastOverallMessageId={lastOverallMessage?.id || null}
             hasConversationEnded={hasConversationEnded}
             forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
           />
-          <MessageInput
+          &lt;MessageInput
             onSendMessage={handleSendMessageRef.current}
             isSending={isSendingMessage && !hasConversationEnded}
             isSpeaking={isSpeaking && !hasConversationEnded}
@@ -1036,32 +1073,32 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             disabled={hasConversationEnded || showPreparingGreeting || (isSendingMessage && aiHasInitiatedConversation && communicationModeRef.current !== 'audio-text') || (isSpeaking && communicationModeRef.current !== 'audio-text')}
           />
           {hasConversationEnded ? (
-             <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
-                <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
-                <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
-             </div>
+             &lt;div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
+                &lt;Button onClick={handleSaveConversationAsPdf} variant="outline"> &lt;Save className="mr-2 h-4 w-4" /> Save as PDF &lt;/Button>
+                &lt;Button onClick={handleStartNewChat} variant="outline"> &lt;RotateCcw className="mr-2 h-4 w-4" /> Start New Chat &lt;/Button>
+             &lt;/div>
           ) : aiHasInitiatedConversation && (
-             <div className="mt-3 flex justify-end">
-                <Button
+             &lt;div className="mt-3 flex justify-end">
+                &lt;Button
                   onClick={handleEndChatManually}
                   variant="outline"
                   size="sm"
                   disabled={showPreparingGreeting || (isSendingMessage && aiHasInitiatedConversation) || isSpeaking }
                 >
-                  <Power className="mr-2 h-4 w-4" /> End Chat
-                </Button>
-             </div>
+                  &lt;Power className="mr-2 h-4 w-4" /> End Chat
+                &lt;/Button>
+             &lt;/div>
           )}
-        </div>
-      </div>
+        &lt;/div>
+      &lt;/div>
     );
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-grow">
+    &lt;div className="flex flex-col h-full">
+      &lt;div className="flex-grow">
         {mainContent()}
-      </div>
-    </div>
+      &lt;/div>
+    &lt;/div>
   );
 }
