@@ -8,9 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 interface ChatBubbleProps {
   message: Message;
   avatarSrc: string;
-  textAnimationEnabled: boolean;
-  textAnimationSpeedMs: number;
-  textPopulationStaggerMs: number;
+  typingSpeedMs: number;
   isNewlyAddedAiMessage: boolean;
   forceFinishAnimation: boolean;
 }
@@ -18,63 +16,62 @@ interface ChatBubbleProps {
 export default function ChatBubble({
   message,
   avatarSrc,
-  textAnimationEnabled,
-  textAnimationSpeedMs,
-  textPopulationStaggerMs,
+  typingSpeedMs,
   isNewlyAddedAiMessage,
   forceFinishAnimation
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
   const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png";
-  const textContentRef = useRef<HTMLParagraphElement>(null);
-  const [hasAnimationBeenForced, setHasAnimationBeenForced] = useState(false);
+  const [displayedText, setDisplayedText] = useState('');
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    setHasAnimationBeenForced(false);
-  }, [message.id]);
+    // This effect handles the typing animation
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
 
-  useEffect(() => {
-    if (forceFinishAnimation && message.sender === 'ai' && !hasAnimationBeenForced) {
-      if (textContentRef.current) {
-        const letterSpans = textContentRef.current.querySelectorAll('.scale-in-letter');
-        letterSpans.forEach(span => {
-          (span as HTMLElement).style.opacity = '1';
-          (span as HTMLElement).style.transform = 'scale(1) translateX(0)';
-          (span as HTMLElement).style.animation = 'none';
-        });
+    const fullText = message.text.replace(/\*\*/g, '\n\n');
+
+    if (message.sender === 'ai' && isNewlyAddedAiMessage && !forceFinishAnimation) {
+      let i = 0;
+      setDisplayedText('');
+
+      const type = () => {
+        if (i < fullText.length) {
+          setDisplayedText(prev => prev + fullText.charAt(i));
+          i++;
+          // Add randomness to the delay to make it feel more natural
+          const randomDelay = typingSpeedMs + (Math.random() - 0.5) * (typingSpeedMs * 0.5);
+          timeoutRef.current = setTimeout(type, Math.max(10, randomDelay)); // Ensure a minimum delay
+        }
+      };
+
+      // Start the typing animation
+      timeoutRef.current = setTimeout(type, typingSpeedMs);
+    } else {
+      // If it's not a new AI message or animation is forced, show the full text immediately.
+      setDisplayedText(fullText);
+    }
+
+    return () => {
+      // Cleanup: clear any pending timeout when the component unmounts or re-renders.
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
       }
-      setHasAnimationBeenForced(true);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [message, isNewlyAddedAiMessage]); // Rerun effect when the message or its 'newly added' status changes.
+
+  useEffect(() => {
+    // This effect handles forcing the animation to finish.
+    if (forceFinishAnimation) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      setDisplayedText(message.text.replace(/\*\*/g, '\n\n'));
     }
-  }, [forceFinishAnimation, message.id, message.sender, hasAnimationBeenForced]);
-
-
-  const renderTextContent = () => {
-    const processedText = message.text.replace(/\*\*/g, '\n\n');
-
-    if (hasAnimationBeenForced) {
-      return processedText;
-    }
-
-    if (message.sender === 'ai' && textAnimationEnabled && isNewlyAddedAiMessage) {
-      const letters = processedText.split('');
-      const animationDuration = textAnimationSpeedMs > 0 ? textAnimationSpeedMs : 800;
-      const staggerDelay = textPopulationStaggerMs > 0 ? textPopulationStaggerMs : 50;
-
-      return letters.map((letter, index) => (
-        <span
-          key={`${message.id}-letter-${index}`}
-          className="scale-in-letter"
-          style={{
-            animationDuration: `${animationDuration}ms`,
-            animationDelay: `${index * staggerDelay}ms`,
-          }}
-        >
-          {letter === ' ' ? '\u00A0' : letter}
-        </span>
-      ));
-    }
-    return processedText;
-  };
+  }, [forceFinishAnimation, message.text]);
   
   const renderPdfLink = () => {
     if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
@@ -93,7 +90,6 @@ export default function ChatBubble({
     }
     return null;
   };
-
 
   return (
     <div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
@@ -115,7 +111,7 @@ export default function ChatBubble({
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        <p ref={textContentRef} className="text-sm whitespace-pre-wrap">{renderTextContent()}</p>
+        <p className="text-sm whitespace-pre-wrap">{displayedText}</p>
         {renderPdfLink()}
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

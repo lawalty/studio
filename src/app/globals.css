@@ -122,36 +122,6 @@ main {
   animation: pulse-speak 1.5s ease-in-out infinite;
 }
 
-@keyframes scaleInFromLeftLetter {
-  0% {
-    opacity: 0;
-    transform: scale(3) translateX(-20px); /* Start larger and slightly to the left */
-  }
-  60% { /* Optional: Overshoot slightly for more dynamic feel */
-    opacity: 1;
-    transform: scale(1.1) translateX(3px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateX(0); /* End at normal size and position */
-  }
-}
-
-.scale-in-letter {
-  display: inline-block; /* Allows transform to work correctly on spans */
-  opacity: 0; /* Start hidden, animation will make it visible */
-  animation-name: scaleInFromLeftLetter;
-  animation-timing-function: cubic-bezier(0.215, 0.610, 0.355, 1.000); /* Easing */
-  animation-fill-mode: forwards; /* Keeps the 100% state after animation finishes */
-}
-
-.animation-force-finish .scale-in-letter {
-  opacity: 1 !important;
-  transform: scale(1) translateX(0) !important;
-  animation: none !important;
-}
-
-
 @keyframes avatarGlow {
   0%, 100% {
     /* Inner, brighter glow - less spread, more opaque */

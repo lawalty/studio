@@ -7,9 +7,7 @@ import React, { useEffect, useRef } from 'react';
 interface ConversationLogProps {
   messages: Message[]; 
   avatarSrc: string;
-  textAnimationEnabled: boolean;
-  textAnimationSpeedMs: number;
-  textPopulationStaggerMs: number; 
+  typingSpeedMs: number;
   lastOverallMessageId: string | null; 
   hasConversationEnded: boolean;
   forceFinishAnimationForMessageId: string | null; 
@@ -18,9 +16,7 @@ interface ConversationLogProps {
 export default function ConversationLog({ 
   messages, 
   avatarSrc,
-  textAnimationEnabled,
-  textAnimationSpeedMs,
-  textPopulationStaggerMs, 
+  typingSpeedMs,
   lastOverallMessageId,
   hasConversationEnded,
   forceFinishAnimationForMessageId 
@@ -56,9 +52,7 @@ export default function ConversationLog({
             key={msg.id} 
             message={msg} 
             avatarSrc={avatarSrc}
-            textAnimationEnabled={textAnimationEnabled}
-            textAnimationSpeedMs={textAnimationSpeedMs}
-            textPopulationStaggerMs={textPopulationStaggerMs} 
+            typingSpeedMs={typingSpeedMs}
             isNewlyAddedAiMessage={msg.sender === 'ai' && msg.id === lastOverallMessageId && !hasConversationEnded}
             forceFinishAnimation={forceFinishAnimationForMessageId === msg.id}
           />

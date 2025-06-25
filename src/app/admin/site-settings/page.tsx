@@ -8,44 +8,26 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Film, Zap, KeyRound, ShieldCheck, Clock } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, KeyRound, ShieldCheck, Clock, Type } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Transparent 1x1 GIF
 const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
-const DEFAULT_ENABLE_TEXT_ANIMATION = false;
-const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800; // Duration of each letter's animation
-const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50; // Delay between letters starting animation
+const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ADMIN_PASSWORD = "admin123";
 
 export default function SiteSettingsPage() {
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
   const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
-  const [enableTextAnimation, setEnableTextAnimation] = useState<boolean>(DEFAULT_ENABLE_TEXT_ANIMATION);
-  const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<string>(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
-  const [textPopulationStaggerMs, setTextPopulationStaggerMs] = useState<string>(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
+  const [typingSpeedMs, setTypingSpeedMs] = useState<string>(String(DEFAULT_TYPING_SPEED_MS));
   const [adminPassword, setAdminPassword] = useState<string>('');
   const [newAdminPassword, setNewAdminPassword] = useState<string>('');
-
 
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
@@ -63,9 +45,7 @@ export default function SiteSettingsPage() {
           const data = docSnap.data();
           setSplashImagePreview(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
-          setEnableTextAnimation(typeof data.enableTextAnimation === 'boolean' ? data.enableTextAnimation : DEFAULT_ENABLE_TEXT_ANIMATION);
-          setTextAnimationSpeedMs(data.textAnimationSpeedMs === undefined ? String(DEFAULT_TEXT_ANIMATION_SPEED_MS) : String(data.textAnimationSpeedMs));
-          setTextPopulationStaggerMs(data.textPopulationStaggerMs === undefined ? String(DEFAULT_TEXT_POPULATION_STAGGER_MS) : String(data.textPopulationStaggerMs));
+          setTypingSpeedMs(data.typingSpeedMs === undefined ? String(DEFAULT_TYPING_SPEED_MS) : String(data.typingSpeedMs));
           
           if (!data.adminPassword || data.adminPassword.trim() === '') {
             setAdminPassword(DEFAULT_ADMIN_PASSWORD); 
@@ -78,9 +58,7 @@ export default function SiteSettingsPage() {
           const defaultSettings = {
             splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             splashWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE,
-            enableTextAnimation: DEFAULT_ENABLE_TEXT_ANIMATION,
-            textAnimationSpeedMs: DEFAULT_TEXT_ANIMATION_SPEED_MS,
-            textPopulationStaggerMs: DEFAULT_TEXT_POPULATION_STAGGER_MS,
+            typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
             adminPassword: DEFAULT_ADMIN_PASSWORD,
             avatarUrl: "https://placehold.co/150x150.png",
             animatedAvatarUrl: "https://placehold.co/150x150.png?text=GIF",
@@ -92,9 +70,7 @@ export default function SiteSettingsPage() {
           await setDoc(docRef, defaultSettings);
           setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
-          setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
-          setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
-          setTextPopulationStaggerMs(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
+          setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
           setAdminPassword(DEFAULT_ADMIN_PASSWORD);
           toast({ title: "Initial Settings Created", description: "Default site settings and admin password have been saved." });
         }
@@ -102,9 +78,7 @@ export default function SiteSettingsPage() {
         console.error("Error fetching/initializing site assets from Firestore:", error);
         setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
         setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
-        setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
-        setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
-        setTextPopulationStaggerMs(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
+        setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
         setAdminPassword(DEFAULT_ADMIN_PASSWORD); 
         toast({
           title: "Error Loading Settings",
@@ -132,20 +106,14 @@ export default function SiteSettingsPage() {
   const handleSplashWelcomeMessageChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setSplashWelcomeMessage(event.target.value);
   };
-
-  const handleTextAnimationSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (value === '' || /^\d*$/.test(value)) {
-      setTextAnimationSpeedMs(value);
-    }
-  };
   
-  const handleTextPopulationStaggerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTypingSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === '' || /^\d*$/.test(value)) {
-      setTextPopulationStaggerMs(value);
+      setTypingSpeedMs(value);
     }
   };
+
 
   const handleSaveAllSiteSettings = async () => {
     setIsSaving(true);
@@ -167,11 +135,8 @@ export default function SiteSettingsPage() {
       }
     }
 
-    const speedMs = parseInt(textAnimationSpeedMs, 10);
-    const validAnimationSpeed = isNaN(speedMs) || speedMs <= 0 ? DEFAULT_TEXT_ANIMATION_SPEED_MS : speedMs;
-    const staggerMs = parseInt(textPopulationStaggerMs, 10);
-    const validPopulationStagger = isNaN(staggerMs) || staggerMs < 0 ? DEFAULT_TEXT_POPULATION_STAGGER_MS : staggerMs;
-
+    const speedMs = parseInt(typingSpeedMs, 10);
+    const validTypingSpeed = isNaN(speedMs) || speedMs <= 0 ? DEFAULT_TYPING_SPEED_MS : speedMs;
 
     try {
       const dataToUpdate: { [key: string]: any } = {};
@@ -195,32 +160,26 @@ export default function SiteSettingsPage() {
         dataToUpdate.splashWelcomeMessage = splashWelcomeMessage;
         changesMade = true;
       }
-
-      if (enableTextAnimation !== (currentData.enableTextAnimation === undefined ? DEFAULT_ENABLE_TEXT_ANIMATION : currentData.enableTextAnimation)) {
-        dataToUpdate.enableTextAnimation = enableTextAnimation;
-        changesMade = true;
-      }
-
-      if (validAnimationSpeed !== (currentData.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : currentData.textAnimationSpeedMs)) {
-        dataToUpdate.textAnimationSpeedMs = validAnimationSpeed;
-        changesMade = true;
-      }
       
-      if (validPopulationStagger !== (currentData.textPopulationStaggerMs === undefined ? DEFAULT_TEXT_POPULATION_STAGGER_MS : currentData.textPopulationStaggerMs)) {
-        dataToUpdate.textPopulationStaggerMs = validPopulationStagger;
+      if (validTypingSpeed !== (currentData.typingSpeedMs === undefined ? DEFAULT_TYPING_SPEED_MS : currentData.typingSpeedMs)) {
+        dataToUpdate.typingSpeedMs = validTypingSpeed;
         changesMade = true;
       }
 
       if (changesMade) {
         if (currentDocSnap.exists()) {
-          await updateDoc(siteAssetsDocRef, dataToUpdate);
+          // Clean up old animation fields if they exist
+          const updatePayload: { [key: string]: any } = { ...dataToUpdate };
+          if ('enableTextAnimation' in currentData) updatePayload.enableTextAnimation = undefined;
+          if ('textAnimationSpeedMs' in currentData) updatePayload.textAnimationSpeedMs = undefined;
+          if ('textPopulationStaggerMs' in currentData) updatePayload.textPopulationStaggerMs = undefined;
+          
+          await updateDoc(siteAssetsDocRef, updatePayload);
         } else {
           const fullDataForNewDoc = {
             splashImageUrl: dataToUpdate.splashImageUrl !== undefined ? dataToUpdate.splashImageUrl : DEFAULT_SPLASH_IMAGE_SRC,
             splashWelcomeMessage: dataToUpdate.splashWelcomeMessage !== undefined ? dataToUpdate.splashWelcomeMessage : DEFAULT_SPLASH_WELCOME_MESSAGE,
-            enableTextAnimation: dataToUpdate.enableTextAnimation !== undefined ? dataToUpdate.enableTextAnimation : DEFAULT_ENABLE_TEXT_ANIMATION,
-            textAnimationSpeedMs: dataToUpdate.textAnimationSpeedMs !== undefined ? dataToUpdate.textAnimationSpeedMs : DEFAULT_TEXT_ANIMATION_SPEED_MS,
-            textPopulationStaggerMs: dataToUpdate.textPopulationStaggerMs !== undefined ? dataToUpdate.textPopulationStaggerMs : DEFAULT_TEXT_POPULATION_STAGGER_MS,
+            typingSpeedMs: dataToUpdate.typingSpeedMs !== undefined ? dataToUpdate.typingSpeedMs : DEFAULT_TYPING_SPEED_MS,
             adminPassword: currentData.adminPassword || DEFAULT_ADMIN_PASSWORD, 
             avatarUrl: currentData.avatarUrl || "https://placehold.co/150x150.png",
             animatedAvatarUrl: currentData.animatedAvatarUrl || "https://placehold.co/150x150.png?text=GIF",
@@ -278,14 +237,11 @@ export default function SiteSettingsPage() {
     setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
     toast({ title: "Welcome Message Reset", description: "Message reset to default. Click 'Save Site Settings' to make it permanent."});
   };
-
-  const handleResetAnimationSettings = () => {
-    setEnableTextAnimation(DEFAULT_ENABLE_TEXT_ANIMATION);
-    setTextAnimationSpeedMs(String(DEFAULT_TEXT_ANIMATION_SPEED_MS));
-    setTextPopulationStaggerMs(String(DEFAULT_TEXT_POPULATION_STAGGER_MS));
-    toast({ title: "Animation Settings Reset", description: "Animation settings reset to default. Click 'Save Site Settings' to make them permanent."});
+  
+  const handleResetTypingSpeed = () => {
+    setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
+    toast({ title: "Typing Speed Reset", description: "Typing speed reset to default. Click 'Save Site Settings' to make it permanent." });
   };
-
 
   return (
     <div className="space-y-6">
@@ -407,86 +363,48 @@ export default function SiteSettingsPage() {
            </Button>
         </CardFooter>
       </Card>
-
+      
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2"><Film /> AI Speech Text Animation</CardTitle>
+          <CardTitle className="font-headline flex items-center gap-2"><Type className="h-5 w-5" /> AI Speech Text Typing Animation</CardTitle>
           <CardDescription>
-            Configure the scale-in text animation effect when AI Blair starts speaking.
+            Configure the letter-by-letter typing animation effect for AI Blair's speech.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {isLoadingData ? (
             <p>Loading animation settings...</p>
           ) : (
-            <>
-              <div className="flex items-center space-x-3 rounded-md border p-4 shadow-sm">
-                  <Zap className="h-5 w-5 text-primary" />
-                  <div className="flex-1 space-y-1">
-                      <Label htmlFor="enableTextAnimation" className="font-medium">
-                          Enable Scale-In Text Animation
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                          If ON, AI Blair's text will animate in letter by letter.
-                      </p>
-                  </div>
-                  <Switch
-                      id="enableTextAnimation"
-                      checked={enableTextAnimation}
-                      onCheckedChange={setEnableTextAnimation}
-                      aria-label="Toggle AI speech text animation"
-                  />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="textAnimationSpeedMs" className="font-medium flex items-center gap-1.5">
-                   <Clock className="h-4 w-4" /> Letter Animation Duration (ms)
-                </Label>
-                <Input
-                  id="textAnimationSpeedMs"
-                  type="number"
-                  value={textAnimationSpeedMs}
-                  onChange={handleTextAnimationSpeedChange}
-                  placeholder="e.g., 800"
-                  min="10"
-                  step="10"
-                  disabled={!enableTextAnimation || isLoadingData}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Duration for each letter's individual animation. Default: {DEFAULT_TEXT_ANIMATION_SPEED_MS}ms. Lower values are faster per letter.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="textPopulationStaggerMs" className="font-medium flex items-center gap-1.5">
-                    <Zap className="h-4 w-4" /> Text Population Stagger (ms)
-                </Label>
-                <Input
-                  id="textPopulationStaggerMs"
-                  type="number"
-                  value={textPopulationStaggerMs}
-                  onChange={handleTextPopulationStaggerChange}
-                  placeholder="e.g., 50"
-                  min="0"
-                  step="5"
-                  disabled={!enableTextAnimation || isLoadingData}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Delay between each letter starting its animation. Default: {DEFAULT_TEXT_POPULATION_STAGGER_MS}ms. Lower values make text appear faster overall.
-                </p>
-              </div>
-            </>
+            <div className="space-y-2">
+              <Label htmlFor="typingSpeedMs" className="font-medium flex items-center gap-1.5">
+                <Clock className="h-4 w-4" /> Average Typing Delay (ms)
+              </Label>
+              <Input
+                id="typingSpeedMs"
+                type="number"
+                value={typingSpeedMs}
+                onChange={handleTypingSpeedChange}
+                placeholder="e.g., 40"
+                min="10"
+                step="5"
+                disabled={isLoadingData}
+              />
+              <p className="text-xs text-muted-foreground">
+                The average delay between each character appearing. Lower is faster. Default: {DEFAULT_TYPING_SPEED_MS}ms.
+              </p>
+            </div>
           )}
         </CardContent>
         <CardFooter>
-           <Button variant="outline" onClick={handleResetAnimationSettings} disabled={isLoadingData}>
-              <RotateCcw className="mr-2 h-4 w-4" /> Reset Animation Settings to Default
-           </Button>
+          <Button variant="outline" onClick={handleResetTypingSpeed} disabled={isLoadingData}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset Typing Speed to Default
+          </Button>
         </CardFooter>
       </Card>
 
-
       <div className="flex justify-start py-4 mt-4 border-t pt-6">
         <Button onClick={handleSaveAllSiteSettings} disabled={isSaving || isLoadingData} size="lg">
-          <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving Settings...' : (isLoadingData ? 'Loading...' : 'Save Display & Animation Settings')}
+          <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving Settings...' : (isLoadingData ? 'Loading...' : 'Save Site Settings')}
         </Button>
       </div>
     </div>

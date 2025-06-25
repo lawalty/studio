@@ -35,9 +35,7 @@ const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
-const DEFAULT_TEXT_ANIMATION_ENABLED = false;
-const DEFAULT_TEXT_ANIMATION_SPEED_MS = 800;
-const DEFAULT_TEXT_POPULATION_STAGGER_MS = 50;
+const DEFAULT_TYPING_SPEED_MS = 40;
 
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
@@ -188,9 +186,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const [consecutiveSilencePrompts, setConsecutiveSilencePrompts] = useState(0);
   const [hasConversationEnded, setHasConversationEnded] = useState(false);
   const [showPreparingGreeting, setShowPreparingGreeting] = useState(false);
-  const [textAnimationEnabled, setTextAnimationEnabled] = useState<boolean>(DEFAULT_TEXT_ANIMATION_ENABLED);
-  const [textAnimationSpeedMs, setTextAnimationSpeedMs] = useState<number>(DEFAULT_TEXT_ANIMATION_SPEED_MS);
-  const [textPopulationStaggerMs, setTextPopulationStaggerMs] = useState<number>(DEFAULT_TEXT_POPULATION_STAGGER_MS);
+  const [typingSpeedMs, setTypingSpeedMs] = useState<number>(DEFAULT_TYPING_SPEED_MS);
   const [forceFinishAnimationForMessageId, setForceFinishAnimationForMessageId] = useState<string | null>(null);
 
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
@@ -880,9 +876,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
           setCustomGreeting(assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
           setResponsePauseTimeMs(assets.responsePauseTimeMs === undefined ? DEFAULT_USER_SPEECH_PAUSE_TIME_MS : Number(assets.responsePauseTimeMs));
-          setTextAnimationEnabled(typeof assets.enableTextAnimation === 'boolean' ? assets.enableTextAnimation : DEFAULT_TEXT_ANIMATION_ENABLED);
-          setTextAnimationSpeedMs(assets.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : Number(assets.textAnimationSpeedMs));
-          setTextPopulationStaggerMs(assets.textPopulationStaggerMs === undefined ? DEFAULT_TEXT_POPULATION_STAGGER_MS : Number(assets.textPopulationStaggerMs));
+          setTypingSpeedMs(assets.typingSpeedMs === undefined ? DEFAULT_TYPING_SPEED_MS : Number(assets.typingSpeedMs));
         } else {
           // Set defaults if doc doesn't exist
           setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
@@ -892,9 +886,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
           setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
           setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
-          setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
-          setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
-          setTextPopulationStaggerMs(DEFAULT_TEXT_POPULATION_STAGGER_MS);
+          setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
         }
       } catch (e: any) {
         toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive" });
@@ -906,9 +898,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
         setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
         setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
-        setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
-        setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
-        setTextPopulationStaggerMs(DEFAULT_TEXT_POPULATION_STAGGER_MS);
+        setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
       } finally {
         setIsLoadingConfig(false);
       }
@@ -987,9 +977,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                  <ConversationLog
                     messages={messages}
                     avatarSrc={avatarSrc}
-                    textAnimationEnabled={textAnimationEnabled && communicationMode !== 'text-only'}
-                    textAnimationSpeedMs={textAnimationSpeedMs}
-                    textPopulationStaggerMs={textPopulationStaggerMs}
+                    typingSpeedMs={typingSpeedMs}
                     lastOverallMessageId={lastOverallMessage?.id || null}
                     hasConversationEnded={hasConversationEnded}
                     forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
@@ -1033,9 +1021,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           <ConversationLog
             messages={messagesForLog}
             avatarSrc={avatarSrc}
-            textAnimationEnabled={textAnimationEnabled && communicationMode !== 'text-only'}
-            textAnimationSpeedMs={textAnimationSpeedMs}
-            textPopulationStaggerMs={textPopulationStaggerMs}
+            typingSpeedMs={typingSpeedMs}
             lastOverallMessageId={lastOverallMessage?.id || null}
             hasConversationEnded={hasConversationEnded}
             forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
