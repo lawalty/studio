@@ -31,16 +31,14 @@ const extractTextPrompt = ai.definePrompt({
   name: 'extractTextFromPdfPrompt',
   input: { schema: ExtractTextFromPdfUrlInputSchema },
   output: { schema: ExtractTextFromPdfUrlOutputSchema },
-  prompt: `You are an expert text extraction tool.
-Please extract all textual content from the PDF document provided via the media URL.
-Focus on accurately capturing the text, maintaining paragraphs and structure where possible, but prioritize completeness of the text.
-Ignore any complex formatting, images, or tables if they hinder text extraction. Only return the extracted text.
+  prompt: `You are an expert text extraction tool. Your only task is to extract all textual content from the PDF document provided.
+- Prioritize completeness and accuracy of the text.
+- Maintain paragraph breaks.
+- Do not add any commentary, preamble, or explanation.
+- Do not wrap the output in code blocks or JSON formatting.
+- Only return the raw, extracted text.
 
-PDF Document: {{media url=pdfUrl}}
-
-Extracted Text:`,
-  // Using gemini-1.5-flash-latest as it's generally good and fast.
-  // If extraction quality is poor for complex PDFs, consider gemini-1.5-pro-latest.
+PDF Document: {{media url=pdfUrl}}`,
   model: 'googleai/gemini-1.5-flash-latest',
   config: {
     temperature: 0.0, // For deterministic extraction
@@ -55,24 +53,22 @@ const extractTextFromPdfUrlFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-      const { output } = await extractTextPrompt(input); // This calls the Gemini model
+      const { output } = await extractTextPrompt(input);
 
-      // Validate the output structure more explicitly, even with Zod, for robustness in Server Actions
       if (!output || typeof output.extractedText !== 'string') {
         console.error('[extractTextFromPdfUrlFlow] Invalid or malformed output from prompt. Expected { extractedText: string }, received:', output);
-        throw new Error('Extraction failed: The AI model returned an unexpected data structure. The PDF might be incompatible or an issue occurred with the model.');
+        throw new Error('Extraction failed: The AI model returned an unexpected data structure. The PDF might be incompatible, corrupted, or an issue occurred with the model.');
       }
       
-      // Unescape newline characters that may have been escaped in the JSON output from the LLM.
-      output.extractedText = output.extractedText.replace(/\\n/g, '\n');
+      // The improved prompt should prevent the model from escaping newlines, making this unnecessary.
+      // output.extractedText = output.extractedText.replace(/\\n/g, '\n');
       
       return output;
     } catch (e: any) {
       console.error('[extractTextFromPdfUrlFlow] Error during text extraction flow:', e);
-      // Ensure a simple, serializable error is thrown
-      let errorMessage = 'Failed to extract text from PDF due to an internal error in the AI flow.';
+      let errorMessage = 'Failed to extract text from PDF due to an internal error.';
       if (e instanceof Error) {
-        errorMessage = e.message; // Use the original message if it's an Error instance
+        errorMessage = e.message;
       } else if (typeof e === 'string') {
         errorMessage = e;
       }
