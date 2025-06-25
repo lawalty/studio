@@ -78,12 +78,15 @@ export default function StartPage() {
       return; 
     }
 
+    // Reset state before starting a new animation cycle
+    setAnimatedGreeting('');
+    setShowGreeting(false);
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+
     const initialDelayTimer = setTimeout(() => {
       setShowGreeting(true);
       
       let i = 0;
-      setAnimatedGreeting('');
-
       const type = () => {
         if (i < GREETING_MESSAGE.length) {
           setAnimatedGreeting(prev => prev + GREETING_MESSAGE.charAt(i));
@@ -94,7 +97,7 @@ export default function StartPage() {
       };
       type();
 
-    }, 10000);
+    }, 3000); // Delay reduced to 3 seconds
 
     return () => {
       clearTimeout(initialDelayTimer);
