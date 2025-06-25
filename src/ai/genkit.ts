@@ -36,7 +36,7 @@ async function getGeminiApiKey(): Promise<string | undefined> {
 export const ai = genkit({
   plugins: [
     googleAI({
-      apiKey: getGeminiApiKey, // Pass the async function to the plugin
+      apiKey: getGeminiApiKey(), // Pass the promise returned by the async function
     })
   ],
   model: 'googleai/gemini-1.5-flash-latest',
