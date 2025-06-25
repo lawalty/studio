@@ -168,13 +168,10 @@ export default function SiteSettingsPage() {
 
       if (changesMade) {
         if (currentDocSnap.exists()) {
-          // Clean up old animation fields if they exist
-          const updatePayload: { [key: string]: any } = { ...dataToUpdate };
-          if ('enableTextAnimation' in currentData) updatePayload.enableTextAnimation = undefined;
-          if ('textAnimationSpeedMs' in currentData) updatePayload.textAnimationSpeedMs = undefined;
-          if ('textPopulationStaggerMs' in currentData) updatePayload.textPopulationStaggerMs = undefined;
-          
-          await updateDoc(siteAssetsDocRef, updatePayload);
+          // The old animation fields ('enableTextAnimation', 'textAnimationSpeedMs') are no longer written.
+          // They will remain in Firestore if they exist, but will not be used by the application.
+          // Attempting to remove them by setting a field to `undefined` causes a crash.
+          await updateDoc(siteAssetsDocRef, dataToUpdate);
         } else {
           const fullDataForNewDoc = {
             splashImageUrl: dataToUpdate.splashImageUrl !== undefined ? dataToUpdate.splashImageUrl : DEFAULT_SPLASH_IMAGE_SRC,
