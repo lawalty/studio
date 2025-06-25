@@ -22,7 +22,7 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 async function getGeminiGenerativeApiKey(): Promise<string> {
   const envKey = process.env.GEMINI_API_KEY;
   if (envKey && envKey.trim() !== '') {
-    console.log(`[Genkit] Using Generative Gemini Key from environment variable.`);
+    console.log(`[Genkit Init] Using Generative Gemini Key from GEMINI_API_KEY environment variable.`);
     return envKey.trim();
   }
 
@@ -34,13 +34,14 @@ async function getGeminiGenerativeApiKey(): Promise<string> {
       const data = docSnap.data();
       const firestoreKey = data?.geminiGenerative || data?.gemini; // Fallback for backwards compatibility
       if (firestoreKey && typeof firestoreKey === 'string' && firestoreKey.trim() !== '') {
-        console.log(`[Genkit] Using Generative Gemini Key from Firestore.`);
+        console.log(`[Genkit Init] Using Generative Gemini Key from Firestore.`);
         return firestoreKey.trim();
       }
     }
+    console.error("[Genkit Init] Generative Gemini API key is missing from both environment variables and Firestore.");
     throw new Error("Generative Gemini API key is missing. Please set it in the admin panel's API Keys page or as a GEMINI_API_KEY environment variable.");
   } catch (error: any) {
-    console.error("[Genkit] Critical error fetching Generative Gemini API key:", error.message);
+    console.error("[Genkit Init] Critical error fetching Generative Gemini API key:", error.message);
     throw new Error(`Failed to fetch Generative Gemini API key. Please check configurations. Original error: ${error.message}`);
   }
 }
@@ -58,14 +59,12 @@ async function getGeminiGenerativeApiKey(): Promise<string> {
  * @throws {Error} If no suitable API key can be found.
  */
 async function getGeminiEmbeddingApiKey(): Promise<string> {
-    // 1. Check for embedding-specific environment variable.
     const envKey = process.env.GEMINI_EMBEDDING_API_KEY;
     if (envKey && envKey.trim() !== '') {
-      console.log(`[Genkit] Using Embedding Gemini Key from environment variable.`);
+      console.log(`[Genkit Init] Using Embedding Gemini Key from GEMINI_EMBEDDING_API_KEY environment variable.`);
       return envKey.trim();
     }
   
-    // 2. Check for embedding-specific key in Firestore.
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
       const docSnap = await getDoc(docRef);
@@ -73,16 +72,15 @@ async function getGeminiEmbeddingApiKey(): Promise<string> {
       if (docSnap.exists()) {
         const firestoreKey = docSnap.data()?.geminiEmbedding;
         if (firestoreKey && typeof firestoreKey === 'string' && firestoreKey.trim() !== '') {
-          console.log(`[Genkit] Using Embedding Gemini Key from Firestore.`);
+          console.log(`[Genkit Init] Using Embedding Gemini Key from Firestore.`);
           return firestoreKey.trim();
         }
       }
     } catch (error: any) {
-       console.warn(`[Genkit] Could not fetch embedding key from Firestore, will use fallback. Error: ${error.message}`);
+       console.warn(`[Genkit Init] Could not fetch embedding-specific key from Firestore, will attempt fallback. Error: ${error.message}`);
     }
 
-    // 3. Fallback to the generative key.
-    console.log('[Genkit] No embedding-specific key found. Falling back to the generative Gemini key for embeddings.');
+    console.log('[Genkit Init] No specific embedding key found. Falling back to the generative Gemini key for embeddings.');
     return getGeminiGenerativeApiKey();
 }
 
