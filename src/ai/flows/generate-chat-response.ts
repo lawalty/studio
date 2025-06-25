@@ -87,7 +87,7 @@ If your answer is primarily based on context that includes a "Reference URL for 
 1.  **Populate the \`pdfReference\` field in your output.**
     -   Extract the file name (e.g., from "Context from document 'document.pdf'") and the full URL from the context string and put them into the \`fileName\` and \`downloadURL\` fields respectively.
 2.  **Modify your \`aiResponse\` text.**
-    -   After providing the information from the PDF, add a helpful, natural-sounding sentence offering a download link. For example: "I found these details in a document, you can download it here if you'd like to see more." or "If you need the full document, here is a link to it."
+    -   After providing the information from the PDF, add a single, helpful, and natural-sounding sentence that offers a download link. For instance: "If you'd like to read the full document, you can download it here."
     -   DO NOT include the raw URL in the \`aiResponse\` text itself. The UI will create the link from the \`pdfReference\` data.
 - **Only do this for PDF files.** Do not create a \`pdfReference\` for answers based on non-PDF files or general knowledge.
 
