@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -113,7 +114,7 @@ export default function StartPage() {
           </CardTitle>
           <CardDescription 
             className={cn(
-              "text-base transition-opacity duration-500 min-h-[1.5rem] font-mono",
+              "text-base transition-opacity duration-500 min-h-[1.5rem] font-body",
               showGreeting ? "opacity-100" : "opacity-0"
             )}
           >
