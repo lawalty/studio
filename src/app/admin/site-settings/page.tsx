@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -9,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, KeyRound, ShieldCheck, Clock, Type } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -19,18 +18,14 @@ const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
 const DEFAULT_TYPING_SPEED_MS = 40;
-const DEFAULT_ADMIN_PASSWORD = "admin123";
 
 export default function SiteSettingsPage() {
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
   const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
   const [typingSpeedMs, setTypingSpeedMs] = useState<string>(String(DEFAULT_TYPING_SPEED_MS));
-  const [adminPassword, setAdminPassword] = useState<string>('');
-  const [newAdminPassword, setNewAdminPassword] = useState<string>('');
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const splashImageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -46,40 +41,25 @@ export default function SiteSettingsPage() {
           setSplashImagePreview(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
           setTypingSpeedMs(data.typingSpeedMs === undefined ? String(DEFAULT_TYPING_SPEED_MS) : String(data.typingSpeedMs));
-          
-          if (!data.adminPassword || data.adminPassword.trim() === '') {
-            setAdminPassword(DEFAULT_ADMIN_PASSWORD); 
-            await updateDoc(docRef, { adminPassword: DEFAULT_ADMIN_PASSWORD });
-            toast({ title: "Admin Password Initialized", description: "A default admin password has been set." });
-          } else {
-            setAdminPassword(data.adminPassword);
-          }
         } else {
+          // If the document doesn't exist, we can create it with defaults.
           const defaultSettings = {
             splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             splashWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE,
             typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
-            adminPassword: DEFAULT_ADMIN_PASSWORD,
-            avatarUrl: "https://placehold.co/150x150.png",
-            animatedAvatarUrl: "https://placehold.co/150x150.png?text=GIF",
-            personaTraits: "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.",
-            useKnowledgeInGreeting: true,
-            customGreetingMessage: "",
-            responsePauseTimeMs: 750,
+            // You might want to pre-fill other settings from other pages here too
           };
-          await setDoc(docRef, defaultSettings);
+          await setDoc(docRef, defaultSettings, { merge: true });
           setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
           setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
-          setAdminPassword(DEFAULT_ADMIN_PASSWORD);
-          toast({ title: "Initial Settings Created", description: "Default site settings and admin password have been saved." });
+          toast({ title: "Initial Settings Created", description: "Default site settings have been saved." });
         }
       } catch (error) {
         console.error("Error fetching/initializing site assets from Firestore:", error);
         setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
         setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
         setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
-        setAdminPassword(DEFAULT_ADMIN_PASSWORD); 
         toast({
           title: "Error Loading Settings",
           description: "Could not fetch site settings. Defaults shown. Please check console.",
@@ -167,26 +147,9 @@ export default function SiteSettingsPage() {
       }
 
       if (changesMade) {
-        if (currentDocSnap.exists()) {
-          // The old animation fields ('enableTextAnimation', 'textAnimationSpeedMs') are no longer written.
-          // They will remain in Firestore if they exist, but will not be used by the application.
-          // Attempting to remove them by setting a field to `undefined` causes a crash.
-          await updateDoc(siteAssetsDocRef, dataToUpdate);
-        } else {
-          const fullDataForNewDoc = {
-            splashImageUrl: dataToUpdate.splashImageUrl !== undefined ? dataToUpdate.splashImageUrl : DEFAULT_SPLASH_IMAGE_SRC,
-            splashWelcomeMessage: dataToUpdate.splashWelcomeMessage !== undefined ? dataToUpdate.splashWelcomeMessage : DEFAULT_SPLASH_WELCOME_MESSAGE,
-            typingSpeedMs: dataToUpdate.typingSpeedMs !== undefined ? dataToUpdate.typingSpeedMs : DEFAULT_TYPING_SPEED_MS,
-            adminPassword: currentData.adminPassword || DEFAULT_ADMIN_PASSWORD, 
-            avatarUrl: currentData.avatarUrl || "https://placehold.co/150x150.png",
-            animatedAvatarUrl: currentData.animatedAvatarUrl || "https://placehold.co/150x150.png?text=GIF",
-            personaTraits: currentData.personaTraits || "You are AI Blair...",
-            useKnowledgeInGreeting: currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting,
-            customGreetingMessage: currentData.customGreetingMessage || "",
-            responsePauseTimeMs: currentData.responsePauseTimeMs === undefined ? 750 : currentData.responsePauseTimeMs,
-          };
-          await setDoc(siteAssetsDocRef, fullDataForNewDoc);
-        }
+        // Using `updateDoc` will only change the specified fields and won't overwrite the whole document.
+        await updateDoc(siteAssetsDocRef, dataToUpdate);
+        
         toast({ title: "Site Settings Saved", description: "Your site display and animation settings have been updated." });
         if (imageUpdated) {
           setSplashImagePreview(newSplashImageUrl);
@@ -204,24 +167,6 @@ export default function SiteSettingsPage() {
     setIsSaving(false);
   };
 
-  const handleSaveAdminPassword = async () => {
-    if (!newAdminPassword.trim()) {
-      toast({ title: "Validation Error", description: "New admin password cannot be empty.", variant: "destructive" });
-      return;
-    }
-    setIsSavingPassword(true);
-    const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
-    try {
-      await updateDoc(siteAssetsDocRef, { adminPassword: newAdminPassword.trim() });
-      setAdminPassword(newAdminPassword.trim()); 
-      setNewAdminPassword(''); 
-      toast({ title: "Admin Password Updated", description: "The admin panel password has been successfully changed." });
-    } catch (error) {
-      console.error("Error updating admin password:", error);
-      toast({ title: "Password Update Failed", description: "Could not update admin password. Please try again.", variant: "destructive" });
-    }
-    setIsSavingPassword(false);
-  };
 
   const handleResetSplashImage = () => {
     setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
@@ -242,43 +187,6 @@ export default function SiteSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2"><ShieldCheck /> Admin Password Management</CardTitle>
-          <CardDescription>
-            Set or change the password for accessing the admin panel. The current password is stored securely in Firestore.
-            Default password is &quot;{DEFAULT_ADMIN_PASSWORD}&quot; if not yet changed.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoadingData ? (
-            <p>Loading password settings...</p>
-          ) : (
-            <>
-              <div className="space-y-1">
-                <Label htmlFor="newAdminPassword">New Admin Password</Label>
-                <Input
-                  id="newAdminPassword"
-                  type="password"
-                  value={newAdminPassword}
-                  onChange={(e) => setNewAdminPassword(e.target.value)}
-                  placeholder="Enter new password"
-                />
-                 <p className="text-xs text-muted-foreground">
-                  Enter a new password to update. The current password is not displayed.
-                </p>
-              </div>
-            </>
-          )}
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleSaveAdminPassword} disabled={isLoadingData || isSavingPassword || !newAdminPassword.trim()}>
-            <KeyRound className="mr-2 h-4 w-4" />
-            {isSavingPassword ? 'Saving Password...' : 'Save Admin Password'}
-          </Button>
-        </CardFooter>
-      </Card>
-
       <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Splash Screen Welcome Message</CardTitle>

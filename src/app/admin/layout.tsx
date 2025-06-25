@@ -1,50 +1,21 @@
-
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutDashboard, Loader2 } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null); // null = pending check
 
-  useEffect(() => {
-    // This effect runs once on the client to check the authentication status.
-    const authStatus = sessionStorage.getItem('isAdminAuthenticated') === 'true';
-    setIsAuthenticated(authStatus);
-  }, []);
-
-  useEffect(() => {
-    // This effect handles redirection if authentication status changes and is not yet true.
-    if (isAuthenticated === false && pathname !== '/admin/login') {
-      router.replace('/admin/login');
-    }
-  }, [isAuthenticated, pathname, router]);
-
-  // The login page is a special case and does not need the admin layout or auth check.
+  // The login page is a special case and does not need the admin layout.
+  // This prevents the layout from showing on the now-simplified entry page.
   if (pathname === '/admin/login') {
     return <>{children}</>;
   }
 
-  // If authentication is not confirmed yet (null) or is false, show a loader.
-  // This prevents any child components (the actual admin pages) from attempting
-  // to render before authentication is successful, which resolves the ChunkLoadError.
-  if (isAuthenticated !== true) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Verifying Access...</p>
-      </div>
-    );
-  }
-
-  // If we reach here, the user is authenticated. Render the full admin layout.
   const pageTitle = (() => {
     switch (pathname) {
       case '/admin':
