@@ -334,6 +334,7 @@ export default function KnowledgeBasePage() {
     const sanitizedOriginalName = currentFile.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
     const filenameInStorageWithTimestamp = `${timestampForFile}-${sanitizedOriginalName}`;
     const filePath = `${config.storageFolder}${filenameInStorageWithTimestamp}`;
+    const fileRef = storageRef(storage, filePath);
     
     const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
