@@ -19,7 +19,7 @@ const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
 const DEFAULT_TYPING_SPEED_MS = 40;
-const DEFAULT_ADMIN_PASSWORD = "password123";
+const DEFAULT_ADMIN_PASSWORD = "admin123";
 
 export default function SiteSettingsPage() {
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);

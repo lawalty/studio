@@ -14,7 +14,7 @@ import { LogIn, AlertTriangle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const DEFAULT_ADMIN_PASSWORD_FOR_LOGIN_CHECK = "password123"; // Fallback if Firestore is inaccessible
+const DEFAULT_ADMIN_PASSWORD_FOR_LOGIN_CHECK = "admin123"; // Fallback if Firestore is inaccessible
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
