@@ -102,7 +102,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
 ${topResults.map(r => 
   `Context from document "${r.sourceName}" (Priority: ${r.level}):
 ${r.text}
-${r.downloadURL ? `(Reference URL for this chunk's source PDF: ${r.downloadURL})` : ''}`
+${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL) ? `(Reference URL for this chunk's source PDF: ${r.downloadURL})` : ''}`
 ).join('\n---\n')}
 ---
 Based on this context, please answer the user's question.
