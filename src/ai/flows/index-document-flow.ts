@@ -12,7 +12,6 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
-import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -33,6 +32,35 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
   return indexDocumentFlow(input);
 }
 
+/**
+ * A simple text splitter function.
+ * This is a basic implementation and doesn't respect word boundaries.
+ * @param text The text to split.
+ * @param options Chunking options.
+ * @returns An array of text chunks.
+ */
+function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: number; chunkOverlap: number }): string[] {
+  if (chunkOverlap >= chunkSize) {
+    throw new Error("chunkOverlap must be smaller than chunkSize.");
+  }
+  if (text.length <= chunkSize) {
+    return [text].filter(c => c.trim() !== ''); // Return only if not empty
+  }
+
+  const chunks: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const end = index + chunkSize;
+    const chunk = text.slice(index, end);
+    if (chunk.trim() !== '') {
+      chunks.push(chunk);
+    }
+    index += chunkSize - chunkOverlap;
+  }
+  return chunks;
+}
+
+
 const indexDocumentFlow = ai.defineFlow(
   {
     name: 'indexDocumentFlow',
@@ -40,21 +68,16 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    // Final, robust cleaning step before chunking.
-    // This removes the UTF-8 BOM and other non-printable control characters that can
-    // cause the embedding model to fail, while preserving essential whitespace.
     const cleanText = text.replace(/^\uFEFF/, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
-    // 1. Chunk the text using a semantic splitter
-    const splitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1800,
-      chunkOverlap: 200,
+    // 1. Chunk the text using the simple, internal splitter
+    const chunks = simpleSplitter(cleanText, {
+      chunkSize: 1500, // Reduced size slightly for safety
+      chunkOverlap: 150,
     });
 
-    const chunks = await splitter.splitText(cleanText);
-
     if (chunks.length === 0) {
-      console.error(`[indexDocumentFlow] No text chunks found in document '${sourceName}'. Aborting.`);
+      console.error(`[indexDocumentFlow] No text chunks generated from document '${sourceName}'. Aborting.`);
       throw new Error("No readable text content was found in the document after processing. Indexing aborted.");
     }
 
@@ -65,8 +88,6 @@ const indexDocumentFlow = ai.defineFlow(
 
     for (const chunk of chunks) {
       try {
-        // The main cleaning is now done before chunking.
-        // We only need to check for empty chunks here.
         if (chunk.trim().length === 0) {
           failedChunks++;
           const errorMsg = 'Chunk was empty or contained only whitespace.';
@@ -85,7 +106,7 @@ const indexDocumentFlow = ai.defineFlow(
             sourceId,
             sourceName,
             level,
-            text: chunk, // Use the original chunk from the splitter
+            text: chunk,
             embedding: embedding,
             createdAt: new Date().toISOString(),
             downloadURL,
@@ -112,7 +133,6 @@ const indexDocumentFlow = ai.defineFlow(
         console.log(`[indexDocumentFlow] Finished processing '${sourceName}'. Successfully embedded ${chunksToSave.length} chunks and skipped ${failedChunks} failed chunks.`);
     }
 
-    // 3. If no chunks were successfully embedded, exit early.
     if (chunksToSave.length === 0) {
       console.log(`[indexDocumentFlow] No chunks were successfully embedded for '${sourceName}'. Nothing to save to Firestore.`);
       if (failedChunks > 0) {
@@ -121,12 +141,11 @@ const indexDocumentFlow = ai.defineFlow(
       return { chunksIndexed: 0, sourceId };
     }
 
-    // 4. Save the successfully embedded chunks to Firestore in a batch
     const batch = writeBatch(db);
     const chunksCollectionRef = collection(db, 'kb_chunks');
 
     chunksToSave.forEach((chunkData) => {
-      const chunkDocRef = doc(chunksCollectionRef); // Auto-generates ID for each chunk
+      const chunkDocRef = doc(chunksCollectionRef);
       batch.set(chunkDocRef, chunkData);
     });
 
