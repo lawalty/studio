@@ -1,16 +1,23 @@
 
 'use client';
 
-import type { ReactNode } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const isLoginPage = pathname === '/admin/login';
 
   const pageTitle = (() => {
@@ -30,27 +37,45 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     }
   })();
 
+  const renderHeaderContent = () => {
+    if (!isMounted) {
+      return (
+        <CardHeader className="flex flex-row items-center justify-between">
+          <Skeleton className="h-8 w-64" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-10 w-48" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+        </CardHeader>
+      );
+    }
+
+    return (
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-2xl font-headline">{pageTitle}</CardTitle>
+        <div className="flex items-center gap-2">
+          {pathname !== '/admin' && (
+            <Button variant="outline" asChild>
+              <Link href="/admin">
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          )}
+          <Button variant="outline" asChild>
+            <Link href="/">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Go to App
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Card className={cn("shadow-lg", isLoginPage && "hidden")}>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-2xl font-headline">{pageTitle}</CardTitle>
-          <div className="flex items-center gap-2">
-            {pathname !== '/admin' && (
-              <Button variant="outline" asChild>
-                <Link href="/admin">
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  Back to Dashboard
-                </Link>
-              </Button>
-            )}
-            <Button variant="outline" asChild>
-              <Link href="/">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Go to App
-              </Link>
-            </Button>
-          </div>
-        </CardHeader>
+        {renderHeaderContent()}
       </Card>
       {children}
     </div>
