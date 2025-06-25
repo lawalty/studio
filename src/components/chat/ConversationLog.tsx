@@ -1,5 +1,5 @@
 
-import type { Message } from '@/app/page';
+import type { Message } from '@/components/chat/ChatInterface';
 import { ScrollArea, ScrollBar, ScrollAreaPrimitive } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";
 import React, { useEffect, useRef } from 'react';
