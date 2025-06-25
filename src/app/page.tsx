@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Mic, MessageSquareText, FileText, DatabaseZap } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { Card } from '@/components/ui/card';
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
@@ -118,7 +119,7 @@ export default function StartPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <div className="w-full max-w-md p-6 space-y-6 text-center bg-card rounded-lg shadow-2xl border">
+      <Card className="w-full max-w-md p-6 space-y-6 text-center shadow-2xl border">
         <div className="space-y-2">
             <h1 className="text-3xl font-headline text-primary">
                 {isLoadingConfig ? "Connecting..." : splashWelcomeMessage}
@@ -179,7 +180,7 @@ export default function StartPage() {
                 </Button>
             </div>
         </div>
-      </div>
+      </Card>
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Press Ctrl + Shift + A to access the admin panel.
       </p>

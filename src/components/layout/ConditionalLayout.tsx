@@ -8,25 +8,20 @@ import Footer from '@/components/layout/Footer';
 
 export default function ConditionalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isAdminRoute = pathname.startsWith('/admin') && pathname !== '/admin/login';
+  const isChatOrSplash = pathname.startsWith('/chat') || pathname === '/';
 
-  if (isAdminRoute) {
-    return (
-      <>
-        <Header />
-        <main className="flex-grow">
-          {children}
-        </main>
-        <Footer />
-      </>
-    );
+  if (isChatOrSplash) {
+    return <main className="flex-grow flex flex-col">{children}</main>;
   }
 
-  // For splash, chat, and login pages, provide a simple main wrapper.
-  // These pages manage their own internal layout (e.g., centering, containers).
+  // Admin pages get the full layout with header and footer.
   return (
-    <main className="flex-grow">
-      {children}
-    </main>
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-grow container mx-auto px-4 py-8">
+        {children}
+      </main>
+      <Footer />
+    </div>
   );
 }
