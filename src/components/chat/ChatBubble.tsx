@@ -1,9 +1,33 @@
 
-import type { Message } from '@/app/page';
+'use client';
+
+import type { Message } from '@/components/chat/ChatInterface';
 import { cn } from "@/lib/utils";
 import { User, Bot, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import React, { useEffect, useRef, useState } from 'react';
+
+// New helper function to parse basic markdown (**bold**) and newlines
+const renderTextWithMarkdown = (text: string): JSX.Element => {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        // Handle newlines within normal text parts
+        return part.split('\n').map((line, lineIndex, arr) => (
+          <React.Fragment key={`${index}-${lineIndex}`}>
+            {line}
+            {lineIndex < arr.length - 1 && <br />}
+          </React.Fragment>
+        ));
+      })}
+    </>
+  );
+};
+
 
 interface ChatBubbleProps {
   message: Message;
@@ -22,57 +46,62 @@ export default function ChatBubble({
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
   const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png";
-  const [displayedText, setDisplayedText] = useState('');
+  
+  // State to hold the plain text being animated
+  const [animatedText, setAnimatedText] = useState('');
+  // State to control whether we show the animation or the final formatted text
+  const [isAnimating, setIsAnimating] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // This effect handles the typing animation
+    const shouldAnimate = message.sender === 'ai' && isNewlyAddedAiMessage;
+
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
 
-    const fullText = message.text.replace(/\*\*/g, '\n\n');
-
-    if (message.sender === 'ai' && isNewlyAddedAiMessage && !forceFinishAnimation) {
+    if (shouldAnimate) {
+      setIsAnimating(true);
+      // Clean the text for animation (remove markdown characters)
+      const textToAnimate = message.text.replace(/\*\*/g, '');
       let i = 0;
-      setDisplayedText('');
+      setAnimatedText('');
 
       const type = () => {
-        if (i < fullText.length) {
-          setDisplayedText(prev => prev + fullText.charAt(i));
+        if (i < textToAnimate.length) {
+          setAnimatedText(prev => prev + textToAnimate.charAt(i));
           i++;
-          // Add randomness to the delay to make it feel more natural
           const randomDelay = typingSpeedMs + (Math.random() - 0.5) * (typingSpeedMs * 0.5);
-          timeoutRef.current = setTimeout(type, Math.max(10, randomDelay)); // Ensure a minimum delay
+          timeoutRef.current = setTimeout(type, Math.max(10, randomDelay));
+        } else {
+          // Animation finished, switch to showing the final formatted content
+          setIsAnimating(false);
         }
       };
-
-      // Start the typing animation
       timeoutRef.current = setTimeout(type, typingSpeedMs);
     } else {
-      // If it's not a new AI message or animation is forced, show the full text immediately.
-      setDisplayedText(fullText);
+      setIsAnimating(false);
+      setAnimatedText(''); // Not animating, so this is not needed
     }
 
     return () => {
-      // Cleanup: clear any pending timeout when the component unmounts or re-renders.
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message, isNewlyAddedAiMessage]); // Rerun effect when the message or its 'newly added' status changes.
+  }, [message, isNewlyAddedAiMessage, typingSpeedMs]);
 
   useEffect(() => {
-    // This effect handles forcing the animation to finish.
+    // If animation is forced to finish, stop animating and show final content
     if (forceFinishAnimation) {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
-      setDisplayedText(message.text.replace(/\*\*/g, '\n\n'));
+      setIsAnimating(false);
     }
-  }, [forceFinishAnimation, message.text]);
-  
+  }, [forceFinishAnimation]);
+
   const renderPdfLink = () => {
     if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
       return (
@@ -90,6 +119,8 @@ export default function ChatBubble({
     }
     return null;
   };
+  
+  const finalContent = renderTextWithMarkdown(message.text);
 
   return (
     <div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
@@ -111,7 +142,9 @@ export default function ChatBubble({
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        <p className="text-sm whitespace-pre-wrap">{displayedText}</p>
+        <div className="text-sm whitespace-pre-wrap">
+          {isAnimating && !forceFinishAnimation ? animatedText : finalContent}
+        </div>
         {renderPdfLink()}
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
