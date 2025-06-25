@@ -42,7 +42,8 @@ Conversational Topics:
 - Identify and extract the main body of text.
 - Ignore headers, footers, page numbers, and irrelevant metadata unless they are part of the main content.
 - Preserve paragraph breaks and essential formatting.
-- Remove all non-readable characters, control characters, and gibberish.
+- Correct common character encoding errors (e.g., replace sequences like 'â€™' with a standard apostrophe ').
+- Remove all other non-readable characters, control characters, and gibberish.
 - Do not add any commentary, preamble, explanation, or summary.
 - Do not wrap the output in code blocks or JSON formatting.
 - Your final output should only be the clean, extracted text, ready for processing.
