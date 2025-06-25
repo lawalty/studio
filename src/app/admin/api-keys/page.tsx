@@ -16,7 +16,6 @@ import { Separator } from '@/components/ui/separator';
 interface ApiKeys {
   gemini: string;
   tts: string;
-  stt: string;
   voiceId: string;
   useTtsApi: boolean;
   twilioAccountSid: string;
@@ -30,7 +29,6 @@ export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
     gemini: '',
     tts: '',
-    stt: '',
     voiceId: '',
     useTtsApi: true,
     twilioAccountSid: '',
@@ -51,7 +49,6 @@ export default function ApiKeysPage() {
           setApiKeys({
             gemini: data.gemini || '',
             tts: data.tts || '',
-            stt: data.stt || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
             twilioAccountSid: data.twilioAccountSid || '',
@@ -60,7 +57,7 @@ export default function ApiKeysPage() {
           });
         } else {
           setApiKeys({
-            gemini: '', tts: '', stt: '', voiceId: '', useTtsApi: true,
+            gemini: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
           });
            toast({
@@ -77,7 +74,7 @@ export default function ApiKeysPage() {
           variant: "destructive",
         });
         setApiKeys({
-            gemini: '', tts: '', stt: '', voiceId: '', useTtsApi: true,
+            gemini: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
         });
       }
@@ -98,7 +95,9 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      await setDoc(docRef, apiKeys);
+      // Filter out STT key before saving if it exists from old state
+      const { ...keysToSave } = apiKeys;
+      await setDoc(docRef, keysToSave);
       toast({ title: "API Keys Saved", description: "Your API keys and settings have been saved to the database." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
@@ -116,7 +115,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key Management</CardTitle>
         <CardDescription>
-          Manage API keys for Gemini, TTS/STT, and Twilio SMS services.
+          Manage API keys for Gemini, TTS, and Twilio SMS services.
           <span className="block mt-2 font-semibold text-destructive/80 flex items-start">
             <AlertTriangle className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
             <span>Security Warning: Storing API keys in a client-accessible database is not recommended for production. For optimal security, manage sensitive keys server-side using environment variables or a dedicated secrets manager.</span>
@@ -178,10 +177,6 @@ export default function ApiKeysPage() {
                     onCheckedChange={handleSwitchChange}
                     aria-label="Toggle Custom TTS API usage"
                 />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sttKey" className="font-medium">STT API Key</Label>
-              <Input id="sttKey" name="stt" type="password" value={apiKeys.stt} onChange={handleChange} placeholder="Enter STT API Key" />
             </div>
           </>
         )}

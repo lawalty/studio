@@ -80,7 +80,7 @@ export default function PersonaPage() {
         setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
         setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
-        setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS);
+        setConversationalTopics(DEFAULT_CONVERSational_TOPICS);
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
@@ -309,6 +309,7 @@ export default function PersonaPage() {
                   placeholder="Describe AI Blair's personality, tone, knowledge areas, etc."
                   rows={8}
                   className="mt-1"
+                  suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
               </div>
@@ -322,6 +323,7 @@ export default function PersonaPage() {
                   placeholder="List the topics the AI is an expert on, one per line..."
                   rows={5}
                   className="mt-1"
+                  suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   List the core topics AI Blair should focus on. This helps keep the conversation relevant and accurate.
@@ -359,6 +361,7 @@ export default function PersonaPage() {
                   placeholder="Enter a specific greeting AI Blair should use. If empty, AI Blair will generate a greeting based on the toggle above."
                   rows={3}
                   className="mt-1"
+                  suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
@@ -380,6 +383,7 @@ export default function PersonaPage() {
                       min="0"
                       step="50"
                       className="mt-1"
+                      suppressHydrationWarning
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                       Pause after user stops speaking before AI processes input (Audio Only mode). Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
@@ -401,6 +405,7 @@ export default function PersonaPage() {
                         max="2.0"
                         step="0.05"
                         className="mt-1"
+                        suppressHydrationWarning
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                         Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, >1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
