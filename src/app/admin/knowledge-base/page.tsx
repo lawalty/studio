@@ -589,6 +589,9 @@ export default function KnowledgeBasePage() {
     const updatedList = [newSource, ...getSourcesState(targetLevel)];
     setSources(updatedList);
     setIsProcessingId(sourceId);
+    
+    // Immediately save the 'pending' state to give the user feedback.
+    await saveSourcesToFirestore(updatedList, targetLevel);
 
     try {
         toast({ title: "Indexing Started", description: `Processing pasted text "${newSource.name}"...` });
