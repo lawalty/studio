@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
-import { indexDocument } from '@/ai/flows/index-document-flow';
+import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -335,7 +335,6 @@ export default function KnowledgeBasePage() {
     const filenameInStorageWithTimestamp = `${timestampForFile}-${sanitizedOriginalName}`;
     const filePath = `${config.storageFolder}${filenameInStorageWithTimestamp}`;
     
-    const fileRef = storageRef(storage, filePath);
     const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     try {
@@ -590,13 +589,19 @@ export default function KnowledgeBasePage() {
 
     try {
         toast({ title: "Indexing Started", description: `Processing pasted text "${newSource.name}"...` });
-        const indexResult = await indexDocument({
+        
+        const payload: IndexDocumentInput = {
             sourceId: newSource.id,
             sourceName: newSource.name,
             text: pastedText,
             level: targetLevel,
-            downloadURL: newSource.downloadURL,
-        });
+        };
+        // Only include downloadURL if it is a non-empty string.
+        if (newSource.downloadURL) {
+            payload.downloadURL = newSource.downloadURL;
+        }
+
+        const indexResult = await indexDocument(payload);
 
         if (indexResult.chunksIndexed > 0) {
              setSources(prev => {

@@ -19,7 +19,7 @@ const IndexDocumentInputSchema = z.object({
   sourceName: z.string().describe('The original filename of the source document.'),
   text: z.string().describe('The full text content of the document to be indexed.'),
   level: z.string().describe('The priority level of the knowledge base (e.g., High, Medium).'),
-  downloadURL: z.string().url().describe('The public download URL for the source file.'),
+  downloadURL: z.string().url().optional().describe('The public download URL for the source file. Omit for sources without a URL, like pasted text.'),
 });
 export type IndexDocumentInput = z.infer<typeof IndexDocumentInputSchema>;
 
