@@ -223,10 +223,24 @@ export default function KnowledgeBasePage() {
     const setSources = getSourcesSetter(level);
 
     try {
+        let topics = '';
+        try {
+            const topicsDocRef = doc(db, "configurations/site_display_assets");
+            const topicsDocSnap = await getDoc(topicsDocRef);
+            if (topicsDocSnap.exists() && topicsDocSnap.data()?.conversationalTopics) {
+                topics = topicsDocSnap.data().conversationalTopics;
+            }
+        } catch (e) {
+            console.warn("Could not fetch conversational topics for extraction, proceeding without them.", e);
+        }
+
         toast({ title: "Extraction Started", description: `AI is processing ${sourceToProcess.name}...` });
         setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
 
-        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL });
+        const result = await extractTextFromDocumentUrl({ 
+            documentUrl: sourceToProcess.downloadURL,
+            conversationalTopics: topics,
+        });
         const extractedText = result.extractedText;
         
         setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));

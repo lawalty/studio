@@ -13,6 +13,7 @@ import {z} from 'genkit';
 
 const ExtractTextFromDocumentUrlInputSchema = z.object({
   documentUrl: z.string().url().describe('The public URL of the document file to process.'),
+  conversationalTopics: z.string().optional().describe('A list of topics the AI should consider its area of expertise to guide extraction.'),
 });
 export type ExtractTextFromDocumentUrlInput = z.infer<typeof ExtractTextFromDocumentUrlInputSchema>;
 
@@ -32,7 +33,12 @@ const extractTextPrompt = ai.definePrompt({
   name: 'extractTextFromDocumentUrlPrompt',
   input: { schema: ExtractTextFromDocumentUrlInputSchema },
   output: { schema: ExtractTextFromDocumentUrlOutputSchema },
-  prompt: `You are an expert text extraction and cleaning tool. Your only task is to extract all human-readable textual content from the document provided.
+  prompt: `You are an expert text extraction and cleaning tool. Your task is to extract all human-readable textual content from the document provided.
+{{#if conversationalTopics}}
+To improve the indexing for a conversational AI, use the following topics as a guide to identify the most relevant information and structure. Pay special attention to content related to these topics, but do not omit other relevant information.
+Conversational Topics:
+{{{conversationalTopics}}}
+{{/if}}
 - Identify and extract the main body of text.
 - Ignore headers, footers, page numbers, and irrelevant metadata unless they are part of the main content.
 - Preserve paragraph breaks and essential formatting.
