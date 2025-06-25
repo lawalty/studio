@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text,
@@ -73,9 +72,25 @@ const indexDocumentFlow = ai.defineFlow(
 
     for (const chunk of chunks) {
       try {
+        // Based on user feedback about potential encoding issues (e.g., non-UTF-8), this step
+        // performs a final, aggressive cleaning of each chunk before it's sent for embedding.
+        // It removes the UTF-8 Byte Order Mark (BOM) and any non-ASCII characters
+        // that could cause the embedding model to reject the content as "invalid".
+        const cleanedChunk = chunk
+          .replace(/^\uFEFF/, '') // Remove BOM
+          .replace(/[^\x00-\x7F]/g, ''); // Remove all non-ASCII characters.
+
+        if (cleanedChunk.trim().length === 0) {
+          failedChunks++;
+          const errorMsg = 'Chunk became empty after cleaning, indicating it may have only contained unsupported characters.';
+          if (!firstError) firstError = errorMsg;
+          console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it was empty after cleaning.`);
+          continue;
+        }
+        
         const { embedding } = await ai.embed({
           embedder: 'googleai/text-embedding-004',
-          content: chunk,
+          content: cleanedChunk, // Use the cleaned chunk
           config: {
             safetySettings: [
               { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
@@ -92,7 +107,7 @@ const indexDocumentFlow = ai.defineFlow(
             sourceId,
             sourceName,
             level,
-            text: chunk,
+            text: cleanedChunk, // IMPORTANT: Save the cleaned chunk to ensure data consistency
             embedding: embedding,
             createdAt: new Date().toISOString(),
             downloadURL,
@@ -102,7 +117,7 @@ const indexDocumentFlow = ai.defineFlow(
           const errorMsg = 'Embedding call returned no embedding.';
           if (!firstError) firstError = errorMsg;
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate an embedding. The chunk may be empty or contain unsupported content. Content: "${chunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate an embedding. The chunk may be empty or contain unsupported content. Content: "${cleanedChunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
