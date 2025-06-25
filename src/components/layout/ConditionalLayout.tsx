@@ -8,20 +8,25 @@ import Footer from '@/components/layout/Footer';
 
 export default function ConditionalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isChatOrSplash = pathname.startsWith('/chat') || pathname === '/';
+  const isImmersive = pathname.startsWith('/chat') || pathname === '/';
 
-  if (isChatOrSplash) {
-    return <main className="flex-grow flex flex-col">{children}</main>;
+  if (isImmersive) {
+    // For immersive pages, we provide a simple flex container that will grow to fill the parent body.
+    return (
+      <main className="flex-grow flex flex-col">
+        {children}
+      </main>
+    );
   }
 
-  // Admin pages get the full layout with header and footer.
+  // For all other pages (like /admin/*), provide the standard layout with header and footer.
   return (
-    <div className="flex flex-col min-h-screen">
+    <>
       <Header />
-      <main className="flex-grow container mx-auto px-4 py-8">
+      <main className="flex-grow">
         {children}
       </main>
       <Footer />
-    </div>
+    </>
   );
 }

@@ -27,7 +27,7 @@ const ChatInterface = dynamic(() => import('@/components/chat/ChatInterface'), {
 
 export default function AudioTextPage() {
   return (
-    <div className="container mx-auto px-4 py-8 flex flex-col h-full flex-grow">
+    <div className="flex flex-col h-full flex-grow p-4 md:p-8">
       <ChatInterface communicationMode="audio-text" />
     </div>
   );
