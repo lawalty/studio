@@ -60,13 +60,10 @@ const indexDocumentFlow = ai.defineFlow(
 
     for (const chunk of chunks) {
       try {
-        // Based on user feedback about potential encoding issues (e.g., non-UTF-8), this step
-        // performs a final, aggressive cleaning of each chunk before it's sent for embedding.
-        // It removes the UTF-8 Byte Order Mark (BOM) and any non-ASCII characters
-        // that could cause the embedding model to reject the content as "invalid".
-        const cleanedChunk = chunk
-          .replace(/^\uFEFF/, '') // Remove BOM
-          .replace(/[^\x00-\x7F]/g, ''); // Remove all non-ASCII characters.
+        // Perform a safe cleaning of each chunk before it's sent for embedding.
+        // This removes the UTF-8 Byte Order Mark (BOM) which can corrupt text for AI processing.
+        // The previous aggressive stripping of all non-ASCII characters was causing errors and has been removed.
+        const cleanedChunk = chunk.replace(/^\uFEFF/, ''); 
 
         if (cleanedChunk.trim().length === 0) {
           failedChunks++;
