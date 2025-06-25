@@ -813,271 +813,269 @@ export default function KnowledgeBasePage() {
   const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="space-y-6">
-        <Card>
-            <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
-                <CardDescription>
-                    Enter a question to see what context the AI would retrieve from the knowledge base. This helps verify that your sources are indexed and retrieved correctly.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="test-query">Test Question</Label>
-                    <Input
-                        id="test-query"
-                        value={testQuery}
-                        onChange={(e) => setTestQuery(e.target.value)}
-                        placeholder="e.g., What are the regulations for jewelry?"
-                        disabled={anyOperationGloballyInProgress}
-                        suppressHydrationWarning
-                    />
-                </div>
-                <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery.trim()}>
-                    {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
-                    {isTesting ? 'Retrieving Context...' : 'Test Retrieval'}
-                </Button>
-                {testResult && (
-                    <div className="space-y-2 pt-4">
-                        <Label>Retrieved Context for AI</Label>
-                        <Textarea
-                            readOnly
-                            value={testResult}
-                            className="h-64 font-mono text-xs bg-muted"
-                            placeholder="Context will be displayed here..."
-                            suppressHydrationWarning
-                        />
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-
-        <Card>
+    <div className="space-y-6">
+      <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Upload New Source</CardTitle>
-            <CardDescription>
-              Add content to AI Blair's knowledge base. PDF and .txt files will be processed and indexed for semantic search.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
-              <Label htmlFor="file-upload" className="font-medium whitespace-nowrap shrink-0">Step 1: File</Label>
-              <div className="flex items-center gap-2">
-                  <Input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                  id="file-upload"
-                  disabled={anyOperationGloballyInProgress || anyKbLoading}
-                  />
-                  <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={anyOperationGloballyInProgress || anyKbLoading} className="w-full sm:w-auto">
-                  <UploadCloud className="mr-2 h-4 w-4" /> Choose File
-                  </Button>
-                  {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
-              </div>
-              {selectedFile && (
-                  <> 
-                    <div/>
-                    <p className="text-xs text-muted-foreground col-start-2"> 
-                    Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
-                    </p>
-                  </>
-              )}
-
-              <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label> 
-              <div className="flex flex-col">
-                <RadioGroup
-                  value={selectedKBTargetForUpload}
-                  onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
-                  className="flex flex-col sm:flex-row sm:space-x-4 pt-2"
-                >
-                  {KB_LEVELS.map(level => (
-                    <div key={level} className="flex items-center space-x-2">
-                      <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={anyOperationGloballyInProgress || anyKbLoading}/>
-                      <Label htmlFor={`r-upload-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-
-              <Label htmlFor="uploadDescription" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 3: Description (Optional)</Label>
-              <Textarea
-                  id="uploadDescription"
-                  value={uploadDescription}
-                  onChange={(e) => setUploadDescription(e.target.value)}
-                  placeholder="Enter a brief description for this source (for admin use only)..."
-                  rows={2}
-                  className="mt-1"
-                  disabled={anyOperationGloballyInProgress || anyKbLoading}
-                  suppressHydrationWarning
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <div className="flex items-center gap-2">
-              <Label className="font-medium whitespace-nowrap shrink-0">Step 4:</Label>
-              <Button onClick={handleUpload} disabled={!selectedFile || anyOperationGloballyInProgress || anyKbLoading}>
-                {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                {isCurrentlyUploading ? 'Uploading...' : `Upload to ${selectedKBTargetForUpload === 'Archive' ? 'Archive' : selectedKBTargetForUpload + ' KB'}`}
-              </Button>
-            </div>
-          </CardFooter>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-              <CardTitle className="font-headline">Index Pasted Text</CardTitle>
+              <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
               <CardDescription>
-                  Paste text directly into the field below to index it. This bypasses file uploads entirely.
+                  Enter a question to see what context the AI would retrieve from the knowledge base. This helps verify that your sources are indexed and retrieved correctly.
               </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] items-start gap-x-4 gap-y-3">
-                  <Label htmlFor="pasted-text-source-name" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 1: Source Name</Label>
+              <div className="space-y-2">
+                  <Label htmlFor="test-query">Test Question</Label>
                   <Input
-                      id="pasted-text-source-name"
-                      value={pastedTextSourceName}
-                      onChange={(e) => setPastedTextSourceName(e.target.value)}
-                      placeholder="e.g., 'Company Mission Statement'"
-                      disabled={anyOperationGloballyInProgress || anyKbLoading}
+                      id="test-query"
+                      value={testQuery}
+                      onChange={(e) => setTestQuery(e.target.value)}
+                      placeholder="e.g., What are the regulations for jewelry?"
+                      disabled={anyOperationGloballyInProgress}
                       suppressHydrationWarning
                   />
-
-                  <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label>
-                  <div className="flex flex-col">
-                    <RadioGroup
-                      value={selectedKBTargetForPastedText}
-                      onValueChange={(value: string) => setSelectedKBTargetForPastedText(value as KnowledgeBaseLevel)}
-                      className="flex flex-col sm:flex-row sm:space-x-4 pt-2"
-                    >
-                      {KB_LEVELS.map(level => (
-                        <div key={`pasted-level-${level}`} className="flex items-center space-x-2">
-                          <RadioGroupItem value={level} id={`r-pasted-${level.toLowerCase()}`} disabled={anyOperationGloballyInProgress || anyKbLoading}/>
-                          <Label htmlFor={`r-pasted-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
+              </div>
+              <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery.trim()}>
+                  {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
+                  {isTesting ? 'Retrieving Context...' : 'Test Retrieval'}
+              </Button>
+              {testResult && (
+                  <div className="space-y-2 pt-4">
+                      <Label>Retrieved Context for AI</Label>
+                      <Textarea
+                          readOnly
+                          value={testResult}
+                          className="h-64 font-mono text-xs bg-muted"
+                          placeholder="Context will be displayed here..."
+                          suppressHydrationWarning
+                      />
                   </div>
-
-                  <Label htmlFor="pastedTextDescription" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 3: Description (Optional)</Label>
-                  <Textarea
-                      id="pastedTextDescription"
-                      value={pastedTextDescription}
-                      onChange={(e) => setPastedTextDescription(e.target.value)}
-                      placeholder="Enter a brief description for this source (for admin use only)..."
-                      rows={2}
-                      className="mt-1"
-                      disabled={anyOperationGloballyInProgress || anyKbLoading}
-                      suppressHydrationWarning
-                  />
-
-                  <Label htmlFor="pasted-text-content" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 4: Text Content</Label>
-                  <Textarea
-                      id="pasted-text-content"
-                      value={pastedText}
-                      onChange={(e) => setPastedText(e.target.value)}
-                      placeholder="Paste your text content here..."
-                      rows={10}
-                      className="md:col-start-2"
-                      disabled={anyOperationGloballyInProgress || anyKbLoading}
-                      suppressHydrationWarning
-                  />
-              </div>
+              )}
           </CardContent>
-          <CardFooter>
-              <div className="flex items-center gap-2">
-                  <Label className="font-medium whitespace-nowrap shrink-0">Step 5:</Label>
-                  <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || anyOperationGloballyInProgress || anyKbLoading}>
-                    {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-                    {isIndexingPastedText ? 'Indexing...' : 'Index Pasted Text'}
-                  </Button>
-              </div>
-          </CardFooter>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Upload New Source</CardTitle>
+          <CardDescription>
+            Add content to AI Blair's knowledge base. PDF and .txt files will be processed and indexed for semantic search.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
+            <Label htmlFor="file-upload" className="font-medium whitespace-nowrap shrink-0">Step 1: File</Label>
+            <div className="flex items-center gap-2">
+                <Input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                id="file-upload"
+                disabled={anyOperationGloballyInProgress || anyKbLoading}
+                />
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={anyOperationGloballyInProgress || anyKbLoading} className="w-full sm:w-auto">
+                <UploadCloud className="mr-2 h-4 w-4" /> Choose File
+                </Button>
+                {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
+            </div>
+            {selectedFile && (
+                <> 
+                  <div/>
+                  <p className="text-xs text-muted-foreground col-start-2"> 
+                  Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
+                  </p>
+                </>
+            )}
 
-        <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb']} className="w-full">
-          {KB_LEVELS.map(level => (
-              <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
-              <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
-              <AccordionContent>
-                  {renderKnowledgeBaseSection(level)}
-              </AccordionContent>
-              </AccordionItem>
-          ))}
-        </Accordion>
-
-        {sourceToMoveDetails && (
-          <AlertDialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Move Knowledge Source</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Move &quot;{sourceToMoveDetails.source.name}&quot; from {sourceToMoveDetails.currentLevel} Priority to:
-                </AlertDialogDescription>
-              </AlertDialogHeader>
+            <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label> 
+            <div className="flex flex-col">
               <RadioGroup
-                value={selectedTargetMoveLevel ?? undefined}
-                onValueChange={(value) => setSelectedTargetMoveLevel(value as KnowledgeBaseLevel)}
-                className="my-4 space-y-2"
+                value={selectedKBTargetForUpload}
+                onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
+                className="flex flex-col sm:flex-row sm:space-x-4 pt-2"
               >
-                {KB_LEVELS.filter(level => level !== sourceToMoveDetails.currentLevel).map(level => (
-                  <div key={`move-target-${level}`} className="flex items-center space-x-2">
-                    <RadioGroupItem value={level} id={`r-move-${level.toLowerCase()}`} />
-                    <Label htmlFor={`r-move-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
+                {KB_LEVELS.map(level => (
+                  <div key={level} className="flex items-center space-x-2">
+                    <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={anyOperationGloballyInProgress || anyKbLoading}/>
+                    <Label htmlFor={`r-upload-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
                   </div>
                 ))}
               </RadioGroup>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setShowMoveDialog(false)} disabled={isMovingSource}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleConfirmMoveSource} disabled={!selectedTargetMoveLevel || isMovingSource}>
-                  {isMovingSource ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  {isMovingSource ? 'Moving...' : 'Confirm Move'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
+            </div>
 
-        {editingSourceDetails && (
-          <Dialog open={showDescriptionDialog} onOpenChange={(open) => {
-            if (!open) { 
-              setEditingSourceDetails(null); 
-              setDescriptionInput(''); 
-            }
-            setShowDescriptionDialog(open);
-          }}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Edit Description for: {editingSourceDetails.source.name}</DialogTitle>
-                <DialogDescription>
-                  This description is for administrative purposes only and is not used by the AI.
-                </DialogDescription>
-              </DialogHeader>
-              <Textarea
-                value={descriptionInput}
-                onChange={(e) => setDescriptionInput(e.target.value)}
-                placeholder="Enter description..."
-                rows={5}
-                className="mt-2"
-                disabled={isSavingDescription}
+            <Label htmlFor="uploadDescription" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 3: Description (Optional)</Label>
+            <Textarea
+                id="uploadDescription"
+                value={uploadDescription}
+                onChange={(e) => setUploadDescription(e.target.value)}
+                placeholder="Enter a brief description for this source (for admin use only)..."
+                rows={2}
+                className="mt-1"
+                disabled={anyOperationGloballyInProgress || anyKbLoading}
                 suppressHydrationWarning
-              />
-              <DialogFooter className="mt-4">
-                <DialogClose asChild>
-                   <Button type="button" variant="outline" disabled={isSavingDescription}>Cancel</Button>
-                </DialogClose>
-                <Button onClick={handleSaveDescription} disabled={isSavingDescription}>
-                  {isSavingDescription ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  {isSavingDescription ? 'Saving...' : 'Save Description'}
+            />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <div className="flex items-center gap-2">
+            <Label className="font-medium whitespace-nowrap shrink-0">Step 4:</Label>
+            <Button onClick={handleUpload} disabled={!selectedFile || anyOperationGloballyInProgress || anyKbLoading}>
+              {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+              {isCurrentlyUploading ? 'Uploading...' : `Upload to ${selectedKBTargetForUpload === 'Archive' ? 'Archive' : selectedKBTargetForUpload + ' KB'}`}
+            </Button>
+          </div>
+        </CardFooter>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+            <CardTitle className="font-headline">Index Pasted Text</CardTitle>
+            <CardDescription>
+                Paste text directly into the field below to index it. This bypasses file uploads entirely.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] items-start gap-x-4 gap-y-3">
+                <Label htmlFor="pasted-text-source-name" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 1: Source Name</Label>
+                <Input
+                    id="pasted-text-source-name"
+                    value={pastedTextSourceName}
+                    onChange={(e) => setPastedTextSourceName(e.target.value)}
+                    placeholder="e.g., 'Company Mission Statement'"
+                    disabled={anyOperationGloballyInProgress || anyKbLoading}
+                    suppressHydrationWarning
+                />
+
+                <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label>
+                <div className="flex flex-col">
+                  <RadioGroup
+                    value={selectedKBTargetForPastedText}
+                    onValueChange={(value: string) => setSelectedKBTargetForPastedText(value as KnowledgeBaseLevel)}
+                    className="flex flex-col sm:flex-row sm:space-x-4 pt-2"
+                  >
+                    {KB_LEVELS.map(level => (
+                      <div key={`pasted-level-${level}`} className="flex items-center space-x-2">
+                        <RadioGroupItem value={level} id={`r-pasted-${level.toLowerCase()}`} disabled={anyOperationGloballyInProgress || anyKbLoading}/>
+                        <Label htmlFor={`r-pasted-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+
+                <Label htmlFor="pastedTextDescription" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 3: Description (Optional)</Label>
+                <Textarea
+                    id="pastedTextDescription"
+                    value={pastedTextDescription}
+                    onChange={(e) => setPastedTextDescription(e.target.value)}
+                    placeholder="Enter a brief description for this source (for admin use only)..."
+                    rows={2}
+                    className="mt-1"
+                    disabled={anyOperationGloballyInProgress || anyKbLoading}
+                    suppressHydrationWarning
+                />
+
+                <Label htmlFor="pasted-text-content" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 4: Text Content</Label>
+                <Textarea
+                    id="pasted-text-content"
+                    value={pastedText}
+                    onChange={(e) => setPastedText(e.target.value)}
+                    placeholder="Paste your text content here..."
+                    rows={10}
+                    className="md:col-start-2"
+                    disabled={anyOperationGloballyInProgress || anyKbLoading}
+                    suppressHydrationWarning
+                />
+            </div>
+        </CardContent>
+        <CardFooter>
+            <div className="flex items-center gap-2">
+                <Label className="font-medium whitespace-nowrap shrink-0">Step 5:</Label>
+                <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || anyOperationGloballyInProgress || anyKbLoading}>
+                  {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
+                  {isIndexingPastedText ? 'Indexing...' : 'Index Pasted Text'}
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
-      </div>
+            </div>
+        </CardFooter>
+    </Card>
+
+
+      <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb']} className="w-full">
+        {KB_LEVELS.map(level => (
+            <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
+            <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
+            <AccordionContent>
+                {renderKnowledgeBaseSection(level)}
+            </AccordionContent>
+            </AccordionItem>
+        ))}
+      </Accordion>
+
+      {sourceToMoveDetails && (
+        <AlertDialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Move Knowledge Source</AlertDialogTitle>
+              <AlertDialogDescription>
+                Move &quot;{sourceToMoveDetails.source.name}&quot; from {sourceToMoveDetails.currentLevel} Priority to:
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <RadioGroup
+              value={selectedTargetMoveLevel ?? undefined}
+              onValueChange={(value) => setSelectedTargetMoveLevel(value as KnowledgeBaseLevel)}
+              className="my-4 space-y-2"
+            >
+              {KB_LEVELS.filter(level => level !== sourceToMoveDetails.currentLevel).map(level => (
+                <div key={`move-target-${level}`} className="flex items-center space-x-2">
+                  <RadioGroupItem value={level} id={`r-move-${level.toLowerCase()}`} />
+                  <Label htmlFor={`r-move-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
+                </div>
+              ))}
+            </RadioGroup>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowMoveDialog(false)} disabled={isMovingSource}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmMoveSource} disabled={!selectedTargetMoveLevel || isMovingSource}>
+                {isMovingSource ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isMovingSource ? 'Moving...' : 'Confirm Move'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {editingSourceDetails && (
+        <Dialog open={showDescriptionDialog} onOpenChange={(open) => {
+          if (!open) { 
+            setEditingSourceDetails(null); 
+            setDescriptionInput(''); 
+          }
+          setShowDescriptionDialog(open);
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Description for: {editingSourceDetails.source.name}</DialogTitle>
+              <DialogDescription>
+                This description is for administrative purposes only and is not used by the AI.
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              value={descriptionInput}
+              onChange={(e) => setDescriptionInput(e.target.value)}
+              placeholder="Enter description..."
+              rows={5}
+              className="mt-2"
+              disabled={isSavingDescription}
+              suppressHydrationWarning
+            />
+            <DialogFooter className="mt-4">
+              <DialogClose asChild>
+                  <Button type="button" variant="outline" disabled={isSavingDescription}>Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleSaveDescription} disabled={isSavingDescription}>
+                {isSavingDescription ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isSavingDescription ? 'Saving...' : 'Save Description'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

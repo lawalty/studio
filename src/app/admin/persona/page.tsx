@@ -287,190 +287,188 @@ export default function PersonaPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><Bot /> AI Persona &amp; Main Settings</CardTitle>
-            <CardDescription>
-              Define AI Blair's conversational style, traits, avatars, and other core interaction settings.
-              All settings here are saved together in Firestore.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {isLoadingData ? (<p>Loading persona settings...</p>) : (
-              <>
-                <div>
-                  <Label htmlFor="personaTraits" className="font-medium">Persona Traits Description</Label>
-                  <Textarea
-                    id="personaTraits"
-                    value={personaTraits}
-                    onChange={handlePersonaChange}
-                    placeholder="Describe AI Blair's personality, tone, knowledge areas, etc."
-                    rows={8}
-                    className="mt-1"
-                    suppressHydrationWarning
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
-                </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><Bot /> AI Persona &amp; Main Settings</CardTitle>
+          <CardDescription>
+            Define AI Blair's conversational style, traits, avatars, and other core interaction settings.
+            All settings here are saved together in Firestore.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {isLoadingData ? (<p>Loading persona settings...</p>) : (
+            <>
+              <div>
+                <Label htmlFor="personaTraits" className="font-medium">Persona Traits Description</Label>
+                <Textarea
+                  id="personaTraits"
+                  value={personaTraits}
+                  onChange={handlePersonaChange}
+                  placeholder="Describe AI Blair's personality, tone, knowledge areas, etc."
+                  rows={8}
+                  className="mt-1"
+                  suppressHydrationWarning
+                />
+                <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
+              </div>
 
-                <div>
-                  <Label htmlFor="conversationalTopics" className="font-medium flex items-center gap-1.5"><ListOrdered className="h-4 w-4" /> Conversational Topics</Label>
-                  <Textarea
-                    id="conversationalTopics"
-                    value={conversationalTopics}
-                    onChange={(e) => setConversationalTopics(e.target.value)}
-                    placeholder="List the topics the AI is an expert on, one per line..."
-                    rows={5}
-                    className="mt-1"
-                    suppressHydrationWarning
+              <div>
+                <Label htmlFor="conversationalTopics" className="font-medium flex items-center gap-1.5"><ListOrdered className="h-4 w-4" /> Conversational Topics</Label>
+                <Textarea
+                  id="conversationalTopics"
+                  value={conversationalTopics}
+                  onChange={(e) => setConversationalTopics(e.target.value)}
+                  placeholder="List the topics the AI is an expert on, one per line..."
+                  rows={5}
+                  className="mt-1"
+                  suppressHydrationWarning
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  List the core topics AI Blair should focus on. This helps keep the conversation relevant and accurate.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
+                <MessageSquareText className="h-5 w-5 text-primary" />
+                <div className="flex-1 space-y-1">
+                    <Label htmlFor="useKnowledgeInGreeting" className="font-medium">
+                        Tailor Initial Greeting with High Priority Knowledge
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                        If ON, AI Blair may reference topics from its High Priority Knowledge Base in its initial greeting.
+                        If OFF (or if a Custom Scripted Greeting below is provided), this setting is overridden or unused for the initial greeting.
+                    </p>
+                </div>
+                <Switch
+                    id="useKnowledgeInGreeting"
+                    checked={useKnowledgeInGreeting}
+                    onCheckedChange={setUseKnowledgeInGreeting}
+                    aria-label="Toggle use of knowledge base in initial greeting"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="customGreetingMessage" className="font-medium flex items-center gap-1.5">
+                  <Type className="h-4 w-4" />
+                  Custom Scripted Greeting (Optional)
+                </Label>
+                <Textarea
+                  id="customGreetingMessage"
+                  value={customGreetingMessage}
+                  onChange={(e) => setCustomGreetingMessage(e.target.value)}
+                  placeholder="Enter a specific greeting AI Blair should use. If empty, AI Blair will generate a greeting based on the toggle above."
+                  rows={3}
+                  className="mt-1"
+                  suppressHydrationWarning
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
+                      <Timer className="h-4 w-4" />
+                      User Speaking Pause Time (ms)
+                  </Label>
+                  <Input
+                      id="responsePauseTime"
+                      type="number"
+                      value={responsePauseTime}
+                      onChange={handleResponsePauseTimeChange}
+                      placeholder="e.g., 750"
+                      min="0"
+                      step="50"
+                      className="mt-1"
+                      suppressHydrationWarning
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    List the core topics AI Blair should focus on. This helps keep the conversation relevant and accurate.
+                      Pause after user stops speaking before AI processes input (Audio Only mode). Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
                   </p>
-                </div>
-
-                <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
-                  <MessageSquareText className="h-5 w-5 text-primary" />
-                  <div className="flex-1 space-y-1">
-                      <Label htmlFor="useKnowledgeInGreeting" className="font-medium">
-                          Tailor Initial Greeting with High Priority Knowledge
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                          If ON, AI Blair may reference topics from its High Priority Knowledge Base in its initial greeting.
-                          If OFF (or if a Custom Scripted Greeting below is provided), this setting is overridden or unused for the initial greeting.
-                      </p>
-                  </div>
-                  <Switch
-                      id="useKnowledgeInGreeting"
-                      checked={useKnowledgeInGreeting}
-                      onCheckedChange={setUseKnowledgeInGreeting}
-                      aria-label="Toggle use of knowledge base in initial greeting"
-                  />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="customGreetingMessage" className="font-medium flex items-center gap-1.5">
-                    <Type className="h-4 w-4" />
-                    Custom Scripted Greeting (Optional)
-                  </Label>
-                  <Textarea
-                    id="customGreetingMessage"
-                    value={customGreetingMessage}
-                    onChange={(e) => setCustomGreetingMessage(e.target.value)}
-                    placeholder="Enter a specific greeting AI Blair should use. If empty, AI Blair will generate a greeting based on the toggle above."
-                    rows={3}
-                    className="mt-1"
-                    suppressHydrationWarning
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
-                        <Timer className="h-4 w-4" />
-                        User Speaking Pause Time (ms)
+                    <Label htmlFor="animationSyncFactor" className="font-medium flex items-center gap-1.5">
+                        <Link2 className="h-4 w-4" />
+                        Audio-Text Animation Sync
                     </Label>
                     <Input
-                        id="responsePauseTime"
+                        id="animationSyncFactor"
                         type="number"
-                        value={responsePauseTime}
-                        onChange={handleResponsePauseTimeChange}
-                        placeholder="e.g., 750"
-                        min="0"
-                        step="50"
+                        value={animationSyncFactor}
+                        onChange={handleAnimationSyncFactorChange}
+                        placeholder="e.g., 0.9"
+                        min="0.1"
+                        max="2.0"
+                        step="0.05"
                         className="mt-1"
                         suppressHydrationWarning
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                        Pause after user stops speaking before AI processes input (Audio Only mode). Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
+                        Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, >1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
                     </p>
-                  </div>
+                </div>
+              </div>
 
-                  <div className="space-y-2">
-                      <Label htmlFor="animationSyncFactor" className="font-medium flex items-center gap-1.5">
-                          <Link2 className="h-4 w-4" />
-                          Audio-Text Animation Sync
-                      </Label>
-                      <Input
-                          id="animationSyncFactor"
-                          type="number"
-                          value={animationSyncFactor}
-                          onChange={handleAnimationSyncFactorChange}
-                          placeholder="e.g., 0.9"
-                          min="0.1"
-                          max="2.0"
-                          step="0.05"
-                          className="mt-1"
-                          suppressHydrationWarning
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                          Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, >1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
-                      </p>
-                  </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                <div>
+                  <Label className="font-medium text-base block mb-2">Static Avatar Image</Label>
+                  <CardDescription className="mb-3">
+                    Default image for AI Blair. Optimal: Square (e.g., 300x300px).
+                  </CardDescription>
+                  <Card className="shadow-sm">
+                    <CardContent className="pt-6 flex flex-col items-center space-y-3">
+                        <Image
+                          src={avatarPreview} alt="AI Blair Static Avatar Preview" width={150} height={150}
+                          className="rounded-full border-2 border-primary shadow-md object-cover"
+                          data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
+                          key={`static-avatar-${avatarPreview.substring(0,30)}`}
+                          unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https://')}
+                          onError={() => { console.warn("Custom static avatar failed to load, falling back."); setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);}}
+                        />
+                      <Input type="file" accept="image/png, image/jpeg, image/webp" ref={avatarInputRef} onChange={handleAvatarChange} className="hidden" id="avatar-upload"/>
+                      <Button variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/> Choose Image</Button>
+                      {selectedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAvatarFile.name}</p>}
+                      <Button variant="link" size="sm" onClick={handleResetAvatar} className="text-xs">Reset to default</Button>
+                    </CardContent>
+                  </Card>
                 </div>
 
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                  <div>
-                    <Label className="font-medium text-base block mb-2">Static Avatar Image</Label>
-                    <CardDescription className="mb-3">
-                      Default image for AI Blair. Optimal: Square (e.g., 300x300px).
-                    </CardDescription>
-                    <Card className="shadow-sm">
-                      <CardContent className="pt-6 flex flex-col items-center space-y-3">
-                         <Image
-                            src={avatarPreview} alt="AI Blair Static Avatar Preview" width={150} height={150}
-                            className="rounded-full border-2 border-primary shadow-md object-cover"
-                            data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
-                            key={`static-avatar-${avatarPreview.substring(0,30)}`}
-                            unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https://')}
-                            onError={() => { console.warn("Custom static avatar failed to load, falling back."); setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);}}
-                          />
-                        <Input type="file" accept="image/png, image/jpeg, image/webp" ref={avatarInputRef} onChange={handleAvatarChange} className="hidden" id="avatar-upload"/>
-                        <Button variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/> Choose Image</Button>
-                        {selectedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAvatarFile.name}</p>}
-                        <Button variant="link" size="sm" onClick={handleResetAvatar} className="text-xs">Reset to default</Button>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div>
-                    <Label className="font-medium text-base block mb-2 flex items-center gap-1.5"><Film /> Animated Speaking Avatar (GIF)</Label>
-                    <CardDescription className="mb-3">
-                      Upload an animated GIF for when AI Blair is speaking in audio modes.
-                    </CardDescription>
-                    <Card className="shadow-sm">
-                      <CardContent className="pt-6 flex flex-col items-center space-y-3">
-                         <Image
-                            src={animatedAvatarPreview} alt="AI Blair Animated Avatar Preview" width={150} height={150}
-                            className="rounded-full border-2 border-accent shadow-md object-cover"
-                            data-ai-hint={animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER || animatedAvatarPreview.includes("placehold.co") ? "animated face" : undefined}
-                            key={`animated-avatar-${animatedAvatarPreview.substring(0,30)}`}
-                            unoptimized={true}
-                            onError={() => { console.warn("Custom animated avatar failed to load, falling back."); setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);}}
-                          />
-                        <Input type="file" accept="image/gif" ref={animatedAvatarInputRef} onChange={handleAnimatedAvatarChange} className="hidden" id="animated-avatar-upload"/>
-                        <Button variant="outline" size="sm" onClick={() => animatedAvatarInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/>Choose GIF</Button>
-                        {selectedAnimatedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAnimatedAvatarFile.name}</p>}
-                        <Button variant="link" size="sm" onClick={handleResetAnimatedAvatar} className="text-xs">Reset to default</Button>
-                      </CardContent>
-                    </Card>
-                  </div>
+                <div>
+                  <Label className="font-medium text-base block mb-2 flex items-center gap-1.5"><Film /> Animated Speaking Avatar (GIF)</Label>
+                  <CardDescription className="mb-3">
+                    Upload an animated GIF for when AI Blair is speaking in audio modes.
+                  </CardDescription>
+                  <Card className="shadow-sm">
+                    <CardContent className="pt-6 flex flex-col items-center space-y-3">
+                        <Image
+                          src={animatedAvatarPreview} alt="AI Blair Animated Avatar Preview" width={150} height={150}
+                          className="rounded-full border-2 border-accent shadow-md object-cover"
+                          data-ai-hint={animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER || animatedAvatarPreview.includes("placehold.co") ? "animated face" : undefined}
+                          key={`animated-avatar-${animatedAvatarPreview.substring(0,30)}`}
+                          unoptimized={true}
+                          onError={() => { console.warn("Custom animated avatar failed to load, falling back."); setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);}}
+                        />
+                      <Input type="file" accept="image/gif" ref={animatedAvatarInputRef} onChange={handleAnimatedAvatarChange} className="hidden" id="animated-avatar-upload"/>
+                      <Button variant="outline" size="sm" onClick={() => animatedAvatarInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/>Choose GIF</Button>
+                      {selectedAnimatedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAnimatedAvatarFile.name}</p>}
+                      <Button variant="link" size="sm" onClick={handleResetAnimatedAvatar} className="text-xs">Reset to default</Button>
+                    </CardContent>
+                  </Card>
                 </div>
-              </>
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button onClick={handleSaveAllSettings} disabled={isSaving || isLoadingData} size="lg">
-              <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving All Persona Settings...' : (isLoadingData ? 'Loading...' : 'Save All Persona Settings')}
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
+              </div>
+            </>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleSaveAllSettings} disabled={isSaving || isLoadingData} size="lg">
+            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving All Persona Settings...' : (isLoadingData ? 'Loading...' : 'Save All Persona Settings')}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

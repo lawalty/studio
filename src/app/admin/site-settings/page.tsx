@@ -187,133 +187,131 @@ export default function SiteSettingsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Splash Screen Welcome Message</CardTitle>
-            <CardDescription>
-              Customize the main welcome message displayed on the application's splash screen.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingData ? (
-              <p>Loading welcome message settings...</p>
-            ) : (
-              <>
-                <Label htmlFor="splashWelcomeMessage" className="font-medium">Welcome Message</Label>
-                <Textarea
-                  id="splashWelcomeMessage"
-                  value={splashWelcomeMessage}
-                  onChange={handleSplashWelcomeMessageChange}
-                  placeholder="Enter your custom welcome message..."
-                  rows={3}
-                  className="mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Default: "{DEFAULT_SPLASH_WELCOME_MESSAGE}"
-                </p>
-              </>
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button variant="outline" onClick={handleResetSplashWelcomeMessage} disabled={isLoadingData}>
-              <RotateCcw className="mr-2 h-4 w-4" /> Reset Message to Default
-            </Button>
-          </CardFooter>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><ImageIcon /> Splash Screen Image</CardTitle>
-            <CardDescription>
-              Upload the image for the splash screen. Stored in Firebase Storage.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoadingData ? (
-               <div className="w-full max-w-md h-[200px] bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center mx-auto">
-                  <p className="text-muted-foreground">Loading image settings...</p>
-               </div>
-            ) : (
-              <div className="flex flex-col items-center space-y-4">
-                <Label htmlFor="splash-image-upload" className="font-medium self-start sr-only">Splash Image Preview & Upload</Label>
-                <Image
-                  src={splashImagePreview}
-                  alt="Splash Screen Preview"
-                  width={400}
-                  height={267}
-                  className="rounded-lg border-2 border-primary shadow-md object-cover"
-                  data-ai-hint={(splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC || splashImagePreview.includes("placehold.co")) ? "technology abstract welcome" : undefined}
-                  unoptimized={splashImagePreview.startsWith('data:image/') || splashImagePreview.startsWith('blob:')}
-                  onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)}
-                />
-                <Input
-                  type="file"
-                  accept="image/*"
-                  ref={splashImageInputRef}
-                  onChange={handleSplashImageChange}
-                  className="hidden"
-                  id="splash-image-upload"
-                />
-                <Button variant="outline" onClick={() => splashImageInputRef.current?.click()} className="w-full max-w-xs" disabled={isLoadingData}>
-                  <UploadCloud className="mr-2 h-4 w-4" /> Choose Image
-                </Button>
-                {selectedSplashFile && <p className="text-xs text-muted-foreground">New: {selectedSplashFile.name}</p>}
-                <p className="text-xs text-muted-foreground">Recommended: Image with good visibility for text overlay.</p>
-              </div>
-            )}
-          </CardContent>
-          <CardFooter>
-             <Button variant="outline" onClick={handleResetSplashImage} disabled={isLoadingData}>
-                <RotateCcw className="mr-2 h-4 w-4" /> Reset Image to Default
-             </Button>
-          </CardFooter>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><Type className="h-5 w-5" /> AI Speech Text Typing Animation</CardTitle>
-            <CardDescription>
-              Configure the letter-by-letter typing animation effect for AI Blair's speech.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoadingData ? (
-              <p>Loading animation settings...</p>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="typingSpeedMs" className="font-medium flex items-center gap-1.5">
-                  <Clock className="h-4 w-4" /> Average Typing Delay (ms)
-                </Label>
-                <Input
-                  id="typingSpeedMs"
-                  type="number"
-                  value={typingSpeedMs}
-                  onChange={handleTypingSpeedChange}
-                  placeholder="e.g., 40"
-                  min="10"
-                  step="5"
-                  disabled={isLoadingData}
-                />
-                <p className="text-xs text-muted-foreground">
-                  The average delay between each character appearing. Lower is faster. Default: {DEFAULT_TYPING_SPEED_MS}ms.
-                </p>
-              </div>
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button variant="outline" onClick={handleResetTypingSpeed} disabled={isLoadingData}>
-              <RotateCcw className="mr-2 h-4 w-4" /> Reset Typing Speed to Default
-            </Button>
-          </CardFooter>
-        </Card>
-
-        <div className="flex justify-start py-4 mt-4 border-t pt-6">
-          <Button onClick={handleSaveAllSiteSettings} disabled={isSaving || isLoadingData} size="lg">
-            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving Settings...' : (isLoadingData ? 'Loading...' : 'Save Site Settings')}
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Splash Screen Welcome Message</CardTitle>
+          <CardDescription>
+            Customize the main welcome message displayed on the application's splash screen.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingData ? (
+            <p>Loading welcome message settings...</p>
+          ) : (
+            <>
+              <Label htmlFor="splashWelcomeMessage" className="font-medium">Welcome Message</Label>
+              <Textarea
+                id="splashWelcomeMessage"
+                value={splashWelcomeMessage}
+                onChange={handleSplashWelcomeMessageChange}
+                placeholder="Enter your custom welcome message..."
+                rows={3}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Default: "{DEFAULT_SPLASH_WELCOME_MESSAGE}"
+              </p>
+            </>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" onClick={handleResetSplashWelcomeMessage} disabled={isLoadingData}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset Message to Default
           </Button>
-        </div>
+        </CardFooter>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><ImageIcon /> Splash Screen Image</CardTitle>
+          <CardDescription>
+            Upload the image for the splash screen. Stored in Firebase Storage.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoadingData ? (
+              <div className="w-full max-w-md h-[200px] bg-muted rounded-lg border-2 border-dashed border-border flex items-center justify-center mx-auto">
+                <p className="text-muted-foreground">Loading image settings...</p>
+              </div>
+          ) : (
+            <div className="flex flex-col items-center space-y-4">
+              <Label htmlFor="splash-image-upload" className="font-medium self-start sr-only">Splash Image Preview & Upload</Label>
+              <Image
+                src={splashImagePreview}
+                alt="Splash Screen Preview"
+                width={400}
+                height={267}
+                className="rounded-lg border-2 border-primary shadow-md object-cover"
+                data-ai-hint={(splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC || splashImagePreview.includes("placehold.co")) ? "technology abstract welcome" : undefined}
+                unoptimized={splashImagePreview.startsWith('data:image/') || splashImagePreview.startsWith('blob:')}
+                onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)}
+              />
+              <Input
+                type="file"
+                accept="image/*"
+                ref={splashImageInputRef}
+                onChange={handleSplashImageChange}
+                className="hidden"
+                id="splash-image-upload"
+              />
+              <Button variant="outline" onClick={() => splashImageInputRef.current?.click()} className="w-full max-w-xs" disabled={isLoadingData}>
+                <UploadCloud className="mr-2 h-4 w-4" /> Choose Image
+              </Button>
+              {selectedSplashFile && <p className="text-xs text-muted-foreground">New: {selectedSplashFile.name}</p>}
+              <p className="text-xs text-muted-foreground">Recommended: Image with good visibility for text overlay.</p>
+            </div>
+          )}
+        </CardContent>
+        <CardFooter>
+            <Button variant="outline" onClick={handleResetSplashImage} disabled={isLoadingData}>
+              <RotateCcw className="mr-2 h-4 w-4" /> Reset Image to Default
+            </Button>
+        </CardFooter>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><Type className="h-5 w-5" /> AI Speech Text Typing Animation</CardTitle>
+          <CardDescription>
+            Configure the letter-by-letter typing animation effect for AI Blair's speech.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoadingData ? (
+            <p>Loading animation settings...</p>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="typingSpeedMs" className="font-medium flex items-center gap-1.5">
+                <Clock className="h-4 w-4" /> Average Typing Delay (ms)
+              </Label>
+              <Input
+                id="typingSpeedMs"
+                type="number"
+                value={typingSpeedMs}
+                onChange={handleTypingSpeedChange}
+                placeholder="e.g., 40"
+                min="10"
+                step="5"
+                disabled={isLoadingData}
+              />
+              <p className="text-xs text-muted-foreground">
+                The average delay between each character appearing. Lower is faster. Default: {DEFAULT_TYPING_SPEED_MS}ms.
+              </p>
+            </div>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" onClick={handleResetTypingSpeed} disabled={isLoadingData}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset Typing Speed to Default
+          </Button>
+        </CardFooter>
+      </Card>
+
+      <div className="flex justify-start py-4 mt-4 border-t pt-6">
+        <Button onClick={handleSaveAllSiteSettings} disabled={isSaving || isLoadingData} size="lg">
+          <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving Settings...' : (isLoadingData ? 'Loading...' : 'Save Site Settings')}
+        </Button>
       </div>
     </div>
   );
