@@ -13,57 +13,43 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isVerificationComplete, setIsVerificationComplete] = useState(false);
 
   useEffect(() => {
-    // sessionStorage is only available on the client
-    if (typeof window !== 'undefined') {
-      // If we are on the login page, we don't need to do auth checks here.
-      // The login page will handle setting the session storage.
-      // We just need to stop our loading state to let the login page render.
-      if (pathname === '/admin/login') {
-        setIsLoading(false);
-        // isAuthenticated can remain false for the login page itself
-        return;
-      }
-
-      const authStatus = sessionStorage.getItem('isAdminAuthenticated');
-      if (authStatus !== 'true') {
-        router.replace('/admin/login');
-      } else {
-        setIsAuthenticated(true);
-      }
-      setIsLoading(false);
+    // sessionStorage is only available on the client side.
+    // This effect checks for the auth token and updates the state.
+    const authStatus = sessionStorage.getItem('isAdminAuthenticated');
+    if (authStatus === 'true') {
+      setIsAuthenticated(true);
     }
-  }, [router, pathname]); // Add pathname to dependency array
+    // Mark verification as complete so we can decide whether to render or redirect.
+    setIsVerificationComplete(true);
+  }, []);
 
-  // If it's the login page, just render its content directly
-  // without the admin panel's header or further checks from this layout.
+  useEffect(() => {
+    // This effect handles redirection after verification is complete.
+    if (isVerificationComplete && !isAuthenticated && pathname !== '/admin/login') {
+      router.replace('/admin/login');
+    }
+  }, [isVerificationComplete, isAuthenticated, pathname, router]);
+
+  // On the login page, we don't need to show the layout or run further checks.
   if (pathname === '/admin/login') {
     return <>{children}</>;
   }
 
-  if (isLoading) {
+  // While verification is in progress, or if we need to redirect, show a loader.
+  // This prevents a flash of the admin panel before the redirect happens.
+  if (!isVerificationComplete || !isAuthenticated) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading Admin Panel...</p>
+        <p className="mt-4 text-muted-foreground">Verifying Access...</p>
       </div>
     );
   }
-
-  if (!isAuthenticated) {
-    // This block will show "Redirecting to login..." if isLoading is false,
-    // isAuthenticated is false, and we are NOT on the /admin/login page.
-    // This is the expected behavior while the redirect to /admin/login happens.
-    return (
-       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Redirecting to login...</p>
-      </div>
-    );
-  }
-
+  
+  // If authenticated and verified, render the full admin layout.
   const pageTitle = (() => {
     switch (pathname) {
       case '/admin':
@@ -81,8 +67,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     }
   })();
 
-
-  // If authenticated, not loading, and not on the login page:
   return (
     <div className="space-y-6">
       <Card className="shadow-lg">
