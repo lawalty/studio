@@ -223,71 +223,87 @@ export default function KnowledgeBasePage() {
     const setSources = getSourcesSetter(level);
 
     try {
+      let extractedText: string | null = null;
+      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'pending' } : s));
+
+      // NEW: Differentiated processing based on file type
+      if (sourceToProcess.type === 'text') {
+        toast({ title: "Processing Text File", description: `Reading content from ${sourceToProcess.name}...` });
+        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
+        
+        const response = await fetch(sourceToProcess.downloadURL);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch text file: ${response.statusText}`);
+        }
+        extractedText = await response.text();
+        toast({ title: "Text Read Successfully", description: `Now indexing ${sourceToProcess.name}...` });
+      } else { // For 'pdf' and 'document' types
         let topics = '';
         try {
-            const topicsDocRef = doc(db, "configurations/site_display_assets");
-            const topicsDocSnap = await getDoc(topicsDocRef);
-            if (topicsDocSnap.exists() && topicsDocSnap.data()?.conversationalTopics) {
-                topics = topicsDocSnap.data().conversationalTopics;
-            }
+          const topicsDocRef = doc(db, "configurations/site_display_assets");
+          const topicsDocSnap = await getDoc(topicsDocRef);
+          if (topicsDocSnap.exists() && topicsDocSnap.data()?.conversationalTopics) {
+            topics = topicsDocSnap.data().conversationalTopics;
+          }
         } catch (e) {
-            console.warn("Could not fetch conversational topics for extraction, proceeding without them.", e);
+          console.warn("Could not fetch conversational topics for extraction, proceeding without them.", e);
         }
 
         toast({ title: "Extraction Started", description: `AI is processing ${sourceToProcess.name}...` });
-        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
-
-        const result = await extractTextFromDocumentUrl({ 
-            documentUrl: sourceToProcess.downloadURL,
-            conversationalTopics: topics,
-        });
-        const extractedText = result.extractedText;
+        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending' } : s));
         
+        const result = await extractTextFromDocumentUrl({
+          documentUrl: sourceToProcess.downloadURL,
+          conversationalTopics: topics,
+        });
+        extractedText = result.extractedText;
+
         setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
-        toast({ title: "Text Extracted", description: `Now indexing ${sourceToProcess.name}...` });
+        toast({ title: "Text Extracted by AI", description: `Now indexing ${sourceToProcess.name}...` });
+      }
 
-        if (!extractedText) {
-            throw new Error("Text content is missing or empty after AI extraction, cannot index.");
-        }
+      if (!extractedText || extractedText.trim() === '') {
+        throw new Error("Text content is missing or empty after processing, cannot index.");
+      }
 
-        await indexDocument({
-            sourceId: sourceToProcess.id,
-            sourceName: sourceToProcess.name,
-            text: extractedText,
-            level: level,
-            downloadURL: sourceToProcess.downloadURL,
-        });
+      await indexDocument({
+        sourceId: sourceToProcess.id,
+        sourceName: sourceToProcess.name,
+        text: extractedText,
+        level: level,
+        downloadURL: sourceToProcess.downloadURL,
+      });
 
-        setSources(prev => {
-            const updated = prev.map(s => s.id === sourceToProcess.id ? { 
-                ...s,
-                extractionStatus: 'success', 
-                extractionError: '',
-                indexingStatus: 'indexed',
-                indexingError: ''
-            } : s);
-            saveSourcesToFirestore(updated, level);
-            return updated;
-        });
-        toast({ title: "Processing Successful", description: `${sourceToProcess.name} has been extracted and indexed.` });
+      setSources(prev => {
+        const updated = prev.map(s => s.id === sourceToProcess.id ? {
+          ...s,
+          extractionStatus: 'success',
+          extractionError: '',
+          indexingStatus: 'indexed',
+          indexingError: ''
+        } : s);
+        saveSourcesToFirestore(updated, level);
+        return updated;
+      });
+      toast({ title: "Processing Successful", description: `${sourceToProcess.name} has been indexed.` });
 
     } catch (error: any) {
-        console.error(`[KBPage - triggerProcessing - ${level}] Error for ${sourceToProcess.name}:`, error);
-        const errorMessage = error.message || 'An unknown error occurred during processing.';
-        setSources(prev => {
-            const updated = prev.map(s => s.id === sourceToProcess.id ? { 
-                ...s, 
-                extractionStatus: 'failed',
-                extractionError: errorMessage,
-                indexingStatus: 'failed', 
-                indexingError: errorMessage
-            } : s);
-            saveSourcesToFirestore(updated, level);
-            return updated;
-        });
-        toast({ title: "Processing Failed", description: `Could not process ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive" });
+      console.error(`[KBPage - triggerProcessing - ${level}] Error for ${sourceToProcess.name}:`, error);
+      const errorMessage = error.message || 'An unknown error occurred during processing.';
+      setSources(prev => {
+        const updated = prev.map(s => s.id === sourceToProcess.id ? {
+          ...s,
+          extractionStatus: 'failed',
+          extractionError: errorMessage,
+          indexingStatus: 'failed',
+          indexingError: errorMessage
+        } : s);
+        saveSourcesToFirestore(updated, level);
+        return updated;
+      });
+      toast({ title: "Processing Failed", description: `Could not process ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive" });
     } finally {
-        setIsProcessingId(null);
+      setIsProcessingId(null);
     }
   }, [getSourcesSetter, saveSourcesToFirestore, toast]);
 
