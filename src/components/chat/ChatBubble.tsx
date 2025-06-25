@@ -68,12 +68,16 @@ export default function ChatBubble({
   }, [message.timestamp]);
 
   useEffect(() => {
+    // If the animation is already complete for this bubble, do not restart it on re-render.
+    if (isAnimationComplete) {
+      return;
+    }
+
     const shouldAnimate = message.sender === 'ai' && isNewlyAddedAiMessage;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    setIsAnimationComplete(false);
 
     if (shouldAnimate) {
       setDisplayedContent(<></>);
@@ -155,7 +159,8 @@ export default function ChatBubble({
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message, isNewlyAddedAiMessage, typingSpeedMs, animationSyncFactor, communicationMode]);
+  }, [message.id, isNewlyAddedAiMessage]);
+
 
   const renderPdfLink = () => {
     if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
