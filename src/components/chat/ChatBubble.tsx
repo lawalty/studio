@@ -7,7 +7,7 @@ import { User, Bot, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import React, { useEffect, useRef, useState } from 'react';
 
-// New helper function to parse basic markdown (**bold**) and newlines
+// Helper function to parse basic markdown (**bold**) and newlines
 const renderTextWithMarkdown = (text: string): JSX.Element => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return (
@@ -46,11 +46,9 @@ export default function ChatBubble({
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
   const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png";
-  
-  // State to hold the plain text being animated
-  const [animatedText, setAnimatedText] = useState('');
-  // State to control whether we show the animation or the final formatted text
-  const [isAnimating, setIsAnimating] = useState(false);
+
+  const [displayedContent, setDisplayedContent] = useState<React.ReactNode>(null);
+  const [isAnimationComplete, setIsAnimationComplete] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -59,29 +57,68 @@ export default function ChatBubble({
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
+    setIsAnimationComplete(false);
 
     if (shouldAnimate) {
-      setIsAnimating(true);
-      // Clean the text for animation (remove markdown characters)
-      const textToAnimate = message.text.replace(/\*\*/g, '');
-      let i = 0;
-      setAnimatedText('');
+      setDisplayedContent(<></>);
+
+      const parts = message.text.split(/(\*\*.*?\*\*)/g).filter(p => p);
+      const characterQueue: { char: string; isBold: boolean; isNewline: boolean }[] = [];
+
+      parts.forEach(part => {
+        const isBoldPart = part.startsWith('**') && part.endsWith('**');
+        const textOfPart = isBoldPart ? part.slice(2, -2) : part;
+
+        for (const char of textOfPart) {
+          if (char === '\n') {
+            characterQueue.push({ char: '', isBold: false, isNewline: true });
+          } else {
+            characterQueue.push({ char: char, isBold: isBoldPart, isNewline: false });
+          }
+        }
+      });
+
+      let index = 0;
+      let fullContent: React.ReactNode[] = [];
 
       const type = () => {
-        if (i < textToAnimate.length) {
-          setAnimatedText(prev => prev + textToAnimate.charAt(i));
-          i++;
+        if (index < characterQueue.length) {
+          const { char, isBold, isNewline } = characterQueue[index];
+
+          if (isNewline) {
+            fullContent.push(<br key={`br-${index}`} />);
+          } else if (isBold) {
+            const lastElement = fullContent[fullContent.length - 1] as React.ReactElement;
+            if (lastElement && lastElement.type === 'strong') {
+              fullContent[fullContent.length - 1] = React.cloneElement(lastElement, {
+                children: lastElement.props.children + char,
+              });
+            } else {
+              fullContent.push(<strong key={`str-${index}`}>{char}</strong>);
+            }
+          } else {
+            const lastElement = fullContent[fullContent.length - 1];
+            if (lastElement && typeof lastElement === 'string') {
+              fullContent[fullContent.length - 1] = lastElement + char;
+            } else {
+              fullContent.push(char);
+            }
+          }
+          
+          setDisplayedContent(<>{fullContent}</>);
+          index++;
+
           const randomDelay = typingSpeedMs + (Math.random() - 0.5) * (typingSpeedMs * 0.5);
           timeoutRef.current = setTimeout(type, Math.max(10, randomDelay));
         } else {
-          // Animation finished, switch to showing the final formatted content
-          setIsAnimating(false);
+          setIsAnimationComplete(true);
         }
       };
+
       timeoutRef.current = setTimeout(type, typingSpeedMs);
     } else {
-      setIsAnimating(false);
-      setAnimatedText(''); // Not animating, so this is not needed
+      setDisplayedContent(renderTextWithMarkdown(message.text));
+      setIsAnimationComplete(true);
     }
 
     return () => {
@@ -91,16 +128,6 @@ export default function ChatBubble({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message, isNewlyAddedAiMessage, typingSpeedMs]);
-
-  useEffect(() => {
-    // If animation is forced to finish, stop animating and show final content
-    if (forceFinishAnimation) {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      setIsAnimating(false);
-    }
-  }, [forceFinishAnimation]);
 
   const renderPdfLink = () => {
     if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
@@ -119,7 +146,7 @@ export default function ChatBubble({
     }
     return null;
   };
-  
+
   const finalContent = renderTextWithMarkdown(message.text);
 
   return (
@@ -143,7 +170,7 @@ export default function ChatBubble({
         )}
       >
         <div className="text-sm whitespace-pre-wrap">
-          {isAnimating && !forceFinishAnimation ? animatedText : finalContent}
+          {isAnimationComplete || forceFinishAnimation ? finalContent : displayedContent}
         </div>
         {renderPdfLink()}
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
