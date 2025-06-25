@@ -15,79 +15,36 @@ import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
- * A robust text chunker that recursively splits text to respect
- * paragraph and line boundaries as much as possible.
+ * A robust text chunker that aggressively cleans text and splits it into
+ * fixed-size chunks to ensure reliability for the embedding service.
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-  // 1. Initial cleaning of the text
+  // 1. VERY aggressive cleaning. This removes anything that is not a standard letter, number,
+  // common punctuation, or whitespace. This is to prevent any unsupported characters
+  // from causing the embedding model to fail.
   const cleanedText = text
-    .replace(/^\uFEFF/, '') // Remove Byte Order Mark (BOM)
-    .replace(/\r/g, '')     // Remove all carriage returns
-    .replace(/[\p{C}]+/gu, ' ') // Replace control characters with a space
-    .replace(/ {2,}/g, ' ') // Collapse multiple spaces
+    .replace(/’/g, "'") // Normalize apostrophes
+    .replace(/“|”/g, '"') // Normalize quotes
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ') // Remove control characters
+    .replace(/[^\w\s.,!?'"$%-]/g, ' ') // Remove any remaining non-standard characters
+    .replace(/\s+/g, ' ') // Collapse all whitespace to a single space
     .trim();
 
-  if (cleanedText.length <= chunkSize) {
-    return cleanedText.length > 0 ? [cleanedText] : [];
+  if (cleanedText.length === 0) {
+    return [];
   }
 
-  // 2. Define splitters in order of preference (from largest to smallest structure)
-  const splitters = ['\n\n', '\n', '. ', '? ', '! ', ' '];
-  
-  function splitRecursively(textToSplit: string, currentSplitters: string[]): string[] {
-    if (textToSplit.length <= chunkSize) {
-      return [textToSplit];
-    }
-    if (currentSplitters.length === 0) {
-      // Base case: If we've run out of splitters, hard-split the remaining text
-      const hardSplits: string[] = [];
-      for (let i = 0; i < textToSplit.length; i += chunkSize) {
-          hardSplits.push(textToSplit.substring(i, i + chunkSize));
-      }
-      return hardSplits;
-    }
-
-    const currentSplitter = currentSplitters[0];
-    const remainingSplitters = currentSplitters.slice(1);
-    const parts = textToSplit.split(currentSplitter);
-    
-    const finalChunks: string[] = [];
-    let tempChunk = "";
-
-    for (const part of parts) {
-        if (part.trim().length === 0) continue;
-
-        const prospectiveChunk = tempChunk.length > 0 ? tempChunk + currentSplitter + part : part;
-
-        if (prospectiveChunk.length > chunkSize) {
-            // If the current tempChunk is not empty, it must be valid. Push it.
-            if (tempChunk.length > 0) {
-                finalChunks.push(...splitRecursively(tempChunk, remainingSplitters));
-            }
-            // The new part itself is too long, so we must split it further.
-            finalChunks.push(...splitRecursively(part, remainingSplitters));
-            tempChunk = ""; // Reset tempChunk
-        } else {
-            // The prospective chunk is valid, so we can continue building on it.
-            tempChunk = prospectiveChunk;
-        }
-    }
-    
-    // Add the last remaining tempChunk if it exists
-    if (tempChunk.length > 0) {
-        finalChunks.push(tempChunk);
-    }
-    
-    return finalChunks;
+  const chunks: string[] = [];
+  // 2. Simple, hard splitting. Instead of complex semantic logic, we split by the chunk size
+  // to ensure no chunk is ever too long for the embedding model.
+  for (let i = 0; i < cleanedText.length; i += chunkSize) {
+    chunks.push(cleanedText.substring(i, i + chunkSize));
   }
-  
-  const chunks = splitRecursively(cleanedText, splitters);
 
-  // Final filter for any empty chunks that might have been created
-  return chunks.map(c => c.trim()).filter(chunk => chunk.length > 0);
+  return chunks.filter(chunk => chunk.trim().length > 0);
 }
 
 
