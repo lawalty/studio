@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, LayoutDashboard } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -18,10 +19,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     setIsClient(true);
   }, []);
 
-  // If on the login page, don't render the shared admin layout
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
+  const isLoginPage = pathname === '/admin/login';
 
   const pageTitle = (() => {
     switch (pathname) {
@@ -59,7 +57,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-lg">
+      <Card className={cn("shadow-lg", isLoginPage && "hidden")}>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-2xl font-headline">{pageTitle}</CardTitle>
           <div className="flex items-center gap-2">
