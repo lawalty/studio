@@ -127,7 +127,7 @@ export default function ApiKeysPage() {
           Manage API keys for Gemini, TTS, and Twilio SMS services.
           <span className="block mt-2 font-semibold text-destructive/80 flex items-start">
             <AlertTriangle className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
-            <span>Security Warning: Storing API keys in a client-accessible database is not recommended for production. For optimal security, manage sensitive keys server-side using environment variables or a dedicated secrets manager.</span>
+            <span>Storing API keys in Firestore is convenient for development but not recommended for production.</span>
           </span>
         </CardDescription>
       </CardHeader>
@@ -143,12 +143,12 @@ export default function ApiKeysPage() {
             <div className="space-y-2">
               <Label htmlFor="geminiGenerative" className="font-medium">Gemini Generative API Key</Label>
               <Input id="geminiGenerative" name="geminiGenerative" type="password" value={apiKeys.geminiGenerative} onChange={handleChange} placeholder="Enter key for chat, summarization, etc." />
-              <p className="text-xs text-muted-foreground">Used for all conversational and generative AI tasks.</p>
+              <p className="text-xs text-muted-foreground">Used for all conversational AI tasks. Ensure the <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" rel="noopener noreferrer" className="underline text-primary">Generative Language API</a> is enabled in your Google Cloud project.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="geminiEmbedding" className="font-medium">Gemini Embedding API Key</Label>
               <Input id="geminiEmbedding" name="geminiEmbedding" type="password" value={apiKeys.geminiEmbedding} onChange={handleChange} placeholder="Enter key for knowledge base indexing" />
-              <p className="text-xs text-muted-foreground">Used for indexing documents in the knowledge base. If left blank, the Generative key will be used as a fallback.</p>
+              <p className="text-xs text-muted-foreground">Used for indexing documents. If blank, the Generative key is used. Ensure the <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" rel="noopener noreferrer" className="underline text-primary">Generative Language API</a> is enabled in your Google Cloud project.</p>
             </div>
 
             <Separator className="my-6" />
