@@ -863,20 +863,24 @@ export default function HomePage() {
       try {
         const apiKeysDocRef = doc(db, FIRESTORE_API_KEYS_PATH);
         const apiKeysDocSnap = await getDoc(apiKeysDocRef);
-        let localApiKey: string | null = null, localVoiceId: string | null = null, localUseTtsApi: boolean = true;
         if (apiKeysDocSnap.exists()) {
           const keys = apiKeysDocSnap.data();
-          localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
-          localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
-          localUseTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
-          setElevenLabsApiKey(localApiKey); setElevenLabsVoiceId(localVoiceId); setUseTtsApi(localUseTtsApi);
+          const localApiKey = keys.tts && typeof keys.tts === 'string' && keys.tts.trim() !== '' ? keys.tts.trim() : null;
+          const localVoiceId = keys.voiceId && typeof keys.voiceId === 'string' && keys.voiceId.trim() !== '' ? keys.voiceId.trim() : null;
+          const localUseTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
+          setElevenLabsApiKey(localApiKey);
+          setElevenLabsVoiceId(localVoiceId);
+          setUseTtsApi(localUseTtsApi);
           if (localUseTtsApi && (!localApiKey || !localVoiceId)) {
             toast({ title: "TTS Configuration Issue", description: "Custom TTS API is ON, but API Key/Voice ID is missing. Using browser default.", variant: "default", duration: 8000 });
           }
         } else {
-          setElevenLabsApiKey(null); setElevenLabsVoiceId(null); setUseTtsApi(true);
+          setElevenLabsApiKey(null);
+          setElevenLabsVoiceId(null);
+          setUseTtsApi(true);
           toast({ title: "TTS Configuration Missing", description: `API keys not found. Custom TTS may not work. Configure in Admin.`, variant: "default", duration: 8000 });
         }
+
         const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
         const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
         if (siteAssetsDocSnap.exists()) {
@@ -893,20 +897,35 @@ export default function HomePage() {
           setTextAnimationSpeedMs(assets.textAnimationSpeedMs === undefined ? DEFAULT_TEXT_ANIMATION_SPEED_MS : Number(assets.textAnimationSpeedMs));
           setTextPopulationStaggerMs(assets.textPopulationStaggerMs === undefined ? DEFAULT_TEXT_POPULATION_STAGGER_MS : Number(assets.textPopulationStaggerMs));
         } else {
-            setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
-            setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
-            setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-            setPersonaTraits(DEFAULT_PERSONA_TRAITS);
-            setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE);
-            setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
-            setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
-            setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
-            setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
-            setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
-            setTextPopulationStaggerMs(DEFAULT_TEXT_POPULATION_STAGGER_MS);
+          setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
+          setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
+          setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+          setPersonaTraits(DEFAULT_PERSONA_TRAITS);
+          setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE);
+          setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
+          setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
+          setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
+          setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
+          setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
+          setTextPopulationStaggerMs(DEFAULT_TEXT_POPULATION_STAGGER_MS);
         }
-      } catch (e: any) { toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive"});}
-      setIsLoadingConfig(false);
+      } catch (e: any) {
+        toast({ title: "Config Error", description: `Could not load app settings: ${e.message || 'Unknown'}. Using defaults.`, variant: "destructive" });
+        // Set defaults on error to allow the app to continue
+        setAvatarSrc(DEFAULT_AVATAR_PLACEHOLDER_URL);
+        setAnimatedAvatarSrc(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL);
+        setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+        setPersonaTraits(DEFAULT_PERSONA_TRAITS);
+        setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE);
+        setSplashScreenWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE);
+        setCustomGreeting(DEFAULT_CUSTOM_GREETING_MAIN_PAGE);
+        setResponsePauseTimeMs(DEFAULT_USER_SPEECH_PAUSE_TIME_MS);
+        setTextAnimationEnabled(DEFAULT_TEXT_ANIMATION_ENABLED);
+        setTextAnimationSpeedMs(DEFAULT_TEXT_ANIMATION_SPEED_MS);
+        setTextPopulationStaggerMs(DEFAULT_TEXT_POPULATION_STAGGER_MS);
+      } finally {
+        setIsLoadingConfig(false);
+      }
     };
     fetchAllData();
   }, [toast]);
