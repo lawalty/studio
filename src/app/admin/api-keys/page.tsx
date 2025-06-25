@@ -95,9 +95,7 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      // Filter out STT key before saving if it exists from old state
-      const { ...keysToSave } = apiKeys;
-      await setDoc(docRef, keysToSave);
+      await setDoc(docRef, apiKeys);
       toast({ title: "API Keys Saved", description: "Your API keys and settings have been saved to the database." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
@@ -111,81 +109,83 @@ export default function ApiKeysPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-headline">API Key Management</CardTitle>
-        <CardDescription>
-          Manage API keys for Gemini, TTS, and Twilio SMS services.
-          <span className="block mt-2 font-semibold text-destructive/80 flex items-start">
-            <AlertTriangle className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
-            <span>Security Warning: Storing API keys in a client-accessible database is not recommended for production. For optimal security, manage sensitive keys server-side using environment variables or a dedicated secrets manager.</span>
-          </span>
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {isLoading ? (
-          <p>Loading API keys...</p>
-        ) : (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="geminiKey" className="font-medium">Gemini API Key</Label>
-              <Input id="geminiKey" name="gemini" type="password" value={apiKeys.gemini} onChange={handleChange} placeholder="Enter Gemini API Key" />
-            </div>
-            
-            <Separator className="my-6" />
+    <div className="container mx-auto px-4 py-8">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">API Key Management</CardTitle>
+          <CardDescription>
+            Manage API keys for Gemini, TTS, and Twilio SMS services.
+            <span className="block mt-2 font-semibold text-destructive/80 flex items-start">
+              <AlertTriangle className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
+              <span>Security Warning: Storing API keys in a client-accessible database is not recommended for production. For optimal security, manage sensitive keys server-side using environment variables or a dedicated secrets manager.</span>
+            </span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {isLoading ? (
+            <p>Loading API keys...</p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="geminiKey" className="font-medium">Gemini API Key</Label>
+                <Input id="geminiKey" name="gemini" type="password" value={apiKeys.gemini} onChange={handleChange} placeholder="Enter Gemini API Key" />
+              </div>
+              
+              <Separator className="my-6" />
 
-            <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Twilio SMS Configuration</h3>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="twilioAccountSid" className="font-medium">Twilio Account SID</Label>
-                <Input id="twilioAccountSid" name="twilioAccountSid" value={apiKeys.twilioAccountSid} onChange={handleChange} placeholder="Enter Twilio Account SID" />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="twilioAuthToken" className="font-medium">Twilio Auth Token</Label>
-                <Input id="twilioAuthToken" name="twilioAuthToken" type="password" value={apiKeys.twilioAuthToken} onChange={handleChange} placeholder="Enter Twilio Auth Token" />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="twilioPhoneNumber" className="font-medium">Twilio Phone Number</Label>
-                <Input id="twilioPhoneNumber" name="twilioPhoneNumber" value={apiKeys.twilioPhoneNumber} onChange={handleChange} placeholder="Enter your Twilio phone number (e.g., +15551234567)" />
-            </div>
+              <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Twilio SMS Configuration</h3>
+              </div>
+              <div className="space-y-2">
+                  <Label htmlFor="twilioAccountSid" className="font-medium">Twilio Account SID</Label>
+                  <Input id="twilioAccountSid" name="twilioAccountSid" value={apiKeys.twilioAccountSid} onChange={handleChange} placeholder="Enter Twilio Account SID" />
+              </div>
+              <div className="space-y-2">
+                  <Label htmlFor="twilioAuthToken" className="font-medium">Twilio Auth Token</Label>
+                  <Input id="twilioAuthToken" name="twilioAuthToken" type="password" value={apiKeys.twilioAuthToken} onChange={handleChange} placeholder="Enter Twilio Auth Token" />
+              </div>
+              <div className="space-y-2">
+                  <Label htmlFor="twilioPhoneNumber" className="font-medium">Twilio Phone Number</Label>
+                  <Input id="twilioPhoneNumber" name="twilioPhoneNumber" value={apiKeys.twilioPhoneNumber} onChange={handleChange} placeholder="Enter your Twilio phone number (e.g., +15551234567)" />
+              </div>
 
-            <Separator className="my-6" />
-            
-            <div className="space-y-2">
-              <Label htmlFor="ttsKey" className="font-medium">Custom TTS API Key (e.g., Elevenlabs)</Label>
-              <Input id="ttsKey" name="tts" type="password" value={apiKeys.tts} onChange={handleChange} placeholder="Enter TTS API Key" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="voiceId" className="font-medium">Custom TTS Voice ID</Label>
-              <Input id="voiceId" name="voiceId" value={apiKeys.voiceId} onChange={handleChange} placeholder="Enter Voice ID for TTS" />
-            </div>
-             <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
-                <Speech className="h-5 w-5 text-primary" />
-                <div className="flex-1 space-y-1">
-                    <Label htmlFor="useTtsApi" className="font-medium">
-                        Use Custom TTS API
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                        If ON, attempts to use the API Key and Voice ID above. If OFF, uses browser default voice.
-                    </p>
-                </div>
-                <Switch
-                    id="useTtsApi"
-                    checked={apiKeys.useTtsApi}
-                    onCheckedChange={handleSwitchChange}
-                    aria-label="Toggle Custom TTS API usage"
-                />
-            </div>
-          </>
-        )}
-      </CardContent>
-      <CardFooter>
-        <Button onClick={handleSave} disabled={isLoading}>
-          <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save API Keys & Settings'}
-        </Button>
-      </CardFooter>
-    </Card>
+              <Separator className="my-6" />
+              
+              <div className="space-y-2">
+                <Label htmlFor="ttsKey" className="font-medium">Custom TTS API Key (e.g., Elevenlabs)</Label>
+                <Input id="ttsKey" name="tts" type="password" value={apiKeys.tts} onChange={handleChange} placeholder="Enter TTS API Key" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="voiceId" className="font-medium">Custom TTS Voice ID</Label>
+                <Input id="voiceId" name="voiceId" value={apiKeys.voiceId} onChange={handleChange} placeholder="Enter Voice ID for TTS" />
+              </div>
+               <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
+                  <Speech className="h-5 w-5 text-primary" />
+                  <div className="flex-1 space-y-1">
+                      <Label htmlFor="useTtsApi" className="font-medium">
+                          Use Custom TTS API
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                          If ON, attempts to use the API Key and Voice ID above. If OFF, uses browser default voice.
+                      </p>
+                  </div>
+                  <Switch
+                      id="useTtsApi"
+                      checked={apiKeys.useTtsApi}
+                      onCheckedChange={handleSwitchChange}
+                      aria-label="Toggle Custom TTS API usage"
+                  />
+              </div>
+            </>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleSave} disabled={isLoading}>
+            <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save API Keys & Settings'}
+          </Button>
+        </CardFooter>
+      </Card>
+    </div>
   );
 }
