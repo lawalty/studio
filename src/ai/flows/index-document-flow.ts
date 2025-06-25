@@ -15,37 +15,39 @@ import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
- * A robust, simple text chunker.
- * Previous attempts to use complex regex or semantic chunking were brittle and caused
- * errors. This function uses the most reliable method: a simple, hard split by
- * character count after minimal cleaning. This trusts the embedding model to handle
- * varied text, which is its strength.
+ * A robust text chunker that cleans text while preserving structure.
+ * This function cleans text of problematic characters, normalizes whitespace and newlines,
+ * and then performs a simple split by character count. This approach is more reliable
+ * than complex regex and preserves document structure for better embedding.
  *
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-  // 1. Minimal, essential cleaning.
-  // Removes invisible control characters which are known to cause issues, but
-  // leaves all printable characters (including international ones) intact.
-  const cleanedText = text
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ') // Replaces control characters with a space.
-    .replace(/\s+/g, ' ') // Collapses all whitespace sequences into a single space.
-    .trim();
+    // 1. More nuanced cleaning.
+    // - Remove null characters and other non-printable control characters.
+    // - Normalize various whitespace characters to a standard space, but preserve newlines.
+    // - Normalize line endings to a single newline character.
+    // - Collapse multiple newlines to a maximum of two to represent paragraph breaks.
+    const cleanedText = text
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove most control chars, but not \t, \n, \r
+        .replace(/ +/g, ' ') // Collapse multiple spaces to a single space
+        .replace(/\r\n?/g, '\n') // Normalize line endings to \n
+        .replace(/\n{3,}/g, '\n\n') // Collapse 3+ newlines to 2
+        .trim();
 
-  if (cleanedText.length === 0) {
-    return [];
-  }
+    if (cleanedText.length === 0) {
+        return [];
+    }
 
-  // 2. Simple, hard splitting. This is the most reliable way to ensure no chunk
-  // is ever too long for the embedding model.
-  const chunks: string[] = [];
-  for (let i = 0; i < cleanedText.length; i += chunkSize) {
-    chunks.push(cleanedText.substring(i, i + chunkSize));
-  }
+    // 2. Simple, hard splitting.
+    const chunks: string[] = [];
+    for (let i = 0; i < cleanedText.length; i += chunkSize) {
+        chunks.push(cleanedText.substring(i, i + chunkSize));
+    }
 
-  return chunks.filter(chunk => chunk.trim().length > 0);
+    return chunks.filter(chunk => chunk.trim().length > 0);
 }
 
 
