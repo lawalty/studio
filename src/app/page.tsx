@@ -1,18 +1,22 @@
+
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from "@/lib/utils";
-import { Mic, MessageSquareText, FileText, DatabaseZap } from 'lucide-react';
+import { Mic, MessageSquareText, FileText, DatabaseZap, Volume2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
+import { useToast } from "@/hooks/use-toast";
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
+const GREETING_MESSAGE = "Let's have a conversation.";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 export default function StartPage() {
@@ -20,11 +24,16 @@ export default function StartPage() {
   const [splashWelcomeMessage, setSplashScreenWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
   const [isSplashImageLoaded, setIsSplashImageLoaded] = useState(false);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+  
+  const [showGreeting, setShowGreeting] = useState(false);
+  const [isGreetingPlaying, setIsGreetingPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Check for Ctrl + Shift + A to navigate to the admin login page
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a') {
         event.preventDefault();
         router.push('/admin/login');
@@ -33,7 +42,6 @@ export default function StartPage() {
 
     document.addEventListener('keydown', handleKeyDown);
 
-    // Cleanup the event listener on component unmount
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
@@ -52,7 +60,6 @@ export default function StartPage() {
         }
       } catch (e) {
         console.error("Could not load minimal config for start page:", e);
-        // Defaults are already set, so we can just proceed
       } finally {
         setIsLoadingConfig(false);
       }
@@ -68,6 +75,41 @@ export default function StartPage() {
     }
   }, [splashImageSrc]);
 
+  useEffect(() => {
+    if (isLoadingConfig) {
+      return; 
+    }
+
+    const timer = setTimeout(() => {
+      setShowGreeting(true);
+      
+      const playGreeting = async () => {
+        try {
+          const { audioDataUri } = await textToSpeech(GREETING_MESSAGE);
+          if (audioRef.current) {
+            audioRef.current.src = audioDataUri;
+            audioRef.current.play().catch(e => {
+              console.warn("Audio playback was prevented by the browser. A user interaction might be required.", e);
+            });
+          }
+        } catch (error) {
+          console.error("Failed to generate TTS for greeting:", error);
+          toast({
+            title: "Audio Greeting Failed",
+            description: "Could not generate the audio greeting.",
+            variant: "destructive",
+          });
+        }
+      };
+
+      playGreeting();
+
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [isLoadingConfig, toast]);
+
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
       <Card className="w-full max-w-md shadow-2xl">
@@ -75,7 +117,17 @@ export default function StartPage() {
           <CardTitle className="text-3xl font-headline text-primary">
             {isLoadingConfig ? "Connecting..." : splashWelcomeMessage}
           </CardTitle>
-          <CardDescription className="text-base">Let&apos;s have a conversation.</CardDescription>
+          <CardDescription 
+            className={cn(
+              "text-base transition-opacity duration-500 min-h-[1.5rem]",
+              showGreeting ? "opacity-100" : "opacity-0"
+            )}
+          >
+            <span className="inline-flex items-center justify-center">
+              {isGreetingPlaying && <Volume2 className="inline-block mr-2 h-4 w-4 animate-pulse" />}
+              {GREETING_MESSAGE}
+            </span>
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-6">
           <Image
@@ -123,6 +175,7 @@ export default function StartPage() {
           </div>
         </CardContent>
       </Card>
+      <audio ref={audioRef} onPlay={() => setIsGreetingPlaying(true)} onEnded={() => setIsGreetingPlaying(false)} />
     </div>
   );
 }
