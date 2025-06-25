@@ -1,3 +1,4 @@
+
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,13 +16,22 @@ async function getGeminiApiKey(): Promise<string | undefined> {
     const docRef = doc(db, FIRESTORE_KEYS_PATH);
     const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists() && docSnap.data()?.gemini) {
-      return docSnap.data().gemini;
+    // Check for a valid, non-empty key from Firestore first.
+    const firestoreKey = docSnap.data()?.gemini;
+    if (docSnap.exists() && firestoreKey && firestoreKey.trim() !== '') {
+      return firestoreKey;
     }
     
-    // Fallback to environment variable if not in Firestore.
+    // If Firestore key is missing or empty, fall back to environment variable.
     // In many environments (like App Hosting), this will be the primary source.
-    return process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    const envKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    if (envKey && envKey.trim() !== '') {
+      return envKey;
+    }
+
+    // If no valid key is found in either source, return undefined.
+    // The Genkit plugin will then fail with a clear "API key not valid" error from Google.
+    return undefined;
 
   } catch (error) {
     console.error(
@@ -29,6 +39,7 @@ async function getGeminiApiKey(): Promise<string | undefined> {
       "Falling back to GOOGLE_API_KEY environment variable. Error:", 
       error
     );
+    // On error, still try the environment variable as a last resort.
     return process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
   }
 }
