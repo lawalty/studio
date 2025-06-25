@@ -26,5 +26,9 @@ const ChatInterface = dynamic(() => import('@/components/chat/ChatInterface'), {
 });
 
 export default function TextOnlyPage() {
-  return <ChatInterface communicationMode="text-only" />;
+  return (
+    <main className="flex-grow container mx-auto px-4 py-8 flex flex-col">
+      <ChatInterface communicationMode="text-only" />
+    </main>
+  );
 }

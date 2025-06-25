@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -117,71 +118,73 @@ export default function StartPage() {
 
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-headline text-primary">
-            {isLoadingConfig ? "Connecting..." : splashWelcomeMessage}
-          </CardTitle>
-          <CardDescription 
-            className={cn(
-              "text-base transition-opacity duration-500 min-h-[1.5rem] font-body",
-              showGreeting ? "opacity-100" : "opacity-0"
+    <main className="flex-grow">
+      <div className="flex flex-col items-center justify-center h-full p-4 bg-background">
+        <Card className="w-full max-w-md shadow-2xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-headline text-primary">
+              {isLoadingConfig ? "Connecting..." : splashWelcomeMessage}
+            </CardTitle>
+            <CardDescription 
+              className={cn(
+                "text-base transition-opacity duration-500 min-h-[1.5rem] font-body",
+                showGreeting ? "opacity-100" : "opacity-0"
+              )}
+            >
+              {isClient && animatedGreeting}
+              {isClient && showGreeting && <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center space-y-6">
+            <Image
+              src={splashImageSrc}
+              alt="AI Chat Splash"
+              width={400}
+              height={267}
+              className={cn(
+                "rounded-lg shadow-md object-cover transition-opacity duration-700 ease-in-out",
+                (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC && !isSplashImageLoaded) ? "opacity-0" : "opacity-100"
+              )}
+              priority
+              unoptimized={splashImageSrc.startsWith('data:image/')}
+              onLoad={() => {
+                if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(true);
+              }}
+              onError={() => {
+                setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+                setIsSplashImageLoaded(true);
+              }}
+              data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
+            />
+            <p className="text-base font-semibold text-foreground">Choose your preferred way to interact:</p>
+            {isLoadingConfig && (
+              <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
+                <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" /> Connecting to settings...
+              </div>
             )}
-          >
-            {isClient && animatedGreeting}
-            {isClient && showGreeting && <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center space-y-6">
-          <Image
-            src={splashImageSrc}
-            alt="AI Chat Splash"
-            width={400}
-            height={267}
-            className={cn(
-              "rounded-lg shadow-md object-cover transition-opacity duration-700 ease-in-out",
-              (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC && !isSplashImageLoaded) ? "opacity-0" : "opacity-100"
-            )}
-            priority
-            unoptimized={splashImageSrc.startsWith('data:image/')}
-            onLoad={() => {
-              if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsSplashImageLoaded(true);
-            }}
-            onError={() => {
-              setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-              setIsSplashImageLoaded(true);
-            }}
-            data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
-          />
-          <p className="text-base font-semibold text-foreground">Choose your preferred way to interact:</p>
-          {isLoadingConfig && (
-            <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
-              <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" /> Connecting to settings...
+            <div className="w-full space-y-3">
+               <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
+                <Link href="/chat/audio-only">
+                  <Mic className="mr-2"/> Audio Only
+                </Link>
+              </Button>
+              <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
+                <Link href="/chat/audio-text">
+                  <MessageSquareText className="mr-2"/> Audio & Text
+                </Link>
+              </Button>
+               <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
+                <Link href="/chat/text-only">
+                  <FileText className="mr-2"/> Text Only
+                </Link>
+              </Button>
             </div>
-          )}
-          <div className="w-full space-y-3">
-             <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
-              <Link href="/chat/audio-only">
-                <Mic className="mr-2"/> Audio Only
-              </Link>
-            </Button>
-            <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
-              <Link href="/chat/audio-text">
-                <MessageSquareText className="mr-2"/> Audio & Text
-              </Link>
-            </Button>
-             <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
-              <Link href="/chat/text-only">
-                <FileText className="mr-2"/> Text Only
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        Press Ctrl + Shift + A to access the admin panel.
-      </p>
-    </div>
+          </CardContent>
+        </Card>
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Press Ctrl + Shift + A to access the admin panel.
+        </p>
+      </div>
+    </main>
   );
 }
