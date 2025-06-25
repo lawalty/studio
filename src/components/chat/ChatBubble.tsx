@@ -54,6 +54,18 @@ export default function ChatBubble({
   const [displayedContent, setDisplayedContent] = useState<React.ReactNode>(null);
   const [isAnimationComplete, setIsAnimationComplete] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [formattedTime, setFormattedTime] = useState('');
+
+  useEffect(() => {
+    // This ensures the timestamp is only formatted on the client, after hydration,
+    // preventing a mismatch between server and client rendered output.
+    setFormattedTime(
+      new Date(message.timestamp).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    );
+  }, [message.timestamp]);
 
   useEffect(() => {
     const shouldAnimate = message.sender === 'ai' && isNewlyAddedAiMessage;
@@ -190,7 +202,7 @@ export default function ChatBubble({
         </div>
         {renderPdfLink()}
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
-          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {formattedTime}
         </p>
       </div>
       {isUser && (
