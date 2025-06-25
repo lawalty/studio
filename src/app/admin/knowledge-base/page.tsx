@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
@@ -569,7 +569,6 @@ export default function KnowledgeBasePage() {
   }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId;
     const isProcessingThisFile = isProcessingId === source.id;
 
     if (!['pdf', 'text'].includes(source.type)) {
@@ -588,24 +587,10 @@ export default function KnowledgeBasePage() {
         case 'indexed':
             return <span className="text-xs text-green-600 flex items-center gap-1"><SearchCheck className="h-3 w-3" /> Indexed</span>;
         case 'failed':
-            return (
-                <div className="flex items-center gap-1">
-                    <span className="text-xs text-red-600" title={source.indexingError || 'Indexing failed'}>Indexing Failed</span>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress}>
-                        <RefreshCw className="h-3 w-3 text-red-600" />
-                    </Button>
-                </div>
-            );
+            return <span className="text-xs text-red-600" title={source.indexingError || 'Indexing failed'}>Failed</span>;
         case 'pending':
         default:
-            return (
-                <div className="flex items-center gap-1">
-                    <span className="text-xs text-yellow-600">Needs Processing</span>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress}>
-                        <Brain className="h-3 w-3 text-yellow-600" />
-                    </Button>
-                </div>
-            );
+            return <span className="text-xs text-yellow-600">Pending</span>;
     }
   };
 
@@ -652,7 +637,7 @@ export default function KnowledgeBasePage() {
                 <TableHead>Description</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded</TableHead>
-                <TableHead>Link/Refresh</TableHead>
+                <TableHead>Download File</TableHead>
                 <TableHead>Indexing Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -672,14 +657,16 @@ export default function KnowledgeBasePage() {
                   <TableCell>{source.uploadedAt}</TableCell>
                   <TableCell>
                     {source.downloadURL ? (
-                      <div className="flex items-center gap-1">
-                        <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
-                          View File
-                        </a>
-                        <Button variant="ghost" size="sm" onClick={() => handleRefreshSourceUrl(source.id, level)} aria-label="Refresh URL" className="h-6 w-6 p-0" disabled={anyOperationGloballyInProgress || isLoadingSources}>
-                            <RefreshCw className="h-3 w-3" />
-                        </Button>
-                      </div>
+                      <a
+                        href={source.downloadURL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={source.name}
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Download className="h-3 w-3" />
+                        Download
+                      </a>
                     ) : source.storagePath ? (
                         <span className="text-xs text-yellow-600">Processing...</span>
                     ) : (
