@@ -1,16 +1,16 @@
-
 import { initializeApp, getApp, getApps, type FirebaseOptions } from "firebase/app";
 import { getStorage } from "firebase/storage";
 import { getFirestore } from "firebase/firestore";
 
-// TODO: Replace with your actual Firebase project configuration
+// The Firebase config is loaded from environment variables.
+// See the README.md file for instructions on how to set this up.
 const firebaseConfig: FirebaseOptions = {
-  apiKey: "AIzaSyBz0edyk760wi-cssGZ7l0ipTpeDr9G9eQ",
-  authDomain: "ai-blair-7fb8o.firebaseapp.com",
-  projectId: "ai-blair-7fb8o",
-  storageBucket: "ai-blair-7fb8o.firebasestorage.app",
-  messagingSenderId: "513112805900",
-  appId: "1:513112805900:web:9a6f209b3f3ab00fb31429"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
 // Initialize Firebase
