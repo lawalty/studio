@@ -34,7 +34,8 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { extractTextFromPdfUrl } from '@/ai/flows/extract-text-from-pdf-url-flow';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 
 
@@ -50,7 +51,6 @@ export interface KnowledgeSource {
   storagePath: string;
   downloadURL: string;
   description?: string;
-  extractedText?: string;
   extractionStatus?: KnowledgeSourceExtractionStatus;
   extractionError?: string;
   indexingStatus?: KnowledgeSourceIndexingStatus;
@@ -152,11 +152,10 @@ export default function KnowledgeBasePage() {
       const sourcesForDb = updatedSourcesToSave.map(s => ({
         id: s.id, name: s.name, type: s.type, size: s.size,
         uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
-        description: s.description || '', 
-        extractedText: s.extractedText || '',
-        extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' ? 'pending' : 'not_applicable'),
+        description: s.description || '',
+        extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
         extractionError: s.extractionError || '',
-        indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' ? 'pending' : 'not_applicable'),
+        indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
         indexingError: s.indexingError || '',
       }));
 
@@ -189,11 +188,10 @@ export default function KnowledgeBasePage() {
       if (docSnap.exists() && docSnap.data()?.sources) {
         const fetchedSources = (docSnap.data().sources as KnowledgeSource[]).map(s => ({
           ...s,
-          description: s.description || '', 
-          extractedText: s.extractedText || '',
-          extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' ? 'pending' : 'not_applicable'),
+          description: s.description || '',
+          extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
           extractionError: s.extractionError || '',
-          indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' ? 'pending' : 'not_applicable'),
+          indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
           indexingError: s.indexingError || '',
         }));
         setSources(fetchedSources);
@@ -219,34 +217,23 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const triggerProcessing = useCallback(async (sourceToProcess: KnowledgeSource, level: KnowledgeBaseLevel, textContent?: string) => {
-    if (!['pdf', 'text'].includes(sourceToProcess.type)) return;
+  const triggerProcessing = useCallback(async (sourceToProcess: KnowledgeSource, level: KnowledgeBaseLevel) => {
+    if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) return;
     setIsProcessingId(sourceToProcess.id);
     const setSources = getSourcesSetter(level);
 
     try {
-        let extractedText = textContent;
+        toast({ title: "Extraction Started", description: `AI is processing ${sourceToProcess.name}...` });
+        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
 
-        if (sourceToProcess.type === 'pdf') {
-            toast({ title: "PDF Extraction Started", description: `Requesting text extraction for ${sourceToProcess.name}...` });
-            setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
-            const result = await extractTextFromPdfUrl({ pdfUrl: sourceToProcess.downloadURL });
-            extractedText = result.extractedText;
-            setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractedText, extractionStatus: 'success', extractionError: '' } : s));
-            toast({ title: "PDF Text Extracted", description: `Now indexing ${sourceToProcess.name}...` });
-        } else if (sourceToProcess.type === 'text') {
-             if (!textContent && sourceToProcess.storagePath) {
-                toast({ title: "Reading File for Reprocessing", description: `Fetching content of ${sourceToProcess.name}...` });
-                const blob = await getBlob(storageRef(storage, sourceToProcess.storagePath));
-                extractedText = await blob.text();
-             } else {
-                extractedText = textContent;
-             }
-             toast({ title: "Indexing Started", description: `Indexing ${sourceToProcess.name}...` });
-        }
+        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL });
+        const extractedText = result.extractedText;
+        
+        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
+        toast({ title: "Text Extracted", description: `Now indexing ${sourceToProcess.name}...` });
 
         if (!extractedText) {
-            throw new Error("Text content is missing or empty, cannot index.");
+            throw new Error("Text content is missing or empty after AI extraction, cannot index.");
         }
 
         await indexDocument({
@@ -259,8 +246,7 @@ export default function KnowledgeBasePage() {
 
         setSources(prev => {
             const updated = prev.map(s => s.id === sourceToProcess.id ? { 
-                ...s, 
-                extractedText: extractedText, 
+                ...s,
                 extractionStatus: 'success', 
                 extractionError: '',
                 indexingStatus: 'indexed',
@@ -277,8 +263,8 @@ export default function KnowledgeBasePage() {
         setSources(prev => {
             const updated = prev.map(s => s.id === sourceToProcess.id ? { 
                 ...s, 
-                extractionStatus: s.extractionStatus !== 'success' ? 'failed' : 'success', 
-                extractionError: s.extractionStatus !== 'success' ? errorMessage : s.extractionError,
+                extractionStatus: 'failed',
+                extractionError: errorMessage,
                 indexingStatus: 'failed', 
                 indexingError: errorMessage
             } : s);
@@ -335,7 +321,7 @@ export default function KnowledgeBasePage() {
       else if (mimeType.startsWith('text/plain') || currentFile.name.toLowerCase().endsWith('.txt')) fileType = 'text';
       else if (mimeType === 'application/msword' || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') fileType = 'document';
 
-      const isProcessable = fileType === 'pdf' || fileType === 'text';
+      const isProcessable = fileType === 'pdf' || fileType === 'text' || fileType === 'document';
 
       const newSource: KnowledgeSource = {
         id: permanentId, name: currentFile.name, type: fileType,
@@ -345,7 +331,7 @@ export default function KnowledgeBasePage() {
         description: uploadDescription || '',
         extractionStatus: isProcessable ? 'pending' : 'not_applicable', 
         indexingStatus: isProcessable ? 'pending' : 'not_applicable',
-        extractedText: '', extractionError: '', indexingError: '',
+        extractionError: '', indexingError: '',
       };
       
       const updatedList = [newSource, ...getSourcesState(targetLevel)];
@@ -354,19 +340,8 @@ export default function KnowledgeBasePage() {
 
       if (savedToDb) {
         toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
-        if (fileType === 'pdf') {
-          triggerProcessing(newSource, targetLevel); 
-        } else if (fileType === 'text') {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const textContent = (e.target?.result as string) || '';
-            triggerProcessing(newSource, targetLevel, textContent);
-          };
-          reader.onerror = () => {
-             toast({ title: "Text Read Error", description: `Could not read content from ${currentFile.name}.`, variant: "destructive" });
-             setSources(prev => prev.map(s => s.id === newSource.id ? {...s, extractionStatus: 'failed', indexingStatus: 'failed', extractionError: 'File read error.'} : s));
-          };
-          reader.readAsText(currentFile);
+        if (isProcessable) {
+          triggerProcessing(newSource, targetLevel);
         }
       } else {
         toast({ title: "Database Save Failed", description: `File uploaded but DB save failed. Reverting.`, variant: "destructive"});
@@ -422,39 +397,6 @@ export default function KnowledgeBasePage() {
         console.error(`[KBPage - handleDelete] Error:`, error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name}: ${error.message}`, variant: "destructive" });
         setSources(sources); 
-    }
-  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId]);
-
-  const handleRefreshSourceUrl = useCallback(async (sourceId: string, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId) {
-        toast({ title: "Operation in Progress", description: "Please wait.", variant: "default" });
-        return;
-    }
-    
-    const setSources = getSourcesSetter(level);
-    const sources = getSourcesState(level);
-    const sourceToRefresh = sources.find(s => s.id === sourceId);
-
-    if (!sourceToRefresh || !sourceToRefresh.storagePath) {
-      toast({title: "Cannot Refresh", description: "Source missing storage path.", variant: "destructive"});
-      return;
-    }
- 
-    try {
-      const newDownloadURL = await getDownloadURL(storageRef(storage, sourceToRefresh.storagePath));
-      const listWithRefreshedUrl = sources.map(s => s.id === sourceId ? { ...s, downloadURL: newDownloadURL } : s);
-      setSources(listWithRefreshedUrl); 
-      
-      const refreshedInDb = await saveSourcesToFirestore(listWithRefreshedUrl, level); 
-      if(refreshedInDb) {
-          toast({title: "URL Refreshed", description: `URL for ${sourceToRefresh.name} updated.`});
-      } else {
-          toast({title: "Refresh Save Error", description: "URL refreshed, but DB save failed. Reverting.", variant: "destructive"});
-          setSources(sources); 
-      }
-    } catch (error) {
-      toast({title: "Refresh Failed", description: `Could not refresh URL for ${sourceToRefresh.name}.`, variant: "destructive"});
-      setSources(sources); 
     }
   }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId]);
 
@@ -570,8 +512,9 @@ export default function KnowledgeBasePage() {
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isProcessingThisFile = isProcessingId === source.id;
+    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId;
 
-    if (!['pdf', 'text'].includes(source.type)) {
+    if (!['pdf', 'text', 'document'].includes(source.type)) {
       return <span className="text-xs text-muted-foreground">N/A</span>;
     }
 
@@ -587,7 +530,30 @@ export default function KnowledgeBasePage() {
         case 'indexed':
             return <span className="text-xs text-green-600 flex items-center gap-1"><SearchCheck className="h-3 w-3" /> Indexed</span>;
         case 'failed':
-            return <span className="text-xs text-red-600" title={source.indexingError || 'Indexing failed'}>Failed</span>;
+            return (
+                <div className="flex items-center gap-1">
+                    <span className="text-xs text-red-600" title={source.indexingError || 'Indexing failed'}>Failed</span>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                 <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => triggerProcessing(source, level)}
+                                    disabled={anyOperationGloballyInProgress}
+                                    aria-label={`Reprocess ${source.name}`}
+                                    className="h-6 w-6"
+                                >
+                                    <RefreshCw className="h-4 w-4 text-blue-600" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Reprocess File</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            );
         case 'pending':
         default:
             return <span className="text-xs text-yellow-600">Pending</span>;
@@ -656,22 +622,16 @@ export default function KnowledgeBasePage() {
                   <TableCell>{source.size}</TableCell>
                   <TableCell>{source.uploadedAt}</TableCell>
                   <TableCell>
-                    {source.downloadURL ? (
-                      <a
-                        href={source.downloadURL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={source.name}
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                      >
-                        <Download className="h-3 w-3" />
-                        Download
-                      </a>
-                    ) : source.storagePath ? (
-                        <span className="text-xs text-yellow-600">Processing...</span>
-                    ) : (
-                        <span className="text-xs text-gray-500">Error</span>
-                    )}
+                    <a
+                      href={source.downloadURL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={source.name}
+                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Download className="h-3 w-3" />
+                      Download
+                    </a>
                   </TableCell>
                   <TableCell>{renderProcessingStatus(source, level)}</TableCell>
                   <TableCell className="text-right space-x-1">

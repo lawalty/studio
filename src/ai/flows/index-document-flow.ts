@@ -15,41 +15,21 @@ import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
- * A robust text chunker that cleans text while preserving structure.
- * This function is designed to be highly resilient. It aggressively cleans text
- * of problematic characters (including the BOM) and normalizes whitespace, then
- * performs a simple character-based split. This approach is more reliable than
- * complex regex for ensuring that chunks are valid for embedding.
- *
+ * Splits a given text into chunks of a specified size.
+ * This is a simple, robust splitter that works on pre-cleaned text.
  * @param text The text to chunk.
- * @param chunkSize The target size for each chunk in characters.
+ * @param chunkSize The maximum size for each chunk in characters.
  * @returns An array of text chunks.
  */
-function chunkText(text: string, chunkSize: number = 1500): string[] {
-    // 1. Aggressive cleaning and normalization.
-    // - Remove BOM (Byte Order Mark), which often causes parsing issues.
-    // - Remove null characters and other non-printable control characters except for standard whitespace.
-    // - Normalize all line endings to a single newline character.
-    // - Collapse multiple spaces and newlines to preserve paragraph structure but avoid messy whitespace.
-    const cleanedText = text
-        .replace(/^\uFEFF/, '') // Remove BOM
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove most control chars
-        .replace(/\r\n?/g, '\n') // Normalize line endings
-        .replace(/[ \t]{2,}/g, ' ') // Collapse spaces and tabs
-        .replace(/\n{3,}/g, '\n\n') // Collapse newlines to paragraph breaks
-        .trim();
-
-    if (cleanedText.length === 0) {
+function chunkText(text: string, chunkSize: number = 1800): string[] {
+    if (!text || text.trim().length === 0) {
         return [];
     }
-
-    // 2. Simple, hard splitting. This is robust and prevents oversized chunks.
     const chunks: string[] = [];
-    for (let i = 0; i < cleanedText.length; i += chunkSize) {
-        chunks.push(cleanedText.substring(i, i + chunkSize));
+    for (let i = 0; i < text.length; i += chunkSize) {
+        chunks.push(text.substring(i, i + chunkSize));
     }
-
-    return chunks.filter(chunk => chunk.trim().length > 0);
+    return chunks;
 }
 
 
@@ -79,7 +59,7 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    // 1. Chunk the text
+    // 1. Chunk the text (which is now pre-cleaned by the new AI extraction flow)
     const chunks = chunkText(text);
     if (chunks.length === 0) {
       console.log(`[indexDocumentFlow] No text chunks found in document '${sourceName}' after cleaning. Skipping indexing.`);
@@ -87,7 +67,6 @@ const indexDocumentFlow = ai.defineFlow(
     }
 
     // 2. Generate embeddings and prepare data for Firestore.
-    // This approach is more resilient, skipping chunks that fail to embed.
     const chunksToSave: any[] = [];
     let failedChunks = 0;
 
@@ -96,9 +75,6 @@ const indexDocumentFlow = ai.defineFlow(
         const { embedding } = await ai.embed({
           embedder: 'googleai/text-embedding-004',
           content: chunk,
-          // Relax all safety filters to allow indexing of internal policy documents
-          // or other content that might otherwise be blocked by default.
-          // This does not affect the safety settings for generating final user responses.
           config: {
             safetySettings: [
               { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
@@ -121,14 +97,12 @@ const indexDocumentFlow = ai.defineFlow(
             downloadURL,
           });
         } else {
-          // This case handles when the embedding model returns no embedding without an error.
           failedChunks++;
           console.warn(
             `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate an embedding. The chunk may be empty or contain unsupported content. Content: "${chunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
-        // This case handles when the embedding call itself throws an exception.
         failedChunks++;
         console.error(
           `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${error.message}. Content: "${chunk.substring(0, 100)}..."`
