@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -78,10 +77,10 @@ export default function StartPage() {
       return; 
     }
 
-    // Reset state before starting a new animation cycle
+    // Clear any previous timers and reset the state before starting a new animation cycle
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     setAnimatedGreeting('');
     setShowGreeting(false);
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
 
     const initialDelayTimer = setTimeout(() => {
       setShowGreeting(true);
@@ -89,15 +88,18 @@ export default function StartPage() {
       let i = 0;
       const type = () => {
         if (i < GREETING_MESSAGE.length) {
-          setAnimatedGreeting(prev => prev + GREETING_MESSAGE.charAt(i));
+          // Use substring to build the text. This is a more robust way to prevent rendering glitches.
+          setAnimatedGreeting(GREETING_MESSAGE.substring(0, i + 1));
           i++;
           const randomDelay = 60 + (Math.random() - 0.5) * 60;
           typingTimerRef.current = setTimeout(type, Math.max(30, randomDelay));
         }
       };
+      
+      // Kick off the typing animation
       type();
 
-    }, 3000); // Delay reduced to 3 seconds
+    }, 3000);
 
     return () => {
       clearTimeout(initialDelayTimer);
