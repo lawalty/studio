@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Message, CommunicationMode } from '@/components/chat/ChatInterface';
@@ -10,20 +11,20 @@ import React, { useEffect, useRef, useState } from 'react';
 const renderTextWithMarkdown = (text: string): JSX.Element => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return (
-    &lt;>
+    <>
       {parts.map((part, index) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return &lt;strong key={index}>{part.slice(2, -2)}&lt;/strong>;
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
         }
         // Handle newlines within normal text parts
         return part.split('\n').map((line, lineIndex, arr) => (
-          &lt;React.Fragment key={`${index}-${lineIndex}`}>
+          <React.Fragment key={`${index}-${lineIndex}`}>
             {line}
-            {lineIndex &lt; arr.length - 1 && &lt;br />}
-          &lt;/React.Fragment>
+            {lineIndex < arr.length - 1 && <br />}
+          </React.Fragment>
         ));
       })}
-    &lt;/>
+    </>
   );
 };
 
@@ -50,9 +51,9 @@ export default function ChatBubble({
   const isUser = message.sender === 'user';
   const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png";
 
-  const [displayedContent, setDisplayedContent] = useState&lt;React.ReactNode>(null);
+  const [displayedContent, setDisplayedContent] = useState<React.ReactNode>(null);
   const [isAnimationComplete, setIsAnimationComplete] = useState(false);
-  const timeoutRef = useRef&lt;NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const shouldAnimate = message.sender === 'ai' && isNewlyAddedAiMessage;
@@ -63,7 +64,7 @@ export default function ChatBubble({
     setIsAnimationComplete(false);
 
     if (shouldAnimate) {
-      setDisplayedContent(&lt;>&lt;/>);
+      setDisplayedContent(<></>);
 
       let effectiveTypingSpeed = typingSpeedMs;
       if (
@@ -97,11 +98,11 @@ export default function ChatBubble({
       let fullContent: React.ReactNode[] = [];
 
       const type = () => {
-        if (index &lt; characterQueue.length) {
+        if (index < characterQueue.length) {
           const { char, isBold, isNewline } = characterQueue[index];
 
           if (isNewline) {
-            fullContent.push(&lt;br key={`br-${index}`} />);
+            fullContent.push(<br key={`br-${index}`} />);
           } else if (isBold) {
             const lastElement = fullContent[fullContent.length - 1] as React.ReactElement;
             if (lastElement && lastElement.type === 'strong' && React.isValidElement(lastElement)) {
@@ -109,7 +110,7 @@ export default function ChatBubble({
                 children: lastElement.props.children + char,
               });
             } else {
-              fullContent.push(&lt;strong key={`str-${index}`}>{char}&lt;/strong>);
+              fullContent.push(<strong key={`str-${index}`}>{char}</strong>);
             }
           } else {
              // Check if the last element is a plain string
@@ -120,7 +121,7 @@ export default function ChatBubble({
             }
           }
           
-          setDisplayedContent(&lt;>{fullContent}&lt;/>);
+          setDisplayedContent(<>{fullContent}</>);
           index++;
 
           const randomDelay = effectiveTypingSpeed + (Math.random() - 0.5) * (effectiveTypingSpeed * 0.5);
@@ -147,16 +148,16 @@ export default function ChatBubble({
   const renderPdfLink = () => {
     if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
       return (
-        &lt;a
+        <a
           href={message.pdfReference.downloadURL}
           target="_blank"
           rel="noopener noreferrer"
           download={message.pdfReference.fileName}
           className="mt-2 inline-flex items-center gap-2 rounded-md bg-accent/50 px-3 py-1.5 text-xs font-medium text-accent-foreground transition-colors hover:bg-accent"
         >
-          &lt;Download className="h-3 w-3" />
+          <Download className="h-3 w-3" />
           Download: {message.pdfReference.fileName}
-        &lt;/a>
+        </a>
       );
     }
     return null;
@@ -165,18 +166,18 @@ export default function ChatBubble({
   const finalContent = renderTextWithMarkdown(message.text);
 
   return (
-    &lt;div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
-        &lt;Avatar className="h-8 w-8 mr-2 self-start">
+        <Avatar className="h-8 w-8 mr-2 self-start">
           {avatarSrc && !avatarSrc.startsWith('https://placehold.co') ? (
-             &lt;AvatarImage src={avatarSrc} alt="AI Avatar" className="object-cover"/>
+             <AvatarImage src={avatarSrc} alt="AI Avatar" className="object-cover"/>
           ) : (
-             &lt;AvatarImage src={DEFAULT_AVATAR_PLACEHOLDER} alt="AI Avatar Placeholder" data-ai-hint="professional woman" />
+             <AvatarImage src={DEFAULT_AVATAR_PLACEHOLDER} alt="AI Avatar Placeholder" data-ai-hint="professional woman" />
           )}
-          &lt;AvatarFallback>&lt;Bot size={20}/>&lt;/AvatarFallback>
-        &lt;/Avatar>
+          <AvatarFallback><Bot size={20}/></AvatarFallback>
+        </Avatar>
       )}
-      &lt;div
+      <div
         className={cn(
           "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg shadow flex flex-col",
           isUser
@@ -184,19 +185,19 @@ export default function ChatBubble({
             : "bg-secondary text-secondary-foreground rounded-bl-none"
         )}
       >
-        &lt;div className="text-sm whitespace-pre-wrap">
+        <div className="text-sm whitespace-pre-wrap">
           {isAnimationComplete || forceFinishAnimation ? finalContent : displayedContent}
-        &lt;/div>
+        </div>
         {renderPdfLink()}
-        &lt;p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
+        <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        &lt;/p>
-      &lt;/div>
+        </p>
+      </div>
       {isUser && (
-         &lt;Avatar className="h-8 w-8 ml-2 self-start">
-          &lt;AvatarFallback>&lt;User size={20}/>&lt;/AvatarFallback>
-        &lt;/Avatar>
+         <Avatar className="h-8 w-8 ml-2 self-start">
+          <AvatarFallback><User size={20}/></AvatarFallback>
+        </Avatar>
       )}
-    &lt;/div>
+    </div>
   );
 }

@@ -24,7 +24,7 @@ export default function ConversationLog({
   hasConversationEnded,
   forceFinishAnimationForMessageId 
 }: ConversationLogProps) {
-  const viewportRef = useRef&lt;HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -42,16 +42,16 @@ export default function ConversationLog({
   }, [messages]); 
 
   return (
-    &lt;ScrollArea
+    <ScrollArea
       className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
     >
-      &lt;ScrollAreaPrimitive.Viewport
+      <ScrollAreaPrimitive.Viewport
         className="h-full w-full rounded-[inherit]" 
         ref={viewportRef}
         data-testid="conversation-log-viewport"
       >
         {messages.map((msg) => (
-          &lt;ChatBubble 
+          <ChatBubble 
             key={msg.id} 
             message={msg} 
             avatarSrc={avatarSrc}
@@ -63,12 +63,12 @@ export default function ConversationLog({
           />
         ))}
         {messages.length === 0 && (
-          &lt;div className="flex items-center justify-center h-full">
-            &lt;p className="text-muted-foreground">Start the conversation by typing or using the microphone.&lt;/p>
-          &lt;/div>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">Start the conversation by typing or using the microphone.</p>
+          </div>
         )}
-      &lt;/ScrollAreaPrimitive.Viewport>
-      &lt;ScrollBar orientation="vertical" />
-    &lt;/ScrollArea>
+      </ScrollAreaPrimitive.Viewport>
+      <ScrollBar orientation="vertical" />
+    </ScrollArea>
   );
 }

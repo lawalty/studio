@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -419,7 +420,9 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
       if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
       setIsSpeaking(false);
-      if (!isAcknowledgement && messagesRef.current.length &lt;= 1 && messagesRef.current.find(m => m.sender === 'ai')) setShowPreparingGreeting(true);
+      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) {
+        setShowPreparingGreeting(true);
+      }
 
       const tryBrowserFallback = () => {
         if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -608,7 +611,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           }
           let currentVisualTranscript = '';
           let latestFinalUtteranceThisEvent = '';
-          for (let i = 0; i &lt; event.results.length; i++) {
+          for (let i = 0; i < event.results.length; i++) {
             const segmentTranscript = event.results[i][0].transcript;
             if (communicationModeRef.current === 'audio-text') {
                 currentVisualTranscript += segmentTranscript;
@@ -951,7 +954,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     isDisplayingAnimatedAvatar = true;
   }
 
-  const imageProps: React.ComponentProps&lt;typeof Image> = {
+  const imageProps: React.ComponentProps<typeof Image> = {
     src: currentAvatarToDisplay,
     alt: "AI Blair Avatar",
     width: communicationMode === 'audio-only' ? 200 : 120,
@@ -976,12 +979,12 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const showAiTypingIndicator = isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting;
   const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null;
-    if (showPreparingGreeting) return &lt;div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> &lt;Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... &lt;/div>;
+    if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
     if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
-      return &lt;div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> &lt;Mic size={20} className="mr-2" /> Listening... &lt;/div>;
+      return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
     }
      if (showAiTypingIndicator && !isSpeaking && !isListening) {
-      return &lt;div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> AI Blair is preparing... &lt;/div>;
+      return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> AI Blair is preparing... </div>;
     }
     return null;
   };
@@ -992,20 +995,20 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
   const mainContent = () => {
     if (isLoadingConfig && !aiHasInitiatedConversation) {
-        return ( &lt;div className="flex flex-col items-center justify-center h-full text-center py-8"> &lt;DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> &lt;h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Chat Configuration&lt;/h2> &lt;p className="mt-2 text-muted-foreground">Please wait a moment...&lt;/p> &lt;/div> );
+        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Chat Configuration</h2> <p className="mt-2 text-muted-foreground">Please wait a moment...</p> </div> );
     }
     if (communicationMode === 'audio-only') {
       return (
-        &lt;div className="flex flex-col items-center justify-center h-full text-center py-8">
-          {!hasConversationEnded && &lt;Image {...imageProps} />}
-          {!hasConversationEnded && &lt;h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}&lt;/h2>}
-           &lt;div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
+        <div className="flex flex-col items-center justify-center h-full text-center py-8">
+          {!hasConversationEnded && <Image {...imageProps} />}
+          {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}</h2>}
+           <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {audioOnlyLiveIndicator()}
-          &lt;/div>
+          </div>
           {hasConversationEnded && (
-            &lt;div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
-                 &lt;h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended&lt;/h3>
-                 &lt;ConversationLog
+            <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
+                 <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
+                 <ConversationLog
                     messages={messages}
                     avatarSrc={avatarSrc}
                     typingSpeedMs={typingSpeedMs}
@@ -1015,43 +1018,43 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                     hasConversationEnded={hasConversationEnded}
                     forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
                   />
-                 &lt;div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
-                    &lt;Button onClick={handleSaveConversationAsPdf} variant="outline"> &lt;Save className="mr-2 h-4 w-4" /> Save as PDF &lt;/Button>
-                    &lt;Button onClick={handleStartNewChat} variant="outline"> &lt;RotateCcw className="mr-2 h-4 w-4" /> Start New Chat &lt;/Button>
-                 &lt;/div>
-            &lt;/div>
+                 <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
+                    <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
+                    <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+                 </div>
+            </div>
           )}
           {aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting && !isSpeaking && !isSendingMessage && (
-            &lt;Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8">
-                &lt;Power className="mr-2 h-5 w-5" /> End Chat
-            &lt;/Button>
+            <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8">
+                <Power className="mr-2 h-5 w-5" /> End Chat
+            </Button>
           )}
-        &lt;/div>
+        </div>
       );
     }
     // For 'audio-text' and 'text-only' modes:
     return (
-      &lt;div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-        &lt;div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
-          &lt;Card className="w-full shadow-xl">
-            &lt;CardContent className="pt-6 flex flex-col items-center">
-              &lt;Image {...imageProps} />
-              &lt;h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}&lt;/h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
+        <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
+          <Card className="w-full shadow-xl">
+            <CardContent className="pt-6 flex flex-col items-center">
+              <Image {...imageProps} />
+              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}</h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
-                &lt;p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
+                <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
                   Preparing greeting...
-                &lt;/p>
+                </p>
               )}
               {showAiTypingIndicator && !isSpeaking && (
-                 &lt;p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">
+                 <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">
                   AI Blair is typing...
-                &lt;/p>
+                </p>
               )}
-            &lt;/CardContent>
-          &lt;/Card>
-        &lt;/div>
-        &lt;div className="md:col-span-2 flex flex-col h-full">
-          &lt;ConversationLog
+            </CardContent>
+          </Card>
+        </div>
+        <div className="md:col-span-2 flex flex-col h-full">
+          <ConversationLog
             messages={messagesForLog}
             avatarSrc={avatarSrc}
             typingSpeedMs={typingSpeedMs}
@@ -1061,7 +1064,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             hasConversationEnded={hasConversationEnded}
             forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
           />
-          &lt;MessageInput
+          <MessageInput
             onSendMessage={handleSendMessageRef.current}
             isSending={isSendingMessage && !hasConversationEnded}
             isSpeaking={isSpeaking && !hasConversationEnded}
@@ -1073,32 +1076,32 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             disabled={hasConversationEnded || showPreparingGreeting || (isSendingMessage && aiHasInitiatedConversation && communicationModeRef.current !== 'audio-text') || (isSpeaking && communicationModeRef.current !== 'audio-text')}
           />
           {hasConversationEnded ? (
-             &lt;div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
-                &lt;Button onClick={handleSaveConversationAsPdf} variant="outline"> &lt;Save className="mr-2 h-4 w-4" /> Save as PDF &lt;/Button>
-                &lt;Button onClick={handleStartNewChat} variant="outline"> &lt;RotateCcw className="mr-2 h-4 w-4" /> Start New Chat &lt;/Button>
-             &lt;/div>
+             <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
+                <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
+                <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+             </div>
           ) : aiHasInitiatedConversation && (
-             &lt;div className="mt-3 flex justify-end">
-                &lt;Button
+             <div className="mt-3 flex justify-end">
+                <Button
                   onClick={handleEndChatManually}
                   variant="outline"
                   size="sm"
                   disabled={showPreparingGreeting || (isSendingMessage && aiHasInitiatedConversation) || isSpeaking }
                 >
-                  &lt;Power className="mr-2 h-4 w-4" /> End Chat
-                &lt;/Button>
-             &lt;/div>
+                  <Power className="mr-2 h-4 w-4" /> End Chat
+                </Button>
+             </div>
           )}
-        &lt;/div>
-      &lt;/div>
+        </div>
+      </div>
     );
   };
 
   return (
-    &lt;div className="flex flex-col h-full">
-      &lt;div className="flex-grow">
+    <div className="flex flex-col h-full">
+      <div className="flex-grow">
         {mainContent()}
-      &lt;/div>
-    &lt;/div>
+      </div>
+    </div>
   );
 }
