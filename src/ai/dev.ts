@@ -8,4 +8,3 @@ import '@/ai/flows/extract-text-from-document-url-flow.ts';
 import '@/ai/flows/index-document-flow.ts';
 import '@/ai/flows/generate-sms-response.ts';
 import '@/ai/flows/send-sms-flow.ts';
-import '@/ai/flows/text-to-speech-flow.ts';

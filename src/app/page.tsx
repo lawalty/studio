@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -8,11 +7,9 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from "@/lib/utils";
-import { Mic, MessageSquareText, FileText, DatabaseZap, Volume2 } from 'lucide-react';
+import { Mic, MessageSquareText, FileText, DatabaseZap } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
-import { useToast } from "@/hooks/use-toast";
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
@@ -26,11 +23,11 @@ export default function StartPage() {
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   
   const [showGreeting, setShowGreeting] = useState(false);
-  const [isGreetingPlaying, setIsGreetingPlaying] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [animatedGreeting, setAnimatedGreeting] = useState('');
 
   const router = useRouter();
-  const { toast } = useToast();
+  
+  const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -80,34 +77,31 @@ export default function StartPage() {
       return; 
     }
 
-    const timer = setTimeout(() => {
+    const initialDelayTimer = setTimeout(() => {
       setShowGreeting(true);
       
-      const playGreeting = async () => {
-        try {
-          const { audioDataUri } = await textToSpeech(GREETING_MESSAGE);
-          if (audioRef.current) {
-            audioRef.current.src = audioDataUri;
-            audioRef.current.play().catch(e => {
-              console.warn("Audio playback was prevented by the browser. A user interaction might be required.", e);
-            });
-          }
-        } catch (error) {
-          console.error("Failed to generate TTS for greeting:", error);
-          toast({
-            title: "Audio Greeting Failed",
-            description: "Could not generate the audio greeting.",
-            variant: "destructive",
-          });
+      let i = 0;
+      setAnimatedGreeting('');
+
+      const type = () => {
+        if (i < GREETING_MESSAGE.length) {
+          setAnimatedGreeting(prev => prev + GREETING_MESSAGE.charAt(i));
+          i++;
+          const randomDelay = 60 + (Math.random() - 0.5) * 60;
+          typingTimerRef.current = setTimeout(type, Math.max(30, randomDelay));
         }
       };
-
-      playGreeting();
+      type();
 
     }, 10000);
 
-    return () => clearTimeout(timer);
-  }, [isLoadingConfig, toast]);
+    return () => {
+      clearTimeout(initialDelayTimer);
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+      }
+    };
+  }, [isLoadingConfig]);
 
 
   return (
@@ -119,14 +113,12 @@ export default function StartPage() {
           </CardTitle>
           <CardDescription 
             className={cn(
-              "text-base transition-opacity duration-500 min-h-[1.5rem]",
+              "text-base transition-opacity duration-500 min-h-[1.5rem] font-mono",
               showGreeting ? "opacity-100" : "opacity-0"
             )}
           >
-            <span className="inline-flex items-center justify-center">
-              {isGreetingPlaying && <Volume2 className="inline-block mr-2 h-4 w-4 animate-pulse" />}
-              {GREETING_MESSAGE}
-            </span>
+            {animatedGreeting}
+            {showGreeting && <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-6">
@@ -175,7 +167,6 @@ export default function StartPage() {
           </div>
         </CardContent>
       </Card>
-      <audio ref={audioRef} onPlay={() => setIsGreetingPlaying(true)} onEnded={() => setIsGreetingPlaying(false)} />
     </div>
   );
 }
