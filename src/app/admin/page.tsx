@@ -1,6 +1,8 @@
 
+'use client';
+
 import AdminNavLinkCard from '@/components/admin/AdminNavLinkCard';
-import { BookOpenText, KeyRound, Smile, Settings } from 'lucide-react'; // Use ImageIcon for avatar
+import { BookOpenText, KeyRound, Smile, Settings } from 'lucide-react';
 
 export default function AdminDashboardPage() {
   return (
