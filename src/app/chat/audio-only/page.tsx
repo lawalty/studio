@@ -17,8 +17,8 @@ const ChatInterface = dynamic(() => import('@/components/chat/ChatInterface'), {
 
 export default function AudioOnlyPage() {
   return (
-    <main className="flex-grow container mx-auto px-4 py-8 flex flex-col">
+    <div className="container mx-auto px-4 py-8 flex flex-col h-full">
       <ChatInterface communicationMode="audio-only" />
-    </main>
+    </div>
   );
 }
