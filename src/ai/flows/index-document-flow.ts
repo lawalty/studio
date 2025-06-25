@@ -69,6 +69,7 @@ const indexDocumentFlow = ai.defineFlow(
     // 2. Generate embeddings and prepare data for Firestore.
     const chunksToSave: any[] = [];
     let failedChunks = 0;
+    let firstError = '';
 
     for (const chunk of chunks) {
       try {
@@ -98,14 +99,18 @@ const indexDocumentFlow = ai.defineFlow(
           });
         } else {
           failedChunks++;
+          const errorMsg = 'Embedding call returned no embedding.';
+          if (!firstError) firstError = errorMsg;
           console.warn(
             `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate an embedding. The chunk may be empty or contain unsupported content. Content: "${chunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
         failedChunks++;
+        const errorMsg = error.message || 'An unknown error occurred during embedding.';
+        if (!firstError) firstError = errorMsg;
         console.error(
-          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${error.message}. Content: "${chunk.substring(0, 100)}..."`
+          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${errorMsg}. Content: "${chunk.substring(0, 100)}..."`
         );
       }
     }
@@ -118,7 +123,7 @@ const indexDocumentFlow = ai.defineFlow(
     if (chunksToSave.length === 0) {
       console.log(`[indexDocumentFlow] No chunks were successfully embedded for '${sourceName}'. Nothing to save to Firestore.`);
       if (failedChunks > 0) {
-          throw new Error(`Failed to index '${sourceName}'. All ${failedChunks} text chunks in the document were invalid or unsupported by the embedding model.`);
+          throw new Error(`Failed to index '${sourceName}'. All ${failedChunks} text chunks failed. First error: ${firstError}`);
       }
       return { chunksIndexed: 0, sourceId };
     }

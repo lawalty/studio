@@ -69,7 +69,15 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
         throw new Error('Extraction failed: The AI model returned an unexpected data structure. The document might be incompatible, corrupted, or an issue occurred with the model.');
       }
       
-      return output;
+      // Aggressively clean up potential markdown formatting from the AI's output.
+      let cleanedText = output.extractedText;
+      // Remove markdown code block fences (e.g., ```json, ```text, ```)
+      cleanedText = cleanedText.replace(/```[a-z]*\n/g, '').replace(/```/g, '');
+      // Trim whitespace and newlines from the start and end
+      cleanedText = cleanedText.trim();
+
+      return { extractedText: cleanedText };
+
     } catch (e: any) {
       console.error('[extractTextFromDocumentUrlFlow] Error during text extraction flow:', e);
       let errorMessage = 'Failed to extract text from document due to an internal error.';
