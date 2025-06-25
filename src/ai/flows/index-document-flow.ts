@@ -15,31 +15,32 @@ import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
 /**
- * A robust text chunker that aggressively cleans text and splits it into
- * fixed-size chunks to ensure reliability for the embedding service.
+ * A robust, simple text chunker.
+ * Previous attempts to use complex regex or semantic chunking were brittle and caused
+ * errors. This function uses the most reliable method: a simple, hard split by
+ * character count after minimal cleaning. This trusts the embedding model to handle
+ * varied text, which is its strength.
+ *
  * @param text The text to chunk.
  * @param chunkSize The target size for each chunk in characters.
  * @returns An array of text chunks.
  */
 function chunkText(text: string, chunkSize: number = 1500): string[] {
-  // 1. VERY aggressive cleaning. This removes anything that is not a standard letter, number,
-  // common punctuation, or whitespace. This is to prevent any unsupported characters
-  // from causing the embedding model to fail.
+  // 1. Minimal, essential cleaning.
+  // Removes invisible control characters which are known to cause issues, but
+  // leaves all printable characters (including international ones) intact.
   const cleanedText = text
-    .replace(/’/g, "'") // Normalize apostrophes
-    .replace(/“|”/g, '"') // Normalize quotes
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ') // Remove control characters
-    .replace(/[^\w\s.,!?'"$%-]/g, ' ') // Remove any remaining non-standard characters
-    .replace(/\s+/g, ' ') // Collapse all whitespace to a single space
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ') // Replaces control characters with a space.
+    .replace(/\s+/g, ' ') // Collapses all whitespace sequences into a single space.
     .trim();
 
   if (cleanedText.length === 0) {
     return [];
   }
 
+  // 2. Simple, hard splitting. This is the most reliable way to ensure no chunk
+  // is ever too long for the embedding model.
   const chunks: string[] = [];
-  // 2. Simple, hard splitting. Instead of complex semantic logic, we split by the chunk size
-  // to ensure no chunk is ever too long for the embedding model.
   for (let i = 0; i < cleanedText.length; i += chunkSize) {
     chunks.push(cleanedText.substring(i, i + chunkSize));
   }
@@ -92,7 +93,7 @@ const indexDocumentFlow = ai.defineFlow(
           embedder: 'googleai/text-embedding-004',
           content: chunk,
           // Relax all safety filters to allow indexing of internal policy documents
-          // or other content that might otherwise be blocked.
+          // or other content that might otherwise be blocked by default.
           // This does not affect the safety settings for generating final user responses.
           config: {
             safetySettings: [
@@ -100,6 +101,7 @@ const indexDocumentFlow = ai.defineFlow(
               { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
               { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
               { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
             ],
           },
         });
