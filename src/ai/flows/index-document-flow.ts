@@ -62,8 +62,8 @@ const indexDocumentFlow = ai.defineFlow(
     // 1. Chunk the text (which is now pre-cleaned by the new AI extraction flow)
     const chunks = chunkText(text);
     if (chunks.length === 0) {
-      console.log(`[indexDocumentFlow] No text chunks found in document '${sourceName}' after cleaning. Skipping indexing.`);
-      return { chunksIndexed: 0, sourceId };
+      console.error(`[indexDocumentFlow] No text chunks found in document '${sourceName}'. Aborting.`);
+      throw new Error("No readable text content was found in the document after processing. Indexing aborted.");
     }
 
     // 2. Generate embeddings and prepare data for Firestore.
