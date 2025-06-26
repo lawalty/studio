@@ -1,106 +1,35 @@
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-
-const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 /**
- * Dynamically retrieves the Gemini API key for GENERATIVE models.
- * This function implements a fallback mechanism for easier debugging and provides
- * clear error messages if the key cannot be found or retrieved.
+ * @fileOverview Genkit Configuration
  *
- * 1.  It first checks for a `GEMINI_API_KEY` environment variable.
- * 2.  If not found, it falls back to fetching the key from Firestore at
- *     `configurations/api_keys_config` from the `geminiGenerative` field (with a fallback to the old `gemini` field).
- * 3.  If the key is not found, it throws an explicit error.
+ * This file configures the Genkit AI instances for the application.
  *
- * @returns {Promise<string>} A promise that resolves to the Gemini API key.
- * @throws {Error} If the API key cannot be found.
+ * Authentication is handled automatically via Application Default Credentials (ADC).
+ * The application's service account has been granted the "Vertex AI User" role
+ * in the Google Cloud IAM settings, so no API keys are required in this configuration.
+ *
+ * For more details on service account permissions, see the IAM page in the Google Cloud Console.
  */
-async function getGeminiGenerativeApiKey(): Promise<string> {
-  const envKey = process.env.GEMINI_API_KEY;
-  if (envKey && envKey.trim() !== '') {
-    console.log(`[Genkit Init] Using Generative Gemini Key from GEMINI_API_KEY environment variable.`);
-    return envKey.trim();
-  }
-
-  try {
-    const docRef = doc(db, FIRESTORE_KEYS_PATH);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      const firestoreKey = data?.geminiGenerative || data?.gemini; // Fallback for backwards compatibility
-      if (firestoreKey && typeof firestoreKey === 'string' && firestoreKey.trim() !== '') {
-        console.log(`[Genkit Init] Using Generative Gemini Key from Firestore.`);
-        return firestoreKey.trim();
-      }
-    }
-    console.error("[Genkit Init] Generative Gemini API key is missing from both environment variables and Firestore.");
-    throw new Error("Generative Gemini API key is missing. Please set it in the admin panel's API Keys page or as a GEMINI_API_KEY environment variable.");
-  } catch (error: any) {
-    console.error("[Genkit Init] Critical error fetching Generative Gemini API key:", error.message);
-    throw new Error(`Failed to fetch Generative Gemini API key. Please check configurations. Original error: ${error.message}`);
-  }
-}
-
-
-/**
- * Dynamically retrieves the Gemini API key for EMBEDDING models.
- * This function is similar to the generative key function but checks for an embedding-specific key first.
- *
- * 1.  It first checks for a `GEMINI_EMBEDDING_API_KEY` environment variable.
- * 2.  If not found, it falls back to fetching from the `geminiEmbedding` field in Firestore.
- * 3.  If the embedding-specific key is not found, it falls back to using the GENERATIVE key.
- *
- * @returns {Promise<string>} A promise that resolves to the appropriate Gemini API key for embeddings.
- * @throws {Error} If no suitable API key can be found.
- */
-async function getGeminiEmbeddingApiKey(): Promise<string> {
-    const envKey = process.env.GEMINI_EMBEDDING_API_KEY;
-    if (envKey && envKey.trim() !== '') {
-      console.log(`[Genkit Init] Using Embedding Gemini Key from GEMINI_EMBEDDING_API_KEY environment variable.`);
-      return envKey.trim();
-    }
-  
-    try {
-      const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      const docSnap = await getDoc(docRef);
-  
-      if (docSnap.exists()) {
-        const firestoreKey = docSnap.data()?.geminiEmbedding;
-        if (firestoreKey && typeof firestoreKey === 'string' && firestoreKey.trim() !== '') {
-          console.log(`[Genkit Init] Using Embedding Gemini Key from Firestore.`);
-          return firestoreKey.trim();
-        }
-      }
-    } catch (error: any) {
-       console.warn(`[Genkit Init] Could not fetch embedding-specific key from Firestore, will attempt fallback. Error: ${error.message}`);
-    }
-
-    console.log('[Genkit Init] No specific embedding key found. Falling back to the generative Gemini key for embeddings.');
-    return getGeminiGenerativeApiKey();
-}
 
 
 // This is the primary Genkit instance for all GENERATIVE tasks (chat, summarization, etc.)
+// The googleAI() plugin will automatically use the service account credentials
+// when running in a Google Cloud environment (like Firebase App Hosting).
 export const ai = genkit({
   plugins: [
-    googleAI({
-      apiKey: getGeminiGenerativeApiKey(),
-    })
+    googleAI()
   ],
   model: 'googleai/gemini-1.5-flash-latest',
 });
 
 
 // This is a secondary Genkit instance configured specifically for EMBEDDING tasks.
+// It also uses the same automatic service account authentication.
 export const embedderAi = genkit({
     plugins: [
-      googleAI({
-        apiKey: getGeminiEmbeddingApiKey(),
-      })
+      googleAI()
     ],
 });

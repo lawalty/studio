@@ -8,14 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, AlertTriangle, Speech, MessageSquare, BrainCircuit } from 'lucide-react';
+import { Save, AlertTriangle, Speech, MessageSquare, BrainCircuit, CheckCircle } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
-  geminiGenerative: string;
-  geminiEmbedding: string;
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -28,8 +26,6 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
-    geminiGenerative: '',
-    geminiEmbedding: '',
     tts: '',
     voiceId: '',
     useTtsApi: true,
@@ -49,8 +45,6 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setApiKeys({
-            geminiGenerative: data.geminiGenerative || data.gemini || '',
-            geminiEmbedding: data.geminiEmbedding || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
@@ -60,13 +54,8 @@ export default function ApiKeysPage() {
           });
         } else {
           setApiKeys({
-            geminiGenerative: '', geminiEmbedding: '', tts: '', voiceId: '', useTtsApi: true,
+            tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
-          });
-           toast({
-            title: "API Keys Not Configured",
-            description: "Please enter and save your API keys. They will be stored in Firestore.",
-            variant: "default",
           });
         }
       } catch (error) {
@@ -77,7 +66,7 @@ export default function ApiKeysPage() {
           variant: "destructive",
         });
         setApiKeys({
-            geminiGenerative: '', geminiEmbedding: '', tts: '', voiceId: '', useTtsApi: true,
+            tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
         });
       }
@@ -98,21 +87,13 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      // Construct the object to save, excluding the old 'gemini' key
-      const { geminiGenerative, geminiEmbedding, ...restOfKeys } = apiKeys;
-      const dataToSave = {
-        geminiGenerative,
-        geminiEmbedding,
-        ...restOfKeys,
-      };
-
-      await setDoc(docRef, dataToSave);
-      toast({ title: "API Keys Saved", description: "Your API keys and settings have been saved to the database." });
+      await setDoc(docRef, apiKeys, { merge: true }); // Use merge to avoid overwriting Gemini keys if they still exist
+      toast({ title: "Settings Saved", description: "Your TTS and Twilio settings have been saved to the database." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
       toast({
         title: "Error Saving Keys",
-        description: "Could not save API keys to the database. Please try again.",
+        description: "Could not save keys to the database. Please try again.",
         variant: "destructive",
       });
     }
@@ -122,33 +103,26 @@ export default function ApiKeysPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline">API Key Management</CardTitle>
+        <CardTitle className="font-headline">API Key & Services Management</CardTitle>
         <CardDescription>
-          Manage API keys for Gemini, TTS, and Twilio SMS services.
-          <span className="block mt-2 font-semibold text-destructive/80 flex items-start">
-            <AlertTriangle className="h-4 w-4 mr-1 mt-0.5 shrink-0" />
-            <span>Storing API keys in Firestore is convenient for development but not recommended for production.</span>
-          </span>
+          Manage keys for external services like Twilio SMS and custom Text-to-Speech.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {isLoading ? (
-          <p>Loading API keys...</p>
+          <p>Loading settings...</p>
         ) : (
           <>
-            <div className="flex items-center gap-2 mb-2">
-                <BrainCircuit className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Gemini AI Keys</h3>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="geminiGenerative" className="font-medium">Gemini Generative API Key</Label>
-              <Input id="geminiGenerative" name="geminiGenerative" type="password" value={apiKeys.geminiGenerative} onChange={handleChange} placeholder="Enter key for chat, summarization, etc." />
-              <p className="text-xs text-muted-foreground">Used for all conversational AI tasks. Ensure the <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" rel="noopener noreferrer" className="underline text-primary">Generative Language API</a> is enabled in your Google Cloud project.</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="geminiEmbedding" className="font-medium">Gemini Embedding API Key</Label>
-              <Input id="geminiEmbedding" name="geminiEmbedding" type="password" value={apiKeys.geminiEmbedding} onChange={handleChange} placeholder="Enter key for knowledge base indexing" />
-              <p className="text-xs text-muted-foreground">Used for indexing documents. If blank, the Generative key is used. Ensure the <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" rel="noopener noreferrer" className="underline text-primary">Generative Language API</a> is enabled in your Google Cloud project.</p>
+            <div className="rounded-lg border border-green-500 bg-green-50 p-4 dark:bg-green-950">
+              <div className="flex items-center gap-3">
+                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  <div>
+                    <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">Gemini AI Authenticated</h3>
+                    <p className="text-sm text-green-700 dark:text-green-400 mt-1">
+                      Your application is now authenticated to use Gemini AI through a secure service account. No API keys are required here.
+                    </p>
+                  </div>
+              </div>
             </div>
 
             <Separator className="my-6" />
@@ -172,6 +146,10 @@ export default function ApiKeysPage() {
 
             <Separator className="my-6" />
             
+            <div className="flex items-center gap-2 mb-2">
+                <Speech className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">Custom Text-to-Speech (TTS)</h3>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="ttsKey" className="font-medium">Custom TTS API Key (e.g., Elevenlabs)</Label>
               <Input id="ttsKey" name="tts" type="password" value={apiKeys.tts} onChange={handleChange} placeholder="Enter TTS API Key" />
@@ -181,7 +159,6 @@ export default function ApiKeysPage() {
               <Input id="voiceId" name="voiceId" value={apiKeys.voiceId} onChange={handleChange} placeholder="Enter Voice ID for TTS" />
             </div>
               <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
-                <Speech className="h-5 w-5 text-primary" />
                 <div className="flex-1 space-y-1">
                     <Label htmlFor="useTtsApi" className="font-medium">
                         Use Custom TTS API
@@ -202,7 +179,7 @@ export default function ApiKeysPage() {
       </CardContent>
       <CardFooter>
         <Button onClick={handleSave} disabled={isLoading}>
-          <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save API Keys & Settings'}
+          <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save Settings'}
         </Button>
       </CardFooter>
     </Card>
