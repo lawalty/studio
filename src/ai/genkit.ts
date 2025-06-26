@@ -25,7 +25,13 @@ import {googleAI} from '@genkit-ai/googleai';
 // when running in a Google Cloud environment (like Firebase App Hosting).
 export const ai = genkit({
   plugins: [
-    googleAI(),
+    googleAI({
+      // By specifying a location, we are explicitly telling Genkit to use
+      // the Vertex AI API instead of the Google AI (Gemini) API.
+      // Ensure this location matches the region where you have enabled
+      // the Vertex AI API in your Google Cloud project.
+      location: 'us-central1',
+    }),
     // The firebase() plugin has been removed to resolve build issues.
     // Firebase Admin SDK is now initialized manually where needed.
   ],
