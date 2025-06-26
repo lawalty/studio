@@ -588,7 +588,6 @@ export default function KnowledgeBasePage() {
     const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
     
-    // Create a File object from the pasted text
     const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') ? pastedTextSourceName : `${pastedTextSourceName}.txt`;
     const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
     const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
@@ -600,11 +599,9 @@ export default function KnowledgeBasePage() {
     try {
       toast({ title: "Saving Text", description: `Saving "${textAsFile.name}" to Storage...` });
       
-      // Upload the new file to storage
       await uploadBytes(fileRef, textAsFile);
       const downloadURL = await getDownloadURL(fileRef);
 
-      // Create the new source metadata object
       const newSource: KnowledgeSource = {
         id: permanentId,
         name: textAsFile.name,
@@ -620,7 +617,6 @@ export default function KnowledgeBasePage() {
         indexingError: '',
       };
 
-      // Update UI and Firestore with the new source
       const updatedList = [newSource, ...getSourcesState(targetLevel)];
       setSources(updatedList);
       const savedToDb = await saveSourcesToFirestore(updatedList, targetLevel);
