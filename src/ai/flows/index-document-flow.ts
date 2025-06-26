@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text,
@@ -101,7 +100,6 @@ const indexDocumentFlow = ai.defineFlow(
         const { embedding } = await ai.embed({
           embedder: 'googleai/embedding-001',
           content: trimmedChunk,
-          taskType: 'RETRIEVAL_DOCUMENT',
         });
 
         if (embedding && Array.isArray(embedding) && embedding.length > 0) {
