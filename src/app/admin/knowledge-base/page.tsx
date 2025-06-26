@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
@@ -39,6 +39,7 @@ import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-documen
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
 import { testEmbedding } from '@/ai/flows/test-embedding-flow';
+import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -139,6 +140,7 @@ export default function KnowledgeBasePage() {
 
   // State for testing embedding
   const [isTestingEmbedding, setIsTestingEmbedding] = useState(false);
+  const [isTestingGeneration, setIsTestingGeneration] = useState(false);
 
 
   const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
@@ -676,6 +678,7 @@ export default function KnowledgeBasePage() {
           title: "Embedding Test Failed",
           description: `The test failed: ${result.error}`,
           variant: "destructive",
+          duration: 15000,
         });
       }
     } catch (error: any) {
@@ -683,15 +686,45 @@ export default function KnowledgeBasePage() {
         title: "Embedding Test Error",
         description: `An unexpected error occurred: ${error.message}`,
         variant: "destructive",
+        duration: 15000,
       });
     }
     setIsTestingEmbedding(false);
   };
 
+  const handleTestGeneration = async () => {
+    setIsTestingGeneration(true);
+    try {
+      const result = await testTextGeneration();
+      if (result.success) {
+        toast({
+          title: "Text Generation Test Successful!",
+          description: `Model said: "${result.generatedText}"`,
+        });
+      } else {
+        toast({
+          title: "Text Generation Test Failed",
+          description: `The test failed: ${result.error}`,
+          variant: "destructive",
+          duration: 15000,
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Text Generation Test Error",
+        description: `An unexpected error occurred: ${error.message}`,
+        variant: "destructive",
+        duration: 15000,
+      });
+    }
+    setIsTestingGeneration(false);
+  };
+
+  const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
+  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isProcessingThisFile = isProcessingId === source.id;
-    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding;
 
     if (!['pdf', 'text', 'document'].includes(source.type)) {
       return <span className="text-xs text-muted-foreground">N/A</span>;
@@ -776,8 +809,6 @@ export default function KnowledgeBasePage() {
       ? "Archived sources. Files here are not used by AI Blair for responses but are kept for record-keeping."
       : `View and manage sources. For PDF and text files, content is extracted and indexed as vector embeddings for semantic search. Other file types are stored for reference.`;
     
-    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding;
-
     return (
       <Card className="mt-6">
         <CardHeader>
@@ -858,12 +889,24 @@ export default function KnowledgeBasePage() {
     );
   };
 
-  const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding;
-
   return (
     <div className="space-y-6">
        <Card>
+          <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><MessageSquareText /> Test Text Generation</CardTitle>
+              <CardDescription>
+                  This performs a direct test of the Gemini text generation model. This helps determine if the issue is specific to embeddings or affects all AI services.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Button onClick={handleTestGeneration} disabled={anyOperationGloballyInProgress}>
+                  {isTestingGeneration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
+                  {isTestingGeneration ? 'Testing Generation...' : 'Run Generation Test'}
+              </Button>
+          </CardContent>
+      </Card>
+
+      <Card>
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Test Core Embedding Service</CardTitle>
               <CardDescription>

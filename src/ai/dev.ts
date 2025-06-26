@@ -10,3 +10,4 @@ import '@/ai/flows/generate-sms-response.ts';
 import '@/ai/flows/send-sms-flow.ts';
 import '@/ai/flows/test-knowledge-base-flow.ts';
 import '@/ai/flows/test-embedding-flow.ts';
+import '@/ai/flows/test-text-generation-flow.ts';
