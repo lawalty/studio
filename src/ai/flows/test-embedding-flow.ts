@@ -37,33 +37,29 @@ const testEmbeddingFlow = ai.defineFlow(
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      if (!result) {
-        return { success: false, error: 'The embedding service returned a null or undefined result object.' };
-      }
-      
       const embedding = result.embedding;
-      
-      if (!embedding) {
-        const fullResponse = JSON.stringify(result, null, 2);
-        return { success: false, error: `The result object was received, but the 'embedding' property was missing. Full response: ${fullResponse}` };
-      }
 
-      if (embedding.length > 0) {
+      // This is the corrected check. It validates that the embedding exists
+      // and has a length greater than 0. This correctly handles the Float32Array.
+      if (embedding && embedding.length > 0) {
         // SUCCESS!
         return {
           success: true,
           embeddingVectorLength: embedding.length,
         };
       } else {
-        // The embedding property exists, but it's an empty array.
+        // This will now only trigger for a genuinely empty or invalid response.
         const fullResponse = JSON.stringify(result, null, 2);
-        return { success: false, error: `The 'embedding' property was found, but it was an empty array. Full response: ${fullResponse}` };
+        return { 
+          success: false, 
+          error: `The embedding was either empty or invalid. Full response: ${fullResponse}` 
+        };
       }
 
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
       const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
-      const errorMessage = `The test failed with an unexpected exception. This often indicates a problem with API configuration or permissions. Details: ${e.message || 'Unknown error'}. Full error object: ${fullError}`;
+      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. Full error object: ${fullError}`;
       return {
           success: false,
           error: errorMessage,

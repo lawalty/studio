@@ -113,7 +113,8 @@ const indexDocumentFlow = ai.defineFlow(
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: Array.from(embeddingVector), // Convert Float32Array to regular Array for Firestore
+            // CRITICAL FIX: Convert Float32Array to a standard Array for Firestore.
+            embedding: Array.from(embeddingVector),
             createdAt: new Date(),
             downloadURL: downloadURL || null,
           });
