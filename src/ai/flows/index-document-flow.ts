@@ -11,9 +11,11 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { db } from '@/lib/firebase';
-import { collection, writeBatch, doc } from 'firebase/firestore';
+import { getFirestore } from 'firebase-admin/firestore'; // Using Admin SDK
 import { textEmbedding004 } from '@genkit-ai/googleai';
+
+// Initialize Admin Firestore. Genkit's Firebase plugin handles app initialization.
+const db = getFirestore();
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -37,20 +39,12 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
   return indexDocumentFlow(input);
 }
 
-/**
- * A simple text splitter function.
- * This is a basic implementation and doesn't respect word boundaries.
- * @param text The text to split.
- * @param options Chunking options.
- * @returns An array of text chunks.
- */
 function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: number; chunkOverlap: number }): string[] {
   if (chunkOverlap >= chunkSize) {
-    // This is a developer configuration error, so throwing is appropriate.
     throw new Error("chunkOverlap must be smaller than chunkSize.");
   }
   if (text.length <= chunkSize) {
-    return [text].filter(c => c.trim() !== ''); // Return only if not empty
+    return [text].filter(c => c.trim() !== '');
   }
 
   const chunks: string[] = [];
@@ -87,10 +81,11 @@ const indexDocumentFlow = ai.defineFlow(
       chunkOverlap: 150,
     });
     
-    const chunksToSave: any[] = [];
+    const batch = db.batch();
+    const chunksCollectionRef = db.collection('kb_chunks');
+    let successfulChunks = 0;
     let failedChunks = 0;
     let firstError: string | null = null;
-    let firstFailedChunkContent: string | null = null;
 
     for (const chunk of chunks) {
       try {
@@ -107,67 +102,41 @@ const indexDocumentFlow = ai.defineFlow(
         
         const embeddingVector = result.embedding;
 
-        // This is the crucial check based on the user's example.
-        if (embeddingVector && embeddingVector.length > 0) {
-          chunksToSave.push({
+        if (embeddingVector && typeof embeddingVector.length === 'number' && embeddingVector.length > 0) {
+          const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
+          batch.set(chunkDocRef, {
             sourceId,
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: Array.from(embeddingVector), // Use Array.from for Firestore compatibility
-            createdAt: new Date().toISOString(),
+            embedding: Array.from(embeddingVector), // Convert Float32Array to regular Array
+            createdAt: new Date(), // Use JS Date object, Firestore converts to Timestamp
             downloadURL,
           });
+          successfulChunks++;
         } else {
-          // This block now handles the specific case of an empty/invalid vector from the service.
           failedChunks++;
-          const fullResponse = JSON.stringify(result, null, 2);
-          const errorMsg = `The embedding service returned an empty or invalid embedding. This often points to a configuration issue in your Google Cloud project (e.g., Billing, API provisioning). Full service response: ${fullResponse}`;
-          if (!firstError) {
-            firstError = errorMsg;
-            firstFailedChunkContent = trimmedChunk;
-          }
-          console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because the embedding result was empty or invalid. This may indicate a cloud configuration issue. Content: "${trimmedChunk.substring(0, 100)}..."`
-          );
+          const errorMsg = `The embedding service returned an empty or invalid embedding.`;
+          if (!firstError) firstError = errorMsg;
+          console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
         }
       } catch (error: any) {
-        // This block catches exceptions during the API call itself.
         failedChunks++;
-        const errorMsg = `The embedding API call failed with an exception: ${error.message || 'Unknown error'}. Full details: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
-        if (!firstError) {
-          firstError = errorMsg;
-          firstFailedChunkContent = chunk;
-        }
-        console.error(
-          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${errorMsg}. Content: "${chunk.substring(0, 100)}..."`
-        );
+        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}.`;
+        if (!firstError) firstError = errorMsg;
+        console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
       }
     }
     
-    if (failedChunks > 0) {
-        console.log(`[indexDocumentFlow] Finished processing '${sourceName}'. Successfully embedded ${chunksToSave.length} chunks and skipped ${failedChunks} failed chunks.`);
-    }
-
-    // If all chunks failed, return a specific error.
-    if (chunksToSave.length === 0 && chunks.length > 0) {
-        const finalError = `Failed to embed any chunks for '${sourceName}'. The first error was: ${firstError} \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
-        return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
-    }
-
-    // If there are chunks to save, commit them to Firestore.
-    if (chunksToSave.length > 0) {
-        const batch = writeBatch(db);
-        const chunksCollectionRef = collection(db, 'kb_chunks');
-
-        chunksToSave.forEach((chunkData) => {
-          const chunkDocRef = doc(chunksCollectionRef);
-          batch.set(chunkDocRef, chunkData);
-        });
-
+    if (successfulChunks > 0) {
         await batch.commit();
     }
 
-    return { chunksCreated: chunks.length, chunksIndexed: chunksToSave.length, sourceId, success: true };
+    if (failedChunks > 0 && successfulChunks === 0) {
+        const finalError = `Failed to embed any chunks for '${sourceName}'. The first error was: ${firstError}`;
+        return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
+    }
+
+    return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: true };
   }
 );

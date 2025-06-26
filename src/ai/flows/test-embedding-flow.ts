@@ -37,30 +37,31 @@ const testEmbeddingFlow = ai.defineFlow(
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      // The embedding vector was successfully generated.
       const embedding = result?.embedding;
 
-      // Now, validate that the vector is not empty.
-      if (embedding && embedding.length > 0) {
+      // This is the corrected validation.
+      // The vector can be a Float32Array, which is not a standard Array.
+      // We check if it's an array-like object with a length property.
+      if (embedding && typeof embedding.length === 'number' && embedding.length > 0) {
         return {
           success: true,
           embeddingVectorLength: embedding.length,
         };
-      } else {
-        // The service responded, but with an empty or invalid embedding.
-        // This is a specific failure case we want to report clearly.
-        const fullResponse = JSON.stringify(result, null, 2);
-        const errorMessage = `The embedding service returned an empty or invalid vector. Full service response: ${fullResponse}`;
-        console.error('[testEmbeddingFlow] Failed with empty vector:', result);
-        return {
-          success: false,
-          error: errorMessage,
-        };
       }
+      
+      const fullResponse = JSON.stringify(result, null, 2);
+      const errorMessage = `The embedding service returned a successful response, but the embedding vector was empty or in an unexpected format. Full service response: ${fullResponse}`;
+      console.error('[testEmbeddingFlow] Failed with invalid vector format:', result);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+
     } catch (e: any) {
-      // An unexpected exception occurred during the API call.
       console.error('[testEmbeddingFlow] Exception caught:', e);
-      const errorMessage = `The test failed with an unexpected exception. This often indicates a problem with API configuration or permissions in your Google Cloud project. Details: ${e.message || 'Unknown error'}`;
+      // The JSON stringify here is important to see the full error object.
+      const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
+      const errorMessage = `The test failed with an unexpected exception. This often indicates a problem with API configuration or permissions. Details: ${e.message || 'Unknown error'}. Full error object: ${fullError}`;
       return {
           success: false,
           error: errorMessage,
