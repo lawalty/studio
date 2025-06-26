@@ -55,6 +55,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   const { embedding } = await ai.embed({
     embedder: 'googleai/embedding-001',
     content: query,
+    taskType: 'RETRIEVAL_QUERY',
   });
 
   // 2. Fetch all chunks from Firestore

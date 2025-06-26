@@ -101,6 +101,7 @@ const indexDocumentFlow = ai.defineFlow(
         const { embedding } = await ai.embed({
           embedder: 'googleai/embedding-001',
           content: trimmedChunk,
+          taskType: 'RETRIEVAL_DOCUMENT',
         });
 
         if (embedding && Array.isArray(embedding) && embedding.length > 0) {
