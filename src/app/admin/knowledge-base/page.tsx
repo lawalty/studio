@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
-import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
+import { indexDocument } from '@/ai/flows/index-document-flow';
 import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
 
 
@@ -237,10 +237,11 @@ export default function KnowledgeBasePage() {
     let extractedText: string | null = null;
     let extractionFailed = false;
 
+    // Update UI to show pending status
+    setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
+
     // Outer try/catch for text extraction step
     try {
-      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
-
       if (sourceToProcess.type === 'text') {
         toast({ title: "Processing Text File", description: `Reading content from ${sourceToProcess.name}...` });
         const response = await fetch(sourceToProcess.downloadURL);
@@ -296,7 +297,7 @@ export default function KnowledgeBasePage() {
       return;
     }
 
-    // Indexing Step (no longer needs a try/catch as the flow returns success/error)
+    // Indexing Step
     const indexResult = await indexDocument({
       sourceId: sourceToProcess.id,
       sourceName: sourceToProcess.name,
@@ -461,10 +462,6 @@ export default function KnowledgeBasePage() {
       toast({ title: "Operation in Progress", description: "Please wait.", variant: "default" });
       return;
     }
-    if (source.storagePath === 'pasted-text') {
-      toast({ title: "Move Not Supported", description: "Moving pasted text sources is not yet supported.", variant: "default" });
-      return;
-    }
     setSourceToMoveDetails({ source, currentLevel });
     setSelectedTargetMoveLevel(null);
     setShowMoveDialog(true);
@@ -572,85 +569,74 @@ export default function KnowledgeBasePage() {
   
   const handleIndexPastedText = useCallback(async () => {
     if (!pastedText.trim() || !pastedTextSourceName.trim()) {
-        toast({ title: "Missing Information", description: "Please provide a source name and text to index.", variant: "destructive" });
-        return;
+      toast({ title: "Missing Information", description: "Please provide a source name and text to index.", variant: "destructive" });
+      return;
     }
-     if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId || isIndexingPastedText) {
+    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId || isIndexingPastedText) {
       toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
       return;
     }
 
     setIsIndexingPastedText(true);
     const targetLevel = selectedKBTargetForPastedText;
+    const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
-    const sourceId = `pasted-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     
-    const newSource: KnowledgeSource = {
-        id: sourceId,
-        name: pastedTextSourceName,
+    // Create a File object from the pasted text
+    const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') ? pastedTextSourceName : `${pastedTextSourceName}.txt`;
+    const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
+    const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
+
+    const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const filePath = `${config.storageFolder}${permanentId}-${textAsFile.name}`;
+    const fileRef = storageRef(storage, filePath);
+
+    try {
+      toast({ title: "Saving Text", description: `Saving "${textAsFile.name}" to Storage...` });
+      
+      // Upload the new file to storage
+      await uploadBytes(fileRef, textAsFile);
+      const downloadURL = await getDownloadURL(fileRef);
+
+      // Create the new source metadata object
+      const newSource: KnowledgeSource = {
+        id: permanentId,
+        name: textAsFile.name,
         type: 'text',
-        size: `${(pastedText.length / 1024).toFixed(2)}KB`,
+        size: `${(textAsFile.size / 1024).toFixed(2)}KB`,
         uploadedAt: new Date().toISOString().split('T')[0],
-        storagePath: 'pasted-text',
-        downloadURL: '',
+        storagePath: filePath,
+        downloadURL: downloadURL,
         description: pastedTextDescription || '',
-        extractionStatus: 'success',
+        extractionStatus: 'pending',
         indexingStatus: 'pending',
         extractionError: '',
         indexingError: '',
-    };
+      };
 
-    const updatedList = [newSource, ...getSourcesState(targetLevel)];
-    setSources(updatedList);
-    setIsProcessingId(sourceId);
-    
-    await saveSourcesToFirestore(updatedList, targetLevel);
-    toast({ title: "Indexing Started", description: `Processing pasted text "${newSource.name}"...` });
+      // Update UI and Firestore with the new source
+      const updatedList = [newSource, ...getSourcesState(targetLevel)];
+      setSources(updatedList);
+      const savedToDb = await saveSourcesToFirestore(updatedList, targetLevel);
 
-    const payload: IndexDocumentInput = {
-        sourceId: newSource.id,
-        sourceName: newSource.name,
-        text: pastedText,
-        level: targetLevel,
-    };
-    if (newSource.downloadURL) {
-        payload.downloadURL = newSource.downloadURL;
+      if (savedToDb) {
+        toast({ title: "Source Saved", description: `"${textAsFile.name}" is now ready for processing.` });
+        triggerProcessing(newSource, targetLevel);
+      } else {
+        toast({ title: "Database Save Failed", description: "File created but DB save failed. Reverting.", variant: "destructive"});
+        deleteObject(fileRef).catch(delError => console.warn("Failed to clean up orphaned file:", delError));
+        setSources(prev => prev.filter(s => s.id !== newSource.id));
+      }
+    } catch (error: any) {
+      toast({ title: "Operation Failed", description: `Could not save/process pasted text: ${error.message || 'Unknown'}.`, variant: "destructive"});
+    } finally {
+      setIsIndexingPastedText(false);
+      setPastedText('');
+      setPastedTextSourceName('');
+      setPastedTextDescription('');
     }
+  }, [pastedText, pastedTextSourceName, pastedTextDescription, selectedKBTargetForPastedText, getSourcesSetter, getSourcesState, triggerProcessing, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
 
-    const indexResult = await indexDocument(payload);
-
-    if (indexResult.success) {
-         setSources(prev => {
-            const updated = prev.map(s => s.id === sourceId ? {
-              ...s,
-              indexingStatus: 'indexed',
-              indexingError: ''
-            } : s);
-            saveSourcesToFirestore(updated, targetLevel);
-            return updated;
-        });
-        toast({ title: "Indexing Successful", description: `Pasted text "${newSource.name}" has been indexed with ${indexResult.chunksIndexed} chunks.` });
-    } else {
-        const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
-        setSources(prev => {
-            const updated = prev.map(s => s.id === sourceId ? {
-              ...s,
-              indexingStatus: 'failed',
-              indexingError: errorMessage,
-            } : s);
-            saveSourcesToFirestore(updated, targetLevel);
-            return updated;
-        });
-        toast({ title: "Indexing Failed", description: `Could not index pasted text: ${errorMessage}`, variant: "destructive" });
-    }
-
-    setIsIndexingPastedText(false);
-    setIsProcessingId(null);
-    setPastedText('');
-    setPastedTextSourceName('');
-    setPastedTextDescription('');
-
-  }, [pastedText, pastedTextSourceName, pastedTextDescription, selectedKBTargetForPastedText, toast, getSourcesSetter, saveSourcesToFirestore, getSourcesState, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
 
   const handleTestKnowledgeBase = async () => {
     if (!testQuery.trim()) {
@@ -702,8 +688,8 @@ export default function KnowledgeBasePage() {
                                  <Button 
                                     variant="ghost" 
                                     size="icon" 
-                                    onClick={() => source.storagePath === 'pasted-text' ? toast({title: "Reprocessing pasted text not supported", description: "Please paste and index again.", variant: "default"}) : triggerProcessing(source, level)}
-                                    disabled={anyOperationGloballyInProgress || source.storagePath === 'pasted-text'}
+                                    onClick={() => triggerProcessing(source, level)}
+                                    disabled={anyOperationGloballyInProgress}
                                     aria-label={`Reprocess ${source.name}`}
                                     className="h-6 w-6"
                                 >
@@ -711,7 +697,7 @@ export default function KnowledgeBasePage() {
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>{source.storagePath === 'pasted-text' ? 'Reprocessing pasted text not supported' : 'Reprocess File'}</p>
+                                <p>Reprocess File</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
@@ -719,7 +705,30 @@ export default function KnowledgeBasePage() {
             );
         case 'pending':
         default:
-            return <span className="text-xs text-yellow-600">Pending</span>;
+             return (
+                <div className="flex items-center gap-1">
+                    <span className="text-xs text-yellow-600">Pending</span>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                 <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => triggerProcessing(source, level)}
+                                    disabled={anyOperationGloballyInProgress}
+                                    aria-label={`Process ${source.name}`}
+                                    className="h-6 w-6"
+                                >
+                                    <RefreshCw className="h-4 w-4 text-blue-600" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Start Processing</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
+            );
     }
   };
 
@@ -802,7 +811,7 @@ export default function KnowledgeBasePage() {
                   </TableCell>
                   <TableCell>{renderProcessingStatus(source, level)}</TableCell>
                   <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={anyOperationGloballyInProgress || isLoadingSources || source.storagePath === 'pasted-text'}>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={anyOperationGloballyInProgress || isLoadingSources}>
                       <ArrowRightLeft className="h-4 w-4 text-blue-600" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={anyOperationGloballyInProgress || isLoadingSources}>
@@ -939,7 +948,7 @@ export default function KnowledgeBasePage() {
         <CardHeader>
             <CardTitle className="font-headline">Index Pasted Text</CardTitle>
             <CardDescription>
-                Paste text directly into the field below to index it. This bypasses file uploads entirely.
+                Paste text directly into the field below to index it. This will save the content as a .txt file in Firebase Storage and then process it like any other file.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -949,7 +958,7 @@ export default function KnowledgeBasePage() {
                     id="pasted-text-source-name"
                     value={pastedTextSourceName}
                     onChange={(e) => setPastedTextSourceName(e.target.value)}
-                    placeholder="e.g., 'Company Mission Statement'"
+                    placeholder="e.g., 'Company Mission Statement' (will be saved as .txt)"
                     disabled={anyOperationGloballyInProgress || anyKbLoading}
                     suppressHydrationWarning
                 />
@@ -1000,7 +1009,7 @@ export default function KnowledgeBasePage() {
                 <Label className="font-medium whitespace-nowrap shrink-0">Step 5:</Label>
                 <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || anyOperationGloballyInProgress || anyKbLoading}>
                   {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-                  {isIndexingPastedText ? 'Indexing...' : 'Index Pasted Text'}
+                  {isIndexingPastedText ? 'Saving & Indexing...' : 'Save & Index Pasted Text'}
                 </Button>
             </div>
         </CardFooter>
