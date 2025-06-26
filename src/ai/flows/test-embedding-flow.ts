@@ -55,7 +55,7 @@ const testEmbeddingFlow = ai.defineFlow(
       console.error('[testEmbeddingFlow] Exception caught:', e);
       return {
           success: false,
-          error: `The test failed with an unexpected exception: ${e.message || 'Unknown error'}`,
+          error: `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
       };
     }
   }

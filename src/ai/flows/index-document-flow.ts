@@ -128,7 +128,7 @@ const indexDocumentFlow = ai.defineFlow(
         }
       } catch (error: any) {
         failedChunks++;
-        const errorMsg = error.message || 'An unknown error occurred during embedding.';
+        const errorMsg = `The test failed with an unexpected exception: ${error.message || 'Unknown error'}. Full details: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
         if (!firstError) {
           firstError = errorMsg;
           firstFailedChunkContent = chunk;
