@@ -34,7 +34,7 @@ const testEmbeddingFlow = ai.defineFlow(
       const { embedding } = await ai.embed({
         embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
-        taskType: 'RETRIEVAL_DOCUMENT',
+        taskType: 'SEMANTIC_SIMILARITY',
       });
 
       // Use a more lenient check that works for both standard and TypedArrays.
