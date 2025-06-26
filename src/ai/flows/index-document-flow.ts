@@ -13,7 +13,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
-import { textEmbeddingGecko } from '@genkit-ai/googleai';
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -100,7 +100,7 @@ const indexDocumentFlow = ai.defineFlow(
         }
         
         const { embedding } = await ai.embed({
-          embedder: textEmbeddingGecko,
+          embedder: gemini15Flash,
           content: trimmedChunk,
           taskType: 'RETRIEVAL_DOCUMENT',
         });
@@ -128,14 +128,13 @@ const indexDocumentFlow = ai.defineFlow(
         }
       } catch (error: any) {
         failedChunks++;
-        const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-        const errorMsg = `The embedding service threw an unexpected exception: ${error.message || 'Unknown error'}. Full details: ${fullError}`;
+        const errorMsg = error.message || 'An unknown error occurred during embedding.';
         if (!firstError) {
           firstError = errorMsg;
           firstFailedChunkContent = chunk;
         }
         console.error(
-          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Full Error: ${fullError}. Content: "${chunk.substring(0, 100)}..."`
+          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${errorMsg}. Content: "${chunk.substring(0, 100)}..."`
         );
       }
     }

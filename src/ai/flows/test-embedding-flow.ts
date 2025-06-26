@@ -10,7 +10,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { textEmbeddingGecko } from '@genkit-ai/googleai';
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
@@ -32,7 +32,7 @@ const testEmbeddingFlow = ai.defineFlow(
   async () => {
     try {
       const { embedding } = await ai.embed({
-        embedder: textEmbeddingGecko,
+        embedder: gemini15Flash,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
       });
@@ -51,11 +51,11 @@ const testEmbeddingFlow = ai.defineFlow(
         };
       }
     } catch (e: any) {
-      // This provides a more detailed error directly in the UI toast for any other exception.
-      console.error('[testEmbeddingFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+      // This provides a cleaner error directly in the UI toast for any other exception.
+      console.error('[testEmbeddingFlow] Exception caught:', e);
       return {
           success: false,
-          error: `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
+          error: `The test failed with an unexpected exception: ${e.message || 'Unknown error'}`,
       };
     }
   }
