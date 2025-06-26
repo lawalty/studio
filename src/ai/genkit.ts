@@ -20,9 +20,8 @@ import {googleAI} from '@genkit-ai/googleai';
 // generative chat, embeddings, and any other model interactions.
 // The googleAI() plugin will automatically use the service account credentials
 // when running in a Google Cloud environment (like Firebase App Hosting).
-// By specifying a location, we ensure Genkit can resolve regional models.
 export const ai = genkit({
   plugins: [
-    googleAI({ location: 'us-central1' })
+    googleAI()
   ],
 });
