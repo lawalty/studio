@@ -1,9 +1,8 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
@@ -20,6 +19,22 @@ export default function UpdatesComingPage() {
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [message, setMessage] = useState<string>(DEFAULT_MESSAGE);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        router.push('/admin');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [router]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -104,11 +119,8 @@ export default function UpdatesComingPage() {
           )}
         </CardContent>
       </Card>
-      <p className="mt-6 text-center text-xs text-muted-foreground">
-        Need to make changes?{' '}
-        <Link href="/admin" className="text-accent hover:underline font-semibold">
-            Go to Admin Panel
-        </Link>
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Press Ctrl + Shift + A to access the admin panel.
       </p>
     </div>
   );

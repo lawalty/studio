@@ -1,7 +1,6 @@
 
 'use client';
 
-import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
 export default function Footer() {
@@ -16,9 +15,6 @@ export default function Footer() {
       <div className="container mx-auto px-4 py-4 text-center text-muted-foreground">
         <p className="text-sm">
           © {year} AI Chat. All rights reserved.
-          <Link href="/admin" className="ml-4 text-xs text-accent hover:underline">
-            Admin Area
-          </Link>
         </p>
       </div>
     </footer>
