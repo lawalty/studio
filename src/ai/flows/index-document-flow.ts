@@ -67,7 +67,7 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    const cleanText = text.replace(/[^\x20-\x7E\n\r\t]/g, '').trim();
+    const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
     if (!cleanText) {
        const errorMessage = "No readable text content was found in the document after processing. Indexing aborted.";
@@ -101,6 +101,8 @@ const indexDocumentFlow = ai.defineFlow(
         
         const embeddingVector = result.embedding;
 
+        // Corrected Validation: Check if the embedding is an array-like object with a length.
+        // This correctly handles the Float32Array returned by the service.
         if (embeddingVector && typeof embeddingVector.length === 'number' && embeddingVector.length > 0) {
           const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
           batch.set(chunkDocRef, {
@@ -108,9 +110,9 @@ const indexDocumentFlow = ai.defineFlow(
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: Array.from(embeddingVector), // Convert Float32Array to regular Array
+            embedding: Array.from(embeddingVector), // Convert Float32Array to regular Array for Firestore
             createdAt: new Date(), // Use JS Date object, Firestore converts to Timestamp
-            downloadURL,
+            downloadURL: downloadURL || null, // Ensure it's null if undefined
           });
           successfulChunks++;
         } else {

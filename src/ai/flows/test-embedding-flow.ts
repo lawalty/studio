@@ -39,7 +39,7 @@ const testEmbeddingFlow = ai.defineFlow(
       const embedding = result?.embedding;
 
       // This is the corrected validation.
-      // The vector can be a Float32Array, which is not a standard Array.
+      // The vector can be a Float32Array, which is not a standard Array, but it has a .length property.
       // We check if it's an array-like object with a length property.
       if (embedding && typeof embedding.length === 'number' && embedding.length > 0) {
         return {
