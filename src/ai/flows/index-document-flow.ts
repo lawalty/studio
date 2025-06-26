@@ -87,7 +87,7 @@ const indexDocumentFlow = ai.defineFlow(
     });
     
     if (chunks.length > 0) {
-        console.log(`[indexDocumentFlow] Chunking complete for '${sourceName}'. ${chunks.length} text chunks were created.`);
+        toast({ title: "Chunking Phase Complete", description: `${chunks.length} text chunks were created.` });
     }
 
     const chunksToSave: any[] = [];
