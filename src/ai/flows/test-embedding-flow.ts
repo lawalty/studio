@@ -38,10 +38,8 @@ const testEmbeddingFlow = ai.defineFlow(
 
       const embedding = result?.embedding;
 
-      // This is the corrected validation.
-      // The vector can be a Float32Array, which is not a standard Array, but it has a .length property.
-      // We check if it's an array-like object with a length property.
-      if (embedding && typeof embedding.length === 'number' && embedding.length > 0) {
+      // Corrected Validation: Check if the embedding exists and has a length greater than 0.
+      if (embedding && embedding.length > 0) {
         return {
           success: true,
           embeddingVectorLength: embedding.length,
@@ -58,7 +56,6 @@ const testEmbeddingFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
-      // The JSON stringify here is important to see the full error object.
       const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
       const errorMessage = `The test failed with an unexpected exception. This often indicates a problem with API configuration or permissions. Details: ${e.message || 'Unknown error'}. Full error object: ${fullError}`;
       return {

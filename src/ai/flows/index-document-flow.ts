@@ -105,9 +105,8 @@ const indexDocumentFlow = ai.defineFlow(
         
         const embeddingVector = result.embedding;
 
-        // Corrected Validation: Check if the embedding is an array-like object with a length.
-        // This correctly handles the Float32Array returned by the service.
-        if (embeddingVector && typeof embeddingVector.length === 'number' && embeddingVector.length > 0) {
+        // Corrected Validation: Check if the embedding vector exists and is not empty.
+        if (embeddingVector && embeddingVector.length > 0) {
           const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
           batch.set(chunkDocRef, {
             sourceId,
@@ -115,8 +114,8 @@ const indexDocumentFlow = ai.defineFlow(
             level,
             text: trimmedChunk,
             embedding: Array.from(embeddingVector), // Convert Float32Array to regular Array for Firestore
-            createdAt: new Date(), // Use JS Date object, Firestore converts to Timestamp
-            downloadURL: downloadURL || null, // Ensure it's null if undefined
+            createdAt: new Date(),
+            downloadURL: downloadURL || null,
           });
           successfulChunks++;
         } else {
