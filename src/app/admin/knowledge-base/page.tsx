@@ -234,22 +234,19 @@ export default function KnowledgeBasePage() {
     if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) return;
     setIsProcessingId(sourceToProcess.id);
     const setSources = getSourcesSetter(level);
+    let extractedText: string | null = null;
+    let extractionFailed = false;
 
+    // Outer try/catch for text extraction step
     try {
-      let extractedText: string | null = null;
-      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'pending' } : s));
+      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
 
       if (sourceToProcess.type === 'text') {
         toast({ title: "Processing Text File", description: `Reading content from ${sourceToProcess.name}...` });
-        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
-        
         const response = await fetch(sourceToProcess.downloadURL);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch text file: ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`Failed to fetch text file: ${response.statusText}`);
         extractedText = await response.text();
-        toast({ title: "Text Read Successfully", description: `Now indexing ${sourceToProcess.name}...` });
-      } else { 
+      } else {
         let topics = '';
         try {
           const topicsDocRef = doc(db, "configurations/site_display_assets");
@@ -260,37 +257,58 @@ export default function KnowledgeBasePage() {
         } catch (e) {
           console.warn("Could not fetch conversational topics for extraction, proceeding without them.", e);
         }
-
         toast({ title: "Extraction Started", description: `AI is processing ${sourceToProcess.name}...` });
-        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending' } : s));
-        
-        const result = await extractTextFromDocumentUrl({
-          documentUrl: sourceToProcess.downloadURL,
-          conversationalTopics: topics,
-        });
+        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: topics });
         extractedText = result.extractedText;
-
-        setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
-        toast({ title: "Text Extracted by AI", description: `Now indexing ${sourceToProcess.name}...` });
       }
+      
+      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
+      toast({ title: "Text Extracted Successfully", description: `Now indexing ${sourceToProcess.name}...` });
 
-      if (!extractedText || extractedText.trim() === '') {
-        throw new Error("Text content is missing or empty after processing, cannot index.");
-      }
-
-      await indexDocument({
-        sourceId: sourceToProcess.id,
-        sourceName: sourceToProcess.name,
-        text: extractedText,
-        level: level,
-        downloadURL: sourceToProcess.downloadURL,
-      });
-
+    } catch (error: any) {
+      extractionFailed = true;
+      console.error(`[KBPage - triggerProcessing - Extraction Error] for ${sourceToProcess.name}:`, error);
+      const errorMessage = error.message || 'An unknown error occurred during text extraction.';
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
           ...s,
-          extractionStatus: 'success',
-          extractionError: '',
+          extractionStatus: 'failed',
+          extractionError: errorMessage,
+          indexingStatus: 'failed',
+          indexingError: 'Did not attempt indexing due to extraction failure.'
+        } : s);
+        saveSourcesToFirestore(updated, level);
+        return updated;
+      });
+      toast({ title: "Extraction Failed", description: `Could not extract text from ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive" });
+    }
+
+    if (extractionFailed) {
+      setIsProcessingId(null);
+      return;
+    }
+
+    if (!extractedText || extractedText.trim() === '') {
+      const errorMessage = "Text content is missing or empty after processing, cannot index.";
+      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'failed', indexingError: errorMessage } : s));
+      toast({ title: "Indexing Failed", description: errorMessage, variant: "destructive" });
+      setIsProcessingId(null);
+      return;
+    }
+
+    // Indexing Step (no longer needs a try/catch as the flow returns success/error)
+    const indexResult = await indexDocument({
+      sourceId: sourceToProcess.id,
+      sourceName: sourceToProcess.name,
+      text: extractedText,
+      level: level,
+      downloadURL: sourceToProcess.downloadURL,
+    });
+
+    if (indexResult.success) {
+      setSources(prev => {
+        const updated = prev.map(s => s.id === sourceToProcess.id ? {
+          ...s,
           indexingStatus: 'indexed',
           indexingError: ''
         } : s);
@@ -298,25 +316,21 @@ export default function KnowledgeBasePage() {
         return updated;
       });
       toast({ title: "Processing Successful", description: `${sourceToProcess.name} has been indexed.` });
-
-    } catch (error: any) {
-      console.error(`[KBPage - triggerProcessing - ${level}] Error for ${sourceToProcess.name}:`, error);
-      const errorMessage = error.message || 'An unknown error occurred during processing.';
+    } else {
+      const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
           ...s,
-          extractionStatus: 'failed',
-          extractionError: errorMessage,
           indexingStatus: 'failed',
           indexingError: errorMessage
         } : s);
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Processing Failed", description: `Could not process ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive" });
-    } finally {
-      setIsProcessingId(null);
+      toast({ title: "Indexing Failed", description: `Could not index ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive" });
     }
+    
+    setIsProcessingId(null);
   }, [getSourcesSetter, saveSourcesToFirestore, toast]);
 
 
@@ -590,42 +604,34 @@ export default function KnowledgeBasePage() {
     setSources(updatedList);
     setIsProcessingId(sourceId);
     
-    // Immediately save the 'pending' state to give the user feedback.
     await saveSourcesToFirestore(updatedList, targetLevel);
+    toast({ title: "Indexing Started", description: `Processing pasted text "${newSource.name}"...` });
 
-    try {
-        toast({ title: "Indexing Started", description: `Processing pasted text "${newSource.name}"...` });
-        
-        const payload: IndexDocumentInput = {
-            sourceId: newSource.id,
-            sourceName: newSource.name,
-            text: pastedText,
-            level: targetLevel,
-        };
-        // Only include downloadURL if it is a non-empty string.
-        if (newSource.downloadURL) {
-            payload.downloadURL = newSource.downloadURL;
-        }
+    const payload: IndexDocumentInput = {
+        sourceId: newSource.id,
+        sourceName: newSource.name,
+        text: pastedText,
+        level: targetLevel,
+    };
+    if (newSource.downloadURL) {
+        payload.downloadURL = newSource.downloadURL;
+    }
 
-        const indexResult = await indexDocument(payload);
+    const indexResult = await indexDocument(payload);
 
-        if (indexResult.chunksIndexed > 0) {
-             setSources(prev => {
-                const updated = prev.map(s => s.id === sourceId ? {
-                  ...s,
-                  indexingStatus: 'indexed',
-                  indexingError: ''
-                } : s);
-                saveSourcesToFirestore(updated, targetLevel);
-                return updated;
-            });
-            toast({ title: "Indexing Successful", description: `Pasted text "${newSource.name}" has been indexed.` });
-        } else {
-             throw new Error("No text chunks were generated. The text might be too short.");
-        }
-    } catch (error: any) {
-        console.error(`[KBPage - handleIndexPastedText] Error for ${newSource.name}:`, error);
-        const errorMessage = error.message || 'An unknown error occurred.';
+    if (indexResult.success) {
+         setSources(prev => {
+            const updated = prev.map(s => s.id === sourceId ? {
+              ...s,
+              indexingStatus: 'indexed',
+              indexingError: ''
+            } : s);
+            saveSourcesToFirestore(updated, targetLevel);
+            return updated;
+        });
+        toast({ title: "Indexing Successful", description: `Pasted text "${newSource.name}" has been indexed with ${indexResult.chunksIndexed} chunks.` });
+    } else {
+        const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
         setSources(prev => {
             const updated = prev.map(s => s.id === sourceId ? {
               ...s,
@@ -636,13 +642,14 @@ export default function KnowledgeBasePage() {
             return updated;
         });
         toast({ title: "Indexing Failed", description: `Could not index pasted text: ${errorMessage}`, variant: "destructive" });
-    } finally {
-        setIsIndexingPastedText(false);
-        setIsProcessingId(null);
-        setPastedText('');
-        setPastedTextSourceName('');
-        setPastedTextDescription('');
     }
+
+    setIsIndexingPastedText(false);
+    setIsProcessingId(null);
+    setPastedText('');
+    setPastedTextSourceName('');
+    setPastedTextDescription('');
+
   }, [pastedText, pastedTextSourceName, pastedTextDescription, selectedKBTargetForPastedText, toast, getSourcesSetter, saveSourcesToFirestore, getSourcesState, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
 
   const handleTestKnowledgeBase = async () => {
