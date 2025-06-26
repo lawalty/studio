@@ -72,7 +72,9 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    const cleanText = text.replace(/^\uFEFF/, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+    // This more aggressive cleaning removes non-printable ASCII characters but preserves common whitespace like newlines and tabs.
+    // This is crucial for handling text copied from various sources (websites, PDFs, etc.) that may contain invisible invalid characters.
+    const cleanText = text.replace(/[^\x20-\x7E\n\r\t]/g, '').trim();
 
     if (!cleanText) {
        const errorMessage = "No readable text content was found in the document after processing. Indexing aborted.";
@@ -119,7 +121,7 @@ const indexDocumentFlow = ai.defineFlow(
           const errorMsg = 'Embedding call returned an empty or invalid result from the AI model.';
           if (!firstError) firstError = errorMsg;
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. The content might be unsupported by the model. Content: "${trimmedChunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. Chunk length: ${trimmedChunk.length}. The content might be unsupported by the model. Content: "${trimmedChunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
