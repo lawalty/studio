@@ -104,13 +104,15 @@ const indexDocumentFlow = ai.defineFlow(
           taskType: 'RETRIEVAL_DOCUMENT',
         });
 
-        if (embedding && Array.isArray(embedding) && embedding.length > 0) {
+        // Use a more lenient check for the embedding result that supports TypedArrays.
+        if (embedding?.length > 0) {
           chunksToSave.push({
             sourceId,
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: embedding,
+            // Convert to a standard array before saving to Firestore for compatibility.
+            embedding: Array.from(embedding),
             createdAt: new Date().toISOString(),
             downloadURL,
           });

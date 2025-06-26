@@ -11,7 +11,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 
 // Helper function to calculate cosine similarity between two vectors
-function cosineSimilarity(vecA: number[], vecB: number[]): number {
+function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
   if (vecA.length !== vecB.length) {
     return 0; // Or throw an error
   }
@@ -72,7 +72,8 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   // 3. Calculate similarity for each chunk and store the results
   const rankedResults: SearchResult[] = [];
   for (const chunk of allChunks) {
-    if (chunk.embedding && Array.isArray(chunk.embedding)) {
+    // Use a more lenient check for the embedding that supports TypedArrays.
+    if (chunk.embedding?.length > 0) {
       const similarity = cosineSimilarity(embedding, chunk.embedding);
       
       // We can define a threshold to filter out irrelevant results

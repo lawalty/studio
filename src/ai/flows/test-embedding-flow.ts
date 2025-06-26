@@ -30,33 +30,28 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const response = await ai.embed({
+      const { embedding } = await ai.embed({
         embedder: 'googleai/embedding-001',
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      const embedding = response.embedding;
-
-      if (embedding && Array.isArray(embedding) && embedding.length > 0) {
+      // Use a more lenient check that works for both standard and TypedArrays.
+      if (embedding?.length > 0) {
         return {
           success: true,
           embeddingVectorLength: embedding.length,
         };
       } else {
-        // Return the raw response directly in the error message for debugging.
-        const rawResponseString = JSON.stringify(response, null, 2);
         return {
           success: false,
-          error: `The embedding service returned an empty or invalid vector. Raw response from service: ${rawResponseString}`,
+          error: `The embedding service returned a successful but empty response. Please check your Google Cloud project configuration.`,
         };
       }
     } catch (e: any) {
-      // Return the raw exception directly in the error message for debugging.
-      const rawExceptionString = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
       return {
         success: false,
-        error: `An exception occurred during the embedding call. Raw exception: ${rawExceptionString}`,
+        error: `An exception occurred during the embedding call: ${e.message}. This could be a permission or billing issue in your Google Cloud project.`,
       };
     }
   }
