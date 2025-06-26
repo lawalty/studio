@@ -9,7 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import { gemini15Flash } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -54,7 +54,7 @@ interface SearchResult {
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
   // 1. Generate an embedding for the user's query using the primary 'ai' instance
   const { embedding } = await ai.embed({
-    embedder: gemini15Flash,
+    embedder: textEmbedding004,
     content: query,
     taskType: 'RETRIEVAL_QUERY',
   });

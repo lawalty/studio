@@ -10,7 +10,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
@@ -32,7 +32,7 @@ const testEmbeddingFlow = ai.defineFlow(
   async () => {
     try {
       const { embedding } = await ai.embed({
-        embedder: gemini15Flash,
+        embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
       });

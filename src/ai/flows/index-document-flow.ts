@@ -13,7 +13,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { db } from '@/lib/firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
-import { gemini15Flash } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -100,7 +100,7 @@ const indexDocumentFlow = ai.defineFlow(
         }
         
         const { embedding } = await ai.embed({
-          embedder: gemini15Flash,
+          embedder: textEmbedding004,
           content: trimmedChunk,
           taskType: 'RETRIEVAL_DOCUMENT',
         });
