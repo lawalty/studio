@@ -37,8 +37,8 @@ const testEmbeddingFlow = ai.defineFlow(
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      // A more robust check for a valid embedding response.
-      if (result && Array.isArray(result.embedding) && result.embedding.length > 0) {
+      // A more robust check for a valid embedding response that handles both Arrays and Float32Arrays.
+      if (result?.embedding?.length > 0) {
         return {
           success: true,
           embeddingVectorLength: result.embedding.length,

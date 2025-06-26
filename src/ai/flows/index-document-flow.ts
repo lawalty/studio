@@ -105,7 +105,7 @@ const indexDocumentFlow = ai.defineFlow(
           taskType: 'RETRIEVAL_DOCUMENT',
         });
         
-        if (result && Array.isArray(result.embedding) && result.embedding.length > 0) {
+        if (result?.embedding?.length > 0) {
           chunksToSave.push({
             sourceId,
             sourceName,
