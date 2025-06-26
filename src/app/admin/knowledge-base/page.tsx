@@ -305,6 +305,9 @@ export default function KnowledgeBasePage() {
       level: level,
       downloadURL: sourceToProcess.downloadURL,
     });
+    
+    // This is our new diagnostic toast
+    toast({ title: "Chunking Phase Complete", description: `${indexResult.chunksCreated} text chunks were created for processing.` });
 
     if (indexResult.success) {
       setSources(prev => {
@@ -316,7 +319,7 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Processing Successful", description: `${sourceToProcess.name} has been indexed.` });
+      toast({ title: "Processing Successful", description: `${sourceToProcess.name} has been indexed with ${indexResult.chunksIndexed} chunks.` });
     } else {
       const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
       setSources(prev => {

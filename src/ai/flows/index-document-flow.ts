@@ -24,6 +24,7 @@ const IndexDocumentInputSchema = z.object({
 export type IndexDocumentInput = z.infer<typeof IndexDocumentInputSchema>;
 
 const IndexDocumentOutputSchema = z.object({
+  chunksCreated: z.number().describe('The number of chunks the text was split into.'),
   chunksIndexed: z.number().describe('The number of text chunks created and stored.'),
   sourceId: z.string().describe('The unique ID of the source document that was processed.'),
   success: z.boolean().describe('Indicates whether the indexing process completed without critical errors.'),
@@ -72,23 +73,19 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    // This more aggressive cleaning removes non-printable ASCII characters but preserves common whitespace like newlines and tabs.
-    // This is crucial for handling text copied from various sources (websites, PDFs, etc.) that may contain invisible invalid characters.
     const cleanText = text.replace(/[^\x20-\x7E\n\r\t]/g, '').trim();
 
     if (!cleanText) {
        const errorMessage = "No readable text content was found in the document after processing. Indexing aborted.";
        console.warn(`[indexDocumentFlow] ${errorMessage} Document: '${sourceName}'.`);
-       return { chunksIndexed: 0, sourceId, success: false, error: errorMessage };
+       return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMessage };
     }
 
-    // 1. Chunk the text using the simple, internal splitter
     const chunks = simpleSplitter(cleanText, {
-      chunkSize: 1500, // Reduced size slightly for safety
+      chunkSize: 1500,
       chunkOverlap: 150,
     });
     
-    // 2. Generate embeddings and prepare data for Firestore.
     const chunksToSave: any[] = [];
     let failedChunks = 0;
     let firstError = '';
@@ -97,10 +94,9 @@ const indexDocumentFlow = ai.defineFlow(
       try {
         const trimmedChunk = chunk.trim();
         if (trimmedChunk.length === 0) {
-          continue; // Skip empty chunks silently
+          continue;
         }
         
-        // Use the primary 'ai' instance for embedding
         const { embedding } = await ai.embed({
           embedder: 'googleai/text-embedding-004',
           content: trimmedChunk,
@@ -121,7 +117,7 @@ const indexDocumentFlow = ai.defineFlow(
           const errorMsg = 'Embedding call returned an empty or invalid result from the AI model.';
           if (!firstError) firstError = errorMsg;
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. The content might be unsupported by the model due to safety filters. Content: "${trimmedChunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. The content might be unsupported by the model. Content: "${trimmedChunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
@@ -146,10 +142,9 @@ const indexDocumentFlow = ai.defineFlow(
         } else {
           finalError = `The AI model could not process the provided text. This can happen if the text is empty, contains unsupported characters, or violates content policies. Please review the text and try again. Details: ${firstError}`;
         }
-        return { chunksIndexed: 0, sourceId, success: false, error: finalError };
+        return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
       }
-      // This case means the input text was valid but resulted in zero chunks to save, which is a success.
-      return { chunksIndexed: 0, sourceId, success: true };
+      return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: true };
     }
 
     const batch = writeBatch(db);
@@ -162,6 +157,6 @@ const indexDocumentFlow = ai.defineFlow(
 
     await batch.commit();
 
-    return { chunksIndexed: chunksToSave.length, sourceId, success: true };
+    return { chunksCreated: chunks.length, chunksIndexed: chunksToSave.length, sourceId, success: true };
   }
 );
