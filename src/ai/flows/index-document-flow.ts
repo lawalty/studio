@@ -104,28 +104,27 @@ const indexDocumentFlow = ai.defineFlow(
           content: trimmedChunk,
           taskType: 'RETRIEVAL_DOCUMENT',
         });
-        const embedding = result.embedding;
-
-        if (embedding?.length > 0) {
+        
+        if (result && Array.isArray(result.embedding) && result.embedding.length > 0) {
           chunksToSave.push({
             sourceId,
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: Array.from(embedding),
+            embedding: Array.from(result.embedding),
             createdAt: new Date().toISOString(),
             downloadURL,
           });
         } else {
           failedChunks++;
           const fullResponse = JSON.stringify(result, null, 2);
-          const errorMsg = `The embedding service returned an empty embedding. This often points to a configuration issue in your Google Cloud project (e.g., Billing, API provisioning). Full service response: ${fullResponse}`;
+          const errorMsg = `The embedding service returned an empty or invalid embedding. This often points to a configuration issue in your Google Cloud project (e.g., Billing, API provisioning). Full service response: ${fullResponse}`;
           if (!firstError) {
             firstError = errorMsg;
             firstFailedChunkContent = trimmedChunk;
           }
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because the embedding result was empty. This may indicate a cloud configuration issue. Content: "${trimmedChunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because the embedding result was empty or invalid. This may indicate a cloud configuration issue. Content: "${trimmedChunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {

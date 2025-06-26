@@ -37,18 +37,18 @@ const testEmbeddingFlow = ai.defineFlow(
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      const embedding = result.embedding;
-
-      if (embedding?.length > 0) {
+      // A more robust check for a valid embedding response.
+      if (result && Array.isArray(result.embedding) && result.embedding.length > 0) {
         return {
           success: true,
-          embeddingVectorLength: embedding.length,
+          embeddingVectorLength: result.embedding.length,
         };
       } else {
         const fullResponse = JSON.stringify(result, null, 2);
+        const errorMessage = `The embedding service returned an unexpected response. While it didn't crash, the response was not a valid embedding vector. The full response from the service was: ${fullResponse}`;
         return {
           success: false,
-          error: `The embedding was empty. This can happen if the Google Cloud project has not been fully provisioned for Vertex AI, or if there's a billing issue. The full response from the service was: ${fullResponse}`,
+          error: errorMessage,
         };
       }
     } catch (e: any) {
