@@ -55,10 +55,10 @@ const testEmbeddingFlow = ai.defineFlow(
       }
     } catch (e: any) {
       // This will now catch actual exceptions if they occur.
-      console.error('[testEmbeddingFlow] Exception caught:', e);
+      console.error('[testEmbeddingFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
       return {
         success: false,
-        error: e.message || 'An unknown exception occurred during the embedding call.',
+        error: `An exception occurred during the embedding call: ${e.message || 'Unknown error'}. Please check the server logs for the full exception object.`,
       };
     }
   }
