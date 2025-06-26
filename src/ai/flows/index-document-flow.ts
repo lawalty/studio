@@ -98,7 +98,7 @@ const indexDocumentFlow = ai.defineFlow(
         }
         
         const { embedding } = await ai.embed({
-          embedder: 'googleai/text-embedding-004',
+          embedder: 'googleai/embedding-001',
           content: trimmedChunk,
         });
 
