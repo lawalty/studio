@@ -104,6 +104,14 @@ const indexDocumentFlow = ai.defineFlow(
         const { embedding } = await ai.embed({
           embedder: 'googleai/text-embedding-004',
           content: trimmedChunk,
+          config: {
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            ],
+          },
         });
 
         if (embedding && Array.isArray(embedding) && embedding.length > 0) {
@@ -121,7 +129,7 @@ const indexDocumentFlow = ai.defineFlow(
           const errorMsg = 'Embedding call returned an empty or invalid result from the AI model.';
           if (!firstError) firstError = errorMsg;
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. Chunk length: ${trimmedChunk.length}. The content might be unsupported by the model. Content: "${trimmedChunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. The content might be unsupported by the model due to safety filters. Content: "${trimmedChunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
