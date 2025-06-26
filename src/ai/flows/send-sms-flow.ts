@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to send an SMS message using Twilio.
@@ -9,8 +10,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { getFirestore } from 'firebase-admin/firestore'; // Correct: Use Admin SDK for server-side
 import twilio from 'twilio';
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
@@ -40,15 +40,18 @@ const sendSmsFlow = ai.defineFlow(
   },
   async ({ toPhoneNumber, messageBody }) => {
     try {
-      // 1. Fetch Twilio credentials from Firestore
-      const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      const docSnap = await getDoc(docRef);
+      // Get Firestore instance from Admin SDK
+      const db = getFirestore();
 
-      if (!docSnap.exists()) {
+      // 1. Fetch Twilio credentials from Firestore using Admin SDK
+      const docRef = db.doc(FIRESTORE_KEYS_PATH);
+      const docSnap = await docRef.get();
+
+      if (!docSnap.exists) {
         throw new Error("Twilio configuration not found in Firestore.");
       }
 
-      const { twilioAccountSid, twilioAuthToken, twilioPhoneNumber } = docSnap.data();
+      const { twilioAccountSid, twilioAuthToken, twilioPhoneNumber } = docSnap.data()!;
 
       if (!twilioAccountSid || !twilioAuthToken || !twilioPhoneNumber) {
         throw new Error("Incomplete Twilio credentials in Firestore. Please configure Account SID, Auth Token, and Phone Number.");

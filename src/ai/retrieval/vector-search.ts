@@ -7,9 +7,11 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { getFirestore } from 'firebase-admin/firestore'; // Correct: Use Admin SDK for server-side
 import { textEmbedding004 } from '@genkit-ai/googleai';
+
+// Initialize Admin Firestore. Genkit's Firebase plugin handles app initialization.
+const db = getFirestore();
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -59,10 +61,9 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
     taskType: 'RETRIEVAL_QUERY',
   });
 
-  // 2. Fetch all chunks from Firestore
-  // Note: This is the unscalable part of this implementation.
-  const chunksCollectionRef = collection(db, 'kb_chunks');
-  const querySnapshot = await getDocs(chunksCollectionRef);
+  // 2. Fetch all chunks from Firestore using the Admin SDK
+  const chunksCollectionRef = db.collection('kb_chunks');
+  const querySnapshot = await chunksCollectionRef.get();
 
   if (querySnapshot.empty) {
     return "No information found in the knowledge base.";
