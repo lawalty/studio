@@ -89,6 +89,7 @@ const indexDocumentFlow = ai.defineFlow(
     const chunksToSave: any[] = [];
     let failedChunks = 0;
     let firstError = '';
+    let firstFailedChunkContent: string | null = null;
 
     for (const chunk of chunks) {
       try {
@@ -115,7 +116,10 @@ const indexDocumentFlow = ai.defineFlow(
         } else {
           failedChunks++;
           const errorMsg = 'Embedding call returned an empty or invalid result from the AI model.';
-          if (!firstError) firstError = errorMsg;
+          if (!firstError) {
+            firstError = errorMsg;
+            firstFailedChunkContent = trimmedChunk;
+          }
           console.warn(
             `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. The content might be unsupported by the model. Content: "${trimmedChunk.substring(0, 100)}..."`
           );
@@ -123,7 +127,10 @@ const indexDocumentFlow = ai.defineFlow(
       } catch (error: any) {
         failedChunks++;
         const errorMsg = error.message || 'An unknown error occurred during embedding.';
-        if (!firstError) firstError = errorMsg;
+        if (!firstError) {
+          firstError = errorMsg;
+          firstFailedChunkContent = chunk;
+        }
         console.error(
           `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${errorMsg}. Content: "${chunk.substring(0, 100)}..."`
         );
@@ -140,7 +147,7 @@ const indexDocumentFlow = ai.defineFlow(
         if (firstError.includes('PERMISSION_DENIED') || firstError.includes('Vertex AI User')) {
           finalError = `Authentication/permission error. Please ensure the 'Vertex AI User' role is set and 'Generative Language API' is enabled in Google Cloud. Details: ${firstError}`;
         } else {
-          finalError = `The AI model could not process the provided text. This can happen if the text is empty, contains unsupported characters, or violates content policies. Please review the text and try again. Details: ${firstError}`;
+          finalError = `The AI model could not process the provided text. This can happen if the text is empty, contains unsupported characters, or violates content policies. Please review the text and try again. Details: ${firstError}. \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
         }
         return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
       }
