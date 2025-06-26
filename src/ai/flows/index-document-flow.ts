@@ -86,10 +86,6 @@ const indexDocumentFlow = ai.defineFlow(
       chunkOverlap: 150,
     });
     
-    if (chunks.length > 0) {
-        toast({ title: "Chunking Phase Complete", description: `${chunks.length} text chunks were created.` });
-    }
-
     const chunksToSave: any[] = [];
     let failedChunks = 0;
     let firstError: string | null = null;
