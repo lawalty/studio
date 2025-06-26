@@ -33,11 +33,8 @@ const testEmbeddingFlow = ai.defineFlow(
       const response = await ai.embed({
         embedder: 'googleai/embedding-001',
         content: 'This is a simple test sentence.',
-        taskType: 'RETRIEVAL_DOCUMENT', // Add taskType for consistency and best practices
+        taskType: 'RETRIEVAL_DOCUMENT',
       });
-
-      // Log the entire raw response to the server console for debugging
-      console.log('[testEmbeddingFlow] Raw response from ai.embed:', JSON.stringify(response, null, 2));
 
       const embedding = response.embedding;
 
@@ -47,18 +44,19 @@ const testEmbeddingFlow = ai.defineFlow(
           embeddingVectorLength: embedding.length,
         };
       } else {
-        // This error is more specific: the call succeeded but the data was empty.
+        // Return the raw response directly in the error message for debugging.
+        const rawResponseString = JSON.stringify(response, null, 2);
         return {
           success: false,
-          error: 'The embedding service was called successfully, but it returned an empty or invalid embedding vector. Please check the server logs for the raw response.',
+          error: `The embedding service returned an empty or invalid vector. Raw response from service: ${rawResponseString}`,
         };
       }
     } catch (e: any) {
-      // This will now catch actual exceptions if they occur.
-      console.error('[testEmbeddingFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+      // Return the raw exception directly in the error message for debugging.
+      const rawExceptionString = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
       return {
         success: false,
-        error: `An exception occurred during the embedding call: ${e.message || 'Unknown error'}. Please check the server logs for the full exception object.`,
+        error: `An exception occurred during the embedding call. Raw exception: ${rawExceptionString}`,
       };
     }
   }
