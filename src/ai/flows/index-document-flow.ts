@@ -69,7 +69,7 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    const cleanText = text.replace(/^\uFEFF/, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+    const cleanText = text.replace(/^\uFEFF/, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
 
     // 1. Chunk the text using the simple, internal splitter
     const chunks = simpleSplitter(cleanText, {
@@ -89,7 +89,8 @@ const indexDocumentFlow = ai.defineFlow(
 
     for (const chunk of chunks) {
       try {
-        if (chunk.trim().length === 0) {
+        const trimmedChunk = chunk.trim();
+        if (trimmedChunk.length === 0) {
           failedChunks++;
           const errorMsg = 'Chunk was empty or contained only whitespace.';
           if (!firstError) firstError = errorMsg;
@@ -100,25 +101,25 @@ const indexDocumentFlow = ai.defineFlow(
         // Use the dedicated embedderAi instance
         const { embedding } = await embedderAi.embed({
           embedder: 'googleai/text-embedding-004',
-          content: chunk,
+          content: trimmedChunk,
         });
 
-        if (embedding) {
+        if (embedding && Array.isArray(embedding) && embedding.length > 0) {
           chunksToSave.push({
             sourceId,
             sourceName,
             level,
-            text: chunk,
+            text: trimmedChunk,
             embedding: embedding,
             createdAt: new Date().toISOString(),
             downloadURL,
           });
         } else {
           failedChunks++;
-          const errorMsg = 'Embedding call returned no embedding.';
+          const errorMsg = 'Embedding call returned an empty or invalid result from the AI model.';
           if (!firstError) firstError = errorMsg;
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate an embedding. The chunk may be empty or contain unsupported content. Content: "${chunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. The content might be unsupported by the model. Content: "${trimmedChunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
@@ -141,7 +142,7 @@ const indexDocumentFlow = ai.defineFlow(
           if (firstError.includes('API_KEY_INVALID') || firstError.includes('PERMISSION_DENIED')) {
               throw new Error(`Failed to index '${sourceName}' due to an authentication or permission issue. Please ensure the app's service account has the 'Vertex AI User' role in Google Cloud IAM, and that the 'Generative Language API' is enabled for this project. Original error: ${firstError}`);
           }
-          throw new Error(`Failed to index '${sourceName}'. All ${failedChunks} text chunks failed. First error: ${firstError}`);
+          throw new Error(`Failed to index '${sourceName}'. All ${failedChunks} text chunks failed. The AI model did not produce a valid embedding. First error: ${firstError}`);
       }
       return { chunksIndexed: 0, sourceId };
     }
