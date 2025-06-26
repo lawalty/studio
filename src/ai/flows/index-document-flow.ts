@@ -113,7 +113,6 @@ const indexDocumentFlow = ai.defineFlow(
             sourceName,
             level,
             text: trimmedChunk,
-            // CRITICAL FIX: Convert Float32Array to a standard Array for Firestore.
             embedding: Array.from(embeddingVector),
             createdAt: new Date(),
             downloadURL: downloadURL || null,
@@ -121,13 +120,16 @@ const indexDocumentFlow = ai.defineFlow(
           successfulChunks++;
         } else {
           failedChunks++;
-          const errorMsg = `The embedding service returned an empty or invalid embedding.`;
+          // Create a more detailed error message including the raw response from the AI service.
+          const fullResponse = JSON.stringify(result, null, 2);
+          const errorMsg = `The embedding service returned an empty or invalid embedding. Full response: ${fullResponse}`;
           if (!firstError) firstError = errorMsg;
           console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
         }
       } catch (error: any) {
         failedChunks++;
-        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}.`;
+        const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. Full error: ${fullError}`;
         if (!firstError) firstError = errorMsg;
         console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
       }
