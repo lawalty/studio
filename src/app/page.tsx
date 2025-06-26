@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { cn } from "@/lib/utils";
-import { Mic, MessageSquareText, FileText, DatabaseZap } from 'lucide-react';
+import { Mic, MessageSquareText, FileText, Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { Card } from '@/components/ui/card';
@@ -32,7 +32,6 @@ export default function StartPage() {
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // This ensures that any client-specific logic runs only after the component has mounted.
     setIsClient(true);
   }, []);
 
@@ -59,6 +58,12 @@ export default function StartPage() {
         const siteAssetsDocSnap = await getDoc(siteAssetsDocRef);
         if (siteAssetsDocSnap.exists()) {
           const assets = siteAssetsDocSnap.data();
+
+          if (assets.maintenanceModeEnabled) {
+            router.replace('/updates-coming');
+            return; // Stop further processing on this page
+          }
+
           setSplashImageSrc(assets.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setSplashScreenWelcomeMessage(assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
         }
@@ -69,7 +74,7 @@ export default function StartPage() {
       }
     };
     fetchMinimalConfig();
-  }, []);
+  }, [router]);
   
   useEffect(() => {
     if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) {
@@ -116,13 +121,24 @@ export default function StartPage() {
     };
   }, [isLoadingConfig, isClient]);
 
+  if (isLoadingConfig) {
+      return (
+        <div className="flex flex-col items-center justify-center flex-grow">
+            <Card className="w-full max-w-md p-6 space-y-6 text-center shadow-2xl border flex flex-col items-center">
+                 <Loader2 className="h-12 w-12 text-primary animate-spin" />
+                 <p className="text-muted-foreground font-semibold">Connecting and checking settings...</p>
+            </Card>
+        </div>
+      );
+  }
+
 
   return (
     <div className="flex flex-col items-center justify-center flex-grow">
       <Card className="w-full max-w-md p-6 space-y-6 text-center shadow-2xl border">
         <div className="space-y-2">
             <h1 className="text-3xl font-headline text-primary">
-                {isLoadingConfig ? "Connecting..." : splashWelcomeMessage}
+                {splashWelcomeMessage}
             </h1>
             <p 
                 className={cn(
@@ -157,11 +173,6 @@ export default function StartPage() {
                 data-ai-hint={(splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || splashImageSrc.includes("placehold.co")) ? "technology abstract welcome" : undefined}
             />
             <p className="text-base font-semibold text-foreground">Choose your preferred way to interact:</p>
-            {isLoadingConfig && (
-                <div className="flex items-center text-sm text-muted-foreground p-2 border rounded-md bg-secondary/30">
-                <DatabaseZap className="mr-2 h-5 w-5 animate-pulse" /> Connecting to settings...
-                </div>
-            )}
             <div className="w-full space-y-3">
                 <Button asChild size="lg" className="w-full" disabled={isLoadingConfig}>
                 <Link href="/chat/audio-only">

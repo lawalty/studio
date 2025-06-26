@@ -9,22 +9,27 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { Switch } from '@/components/ui/switch';
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Transparent 1x1 GIF
 const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
 const DEFAULT_TYPING_SPEED_MS = 40;
+const DEFAULT_MAINTENANCE_MESSAGE = "Exciting updates are on the way! We'll be back online shortly.";
+
 
 export default function SiteSettingsPage() {
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
   const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
   const [typingSpeedMs, setTypingSpeedMs] = useState<string>(String(DEFAULT_TYPING_SPEED_MS));
+  const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
+  const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -42,18 +47,23 @@ export default function SiteSettingsPage() {
           setSplashImagePreview(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
           setTypingSpeedMs(data.typingSpeedMs === undefined ? String(DEFAULT_TYPING_SPEED_MS) : String(data.typingSpeedMs));
+          setMaintenanceModeEnabled(data.maintenanceModeEnabled === undefined ? false : data.maintenanceModeEnabled);
+          setMaintenanceModeMessage(data.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE);
         } else {
           // If the document doesn't exist, we can create it with defaults.
           const defaultSettings = {
             splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             splashWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE,
             typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
-            // You might want to pre-fill other settings from other pages here too
+            maintenanceModeEnabled: false,
+            maintenanceModeMessage: DEFAULT_MAINTENANCE_MESSAGE,
           };
           await setDoc(docRef, defaultSettings, { merge: true });
           setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
           setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
           setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
+          setMaintenanceModeEnabled(false);
+          setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
           toast({ title: "Initial Settings Created", description: "Default site settings have been saved." });
         }
       } catch (error) {
@@ -61,6 +71,8 @@ export default function SiteSettingsPage() {
         setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
         setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
         setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
+        setMaintenanceModeEnabled(false);
+        setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
         toast({
           title: "Error Loading Settings",
           description: "Could not fetch site settings. Defaults shown. Please check console.",
@@ -146,9 +158,18 @@ export default function SiteSettingsPage() {
         dataToUpdate.typingSpeedMs = validTypingSpeed;
         changesMade = true;
       }
+      
+      if (maintenanceModeEnabled !== (currentData.maintenanceModeEnabled === undefined ? false : currentData.maintenanceModeEnabled)) {
+        dataToUpdate.maintenanceModeEnabled = maintenanceModeEnabled;
+        changesMade = true;
+      }
+
+      if (maintenanceModeMessage !== (currentData.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE)) {
+          dataToUpdate.maintenanceModeMessage = maintenanceModeMessage;
+          changesMade = true;
+      }
 
       if (changesMade) {
-        // Using `updateDoc` will only change the specified fields and won't overwrite the whole document.
         await updateDoc(siteAssetsDocRef, dataToUpdate);
         
         toast({ title: "Site Settings Saved", description: "Your site display and animation settings have been updated." });
@@ -184,6 +205,12 @@ export default function SiteSettingsPage() {
   const handleResetTypingSpeed = () => {
     setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
     toast({ title: "Typing Speed Reset", description: "Typing speed reset to default. Click 'Save Site Settings' to make it permanent." });
+  };
+  
+  const handleResetMaintenanceMode = () => {
+    setMaintenanceModeEnabled(false);
+    setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
+    toast({ title: "Maintenance Mode Reset", description: "Settings reset to default. Click 'Save Site Settings' to make it permanent." });
   };
 
   return (
@@ -270,6 +297,60 @@ export default function SiteSettingsPage() {
         </CardFooter>
       </Card>
       
+      <Card>
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2"><Construction /> Maintenance Mode</CardTitle>
+            <CardDescription>
+            Enable this to show an "Updates Are Coming" page to all users, preventing access to the chat.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            {isLoadingData ? (
+            <p>Loading maintenance settings...</p>
+            ) : (
+            <>
+                <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
+                    <div className="flex-1 space-y-1">
+                        <Label htmlFor="maintenanceModeEnabled" className="font-medium">
+                            Enable "Updates Are Coming" Page
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            If ON, all users will be redirected to this page.
+                        </p>
+                    </div>
+                    <Switch
+                        id="maintenanceModeEnabled"
+                        checked={maintenanceModeEnabled}
+                        onCheckedChange={setMaintenanceModeEnabled}
+                        disabled={isLoadingData}
+                        aria-label="Toggle maintenance mode"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="maintenanceModeMessage">Custom Message</Label>
+                    <Textarea
+                        id="maintenanceModeMessage"
+                        value={maintenanceModeMessage}
+                        onChange={(e) => setMaintenanceModeMessage(e.target.value)}
+                        placeholder="Enter the message to display on the maintenance page..."
+                        rows={3}
+                        className="mt-1"
+                        disabled={isLoadingData || !maintenanceModeEnabled}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                    This message will be shown to users. Default: "{DEFAULT_MAINTENANCE_MESSAGE}"
+                    </p>
+                </div>
+            </>
+            )}
+        </CardContent>
+        <CardFooter>
+            <Button variant="outline" onClick={handleResetMaintenanceMode} disabled={isLoadingData}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset Maintenance Settings
+            </Button>
+        </CardFooter>
+    </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><Type className="h-5 w-5" /> AI Speech Text Typing Animation</CardTitle>

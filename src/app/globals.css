@@ -142,3 +142,16 @@ main {
 .avatar-is-speaking-glow {
   animation: avatarGlow 1.5s ease-in-out infinite;
 }
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin 5s linear infinite;
+}
