@@ -44,19 +44,18 @@ const testEmbeddingFlow = ai.defineFlow(
           embeddingVectorLength: embedding.length,
         };
       } else {
+        // This is the specific error for a successful call with an empty response.
         return {
           success: false,
-          error: `The embedding service returned a successful but empty response. Please check your Google Cloud project configuration.`,
+          error: `The embedding service returned a successful but empty response. This can happen if the Google Cloud project has not been fully provisioned for Vertex AI, or if there's a billing issue. Please double-check your project's billing status and ensure the Vertex AI API is enabled and has had time to provision.`,
         };
       }
     } catch (e: any) {
-      // This log helps debug in the Google Cloud Console Logs Explorer.
+      // This provides a more detailed error directly in the UI toast for any other exception.
       console.error('[testEmbeddingFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
-      
-      // This provides a more detailed error directly in the UI toast.
       return {
           success: false,
-          error: `The test failed with exception: ${e.message || 'Unknown error'}. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
+          error: `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
       };
     }
   }

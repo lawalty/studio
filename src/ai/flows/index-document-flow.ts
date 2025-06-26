@@ -105,14 +105,12 @@ const indexDocumentFlow = ai.defineFlow(
           taskType: 'RETRIEVAL_DOCUMENT',
         });
 
-        // Use a more lenient check for the embedding result that supports TypedArrays.
         if (embedding?.length > 0) {
           chunksToSave.push({
             sourceId,
             sourceName,
             level,
             text: trimmedChunk,
-            // Convert to a standard array before saving to Firestore for compatibility.
             embedding: Array.from(embedding),
             createdAt: new Date().toISOString(),
             downloadURL,
@@ -130,13 +128,14 @@ const indexDocumentFlow = ai.defineFlow(
         }
       } catch (error: any) {
         failedChunks++;
-        const errorMsg = `The embedding service threw an error: ${error.message || 'Unknown error'}. This could be a permission or authentication issue. Please check the 'Vertex AI User' role and ensure the API is enabled and that billing is active on your Google Cloud project.`;
+        const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+        const errorMsg = `The embedding service threw an unexpected exception: ${error.message || 'Unknown error'}. Full details: ${fullError}`;
         if (!firstError) {
           firstError = errorMsg;
           firstFailedChunkContent = chunk;
         }
         console.error(
-          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${error.message}. Content: "${chunk.substring(0, 100)}..."`
+          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Full Error: ${fullError}. Content: "${chunk.substring(0, 100)}..."`
         );
       }
     }
@@ -146,7 +145,7 @@ const indexDocumentFlow = ai.defineFlow(
     }
 
     if (chunksToSave.length === 0 && failedChunks > 0) {
-        const finalError = `${firstError}. \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
+        const finalError = `${firstError} \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
         return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
     }
 
