@@ -122,14 +122,14 @@ const indexDocumentFlow = ai.defineFlow(
         } else {
           failedChunks++;
           const fullResponse = JSON.stringify(result, null, 2);
-          const errorMsg = `The embedding service returned an empty or invalid embedding. Full response: ${fullResponse}`;
+          const errorMsg = `The embedding service returned an empty or invalid embedding. This can happen if the Vertex AI API is not enabled or if there's a billing issue. Full response: ${fullResponse}`;
           if (!firstError) firstError = errorMsg;
           console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
         }
       } catch (error: any) {
         failedChunks++;
         const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. Full error: ${fullError}`;
+        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing in your Google Cloud project. Full error: ${fullError}`;
         if (!firstError) firstError = errorMsg;
         console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
       }

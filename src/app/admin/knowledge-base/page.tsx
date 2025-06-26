@@ -334,7 +334,7 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Indexing Failed", description: `Could not index ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive" });
+      toast({ title: "Indexing Failed", description: `Could not index ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 15000 });
     }
     
     setIsProcessingId(null);
@@ -667,7 +667,7 @@ export default function KnowledgeBasePage() {
       if (result.success) {
         toast({
           title: "Embedding Test Successful!",
-          description: `Successfully received an embedding vector with ${result.embeddingVectorLength} dimensions.`,
+          description: `Successfully received an embedding vector with ${result.embeddingVectorLength} dimensions from Vertex AI.`,
         });
       } else {
         toast({
@@ -891,7 +891,7 @@ export default function KnowledgeBasePage() {
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><MessageSquareText /> Test Text Generation</CardTitle>
               <CardDescription>
-                  This performs a direct test of the Gemini text generation model. This helps determine if the issue is specific to embeddings or affects all AI services.
+                  This performs a direct test of the Gemini text generation model through Vertex AI. This helps confirm that the core AI service is reachable and configured correctly.
               </CardDescription>
           </CardHeader>
           <CardContent>
@@ -906,7 +906,7 @@ export default function KnowledgeBasePage() {
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Test Core Embedding Service</CardTitle>
               <CardDescription>
-                  This performs a direct, isolated test of the embedding service with a hardcoded sentence, bypassing file processing and chunking.
+                  This performs a direct, isolated test of the Vertex AI embedding service with a hardcoded sentence, bypassing file processing and chunking. A success here confirms your project setup is correct.
               </CardDescription>
           </CardHeader>
           <CardContent>

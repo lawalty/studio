@@ -43,16 +43,18 @@ const testTextGenerationFlow = ai.defineFlow(
           generatedText: text,
         };
       } else {
+        const fullResponse = JSON.stringify(result, null, 2);
         return {
           success: false,
-          error: `The text generation service returned a successful but empty response. This reinforces the possibility of a project configuration or billing issue.`,
+          error: `The text generation service returned a successful but empty response. This may indicate a problem with the Vertex AI API configuration or project billing. Full response: ${fullResponse}`,
         };
       }
     } catch (e: any) {
       console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing in your Google Cloud project. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
       return {
           success: false,
-          error: `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
+          error: errorMessage,
       };
     }
   }

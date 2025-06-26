@@ -51,14 +51,14 @@ const testEmbeddingFlow = ai.defineFlow(
         const fullResponse = JSON.stringify(result, null, 2);
         return { 
           success: false, 
-          error: `The embedding service returned an empty or invalid embedding. Full response: ${fullResponse}` 
+          error: `The embedding service returned an empty or invalid embedding. This may indicate a problem with the Vertex AI API configuration or project billing. Full response: ${fullResponse}` 
         };
       }
 
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
       const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
-      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. Full error object: ${fullError}`;
+      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing in your Google Cloud project. Full error object: ${fullError}`;
       return {
           success: false,
           error: errorMessage,
