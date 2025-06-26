@@ -26,11 +26,10 @@ import {googleAI} from '@genkit-ai/googleai';
 export const ai = genkit({
   plugins: [
     googleAI({
-      // By specifying a location, we are explicitly telling Genkit to use
-      // the Vertex AI API instead of the Google AI (Gemini) API.
-      // Ensure this location matches the region where you have enabled
-      // the Vertex AI API in your Google Cloud project.
-      location: 'us-central1',
+      // By REMOVING the 'location' parameter, we allow Genkit to dynamically choose the endpoint.
+      // - If an API key is provided from Firestore in a flow, it will use the Google AI (Gemini) API.
+      // - If no key is provided, it will use Application Default Credentials, which will
+      //   target the Vertex AI API if the service account has the correct permissions.
     }),
     // The firebase() plugin has been removed to resolve build issues.
     // Firebase Admin SDK is now initialized manually where needed.

@@ -7,9 +7,10 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { textEmbedding004 } from '@genkit-ai/googleai';
 
 // Initialize Firebase Admin SDK if it hasn't been already.
 if (admin.apps.length === 0) {
@@ -58,8 +59,25 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  // 1. Generate an embedding for the user's query using the primary 'ai' instance
-  const { embedding } = await ai.embed({
+  // --- Start of API Key logic ---
+  const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+  const docRef = db.doc(FIRESTORE_KEYS_PATH);
+  const docSnap = await docRef.get();
+  const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
+
+  let embeddingAi = ai; // Default instance (uses ADC)
+  if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
+      console.log('[searchKnowledgeBase] Using API Key from Firestore for embedding.');
+      embeddingAi = genkit({
+          plugins: [googleAI({ apiKey: apiKey.trim() })],
+      });
+  } else {
+      console.log('[searchKnowledgeBase] Using default Genkit instance (ADC) for embedding.');
+  }
+  // --- End of API Key logic ---
+  
+  // 1. Generate an embedding for the user's query
+  const { embedding } = await embeddingAi.embed({
     embedder: textEmbedding004,
     content: query,
     taskType: 'RETRIEVAL_QUERY',

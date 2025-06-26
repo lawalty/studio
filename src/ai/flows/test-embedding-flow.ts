@@ -9,8 +9,11 @@
  * - TestEmbeddingOutput - The return type for the function.
  */
 import { ai } from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
+import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
@@ -31,7 +34,28 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const result = await ai.embed({
+      // --- Start of API Key logic ---
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      const db = getFirestore();
+      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+      const docRef = db.doc(FIRESTORE_KEYS_PATH);
+      const docSnap = await docRef.get();
+      const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
+
+      let embeddingAi = ai; // Default instance (uses ADC)
+      if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
+          console.log('[testEmbeddingFlow] Using API Key from Firestore for embedding.');
+          embeddingAi = genkit({
+              plugins: [googleAI({ apiKey: apiKey.trim() })],
+          });
+      } else {
+          console.log('[testEmbeddingFlow] Using default Genkit instance (ADC) for embedding.');
+      }
+      // --- End of API Key logic ---
+
+      const result = await embeddingAi.embed({
         embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
@@ -47,18 +71,17 @@ const testEmbeddingFlow = ai.defineFlow(
           embeddingVectorLength: embeddingAsArray.length,
         };
       } else {
-        // This will now only trigger for a genuinely empty or invalid response.
         const fullResponse = JSON.stringify(result, null, 2);
         return { 
           success: false, 
-          error: `The embedding service returned an empty or invalid embedding. This may indicate a problem with the Vertex AI API configuration or project billing. Full response: ${fullResponse}` 
+          error: `The embedding service returned an empty or invalid embedding. This may indicate a problem with the API configuration or project billing. Full response: ${fullResponse}` 
         };
       }
 
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
       const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
-      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing in your Google Cloud project. Full error object: ${fullError}`;
+      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing. Full error object: ${fullError}`;
       return {
           success: false,
           error: errorMessage,

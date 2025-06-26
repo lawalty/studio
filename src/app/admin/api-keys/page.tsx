@@ -8,12 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, AlertTriangle, Speech, MessageSquare, BrainCircuit, CheckCircle } from 'lucide-react';
+import { Save, KeyRound, Speech, MessageSquare, CheckCircle } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
+  vertexAiApiKey: string;
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -26,6 +27,7 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
+    vertexAiApiKey: '',
     tts: '',
     voiceId: '',
     useTtsApi: true,
@@ -45,6 +47,7 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setApiKeys({
+            vertexAiApiKey: data.vertexAiApiKey || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
@@ -54,7 +57,7 @@ export default function ApiKeysPage() {
           });
         } else {
           setApiKeys({
-            tts: '', voiceId: '', useTtsApi: true,
+            vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
           });
         }
@@ -66,7 +69,7 @@ export default function ApiKeysPage() {
           variant: "destructive",
         });
         setApiKeys({
-            tts: '', voiceId: '', useTtsApi: true,
+            vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
         });
       }
@@ -87,8 +90,8 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      await setDoc(docRef, apiKeys, { merge: true }); // Use merge to avoid overwriting Gemini keys if they still exist
-      toast({ title: "Settings Saved", description: "Your TTS and Twilio settings have been saved to the database." });
+      await setDoc(docRef, apiKeys, { merge: true }); 
+      toast({ title: "Settings Saved", description: "Your API Key and service settings have been saved." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
       toast({
@@ -105,7 +108,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key & Services Management</CardTitle>
         <CardDescription>
-          Manage keys for external services like Twilio SMS and custom Text-to-Speech.
+          Manage keys for AI services, Twilio SMS, and custom Text-to-Speech.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -117,12 +120,26 @@ export default function ApiKeysPage() {
               <div className="flex items-center gap-3">
                   <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                   <div>
-                    <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">Gemini AI Authenticated</h3>
+                    <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">Default: Secure Service Account</h3>
                     <p className="text-sm text-green-700 dark:text-green-400 mt-1">
-                      Your application is now authenticated to use Gemini AI through a secure service account. No API keys are required here.
+                      By default, your application is authenticated to use Gemini AI through a secure service account. If that fails, providing an API key below can be used as an alternative.
                     </p>
                   </div>
               </div>
+            </div>
+
+            <Separator className="my-6" />
+
+             <div className="flex items-center gap-2 mb-2">
+                <KeyRound className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">Google AI API Key (Optional Override)</h3>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="vertexAiApiKey" className="font-medium">API Key</Label>
+                <Input id="vertexAiApiKey" name="vertexAiApiKey" type="password" value={apiKeys.vertexAiApiKey} onChange={handleChange} placeholder="Enter Google AI API Key" />
+                <p className="text-xs text-muted-foreground">
+                    Using an API Key can be a helpful alternative for debugging. This will override the application's default credentials for AI operations.
+                </p>
             </div>
 
             <Separator className="my-6" />

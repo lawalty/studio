@@ -10,10 +10,11 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { textEmbedding004 } from '@genkit-ai/googleai';
 
 // Initialize Firebase Admin SDK if it hasn't been already.
 if (admin.apps.length === 0) {
@@ -72,6 +73,23 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
+    // --- Start of API Key logic ---
+    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+    const docRef = db.doc(FIRESTORE_KEYS_PATH);
+    const docSnap = await docRef.get();
+    const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
+
+    let embeddingAi = ai; // Default instance (uses ADC)
+    if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
+        console.log('[indexDocumentFlow] Using API Key from Firestore for embedding.');
+        embeddingAi = genkit({
+            plugins: [googleAI({ apiKey: apiKey.trim() })],
+        });
+    } else {
+        console.log('[indexDocumentFlow] Using default Genkit instance (ADC) for embedding.');
+    }
+    // --- End of API Key logic ---
+    
     const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
     if (!cleanText) {
@@ -98,7 +116,7 @@ const indexDocumentFlow = ai.defineFlow(
           continue;
         }
         
-        const result = await ai.embed({
+        const result = await embeddingAi.embed({
           embedder: textEmbedding004,
           content: trimmedChunk,
           taskType: 'RETRIEVAL_DOCUMENT',
@@ -114,7 +132,7 @@ const indexDocumentFlow = ai.defineFlow(
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: embeddingAsArray, // Use the converted standard array
+            embedding: embeddingAsArray,
             createdAt: new Date(),
             downloadURL: downloadURL || null,
           });
@@ -122,14 +140,14 @@ const indexDocumentFlow = ai.defineFlow(
         } else {
           failedChunks++;
           const fullResponse = JSON.stringify(result, null, 2);
-          const errorMsg = `The embedding service returned an empty or invalid embedding. This can happen if the Vertex AI API is not enabled or if there's a billing issue. Full response: ${fullResponse}`;
+          const errorMsg = `The embedding service returned an empty or invalid embedding. This can happen if the API is not enabled or if there's a billing issue. Full response: ${fullResponse}`;
           if (!firstError) firstError = errorMsg;
           console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
         }
       } catch (error: any) {
         failedChunks++;
         const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing in your Google Cloud project. Full error: ${fullError}`;
+        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing. Full error: ${fullError}`;
         if (!firstError) firstError = errorMsg;
         console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
       }
