@@ -305,9 +305,6 @@ export default function KnowledgeBasePage() {
       level: level,
       downloadURL: sourceToProcess.downloadURL,
     });
-    
-    // This is our new diagnostic toast
-    toast({ title: "Chunking Phase Complete", description: `${indexResult.chunksCreated} text chunks were created for processing.` });
 
     if (indexResult.success) {
       setSources(prev => {
