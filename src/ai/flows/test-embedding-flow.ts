@@ -33,7 +33,6 @@ const testEmbeddingFlow = ai.defineFlow(
       const { embedding } = await ai.embed({
         embedder: 'googleai/embedding-001',
         content: 'This is a simple test sentence.',
-        taskType: 'RETRIEVAL_DOCUMENT',
       });
 
       if (embedding && Array.isArray(embedding) && embedding.length > 0) {
