@@ -11,7 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const TestEmbeddingOutputSchema = z.object({
+const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
   error: z.string().optional().describe('An error message if the test failed.'),
   embeddingVectorLength: z.number().optional().describe('The number of dimensions in the returned embedding vector.'),
