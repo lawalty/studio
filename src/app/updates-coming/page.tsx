@@ -109,7 +109,7 @@ export default function UpdatesComingPage() {
               <Skeleton className="h-4 w-1/2 mx-auto" />
             </div>
           ) : (
-            <CardDescription className="text-base text-foreground">
+            <CardDescription className="text-base text-foreground" data-gramm="false">
               {message.split('\n').map((line, i) => (
                 <React.Fragment key={i}>
                   {line}
@@ -120,6 +120,9 @@ export default function UpdatesComingPage() {
           )}
         </CardContent>
       </Card>
+      <p className="invisible mt-4 text-center text-xs text-muted-foreground">
+        Press Ctrl + Shift + A to access the admin panel.
+      </p>
     </div>
   );
 }
