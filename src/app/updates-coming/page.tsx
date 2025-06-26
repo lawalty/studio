@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -119,9 +120,6 @@ export default function UpdatesComingPage() {
           )}
         </CardContent>
       </Card>
-      <p className="mt-4 text-center text-xs text-muted-foreground">
-        Press Ctrl + Shift + A to access the admin panel.
-      </p>
     </div>
   );
 }
