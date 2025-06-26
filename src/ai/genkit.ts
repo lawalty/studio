@@ -21,9 +21,6 @@ import {googleAI} from '@genkit-ai/googleai';
 // when running in a Google Cloud environment (like Firebase App Hosting).
 export const ai = genkit({
   plugins: [
-    googleAI({
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      location: 'us-central1',
-    })
+    googleAI()
   ],
 });
