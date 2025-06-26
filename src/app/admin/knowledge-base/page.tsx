@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
@@ -38,6 +38,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
+import { testEmbedding } from '@/ai/flows/test-embedding-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -135,6 +136,9 @@ export default function KnowledgeBasePage() {
   const [testQuery, setTestQuery] = useState('');
   const [testResult, setTestResult] = useState('');
   const [isTesting, setIsTesting] = useState(false);
+
+  // State for testing embedding
+  const [isTestingEmbedding, setIsTestingEmbedding] = useState(false);
 
 
   const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
@@ -658,10 +662,36 @@ export default function KnowledgeBasePage() {
     setIsTesting(false);
   };
 
+  const handleTestEmbedding = async () => {
+    setIsTestingEmbedding(true);
+    try {
+      const result = await testEmbedding();
+      if (result.success) {
+        toast({
+          title: "Embedding Test Successful!",
+          description: `Successfully received an embedding vector with ${result.embeddingVectorLength} dimensions.`,
+        });
+      } else {
+        toast({
+          title: "Embedding Test Failed",
+          description: `The test failed: ${result.error}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Embedding Test Error",
+        description: `An unexpected error occurred: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+    setIsTestingEmbedding(false);
+  };
+
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isProcessingThisFile = isProcessingId === source.id;
-    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting;
+    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding;
 
     if (!['pdf', 'text', 'document'].includes(source.type)) {
       return <span className="text-xs text-muted-foreground">N/A</span>;
@@ -746,7 +776,7 @@ export default function KnowledgeBasePage() {
       ? "Archived sources. Files here are not used by AI Blair for responses but are kept for record-keeping."
       : `View and manage sources. For PDF and text files, content is extracted and indexed as vector embeddings for semantic search. Other file types are stored for reference.`;
     
-    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting;
+    const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding;
 
     return (
       <Card className="mt-6">
@@ -829,10 +859,25 @@ export default function KnowledgeBasePage() {
   };
 
   const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting;
+  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding;
 
   return (
     <div className="space-y-6">
+       <Card>
+          <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Test Core Embedding Service</CardTitle>
+              <CardDescription>
+                  This performs a direct, isolated test of the embedding service with a hardcoded sentence, bypassing file processing and chunking.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Button onClick={handleTestEmbedding} disabled={anyOperationGloballyInProgress}>
+                  {isTestingEmbedding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Beaker className="mr-2 h-4 w-4" />}
+                  {isTestingEmbedding ? 'Testing Embedding...' : 'Run Embedding Test'}
+              </Button>
+          </CardContent>
+      </Card>
+      
       <Card>
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
