@@ -10,10 +10,14 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { getFirestore } from 'firebase-admin/firestore'; // Using Admin SDK
+import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { textEmbedding004 } from '@genkit-ai/googleai';
 
-// Initialize Admin Firestore. Genkit's Firebase plugin handles app initialization.
+// Initialize Firebase Admin SDK if it hasn't been already.
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 const db = getFirestore();
 
 const IndexDocumentInputSchema = z.object({

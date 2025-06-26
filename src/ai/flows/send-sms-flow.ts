@@ -10,8 +10,14 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { getFirestore } from 'firebase-admin/firestore'; // Correct: Use Admin SDK for server-side
+import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import twilio from 'twilio';
+
+// Initialize Firebase Admin SDK if it hasn't been already.
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 

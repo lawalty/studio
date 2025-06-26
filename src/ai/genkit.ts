@@ -3,16 +3,15 @@
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
-import {firebase} from '@genkit-ai/firebase';
 
 /**
  * @fileOverview Genkit Configuration
  *
  * This file configures the Genkit AI instance for the application.
  *
- * It includes the `firebase()` plugin, which is essential for server-side
- * Genkit flows to interact with Firebase services like Firestore. It handles
- * the initialization of the Firebase Admin SDK automatically.
+ * This file NO LONGER includes the `firebase()` plugin, as it was causing
+ * webpack issues by bundling server-only code for the client. Instead,
+ * Firebase Admin SDK is initialized manually in each server flow/file that needs it.
  *
  * Authentication is handled automatically via Application Default Credentials (ADC).
  * The application's service account has been granted the "Vertex AI User" role
@@ -29,6 +28,7 @@ import {firebase} from '@genkit-ai/firebase';
 export const ai = genkit({
   plugins: [
     googleAI(),
-    firebase(), // This plugin is crucial for Firestore integration in flows.
+    // The firebase() plugin has been removed to resolve build issues.
+    // Firebase Admin SDK is now initialized manually where needed.
   ],
 });

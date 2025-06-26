@@ -7,10 +7,14 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { getFirestore } from 'firebase-admin/firestore'; // Correct: Use Admin SDK for server-side
+import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { textEmbedding004 } from '@genkit-ai/googleai';
 
-// Initialize Admin Firestore. Genkit's Firebase plugin handles app initialization.
+// Initialize Firebase Admin SDK if it hasn't been already.
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 const db = getFirestore();
 
 // Helper function to calculate cosine similarity between two vectors
