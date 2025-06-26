@@ -105,22 +105,22 @@ const indexDocumentFlow = ai.defineFlow(
         });
         
         const embeddingVector = result.embedding;
+        const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
 
-        if (embeddingVector && embeddingVector.length > 0) {
+        if (embeddingAsArray.length > 0) {
           const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
           batch.set(chunkDocRef, {
             sourceId,
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: Array.from(embeddingVector),
+            embedding: embeddingAsArray, // Use the converted standard array
             createdAt: new Date(),
             downloadURL: downloadURL || null,
           });
           successfulChunks++;
         } else {
           failedChunks++;
-          // Create a more detailed error message including the raw response from the AI service.
           const fullResponse = JSON.stringify(result, null, 2);
           const errorMsg = `The embedding service returned an empty or invalid embedding. Full response: ${fullResponse}`;
           if (!firstError) firstError = errorMsg;

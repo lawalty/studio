@@ -37,22 +37,21 @@ const testEmbeddingFlow = ai.defineFlow(
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      const embedding = result.embedding;
+      const embeddingVector = result.embedding;
+      const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
 
-      // This is the corrected check. It validates that the embedding exists
-      // and has a length greater than 0. This correctly handles the Float32Array.
-      if (embedding && embedding.length > 0) {
+      if (embeddingAsArray.length > 0) {
         // SUCCESS!
         return {
           success: true,
-          embeddingVectorLength: embedding.length,
+          embeddingVectorLength: embeddingAsArray.length,
         };
       } else {
         // This will now only trigger for a genuinely empty or invalid response.
         const fullResponse = JSON.stringify(result, null, 2);
         return { 
           success: false, 
-          error: `The embedding was either empty or invalid. Full response: ${fullResponse}` 
+          error: `The embedding service returned an empty or invalid embedding. Full response: ${fullResponse}` 
         };
       }
 
