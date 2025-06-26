@@ -31,27 +31,27 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const { embedding } = await ai.embed({
+      const result = await ai.embed({
         embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      // Use a more lenient check that works for both standard and TypedArrays.
+      const embedding = result.embedding;
+
       if (embedding?.length > 0) {
         return {
           success: true,
           embeddingVectorLength: embedding.length,
         };
       } else {
-        // This is the specific error for a successful call with an empty response.
+        const fullResponse = JSON.stringify(result, null, 2);
         return {
           success: false,
-          error: `The embedding service returned a successful but empty response. This can happen if the Google Cloud project has not been fully provisioned for Vertex AI, or if there's a billing issue. Please double-check your project's billing status and ensure the Vertex AI API is enabled and has had time to provision.`,
+          error: `The embedding was empty. This can happen if the Google Cloud project has not been fully provisioned for Vertex AI, or if there's a billing issue. The full response from the service was: ${fullResponse}`,
         };
       }
     } catch (e: any) {
-      // This provides a cleaner error directly in the UI toast for any other exception.
       console.error('[testEmbeddingFlow] Exception caught:', e);
       return {
           success: false,

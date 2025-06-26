@@ -99,11 +99,12 @@ const indexDocumentFlow = ai.defineFlow(
           continue;
         }
         
-        const { embedding } = await ai.embed({
+        const result = await ai.embed({
           embedder: textEmbedding004,
           content: trimmedChunk,
           taskType: 'RETRIEVAL_DOCUMENT',
         });
+        const embedding = result.embedding;
 
         if (embedding?.length > 0) {
           chunksToSave.push({
@@ -117,7 +118,8 @@ const indexDocumentFlow = ai.defineFlow(
           });
         } else {
           failedChunks++;
-          const errorMsg = 'The embedding service returned a successful response, but the response was empty. This often points to a configuration issue in your Google Cloud project (e.g., Billing not enabled for the project, or the Vertex AI API is not fully provisioned). Please verify your project settings in the Google Cloud Console.';
+          const fullResponse = JSON.stringify(result, null, 2);
+          const errorMsg = `The embedding service returned an empty embedding. This often points to a configuration issue in your Google Cloud project (e.g., Billing, API provisioning). Full service response: ${fullResponse}`;
           if (!firstError) {
             firstError = errorMsg;
             firstFailedChunkContent = trimmedChunk;
