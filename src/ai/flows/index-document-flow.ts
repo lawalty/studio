@@ -140,9 +140,11 @@ const indexDocumentFlow = ai.defineFlow(
 
     if (chunksToSave.length === 0) {
       if (failedChunks > 0) {
-        let finalError = `Failed to index '${sourceName}'. All ${failedChunks} text chunks failed. The AI model did not produce a valid embedding. First error: ${firstError}`;
-        if (firstError.includes('API_KEY_INVALID') || firstError.includes('PERMISSION_DENIED') || firstError.includes('Vertex AI User')) {
-            finalError = `Failed to index '${sourceName}' due to an authentication or permission issue. Please ensure the app's service account has the 'Vertex AI User' role in Google Cloud IAM, and that the 'Generative Language API' is enabled for this project. Original error: ${firstError}`;
+        let finalError;
+        if (firstError.includes('PERMISSION_DENIED') || firstError.includes('Vertex AI User')) {
+          finalError = `Authentication/permission error. Please ensure the 'Vertex AI User' role is set and 'Generative Language API' is enabled in Google Cloud. Details: ${firstError}`;
+        } else {
+          finalError = `The AI model could not process the provided text. This can happen if the text is empty, contains unsupported characters, or violates content policies. Please review the text and try again. Details: ${firstError}`;
         }
         return { chunksIndexed: 0, sourceId, success: false, error: finalError };
       }

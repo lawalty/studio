@@ -81,14 +81,12 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error('[extractTextFromDocumentUrlFlow] Error during text extraction flow:', e);
-      let errorMessage = 'Failed to extract text from document due to an internal error.';
-      if (e instanceof Error) {
-        errorMessage = e.message;
-      } else if (typeof e === 'string') {
-        errorMessage = e;
+      let userFriendlyError = 'The AI model could not read the document. It might be corrupted, password-protected, or in an unsupported format.';
+      if (e instanceof Error && (e.message.includes('PERMISSION_DENIED') || e.message.includes('403'))) {
+        userFriendlyError = 'Could not access the document. Please ensure the file URL is public and accessible.';
       }
-      // Prepend a clear indicator for easier debugging from client-side toast
-      throw new Error(`Genkit Document Extraction Error: ${errorMessage}`);
+      // The original error is still useful for debugging in the console.
+      throw new Error(userFriendlyError);
     }
   }
 );
