@@ -53,7 +53,7 @@ interface SearchResult {
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
   // 1. Generate an embedding for the user's query using the primary 'ai' instance
   const { embedding } = await ai.embed({
-    embedder: 'googleai/embedding-001',
+    embedder: 'googleai/embedding-004',
     content: query,
     taskType: 'RETRIEVAL_QUERY',
   });

@@ -31,7 +31,7 @@ const testEmbeddingFlow = ai.defineFlow(
   async () => {
     try {
       const { embedding } = await ai.embed({
-        embedder: 'googleai/embedding-001',
+        embedder: 'googleai/embedding-004',
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
       });
