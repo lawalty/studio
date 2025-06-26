@@ -37,23 +37,28 @@ const testEmbeddingFlow = ai.defineFlow(
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      const embedding = result?.embedding;
+      if (!result) {
+        return { success: false, error: 'The embedding service returned a null or undefined result object.' };
+      }
+      
+      const embedding = result.embedding;
+      
+      if (!embedding) {
+        const fullResponse = JSON.stringify(result, null, 2);
+        return { success: false, error: `The result object was received, but the 'embedding' property was missing. Full response: ${fullResponse}` };
+      }
 
-      // Corrected Validation: Check if the embedding exists and has a length greater than 0.
-      if (embedding && embedding.length > 0) {
+      if (embedding.length > 0) {
+        // SUCCESS!
         return {
           success: true,
           embeddingVectorLength: embedding.length,
         };
+      } else {
+        // The embedding property exists, but it's an empty array.
+        const fullResponse = JSON.stringify(result, null, 2);
+        return { success: false, error: `The 'embedding' property was found, but it was an empty array. Full response: ${fullResponse}` };
       }
-      
-      const fullResponse = JSON.stringify(result, null, 2);
-      const errorMessage = `The embedding service returned a successful response, but the embedding vector was empty or in an unexpected format. Full service response: ${fullResponse}`;
-      console.error('[testEmbeddingFlow] Failed with invalid vector format:', result);
-      return {
-        success: false,
-        error: errorMessage,
-      };
 
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);

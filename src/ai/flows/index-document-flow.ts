@@ -106,7 +106,6 @@ const indexDocumentFlow = ai.defineFlow(
         
         const embeddingVector = result.embedding;
 
-        // Corrected Validation: Check if the embedding vector exists and is not empty.
         if (embeddingVector && embeddingVector.length > 0) {
           const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
           batch.set(chunkDocRef, {
