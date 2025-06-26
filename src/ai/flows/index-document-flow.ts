@@ -105,17 +105,21 @@ const indexDocumentFlow = ai.defineFlow(
           taskType: 'RETRIEVAL_DOCUMENT',
         });
         
-        if (result?.embedding?.length > 0) {
+        const embeddingVector = result.embedding;
+
+        // This is the crucial check based on the user's example.
+        if (embeddingVector && embeddingVector.length > 0) {
           chunksToSave.push({
             sourceId,
             sourceName,
             level,
             text: trimmedChunk,
-            embedding: Array.from(result.embedding),
+            embedding: Array.from(embeddingVector), // Use Array.from for Firestore compatibility
             createdAt: new Date().toISOString(),
             downloadURL,
           });
         } else {
+          // This block now handles the specific case of an empty/invalid vector from the service.
           failedChunks++;
           const fullResponse = JSON.stringify(result, null, 2);
           const errorMsg = `The embedding service returned an empty or invalid embedding. This often points to a configuration issue in your Google Cloud project (e.g., Billing, API provisioning). Full service response: ${fullResponse}`;
@@ -128,8 +132,9 @@ const indexDocumentFlow = ai.defineFlow(
           );
         }
       } catch (error: any) {
+        // This block catches exceptions during the API call itself.
         failedChunks++;
-        const errorMsg = `The test failed with an unexpected exception: ${error.message || 'Unknown error'}. Full details: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
+        const errorMsg = `The embedding API call failed with an exception: ${error.message || 'Unknown error'}. Full details: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
         if (!firstError) {
           firstError = errorMsg;
           firstFailedChunkContent = chunk;
@@ -144,11 +149,13 @@ const indexDocumentFlow = ai.defineFlow(
         console.log(`[indexDocumentFlow] Finished processing '${sourceName}'. Successfully embedded ${chunksToSave.length} chunks and skipped ${failedChunks} failed chunks.`);
     }
 
-    if (chunksToSave.length === 0 && failedChunks > 0) {
-        const finalError = `${firstError} \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
+    // If all chunks failed, return a specific error.
+    if (chunksToSave.length === 0 && chunks.length > 0) {
+        const finalError = `Failed to embed any chunks for '${sourceName}'. The first error was: ${firstError} \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
         return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
     }
 
+    // If there are chunks to save, commit them to Firestore.
     if (chunksToSave.length > 0) {
         const batch = writeBatch(db);
         const chunksCollectionRef = collection(db, 'kb_chunks');

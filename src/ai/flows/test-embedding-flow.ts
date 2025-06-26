@@ -37,25 +37,33 @@ const testEmbeddingFlow = ai.defineFlow(
         taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      // A more robust check for a valid embedding response that handles both Arrays and Float32Arrays.
-      if (result?.embedding?.length > 0) {
+      // The embedding vector was successfully generated.
+      const embedding = result?.embedding;
+
+      // Now, validate that the vector is not empty.
+      if (embedding && embedding.length > 0) {
         return {
           success: true,
-          embeddingVectorLength: result.embedding.length,
+          embeddingVectorLength: embedding.length,
         };
       } else {
+        // The service responded, but with an empty or invalid embedding.
+        // This is a specific failure case we want to report clearly.
         const fullResponse = JSON.stringify(result, null, 2);
-        const errorMessage = `The embedding service returned an unexpected response. While it didn't crash, the response was not a valid embedding vector. The full response from the service was: ${fullResponse}`;
+        const errorMessage = `The embedding service returned an empty or invalid vector. Full service response: ${fullResponse}`;
+        console.error('[testEmbeddingFlow] Failed with empty vector:', result);
         return {
           success: false,
           error: errorMessage,
         };
       }
     } catch (e: any) {
+      // An unexpected exception occurred during the API call.
       console.error('[testEmbeddingFlow] Exception caught:', e);
+      const errorMessage = `The test failed with an unexpected exception. This often indicates a problem with API configuration or permissions in your Google Cloud project. Details: ${e.message || 'Unknown error'}`;
       return {
           success: false,
-          error: `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
+          error: errorMessage,
       };
     }
   }
