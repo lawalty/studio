@@ -138,8 +138,8 @@ const indexDocumentFlow = ai.defineFlow(
     if (chunksToSave.length === 0) {
       console.log(`[indexDocumentFlow] No chunks were successfully embedded for '${sourceName}'. Nothing to save to Firestore.`);
       if (failedChunks > 0) {
-          if (firstError.includes('API_KEY_INVALID')) {
-              throw new Error(`Failed to index '${sourceName}' due to an invalid Gemini API Key. Please verify your key in the Admin Panel AND ensure the "Generative Language API" is enabled in your Google Cloud project. Original error: ${firstError}`);
+          if (firstError.includes('API_KEY_INVALID') || firstError.includes('PERMISSION_DENIED')) {
+              throw new Error(`Failed to index '${sourceName}' due to an authentication or permission issue. Please ensure the app's service account has the 'Vertex AI User' role in Google Cloud IAM, and that the 'Generative Language API' is enabled for this project. Original error: ${firstError}`);
           }
           throw new Error(`Failed to index '${sourceName}'. All ${failedChunks} text chunks failed. First error: ${firstError}`);
       }
