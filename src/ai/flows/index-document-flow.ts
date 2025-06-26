@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text,
@@ -79,15 +80,19 @@ const indexDocumentFlow = ai.defineFlow(
        console.warn(`[indexDocumentFlow] ${errorMessage} Document: '${sourceName}'.`);
        return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMessage };
     }
-
+    
     const chunks = simpleSplitter(cleanText, {
       chunkSize: 1500,
       chunkOverlap: 150,
     });
     
+    if (chunks.length > 0) {
+        console.log(`[indexDocumentFlow] Chunking complete for '${sourceName}'. ${chunks.length} text chunks were created.`);
+    }
+
     const chunksToSave: any[] = [];
     let failedChunks = 0;
-    let firstError = '';
+    let firstError: string | null = null;
     let firstFailedChunkContent: string | null = null;
 
     for (const chunk of chunks) {
@@ -115,24 +120,24 @@ const indexDocumentFlow = ai.defineFlow(
           });
         } else {
           failedChunks++;
-          const errorMsg = 'Embedding call returned an empty or invalid result from the AI model.';
+          const errorMsg = 'The embedding service returned a successful response, but the response was empty. This often points to a configuration issue in your Google Cloud project (e.g., Billing not enabled for the project, or the Vertex AI API is not fully provisioned). Please verify your project settings in the Google Cloud Console.';
           if (!firstError) {
             firstError = errorMsg;
             firstFailedChunkContent = trimmedChunk;
           }
           console.warn(
-            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because it failed to generate a valid embedding. The content might be unsupported by the model. Content: "${trimmedChunk.substring(0, 100)}..."`
+            `[indexDocumentFlow] Skipped a chunk from '${sourceName}' because the embedding result was empty. This may indicate a cloud configuration issue. Content: "${trimmedChunk.substring(0, 100)}..."`
           );
         }
       } catch (error: any) {
         failedChunks++;
-        const errorMsg = error.message || 'An unknown error occurred during embedding.';
+        const errorMsg = `The embedding service threw an error: ${error.message || 'Unknown error'}. This could be a permission or authentication issue. Please check the 'Vertex AI User' role and ensure the API is enabled and that billing is active on your Google Cloud project.`;
         if (!firstError) {
           firstError = errorMsg;
           firstFailedChunkContent = chunk;
         }
         console.error(
-          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${errorMsg}. Content: "${chunk.substring(0, 100)}..."`
+          `[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Skipping chunk. Error: ${error.message}. Content: "${chunk.substring(0, 100)}..."`
         );
       }
     }
@@ -141,28 +146,22 @@ const indexDocumentFlow = ai.defineFlow(
         console.log(`[indexDocumentFlow] Finished processing '${sourceName}'. Successfully embedded ${chunksToSave.length} chunks and skipped ${failedChunks} failed chunks.`);
     }
 
-    if (chunksToSave.length === 0) {
-      if (failedChunks > 0) {
-        let finalError;
-        if (firstError.includes('PERMISSION_DENIED') || firstError.includes('Vertex AI User')) {
-          finalError = `Authentication/permission error. Please ensure the 'Vertex AI User' role is set and 'Generative Language API' is enabled in Google Cloud. Details: ${firstError}`;
-        } else {
-          finalError = `The AI model could not process the provided text. This can happen if the text is empty, contains unsupported characters, or violates content policies. Please review the text and try again. Details: ${firstError}. \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
-        }
+    if (chunksToSave.length === 0 && failedChunks > 0) {
+        const finalError = `${firstError}. \n\nFailed Chunk Content:\n"${firstFailedChunkContent}"`;
         return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
-      }
-      return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: true };
     }
 
-    const batch = writeBatch(db);
-    const chunksCollectionRef = collection(db, 'kb_chunks');
+    if (chunksToSave.length > 0) {
+        const batch = writeBatch(db);
+        const chunksCollectionRef = collection(db, 'kb_chunks');
 
-    chunksToSave.forEach((chunkData) => {
-      const chunkDocRef = doc(chunksCollectionRef);
-      batch.set(chunkDocRef, chunkData);
-    });
+        chunksToSave.forEach((chunkData) => {
+          const chunkDocRef = doc(chunksCollectionRef);
+          batch.set(chunkDocRef, chunkData);
+        });
 
-    await batch.commit();
+        await batch.commit();
+    }
 
     return { chunksCreated: chunks.length, chunksIndexed: chunksToSave.length, sourceId, success: true };
   }
