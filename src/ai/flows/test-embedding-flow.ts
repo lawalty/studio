@@ -49,9 +49,13 @@ const testEmbeddingFlow = ai.defineFlow(
         };
       }
     } catch (e: any) {
+      // This log helps debug in the Google Cloud Console Logs Explorer.
+      console.error('[testEmbeddingFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+      
+      // This provides a more detailed error directly in the UI toast.
       return {
-        success: false,
-        error: `An exception occurred during the embedding call: ${e.message}. This could be a permission or billing issue in your Google Cloud project.`,
+          success: false,
+          error: `The test failed with exception: ${e.message || 'Unknown error'}. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`,
       };
     }
   }
