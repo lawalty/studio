@@ -65,10 +65,14 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
-      // Ensure Firebase Admin SDK is initialized
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
+      // Ensure Firebase Admin SDK is initialized using a named instance
+      // to prevent conflicts in serverless environments.
+      const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
+        admin.initializeApp({
+            // Using an explicit project ID can help in some environments.
+            // The Admin SDK will still use Application Default Credentials for auth.
+            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        }, 'RAG_APP');
 
       const cleanText = text.trim();
       if (!cleanText) {
@@ -88,8 +92,8 @@ const indexDocumentFlow = ai.defineFlow(
 
       console.log(`[indexDocumentFlow] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
 
-      // Use a batched write for efficiency, using the Admin SDK
-      const db = getFirestore();
+      // Use a batched write for efficiency, using the named app instance.
+      const db = getFirestore(app);
       const batch = db.batch();
       const chunksCollection = db.collection('kb_chunks');
 

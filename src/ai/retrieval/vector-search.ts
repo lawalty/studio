@@ -51,10 +51,11 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  // Ensure Firebase Admin SDK is initialized
-  if (admin.apps.length === 0) {
-    admin.initializeApp();
-  }
+  // Initialize Firebase Admin SDK with a named instance to avoid conflicts.
+  const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
+    admin.initializeApp({
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    }, 'RAG_APP');
 
   // 1. Generate an embedding for the user's query.
   const { embedding: queryEmbedding } = await ai.embed({
@@ -64,7 +65,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   });
   
   // 2. Fetch all chunks from the Firestore collection.
-  const db = getFirestore();
+  const db = getFirestore(app);
   const chunksCollectionRef = db.collection('kb_chunks');
   const querySnapshot = await chunksCollectionRef.get();
 
