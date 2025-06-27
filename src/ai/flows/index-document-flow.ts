@@ -12,8 +12,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { db } from '@/lib/firebase-admin';
-import { writeBatch, collection } from 'firebase/firestore';
-
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -84,12 +82,13 @@ const indexDocumentFlow = ai.defineFlow(
 
       console.log(`[indexDocumentFlow] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
 
-      // Use a batched write for efficiency
-      const batch = writeBatch(db);
-      const chunksCollection = collection(db, 'kb_chunks');
+      // Use a batched write for efficiency, using the Admin SDK
+      const batch = db.batch();
+      const chunksCollection = db.collection('kb_chunks');
 
       chunks.forEach((chunkText, index) => {
-        const chunkDocRef = doc(chunksCollection); // Auto-generate a new document ID
+        // Admin SDK syntax for auto-generating a new document ID
+        const chunkDocRef = chunksCollection.doc(); 
         batch.set(chunkDocRef, {
           sourceId,
           sourceName,
