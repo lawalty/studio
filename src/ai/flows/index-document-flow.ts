@@ -64,6 +64,7 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
+    let chunks: string[] = [];
     try {
       if (admin.apps.length === 0) {
         admin.initializeApp();
@@ -78,7 +79,7 @@ const indexDocumentFlow = ai.defineFlow(
          return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMessage };
       }
       
-      const chunks = simpleSplitter(cleanText, {
+      chunks = simpleSplitter(cleanText, {
         chunkSize: 1500,
         chunkOverlap: 150,
       });
@@ -166,21 +167,25 @@ const indexDocumentFlow = ai.defineFlow(
     } catch (e: any) {
       console.error(`[indexDocumentFlow - CRITICAL] An error occurred during document indexing for source '${sourceName}'. Full error object:`, e);
 
-      let userFriendlyError = "An unexpected critical error occurred during indexing. ";
+      // Default, safe error message
+      let userFriendlyError = "An unexpected critical error occurred during indexing. Please check the server logs for details.";
 
-      const errorMessageString = (e instanceof Error) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
+      // Convert error to a string safely, avoiding stringifying large objects.
+      const errorMessageString = e?.message || String(e);
 
-      if (e.code === 7 || errorMessageString.includes('PERMISSION_DENIED')) {
-          userFriendlyError = "Firestore Write Failed (Permission Denied): The server's built-in identity is not authorized to write to the database. Please go to your Google Cloud project's IAM page and grant the 'Cloud Datastore User' role to your App Hosting service account.";
+      // Check for specific, common, and actionable errors.
+      if (errorMessageString.includes('PERMISSION_DENIED') || errorMessageString.includes('7 FAILED_PRECONDITION')) {
+          userFriendlyError = "Firestore Write Failed (Permission Denied): The server's built-in identity is not authorized to write to the database. Please go to your Google Cloud project's IAM page and grant the 'Cloud Datastore User' role to your App Hosting service account. It may take a minute to apply.";
       } 
       else if (errorMessageString.includes('403 Forbidden')) {
           userFriendlyError = 'The embedding API call was blocked (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project, or billing is not set up.';
       } else {
-          userFriendlyError += `Details: ${errorMessageString}`;
+          // For any other error, provide a clean message without dumping the object.
+          userFriendlyError = `An unexpected error occurred during indexing. Details: ${errorMessageString}`;
       }
 
       return {
-        chunksCreated: 0,
+        chunksCreated: chunks.length || 0,
         chunksIndexed: 0,
         sourceId,
         success: false,
