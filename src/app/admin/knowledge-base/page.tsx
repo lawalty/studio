@@ -566,32 +566,51 @@ export default function KnowledgeBasePage() {
       return <div className="flex items-center gap-1 text-xs text-yellow-600"><Loader2 className="h-3 w-3 animate-spin" /> Processing...</div>;
     }
 
-    switch (source.indexingStatus) {
-        case 'indexed':
-            return <span className="text-xs text-green-600 flex items-center gap-1"><SearchCheck className="h-3 w-3" /> Indexed</span>;
-        case 'failed':
-            return (
-                <div className="flex items-center gap-1">
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span className="text-xs text-red-600 cursor-help">Failed</span>
-                            </TooltipTrigger>
-                            <TooltipContent><p>{source.indexingError || 'Unknown indexing error'}</p></TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                    <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
-                </div>
-            );
-        case 'pending':
-        default:
-             return (
-                <div className="flex items-center gap-1">
-                    <span className="text-xs text-yellow-600">Pending</span>
-                    <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
-                </div>
-            );
+    // Handle failure states first
+    if (source.extractionStatus === 'failed') {
+        return (
+            <div className="flex items-center gap-1">
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="text-xs text-red-600 cursor-help flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Extraction Failed</span>
+                        </TooltipTrigger>
+                        <TooltipContent><p>{source.extractionError || 'Unknown extraction error'}</p></TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+                <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
+            </div>
+        );
     }
+
+    if (source.indexingStatus === 'failed') {
+        return (
+            <div className="flex items-center gap-1">
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="text-xs text-red-600 cursor-help flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Indexing Failed</span>
+                        </TooltipTrigger>
+                        <TooltipContent><p>{source.indexingError || 'Unknown indexing error'}</p></TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+                <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
+            </div>
+        );
+    }
+
+    // Handle success state
+    if (source.indexingStatus === 'indexed') {
+        return <span className="text-xs text-green-600 flex items-center gap-1"><SearchCheck className="h-3 w-3" /> Indexed</span>;
+    }
+
+    // Handle pending states
+    return (
+        <div className="flex items-center gap-1">
+            <span className="text-xs text-yellow-600">Pending</span>
+            <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
+        </div>
+    );
   };
 
 
@@ -820,3 +839,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
