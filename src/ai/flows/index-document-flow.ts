@@ -166,19 +166,17 @@ const indexDocumentFlow = ai.defineFlow(
     } catch (e: any) {
       console.error(`[indexDocumentFlow - CRITICAL] An error occurred during document indexing for source '${sourceName}'. Full error object:`, e);
 
-      // Default user-friendly error message.
-      let userFriendlyError = `An unexpected critical error occurred during indexing: ${e.message || 'Unknown error. Check server logs.'}`;
+      let userFriendlyError = "An unexpected critical error occurred during indexing. ";
 
-      // Check for specific known error patterns.
-      const errorMessageString = (e && typeof e.message === 'string') ? e.message : '';
+      const errorMessageString = (e instanceof Error) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
 
-      // Check for Firestore PERMISSION_DENIED (code 7)
       if (e.code === 7 || errorMessageString.includes('PERMISSION_DENIED')) {
           userFriendlyError = "Firestore Write Failed (Permission Denied): The server's built-in identity is not authorized to write to the database. Please go to your Google Cloud project's IAM page and grant the 'Cloud Datastore User' role to your App Hosting service account.";
       } 
-      // Check for Embedding API PERMISSION_DENIED (403)
       else if (errorMessageString.includes('403 Forbidden')) {
           userFriendlyError = 'The embedding API call was blocked (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project, or billing is not set up.';
+      } else {
+          userFriendlyError += `Details: ${errorMessageString}`;
       }
 
       return {

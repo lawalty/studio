@@ -119,7 +119,7 @@ export default function ApiKeysPage() {
                     <code>
                       # This single key requires permissions for Vertex AI, Cloud Firestore, and Generative Language APIs.
                       <br/>
-                      GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+                      GOOGLE_AI_API_KEY=your_multi_permission_google_ai_api_key_here
                     </code>
                   </pre>
                   <p>

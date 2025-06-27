@@ -26,7 +26,6 @@ export const ai = genkit({
       // Genkit and the googleAI plugin will automatically pick up
       // process.env.GOOGLE_AI_API_KEY if apiKey is unspecified.
       // This key is used for all AI and database operations within flows.
-      apiKey: process.env.GOOGLE_AI_API_KEY,
     }),
   ],
   // In-memory tracing for simplicity. For production, you might configure
