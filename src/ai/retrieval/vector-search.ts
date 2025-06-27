@@ -73,6 +73,14 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
     embedder: textEmbedding004,
     content: query,
     taskType: 'RETRIEVAL_QUERY',
+    config: {
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      ]
+    }
   });
   
   // 2. Fetch all chunks from Firestore using the Admin SDK
