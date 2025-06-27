@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Extracts clean, readable text from any document URL using Gemini.
