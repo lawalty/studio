@@ -11,7 +11,6 @@
 import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
@@ -55,7 +54,7 @@ const generateSmsResponseFlow = ai.defineFlow(
     const context = await searchKnowledgeBase(input.userMessage);
 
     // --- Start of API Key logic for Chat ---
-    if (admin.apps.length === 0) { admin.initializeApp(); }
+    // The Genkit firebase() plugin handles initialization. Manual init is no longer needed.
     const db = getFirestore();
     const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
     const docRef = db.doc(FIRESTORE_KEYS_PATH);

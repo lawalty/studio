@@ -10,7 +10,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import twilio from 'twilio';
 
@@ -40,13 +39,10 @@ const sendSmsFlow = ai.defineFlow(
     outputSchema: SendSmsOutputSchema,
   },
   async ({ toPhoneNumber, messageBody }) => {
-    // Initialize Firebase Admin SDK if it hasn't been already.
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
+    // The Genkit firebase() plugin handles initialization. Manual init is no longer needed.
     
     try {
-      // Get Firestore instance from Admin SDK
+      // Get Firestore instance.
       const db = getFirestore();
 
       // 1. Fetch Twilio credentials from Firestore using Admin SDK

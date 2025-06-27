@@ -67,10 +67,7 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    // Initialize Firebase Admin SDK if it hasn't been already.
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
+    // The Genkit firebase() plugin handles initialization. Manual init is no longer needed.
     const db = getFirestore();
 
     // --- Start of API Key logic ---

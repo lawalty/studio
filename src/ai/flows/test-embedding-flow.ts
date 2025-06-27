@@ -12,7 +12,6 @@ import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const TestEmbeddingOutputSchema = z.object({
@@ -35,9 +34,7 @@ const testEmbeddingFlow = ai.defineFlow(
   async () => {
     try {
       // --- Start of API Key logic ---
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
+      // The Genkit firebase() plugin handles initialization. Manual init is no longer needed.
       const db = getFirestore();
       const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
       const docRef = db.doc(FIRESTORE_KEYS_PATH);

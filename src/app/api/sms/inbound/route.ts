@@ -4,7 +4,6 @@
 import { NextRequest } from 'next/server';
 import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
 import { sendSms } from '@/ai/flows/send-sms-flow';
-import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
@@ -16,10 +15,8 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
  * @returns A TwiML response to acknowledge receipt.
  */
 export async function POST(request: NextRequest) {
-  // Initialize Firebase Admin SDK if it hasn't been already.
-  if (admin.apps.length === 0) {
-    admin.initializeApp();
-  }
+  // The Genkit firebase() plugin (if used in flows called from here) handles initialization.
+  // We do NOT need to initialize firebase-admin here manually.
 
   try {
     const formData = await request.formData();
