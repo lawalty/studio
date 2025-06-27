@@ -130,15 +130,15 @@ export default function ApiKeysPage() {
 
             <Separator className="my-6" />
 
-             <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Google AI API Key (Optional Override)</h3>
+                <h3 className="text-lg font-semibold">Vertex AI API Key (Optional Override)</h3>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="vertexAiApiKey" className="font-medium">API Key</Label>
-                <Input id="vertexAiApiKey" name="vertexAiApiKey" type="password" value={apiKeys.vertexAiApiKey} onChange={handleChange} placeholder="Enter Google AI API Key" />
+                <Input id="vertexAiApiKey" name="vertexAiApiKey" type="password" value={apiKeys.vertexAiApiKey} onChange={handleChange} placeholder="Enter Vertex AI API Key" />
                 <p className="text-xs text-muted-foreground">
-                    Using an API Key can be a helpful alternative for debugging. This will override the application's default credentials for AI operations.
+                    Using an API Key can be a helpful alternative for debugging. This will override the application's default credentials for AI operations. This key is used for all RAG embedding logic.
                 </p>
             </div>
 
