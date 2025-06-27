@@ -11,7 +11,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
+import { geminiProEmbedder } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
@@ -97,7 +97,7 @@ const indexDocumentFlow = ai.defineFlow(
           }
           
           const result = await ai.embed({
-            embedder: textEmbedding004,
+            embedder: geminiProEmbedder,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',
             config: {
@@ -106,6 +106,7 @@ const indexDocumentFlow = ai.defineFlow(
                 { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
                 { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
                 { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
               ]
             }
           });
