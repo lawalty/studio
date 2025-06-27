@@ -10,7 +10,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { db } from '@/lib/firebase-admin';
+import * as admin from 'firebase-admin';
 import twilio from 'twilio';
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
@@ -41,6 +41,10 @@ const sendSmsFlow = ai.defineFlow(
   async ({ toPhoneNumber, messageBody }) => {
     try {
       // 1. Fetch Twilio credentials from Firestore using Admin SDK
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      const db = admin.firestore();
       const docRef = db.doc(FIRESTORE_KEYS_PATH);
       const docSnap = await docRef.get();
 

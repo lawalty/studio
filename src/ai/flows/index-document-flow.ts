@@ -13,7 +13,7 @@ import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import { db } from '@/lib/firebase-admin';
+import * as admin from 'firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -67,6 +67,10 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     // --- Start of API Key logic ---
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+    const db = admin.firestore();
     const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
     const docRef = db.doc(FIRESTORE_KEYS_PATH);
     const docSnap = await docRef.get();

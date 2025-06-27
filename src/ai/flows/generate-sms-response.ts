@@ -11,7 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import { db } from '@/lib/firebase-admin';
+import * as admin from 'firebase-admin';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -54,6 +54,10 @@ const generateSmsResponseFlow = ai.defineFlow(
     const context = await searchKnowledgeBase(input.userMessage);
 
     // --- Start of API Key logic for Chat ---
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+    const db = admin.firestore();
     const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
     const docRef = db.doc(FIRESTORE_KEYS_PATH);
     const docSnap = await docRef.get();
