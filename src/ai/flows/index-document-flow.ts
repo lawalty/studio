@@ -85,7 +85,8 @@ const indexDocumentFlow = ai.defineFlow(
       // Explicitly specify the bucket name for the Admin SDK.
       const bucket = storage.bucket(bucketName);
       
-      const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
+      // Reverted the sanitization change. We will use the raw text.
+      const cleanText = text.trim();
 
       if (!cleanText) {
          const errorMessage = "No readable text content was found in the document after processing. Test aborted.";
