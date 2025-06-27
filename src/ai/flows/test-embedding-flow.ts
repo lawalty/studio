@@ -8,9 +8,9 @@
  * - testEmbedding - A function that calls the embedding model with a hardcoded string.
  * - TestEmbeddingOutput - The return type for the function.
  */
-import { ai } from '@/ai/genkit';
+import { genkit } from 'genkit';
 import { z } from 'genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 
 
 const TestEmbeddingOutputSchema = z.object({
@@ -24,7 +24,7 @@ export async function testEmbedding(): Promise<TestEmbeddingOutput> {
   return testEmbeddingFlow();
 }
 
-const testEmbeddingFlow = ai.defineFlow(
+const testEmbeddingFlow = genkit.defineFlow(
   {
     name: 'testEmbeddingFlow',
     inputSchema: z.void(),
@@ -32,8 +32,20 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      // The global 'ai' instance is now configured with the environment variable API key.
-      const result = await ai.embed({
+      const vertexApiKey = process.env.VERTEX_AI_API_KEY;
+      if (!vertexApiKey) {
+        return {
+          success: false,
+          error: 'VERTEX_AI_API_KEY is not set in the environment. This key is required for testing embeddings.',
+        };
+      }
+      
+      const embeddingClient = genkit({
+        plugins: [googleAI({ apiKey: vertexApiKey })],
+        logLevel: 'debug',
+      });
+
+      const result = await embeddingClient.embed({
         embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
@@ -59,7 +71,7 @@ const testEmbeddingFlow = ai.defineFlow(
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
       const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
-      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY, API enablement, or billing. Full error object: ${fullError}`;
+      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with your VERTEX_AI_API_KEY, API enablement, or billing. Full error object: ${fullError}`;
       return {
           success: false,
           error: errorMessage,

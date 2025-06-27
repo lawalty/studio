@@ -9,22 +9,26 @@ config();
 /**
  * @fileOverview Genkit Configuration
  *
- * This file configures the Genkit AI instance for the application.
+ * This file configures the default Genkit AI instance for the application.
  *
- * It is now configured to use the GOOGLE_AI_API_KEY from your project's
- * environment variables (.env.local for local development). This is the
- * standard and most robust way to provide credentials to a server process,
- * resolving previous authentication issues.
+ * It is configured to use the GOOGLE_AI_API_KEY from your project's
+ * environment variables (.env.local for local development). This key is used for
+ * general-purpose AI tasks like chat responses.
  *
- * Make sure your .env.local file contains the following line:
+ * Specialized tasks, like embeddings, may use a separate, dedicated key
+ * (e.g., VERTEX_AI_API_KEY) by creating a temporary client within their flow.
+ *
+ * Make sure your .env.local file contains:
  * GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+ * VERTEX_AI_API_KEY=your_vertex_and_firestore_api_key_here
  */
 export const ai = genkit({
   plugins: [
     googleAI({
-      // The API key is now provided via an environment variable.
+      // The API key is provided via an environment variable for the default client.
       // Genkit and the googleAI plugin will automatically pick up
-      // process.env.GOOGLE_AI_API_KEY.
+      // process.env.GOOGLE_AI_API_KEY if apiKey is unspecified.
+      apiKey: process.env.GOOGLE_AI_API_KEY,
     }),
   ],
   logLevel: 'debug',

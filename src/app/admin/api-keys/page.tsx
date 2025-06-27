@@ -45,7 +45,6 @@ export default function ApiKeysPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          // Note: googleAiApiKey is no longer managed here.
           setApiKeys({
             tts: data.tts || '',
             voiceId: data.voiceId || '',
@@ -80,8 +79,6 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      // We are only saving the keys managed by this page.
-      // The googleAiApiKey is handled separately via environment variables.
       await setDoc(docRef, apiKeys, { merge: true }); 
       toast({ title: "Settings Saved", description: "Your service settings have been saved to Firestore." });
     } catch (error) {
@@ -109,22 +106,30 @@ export default function ApiKeysPage() {
         ) : (
           <>
             <Alert variant="default" className="bg-sky-50 border-sky-200">
-              <KeyRound className="h-4 w-4 text-sky-700" />
-              <AlertTitle className="text-sky-800">Important: Google AI API Key Configuration</AlertTitle>
-              <AlertDescription className="text-sky-700">
-                  <p className="mb-2 font-semibold">
-                    The Google AI API Key is now managed via an environment variable for improved security and stability.
+              <Terminal className="h-4 w-4 text-sky-700" />
+              <AlertTitle className="text-sky-800 font-bold">Important: Google AI API Key Configuration</AlertTitle>
+              <AlertDescription className="text-sky-700 space-y-3">
+                  <p className="font-semibold">
+                    All Google AI features are now managed via environment variables for improved security and stability.
                   </p>
-                  <p>
-                    To enable all AI features (chat, knowledge base, etc.), you must create a file named `.env.local` in the root of your project and add the following line:
-                  </p>
-                  <pre className="my-2 p-2 bg-gray-100 rounded text-sm text-black">
-                    <code>GOOGLE_AI_API_KEY=your_api_key_here</code>
+                  <div>
+                    To enable all AI features, you must create a file named <code className="font-mono bg-gray-200 text-black px-1 py-0.5 rounded">.env.local</code> in the root of your project and add the following keys:
+                  </div>
+                  <pre className="my-2 p-3 bg-gray-100 rounded text-sm text-black">
+                    <code>
+                      # Used for general AI chat and text generation.
+                      <br/>
+                      GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+                      <br/>
+                      <br/>
+                      # Used for the knowledge base embeddings (RAG).
+                      <br/>
+                      # This key MUST have permissions for both Vertex AI and Cloud Firestore APIs.
+                      <br/>
+                      VERTEX_AI_API_KEY=your_vertex_and_firestore_api_key_here
+                    </code>
                   </pre>
                   <p>
-                    For this application to work correctly, this API key **must have permissions for both the Vertex AI API and the Cloud Firestore API** in your Google Cloud project.
-                  </p>
-                   <p className="mt-2">
                     After adding or changing this file, you must **restart the application** for the change to take effect.
                   </p>
               </AlertDescription>

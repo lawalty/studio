@@ -9,9 +9,9 @@
  * - IndexDocumentOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
+import { genkit } from 'genkit';
 import { z } from 'genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
@@ -57,7 +57,7 @@ function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: 
   return chunks;
 }
 
-const indexDocumentFlow = ai.defineFlow(
+const indexDocumentFlow = genkit.defineFlow(
   {
     name: 'indexDocumentFlow',
     inputSchema: IndexDocumentInputSchema,
@@ -65,7 +65,18 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
-      // The global `ai` instance configured with the environment variable API key is used directly.
+      const vertexApiKey = process.env.VERTEX_AI_API_KEY;
+      if (!vertexApiKey) {
+        const errorMsg = "VERTEX_AI_API_KEY is not set in the environment. This key is required for creating embeddings.";
+        console.error(`[indexDocumentFlow] ${errorMsg}`);
+        return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMsg };
+      }
+
+      const embeddingClient = genkit({
+        plugins: [googleAI({ apiKey: vertexApiKey })],
+        logLevel: 'debug',
+      });
+      
       if (admin.apps.length === 0) {
         admin.initializeApp();
       }
@@ -97,8 +108,7 @@ const indexDocumentFlow = ai.defineFlow(
             continue;
           }
           
-          // Use the globally configured `ai` object.
-          const result = await ai.embed({
+          const result = await embeddingClient.embed({
             embedder: textEmbedding004,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',
