@@ -84,13 +84,12 @@ const indexDocumentFlow = ai.defineFlow(
         chunkOverlap: 150,
       });
       
-      const batch = db.batch();
       const chunksCollectionRef = db.collection('kb_chunks');
       let successfulChunks = 0;
-      let failedChunks = 0;
       let firstError: string | null = null;
 
-      for (const chunk of chunks) {
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
         try {
           const trimmedChunk = chunk.trim();
           if (trimmedChunk.length === 0) {
@@ -101,22 +100,14 @@ const indexDocumentFlow = ai.defineFlow(
             embedder: textEmbedding004,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',
-            config: {
-              safetySettings: [
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              ]
-            }
           });
           
           const embeddingVector = result.embedding;
           const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
 
           if (embeddingAsArray.length > 0) {
-            const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
-            batch.set(chunkDocRef, {
+            const chunkDocRef = chunksCollectionRef.doc();
+            await chunkDocRef.set({
               sourceId,
               sourceName,
               level,
@@ -127,64 +118,34 @@ const indexDocumentFlow = ai.defineFlow(
             });
             successfulChunks++;
           } else {
-            failedChunks++;
-            const errorMsg = `The embedding service returned an empty vector. This can happen if the content is blocked by safety filters or there is an API issue.`;
+            const errorMsg = `The embedding service returned an empty vector for chunk ${i+1}. This can happen if the content is blocked by safety filters.`;
             if (!firstError) firstError = errorMsg;
-            console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding. Full response:`, JSON.stringify(result, null, 2));
+            console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
           }
         } catch (error: any) {
-          failedChunks++;
-          const errorDetails = error instanceof Error ? error.message : JSON.stringify(error);
-          let specificError = `The embedding API call failed: ${errorDetails || 'Unknown error'}.`;
-           if (errorDetails.includes('403 Forbidden') || errorDetails.includes('PERMISSION_DENIED')) {
-              specificError = 'The embedding API call was blocked (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project. Please go to your Google Cloud Console, ensure you have the correct project selected, and enable these APIs. Also, verify that billing is enabled for the project.';
-          } else if (errorDetails.includes('API key not valid')) {
-              specificError = 'The provided GOOGLE_AI_API_KEY is not valid. Please check the key in your .env.local file and ensure it is correct.';
-          }
-          const errorMsg = `${specificError}\n\nThis is the first error encountered. Subsequent chunks may also have failed.`;
-          if (!firstError) firstError = errorMsg;
-          console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Full error object:`, error);
+          const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+          const specificError = `Failed to process chunk ${i+1} of '${sourceName}'. Details: ${errorMessage}`;
+          if (!firstError) firstError = specificError;
+          console.error(`[indexDocumentFlow] Error on chunk ${i+1} from '${sourceName}':`, error);
         }
       }
       
-      if (successfulChunks > 0) {
-          await batch.commit();
-      }
-
-      if (failedChunks > 0 && successfulChunks === 0) {
-          const finalError = `Failed to embed any chunks for '${sourceName}'. The first error was: ${firstError}`;
-          return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
-      }
-      
-      if (failedChunks > 0) {
-          const finalError = `Completed with ${failedChunks} errors. The first error was: ${firstError}`;
+      if (successfulChunks < chunks.length) {
+          const finalError = `Completed with ${chunks.length - successfulChunks} errors. The first error was: ${firstError || 'Unknown error'}`;
           return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: false, error: finalError };
       }
 
-
       return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: true };
+
     } catch (e: any) {
-      console.error(`[indexDocumentFlow - CRITICAL] An error occurred during document indexing for source '${sourceName}'. Full error object:`, e);
-
-      let userFriendlyError = "An unexpected critical error occurred during indexing. Please check the server logs for details.";
-      const errorMessageString = e?.message || String(e) || 'Unknown Firestore Error';
-
-      if (errorMessageString.includes('PERMISSION_DENIED') || errorMessageString.includes('7 FAILED_PRECONDITION')) {
-          if (errorMessageString.includes('Cloud Firestore API has not been used')) {
-              userFriendlyError = "Firestore API Not Enabled: Please go to the Firestore console in your Google Cloud project and create a database to enable the API.";
-          } else {
-              userFriendlyError = "Firestore Permission Denied: The server's built-in identity is not authorized to write to the database. Please go to your project's IAM page and grant the 'Cloud Datastore User' role to your App Hosting service account. It may take a minute to apply.";
-          }
-      } else {
-          userFriendlyError = `An unexpected error occurred during indexing. Details: ${errorMessageString}`;
-      }
-
+      console.error(`[indexDocumentFlow - CRITICAL] An unexpected error occurred during the indexing flow for source '${sourceName}':`, e);
+      const errorMessage = e instanceof Error ? e.message : 'An unknown server error occurred.';
       return {
         chunksCreated: chunks.length || 0,
         chunksIndexed: 0,
         sourceId,
         success: false,
-        error: userFriendlyError,
+        error: `Indexing failed due to a critical error: ${errorMessage}`,
       };
     }
   }
