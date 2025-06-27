@@ -7,7 +7,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors

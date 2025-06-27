@@ -9,8 +9,9 @@
  * - TestEmbeddingOutput - The return type for the function.
  */
 import { ai } from '@/ai/genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
+import * as admin from 'firebase-admin';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),

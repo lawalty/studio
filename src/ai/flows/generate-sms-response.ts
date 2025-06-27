@@ -11,6 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
+import * as admin from 'firebase-admin';
 
 const GenerateSmsResponseInputSchema = z.object({
   userMessage: z.string().describe('The user message to respond to.'),
@@ -47,6 +48,10 @@ const generateSmsResponseFlow = ai.defineFlow(
     outputSchema: GenerateSmsResponseOutputSchema,
   },
   async (input) => {
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+    
     // 1. Search the knowledge base for relevant context
     const context = await searchKnowledgeBase(input.userMessage);
 

@@ -11,6 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import * as admin from 'firebase-admin';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
   personaTraits: z
@@ -47,6 +48,10 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     outputSchema: AdjustAiPersonaAndPersonalityOutputSchema,
   },
   async input => {
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+    
     const prompt = ai.definePrompt({
       name: 'adjustAiPersonaAndPersonalityPrompt',
       input: {schema: AdjustAiPersonaAndPersonalityInputSchema},

@@ -11,6 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
+import * as admin from 'firebase-admin';
 
 // Define a schema for individual chat messages for history
 const ChatMessageSchema = z.object({
@@ -71,6 +72,10 @@ const generateChatResponseFlow = ai.defineFlow(
     outputSchema: GenerateChatResponseOutputSchema,
   },
   async (input) => {
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+    
     // 1. Search the knowledge base for relevant context, with error handling.
     let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
     try {

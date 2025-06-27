@@ -10,7 +10,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';
 
