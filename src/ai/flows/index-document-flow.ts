@@ -131,11 +131,11 @@ const indexDocumentFlow = ai.defineFlow(
 
       const appHostingSA = projectId
         ? `${projectId}@gcp-sa-apphosting.iam.gserviceaccount.com`
-        : 'YOUR_PROJECT_ID@gcp-sa-apphosting.iam.gserviceaccount.com (Could not determine Project ID from environment variables)';
+        : 'YOUR_PROJECT_ID@gcp-sa-apphosting.iam.gserviceaccount.com (Could not determine Project ID from .env.local)';
       
       const computeSA = projectId
         ? `${projectId}-compute@developer.gserviceaccount.com`
-        : 'YOUR_PROJECT_ID-compute@developer.gserviceaccount.com (Could not determine Project ID from environment variables)';
+        : 'YOUR_PROJECT_ID-compute@developer.gserviceaccount.com (Could not determine Project ID from .env.local)';
 
       if (errorMessage.includes('could not refresh access token') || (errorMessage.includes('getting metadata from plugin failed') && errorMessage.includes('500'))) {
           userFriendlyError = `Indexing failed due to a Google Cloud authentication error. This means the service account for your backend is missing permissions.
