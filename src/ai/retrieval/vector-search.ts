@@ -8,8 +8,8 @@
 
 import { ai } from '@/ai/genkit';
 import { geminiProEmbedder } from '@genkit-ai/googleai';
+import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import '@/lib/firebase-admin'; // Ensures the admin SDK is initialized
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -51,6 +51,10 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
+  // Ensure Firebase Admin SDK is initialized
+  if (admin.apps.length === 0) {
+    admin.initializeApp();
+  }
 
   // 1. Generate an embedding for the user's query.
   const { embedding: queryEmbedding } = await ai.embed({

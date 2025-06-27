@@ -11,8 +11,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import '@/lib/firebase-admin'; // Ensures the admin SDK is initialized
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -65,6 +65,11 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
+      // Ensure Firebase Admin SDK is initialized
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+
       const cleanText = text.trim();
       if (!cleanText) {
          const errorMessage = "No readable text content was found in the document. Aborting indexing.";
