@@ -63,6 +63,9 @@ export interface KnowledgeSource {
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
 const KB_LEVELS: KnowledgeBaseLevel[] = ['High', 'Medium', 'Low', 'Archive'];
 
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const DEFAULT_CONVERSATIONAL_TOPICS = "";
+
 const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFolder: string; title: string }> = {
   High: {
     firestorePath: "configurations/kb_high_meta_v1",
@@ -107,6 +110,8 @@ export default function KnowledgeBasePage() {
   const [isLoadingMedium, setIsLoadingMedium] = useState(true);
   const [isLoadingLow, setIsLoadingLow] = useState(true);
   const [isLoadingArchive, setIsLoadingArchive] = useState(true);
+
+  const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadDescription, setUploadDescription] = useState('');
@@ -222,16 +227,26 @@ export default function KnowledgeBasePage() {
     setIsLoading(false);
   }, [toast, getIsLoadingSetter, getSourcesSetter]); 
 
+  // Effect for fetching all KB levels
   useEffect(() => {
     KB_LEVELS.forEach(level => fetchSourcesForLevel(level));
   }, [fetchSourcesForLevel]);
 
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setSelectedFile(event.target.files[0]);
-    }
-  };
+  // Effect for fetching conversational topics
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data()?.conversationalTopics) {
+          setConversationalTopics(docSnap.data()!.conversationalTopics);
+        }
+      } catch (e) {
+        console.error("Failed to fetch conversational topics", e);
+      }
+    };
+    fetchTopics();
+  }, []);
 
   const triggerProcessing = useCallback(async (sourceToProcess: KnowledgeSource, level: KnowledgeBaseLevel) => {
     if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) return;
@@ -250,7 +265,7 @@ export default function KnowledgeBasePage() {
         extractedText = await response.text();
       } else {
         toast({ title: "Extraction Started", description: `AI is processing ${sourceToProcess.name}...` });
-        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL });
+        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics });
         extractedText = result.extractedText;
       }
       
@@ -322,42 +337,41 @@ export default function KnowledgeBasePage() {
     }
     
     setIsProcessingId(null);
-  }, [getSourcesSetter, saveSourcesToFirestore, toast]);
+  }, [getSourcesSetter, saveSourcesToFirestore, toast, conversationalTopics]);
 
 
-  const handleUpload = useCallback(async () => {
-    if (!selectedFile) {
-      toast({ title: "No file selected", variant: "destructive" });
+  const handleUpload = useCallback(async (fileToUpload: File) => {
+    if (!fileToUpload) {
+      toast({ title: "No file provided", variant: "destructive" });
       return;
     }
 
     setIsCurrentlyUploading(true);
-    const currentFile = selectedFile;
     const targetLevel = selectedKBTargetForUpload;
     const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
         
     const permanentId = `fb-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const filePath = `${config.storageFolder}${permanentId}-${currentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const filePath = `${config.storageFolder}${permanentId}-${fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const fileRef = storageRef(storage, filePath);
     
     try {
-      toast({ title: "Upload Started", description: `Uploading ${currentFile.name}...` });
-      await uploadBytes(fileRef, currentFile);
+      toast({ title: "Upload Started", description: `Uploading ${fileToUpload.name}...` });
+      await uploadBytes(fileRef, fileToUpload);
       const downloadURL = await getDownloadURL(fileRef);
 
       let fileType: KnowledgeSource['type'] = 'other';
-      if (currentFile.type.startsWith('audio/')) fileType = 'audio';
-      else if (currentFile.type.startsWith('image/')) fileType = 'image';
-      else if (currentFile.type === 'application/pdf') fileType = 'pdf';
-      else if (currentFile.type.startsWith('text/')) fileType = 'text';
-      else if (currentFile.name.match(/\.(doc|docx|rtf|odt)$/i)) fileType = 'document';
+      if (fileToUpload.type.startsWith('audio/')) fileType = 'audio';
+      else if (fileToUpload.type.startsWith('image/')) fileType = 'image';
+      else if (fileToUpload.type === 'application/pdf') fileType = 'pdf';
+      else if (fileToUpload.type.startsWith('text/')) fileType = 'text';
+      else if (fileToUpload.name.match(/\.(doc|docx|rtf|odt)$/i)) fileType = 'document';
 
       const isProcessable = ['pdf', 'text', 'document'].includes(fileType);
 
       const newSource: KnowledgeSource = {
-        id: permanentId, name: currentFile.name, type: fileType,
-        size: `${(currentFile.size / 1024 / 1024).toFixed(2)} MB`,
+        id: permanentId, name: fileToUpload.name, type: fileType,
+        size: `${(fileToUpload.size / 1024 / 1024).toFixed(2)} MB`,
         uploadedAt: new Date().toISOString(),
         storagePath: filePath, downloadURL: downloadURL,
         description: uploadDescription || '',
@@ -370,7 +384,7 @@ export default function KnowledgeBasePage() {
       const savedToDb = await saveSourcesToFirestore(updatedList, targetLevel);
 
       if (savedToDb) {
-        toast({ title: "Upload Successful", description: `${currentFile.name} saved to ${targetLevel} KB.` });
+        toast({ title: "Upload Successful", description: `${fileToUpload.name} saved to ${targetLevel} KB.` });
         if (isProcessable) {
           triggerProcessing(newSource, targetLevel);
         }
@@ -388,7 +402,16 @@ export default function KnowledgeBasePage() {
       setUploadDescription('');
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, saveSourcesToFirestore, uploadDescription, getSourcesState, triggerProcessing]);
+  }, [selectedKBTargetForUpload, getSourcesSetter, saveSourcesToFirestore, uploadDescription, getSourcesState, triggerProcessing, toast]);
+
+  const handleFileUpload = useCallback(() => {
+    if (selectedFile) {
+        handleUpload(selectedFile);
+    } else {
+        toast({ title: "No file selected", variant: "destructive" });
+    }
+  }, [selectedFile, handleUpload, toast]);
+
 
   const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
     const setSources = getSourcesSetter(level);
@@ -499,20 +522,26 @@ export default function KnowledgeBasePage() {
       return;
     }
     setIsIndexingPastedText(true);
-    const targetLevel = selectedKBTargetForPastedText;
-    const setSources = getSourcesSetter(targetLevel);
     
-    const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') ? pastedTextSourceName : `${pastedTextSourceName}.txt`;
+    const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') 
+      ? pastedTextSourceName 
+      : `${pastedTextSourceName}.txt`;
+
     const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
     const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
-
-    await handleUpload(); // Re-use the main upload logic
+    
+    // Set the selected file and description for the main upload function to use
+    setSelectedFile(textAsFile);
+    setUploadDescription(pastedTextDescription);
+    setSelectedKBTargetForUpload(selectedKBTargetForPastedText);
+    
+    await handleUpload(textAsFile);
     
     setIsIndexingPastedText(false);
     setPastedText('');
     setPastedTextSourceName('');
     setPastedTextDescription('');
-  }, [pastedText, pastedTextSourceName, selectedKBTargetForPastedText, getSourcesSetter, toast, handleUpload]);
+  }, [pastedText, pastedTextSourceName, pastedTextDescription, selectedKBTargetForPastedText, toast, handleUpload]);
 
 
   const handleTestKnowledgeBase = async () => {
@@ -566,7 +595,6 @@ export default function KnowledgeBasePage() {
       return <div className="flex items-center gap-1 text-xs text-yellow-600"><Loader2 className="h-3 w-3 animate-spin" /> Processing...</div>;
     }
 
-    // Handle failure states first
     if (source.extractionStatus === 'failed') {
         return (
             <div className="flex items-center gap-1">
@@ -599,12 +627,10 @@ export default function KnowledgeBasePage() {
         );
     }
 
-    // Handle success state
     if (source.indexingStatus === 'indexed') {
         return <span className="text-xs text-green-600 flex items-center gap-1"><SearchCheck className="h-3 w-3" /> Indexed</span>;
     }
 
-    // Handle pending states
     return (
         <div className="flex items-center gap-1">
             <span className="text-xs text-yellow-600">Pending</span>
@@ -746,7 +772,7 @@ export default function KnowledgeBasePage() {
           </div>
         </CardContent>
         <CardFooter>
-          <Button onClick={handleUpload} disabled={!selectedFile || anyOperationGloballyInProgress}>
+          <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress}>
             {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
             Upload and Process
           </Button>
@@ -839,5 +865,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
