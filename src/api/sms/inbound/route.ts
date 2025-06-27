@@ -16,10 +16,6 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
  */
 export async function POST(request: NextRequest) {
   try {
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    
     const formData = await request.formData();
     const fromPhoneNumber = formData.get('From') as string;
     const userMessage = formData.get('Body') as string;
@@ -31,6 +27,9 @@ export async function POST(request: NextRequest) {
     // 1. Fetch persona traits for the AI to use in its response.
     let personaTraits = DEFAULT_PERSONA_TRAITS;
     try {
+        if (admin.apps.length === 0) {
+          admin.initializeApp();
+        }
         const db = admin.firestore();
         const docRef = db.doc(FIRESTORE_SITE_ASSETS_PATH);
         const docSnap = await docRef.get();

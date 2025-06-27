@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
+import { gemini15Flash } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 
@@ -39,18 +39,6 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
   },
   async (input) => {
     try {
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-      
-      const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
-      const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
-
       const extractTextPrompt = ai.definePrompt({
         name: 'extractTextFromDocumentUrlPrompt',
         input: { schema: ExtractTextFromDocumentUrlInputSchema },
@@ -71,7 +59,7 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
       - Your final output should only be the clean, extracted text, ready for processing.
 
       Document to process: {{media url=documentUrl}}`,
-        model: model,
+        model: gemini15Flash, // Use the default model instance
         config: {
           temperature: 0.0, // For deterministic extraction
         }
@@ -95,7 +83,7 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error('[extractTextFromDocumentUrlFlow] Error during text extraction flow:', e);
-      let userFriendlyError = 'The AI model could not read the document. It might be corrupted, password-protected, or in an unsupported format.';
+      let userFriendlyError = 'The AI model could not read the document. It might be corrupted, password-protected, or in an unsupported format. Please also verify your GOOGLE_AI_API_KEY is set correctly in your environment.';
       if (e instanceof Error && (e.message.includes('PERMISSION_DENIED') || e.message.includes('403'))) {
         userFriendlyError = 'Could not access the document. Please ensure the file URL is public and accessible.';
       }

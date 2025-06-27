@@ -9,9 +9,8 @@
  * - TestEmbeddingOutput - The return type for the function.
  */
 import { ai } from '@/ai/genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
@@ -32,17 +31,9 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
-
-      const vertexAi = apiKey ? googleAI({ apiKey }) : undefined;
-      const embedder = vertexAi ? vertexAi.embedder('text-embedding-004') : textEmbedding004;
+      // The embedder is now pre-configured in genkit.ts.
+      // We can use the default instance directly.
+      const embedder = textEmbedding004;
 
       const result = await ai.embed({
         embedder: embedder,
@@ -70,7 +61,7 @@ const testEmbeddingFlow = ai.defineFlow(
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
       const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
-      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing. Full error object: ${fullError}`;
+      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY, API enablement, or billing. Full error object: ${fullError}`;
       return {
           success: false,
           error: errorMessage,

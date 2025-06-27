@@ -11,8 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
-import * as admin from 'firebase-admin';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 const GenerateSmsResponseInputSchema = z.object({
   userMessage: z.string().describe('The user message to respond to.'),
@@ -49,25 +48,12 @@ const generateSmsResponseFlow = ai.defineFlow(
     outputSchema: GenerateSmsResponseOutputSchema,
   },
   async (input) => {
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    const db = admin.firestore();
-
-    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-    const docRef = db.doc(FIRESTORE_KEYS_PATH);
-    const docSnap = await docRef.get();
-    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-    const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
-    const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
-    
     // 1. Search the knowledge base for relevant context
     const context = await searchKnowledgeBase(input.userMessage);
 
     const prompt = ai.definePrompt({
         name: 'generateSmsResponsePrompt',
-        model: model,
+        model: gemini15Flash,
         input: {schema: SmsPromptInputSchema},
         output: {schema: GenerateSmsResponseOutputSchema},
         prompt: `You are AI Blair. Your personality is: {{{personaTraits}}}

@@ -8,9 +8,8 @@
  * - TestTextGenerationOutput - The return type.
  */
 import { ai } from '@/ai/genkit';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
+import { gemini15Flash } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
 
 const TestTextGenerationOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the generation was successful.'),
@@ -31,17 +30,9 @@ const testTextGenerationFlow = ai.defineFlow(
   },
   async () => {
     try {
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-      const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
-      const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
+      // The model is now pre-configured in genkit.ts.
+      // We can use the default instance directly.
+      const model = gemini15Flash;
 
       const result = await ai.generate({
         model: model,
@@ -59,12 +50,12 @@ const testTextGenerationFlow = ai.defineFlow(
         const fullResponse = JSON.stringify(result, null, 2);
         return {
           success: false,
-          error: `The text generation service returned a successful but empty response. This may indicate a problem with the Vertex AI API configuration or project billing. Full response: ${fullResponse}`,
+          error: `The text generation service returned a successful but empty response. This may indicate a problem with your API key or billing. Full response: ${fullResponse}`,
         };
       }
     } catch (e: any) {
       console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
-      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing in your Google Cloud project. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
+      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY, API enablement, or billing. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
       return {
           success: false,
           error: errorMessage,

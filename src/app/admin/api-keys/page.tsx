@@ -3,19 +3,20 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, KeyRound, Speech, MessageSquare, CheckCircle, BrainCircuit } from 'lucide-react';
+import { Save, KeyRound, Speech, MessageSquare, Terminal, AlertTriangle } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
-  googleAiApiKey: string; // Renamed for clarity: For chat, etc.
-  vertexAiApiKey: string; // New field specifically for embeddings
+  googleAiApiKey: string; // This is now for reference only
+  vertexAiApiKey: string; // This is now for reference only
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -58,11 +59,6 @@ export default function ApiKeysPage() {
             twilioAuthToken: data.twilioAuthToken || '',
             twilioPhoneNumber: data.twilioPhoneNumber || '',
           });
-        } else {
-          setApiKeys({
-            googleAiApiKey: '', vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
-            twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
-          });
         }
       } catch (error) {
         console.error("Error fetching API keys from Firestore:", error);
@@ -70,10 +66,6 @@ export default function ApiKeysPage() {
           title: "Error Loading Keys",
           description: "Could not fetch API keys from the database. Please try again.",
           variant: "destructive",
-        });
-        setApiKeys({
-            googleAiApiKey: '', vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
-            twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
         });
       }
       setIsLoading(false);
@@ -93,8 +85,9 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
+      // We still save the keys here for reference and for non-Genkit services.
       await setDoc(docRef, apiKeys, { merge: true }); 
-      toast({ title: "Settings Saved", description: "Your API Key and service settings have been saved." });
+      toast({ title: "Settings Saved", description: "Your service settings have been saved to Firestore." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
       toast({
@@ -111,7 +104,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key & Services Management</CardTitle>
         <CardDescription>
-          Manage keys for AI services, Twilio SMS, and custom Text-to-Speech.
+          Manage keys for third-party services like Twilio SMS and custom Text-to-Speech.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -119,41 +112,40 @@ export default function ApiKeysPage() {
           <p>Loading settings...</p>
         ) : (
           <>
-            <div className="rounded-lg border border-green-500 bg-green-50 p-4 dark:bg-green-950">
-              <div className="flex items-center gap-3">
-                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  <div>
-                    <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">Default: Secure Service Account</h3>
-                    <p className="text-sm text-green-700 dark:text-green-400 mt-1">
-                      By default, your application is authenticated using a secure service account. Providing an API key below can be used as an alternative or for specific services.
-                    </p>
-                  </div>
-              </div>
-            </div>
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Critical: Action Required for AI Functionality</AlertTitle>
+              <AlertDescription>
+                To enable all AI chat and knowledge base features, you **must** set your Google AI API Key as an environment variable.
+                <ol className="list-decimal pl-5 mt-2 space-y-1">
+                  <li>Create a file named `.env.local` in the root directory of your project (if it doesn't exist).</li>
+                  <li>Add the following line to the file, replacing the placeholder with your key:
+                    <pre className="p-2 mt-1 bg-background/50 text-destructive-foreground/80 rounded-md text-xs"><code>GOOGLE_AI_API_KEY=your_google_ai_api_key_here</code></pre>
+                  </li>
+                  <li>Restart your application for the change to take effect.</li>
+                </ol>
+                 The fields below are for reference or for other services, but the AI now runs on the environment variable.
+              </AlertDescription>
+            </Alert>
 
             <Separator className="my-6" />
 
             <div className="flex items-center gap-2 mb-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Google AI API Key (for Chat)</h3>
+                <h3 className="text-lg font-semibold">Google AI / Vertex AI Keys (Reference)</h3>
             </div>
             <div className="space-y-2">
-                <Label htmlFor="googleAiApiKey" className="font-medium">API Key</Label>
-                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter Google AI (Gemini) API Key" />
+                <Label htmlFor="googleAiApiKey" className="font-medium">Google AI API Key (from .env.local)</Label>
+                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Set in .env.local, stored here for reference" />
                 <p className="text-xs text-muted-foreground">
-                    This key is used for general AI operations like chat responses. If left blank, the app will use its default credentials.
+                    This key is now managed by the `GOOGLE_AI_API_KEY` in your `.env.local` file. Changes here are for reference only.
                 </p>
             </div>
-            
-            <div className="flex items-center gap-2 mt-6 mb-2">
-                <BrainCircuit className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Vertex AI API Key (for Embeddings)</h3>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="vertexAiApiKey" className="font-medium">API Key</Label>
-                <Input id="vertexAiApiKey" name="vertexAiApiKey" type="password" value={apiKeys.vertexAiApiKey} onChange={handleChange} placeholder="Enter Vertex AI API Key" />
+             <div className="space-y-2">
+                <Label htmlFor="vertexAiApiKey" className="font-medium">Vertex AI API Key (Legacy)</Label>
+                <Input id="vertexAiApiKey" name="vertexAiApiKey" type="password" value={apiKeys.vertexAiApiKey} onChange={handleChange} placeholder="This field is no longer used by the AI" disabled />
                 <p className="text-xs text-muted-foreground">
-                    This key is used specifically for the RAG embedding logic (knowledge base indexing and search).
+                    The single `GOOGLE_AI_API_KEY` is now used for all Google AI services, including embeddings.
                 </p>
             </div>
 

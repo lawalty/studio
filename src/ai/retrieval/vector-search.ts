@@ -7,7 +7,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
@@ -51,18 +51,9 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  if (admin.apps.length === 0) {
-    admin.initializeApp();
-  }
-  const db = admin.firestore();
-
-  const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-  const docRef = db.doc(FIRESTORE_KEYS_PATH);
-  const docSnap = await docRef.get();
-  const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
-  
-  const vertexAi = apiKey ? googleAI({ apiKey }) : undefined;
-  const embedder = vertexAi ? vertexAi.embedder('text-embedding-004') : textEmbedding004;
+  // The embedder is now pre-configured in genkit.ts.
+  // We can use the default instance directly.
+  const embedder = textEmbedding004;
 
   // 1. Generate an embedding for the user's query
   const { embedding } = await ai.embed({
@@ -70,6 +61,12 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
     content: query,
     taskType: 'RETRIEVAL_QUERY',
   });
+  
+  // Initialize Firestore connection inside the function for serverless environments.
+  if (admin.apps.length === 0) {
+    admin.initializeApp();
+  }
+  const db = admin.firestore();
 
   // 2. Fetch all chunks from Firestore using the Admin SDK
   const chunksCollectionRef = db.collection('kb_chunks');

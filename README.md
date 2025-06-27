@@ -6,11 +6,28 @@ To get started, take a look at src/app/page.tsx.
 
 ## Environment Variables
 
-This project requires a connection to a Firebase project to function correctly. The configuration is managed through environment variables.
+This project requires environment variables to connect to services like Firebase and Google AI.
 
-1.  **Create the file:** Create a new file named `.env.local` in the root directory of this project.
+### 1. Create `.env.local`
 
-2.  **Add your Firebase config:** Add the following lines to your `.env.local` file, replacing the placeholder values with your actual Firebase project credentials.
+Create a new file named `.env.local` in the root directory of this project. This file is for your local secrets and will not be checked into version control.
+
+### 2. Add Google AI API Key (Required for AI Features)
+
+For the AI chat and knowledge base features to work, you must provide a Google AI API Key.
+
+*   Get a key from **[Google AI Studio](https://makersuite.google.com/app/apikey)**.
+*   Add the following line to your `.env.local` file, replacing the placeholder with your actual key:
+
+    ```
+    GOOGLE_AI_API_KEY=your_google_ai_api_key_here
+    ```
+
+### 3. Add Firebase Config (Required for Database/Storage)
+
+For features like saving settings, managing the knowledge base, or using Twilio integration, you need to connect the app to a Firebase project.
+
+*   Add the following lines to your `.env.local` file, replacing the placeholders with your actual Firebase project credentials:
 
     ```
     NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
@@ -21,11 +38,13 @@ This project requires a connection to a Firebase project to function correctly. 
     NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
     ```
 
-3.  **Where to find these values:** You can find your Firebase project's configuration in the Firebase Console:
+*   **Where to find these values:** You can find your Firebase project's configuration in the Firebase Console:
     *   Go to your Firebase project.
     *   Click the gear icon next to "Project Overview" and select "Project settings".
     *   In the "General" tab, scroll down to the "Your apps" section.
     *   Select your web app.
     *   You will find the configuration values (`apiKey`, `authDomain`, etc.) there.
 
-4. **Restart the App:** After saving the `.env.local` file, you must restart the application for the changes to take effect.
+### 4. Restart the App
+
+After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect.

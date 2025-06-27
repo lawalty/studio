@@ -40,7 +40,7 @@ const sendSmsFlow = ai.defineFlow(
   },
   async ({ toPhoneNumber, messageBody }) => {
     try {
-      // 1. Fetch Twilio credentials from Firestore using Admin SDK
+      // Initialize Firebase connection inside the flow for serverless environments.
       if (admin.apps.length === 0) {
         admin.initializeApp();
       }

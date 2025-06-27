@@ -11,8 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
-import * as admin from 'firebase-admin';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
+import { gemini15Flash } from '@genkit-ai/googleai';
 
 // Define a schema for individual chat messages for history
 const ChatMessageSchema = z.object({
@@ -73,19 +72,6 @@ const generateChatResponseFlow = ai.defineFlow(
     outputSchema: GenerateChatResponseOutputSchema,
   },
   async (input) => {
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    const db = admin.firestore();
-
-    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-    const docRef = db.doc(FIRESTORE_KEYS_PATH);
-    const docSnap = await docRef.get();
-    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-    const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
-    const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
-    
     // 1. Search the knowledge base for relevant context, with error handling.
     let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
     try {
@@ -106,7 +92,7 @@ const generateChatResponseFlow = ai.defineFlow(
     // Define the prompt with the default AI instance.
     const prompt = ai.definePrompt({
       name: 'generateChatResponsePrompt',
-      model: model,
+      model: gemini15Flash,
       input: {schema: PromptInputSchema}, // Use the new, more robust schema
       output: {schema: GenerateChatResponseOutputSchema},
       prompt: `You are AI Blair. Your personality and style are defined by the following traits:
@@ -177,7 +163,7 @@ Your Conversational Answer as AI Blair:`,
       return output;
     } catch (error: any) {
       console.error('[generateChatResponseFlow] Error calling AI model:', error);
-      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please try sending your message again in a moment.";
+      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please check that a valid GOOGLE_AI_API_KEY is set in your environment and try again.";
       if (error.message && error.message.includes('503 Service Unavailable')) {
         userFriendlyMessage = "My apologies, it seems my core systems are a bit busy or temporarily unavailable. Could you please try your message again in a few moments?";
       } else if (error.message && error.message.toLowerCase().includes('network error')) {

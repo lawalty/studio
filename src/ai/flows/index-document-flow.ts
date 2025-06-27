@@ -10,7 +10,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';
 
@@ -65,19 +65,9 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    const db = admin.firestore();
-
-    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-    const docRef = db.doc(FIRESTORE_KEYS_PATH);
-    const docSnap = await docRef.get();
-    const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
-
-    const vertexAi = apiKey ? googleAI({ apiKey }) : undefined;
-    const embedder = vertexAi ? vertexAi.embedder('text-embedding-004') : textEmbedding004;
+    // The embedder is now pre-configured in genkit.ts.
+    // We can use the default instance directly.
+    const embedder = textEmbedding004;
     
     const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
@@ -92,6 +82,11 @@ const indexDocumentFlow = ai.defineFlow(
       chunkOverlap: 150,
     });
     
+    // Initialize Firestore connection inside the flow for serverless environments.
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+    const db = admin.firestore();
     const batch = db.batch();
     const chunksCollectionRef = db.collection('kb_chunks');
     let successfulChunks = 0;
@@ -136,7 +131,7 @@ const indexDocumentFlow = ai.defineFlow(
       } catch (error: any) {
         failedChunks++;
         const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with authentication, API enablement, or billing. Full error: ${fullError}`;
+        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY environment variable, API enablement, or billing. Full error: ${fullError}`;
         if (!firstError) firstError = errorMsg;
         console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
       }
