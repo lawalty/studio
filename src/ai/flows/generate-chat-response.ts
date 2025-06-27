@@ -9,6 +9,10 @@
  */
 
 import { ai } from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
+import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -64,11 +68,55 @@ export async function generateChatResponse(
   return generateChatResponseFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'generateChatResponsePrompt',
-  input: {schema: PromptInputSchema}, // Use the new, more robust schema
-  output: {schema: GenerateChatResponseOutputSchema},
-  prompt: `You are AI Blair. Your personality and style are defined by the following traits:
+const generateChatResponseFlow = ai.defineFlow(
+  {
+    name: 'generateChatResponseFlow',
+    inputSchema: GenerateChatResponseInputSchema,
+    outputSchema: GenerateChatResponseOutputSchema,
+  },
+  async (input) => {
+    // 1. Search the knowledge base for relevant context, with error handling.
+    let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
+    try {
+        context = await searchKnowledgeBase(input.userMessage);
+    } catch (error: any) {
+        console.warn(`[generateChatResponseFlow] Knowledge base search failed: ${error.message}. The AI will respond without external context. This is non-fatal.`);
+        // The default context string above will be used.
+    }
+
+    // 2. Prepare chat history
+    const processedChatHistory = (input.chatHistory || []).map(msg => {
+      if (msg.role === 'user') {
+        return { user: msg.parts[0].text };
+      }
+      return { model: msg.parts[0].text };
+    });
+    
+    // --- Start of API Key logic for Chat ---
+    if (admin.apps.length === 0) { admin.initializeApp(); }
+    const db = getFirestore();
+    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+    const docRef = db.doc(FIRESTORE_KEYS_PATH);
+    const docSnap = await docRef.get();
+    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
+
+    let chatAi = ai; // Default instance
+    if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
+        console.log('[generateChatResponseFlow] Using Google AI API Key from Firestore for chat.');
+        chatAi = genkit({
+            plugins: [googleAI({ apiKey: apiKey.trim() })],
+        });
+    } else {
+        console.log('[generateChatResponseFlow] Using default Genkit instance (ADC) for chat.');
+    }
+    // --- End of API Key logic ---
+
+    // Define the prompt dynamically with the correct AI instance
+    const prompt = chatAi.definePrompt({
+      name: 'generateChatResponsePrompt',
+      input: {schema: PromptInputSchema}, // Use the new, more robust schema
+      output: {schema: GenerateChatResponseOutputSchema},
+      prompt: `You are AI Blair. Your personality and style are defined by the following traits:
 {{{personaTraits}}}
 
 {{#if conversationalTopics}}
@@ -113,32 +161,8 @@ Special instructions for greetings, ending the conversation, and asking follow-u
 ---
 
 Your Conversational Answer as AI Blair:`,
-});
-
-
-const generateChatResponseFlow = ai.defineFlow(
-  {
-    name: 'generateChatResponseFlow',
-    inputSchema: GenerateChatResponseInputSchema,
-    outputSchema: GenerateChatResponseOutputSchema,
-  },
-  async (input) => {
-    // 1. Search the knowledge base for relevant context, with error handling.
-    let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
-    try {
-        context = await searchKnowledgeBase(input.userMessage);
-    } catch (error: any) {
-        console.warn(`[generateChatResponseFlow] Knowledge base search failed: ${error.message}. The AI will respond without external context. This is non-fatal.`);
-        // The default context string above will be used.
-    }
-
-    // 2. Prepare chat history
-    const processedChatHistory = (input.chatHistory || []).map(msg => {
-      if (msg.role === 'user') {
-        return { user: msg.parts[0].text };
-      }
-      return { model: msg.parts[0].text };
     });
+
 
     // 3. Construct the input for the prompt with the retrieved context
     const promptInput = {

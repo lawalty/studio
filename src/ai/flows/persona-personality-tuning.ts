@@ -10,6 +10,10 @@
  */
 
 import {ai} from '@/ai/genkit';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
+import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import {z} from 'genkit';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
@@ -40,17 +44,6 @@ export async function adjustAiPersonaAndPersonality(
   return adjustAiPersonaAndPersonalityFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'adjustAiPersonaAndPersonalityPrompt',
-  input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
-  output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
-  prompt: `You are AI Blair. Your personality settings have just been updated with the following traits:
-"{{{personaTraits}}}"
-
-Please provide a concise and natural-sounding confirmation, in your new character as AI Blair, that your settings have been successfully applied. Do not list or repeat the persona traits in your response; simply confirm the update in character, reflecting this new personality. For example, if your new persona is very formal, your confirmation should be formal. If it's very friendly, be friendly.
-Confirmation:`,
-});
-
 const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
   {
     name: 'adjustAiPersonaAndPersonalityFlow',
@@ -58,6 +51,36 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     outputSchema: AdjustAiPersonaAndPersonalityOutputSchema,
   },
   async input => {
+    // --- Start of API Key logic for Chat ---
+    if (admin.apps.length === 0) { admin.initializeApp(); }
+    const db = getFirestore();
+    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+    const docRef = db.doc(FIRESTORE_KEYS_PATH);
+    const docSnap = await docRef.get();
+    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
+
+    let chatAi = ai; // Default instance
+    if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
+        console.log('[adjustAiPersonaAndPersonalityFlow] Using Google AI API Key from Firestore.');
+        chatAi = genkit({
+            plugins: [googleAI({ apiKey: apiKey.trim() })],
+        });
+    } else {
+        console.log('[adjustAiPersonaAndPersonalityFlow] Using default Genkit instance (ADC).');
+    }
+    // --- End of API Key logic ---
+    
+    const prompt = chatAi.definePrompt({
+      name: 'adjustAiPersonaAndPersonalityPrompt',
+      input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
+      output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
+      prompt: `You are AI Blair. Your personality settings have just been updated with the following traits:
+"{{{personaTraits}}}"
+
+Please provide a concise and natural-sounding confirmation, in your new character as AI Blair, that your settings have been successfully applied. Do not list or repeat the persona traits in your response; simply confirm the update in character, reflecting this new personality. For example, if your new persona is very formal, your confirmation should be formal. If it's very friendly, be friendly.
+Confirmation:`,
+    });
+
     const {output} = await prompt(input);
     if (!output || typeof output.updatedPersonaDescription !== 'string') {
       console.error('[adjustAiPersonaAndPersonalityFlow] Invalid or malformed output from prompt. Expected { updatedPersonaDescription: string }, received:', output);
