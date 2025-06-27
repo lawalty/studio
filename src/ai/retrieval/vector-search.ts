@@ -6,8 +6,8 @@
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
  */
 
-import { genkit } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { ai } from '@/ai/genkit';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
@@ -51,25 +51,14 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  const vertexApiKey = process.env.VERTEX_AI_API_KEY;
-  if (!vertexApiKey) {
-    const errorMsg = "Could not perform search: The embedding service is not configured because VERTEX_AI_API_KEY is not set in the environment.";
-    console.error(`[searchKnowledgeBase] ${errorMsg}`);
-    return errorMsg;
-  }
-
-  // Create a temporary, dedicated client for embeddings using the Vertex key.
-  const embeddingClient = genkit({
-    plugins: [googleAI({ apiKey: vertexApiKey })],
-  });
 
   if (admin.apps.length === 0) {
     admin.initializeApp();
   }
   const db = admin.firestore();
 
-  // 1. Generate an embedding for the user's query using the dedicated Vertex client
-  const { embedding } = await embeddingClient.embed({
+  // 1. Generate an embedding for the user's query using the globally configured AI client.
+  const { embedding } = await ai.embed({
     embedder: textEmbedding004,
     content: query,
     taskType: 'RETRIEVAL_QUERY',

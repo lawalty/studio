@@ -12,26 +12,26 @@ This project requires environment variables to connect to services like Firebase
 
 Create a new file named `.env.local` in the root directory of this project. This file is for your local secrets and will not be checked into version control.
 
-### 2. Add Google AI API Keys (Required for AI Features)
+### 2. Add Google AI API Key (Required for ALL AI Features)
 
-For the AI chat and knowledge base features to work, you must provide API Keys for Google AI services.
+For any AI features to work (chat, knowledge base, etc.), you must provide a single, powerful Google AI API Key.
 
-*   Get a key from **[Google AI Studio](https://makersuite.google.com/app/apikey)**.
-*   **IMPORTANT**: For the Knowledge Base (embeddings) to work, you must create a key that has permissions for **both** the **Vertex AI API** and the **Cloud Firestore API**.
-*   Add the following lines to your `.env.local` file, replacing the placeholders with your actual keys:
+*   Get a key from **[Google AI Studio](https://makersuite.google.com/app/apikey)** or the Google Cloud Console.
+*   **IMPORTANT**: For the application to function correctly, this single key **MUST** have permissions for all three of the following APIs in your Google Cloud project:
+    1.  **Vertex AI API**
+    2.  **Cloud Firestore API**
+    3.  **Generative Language API**
+*   Add the following line to your `.env.local` file, replacing the placeholder with your actual key:
 
     ```
-    # Used for general AI chat and text generation.
-    GOOGLE_AI_API_KEY=your_google_ai_api_key_here
-
-    # Used for creating and querying knowledge base embeddings (RAG).
-    # This key MUST have permissions for both Vertex AI and Cloud Firestore APIs.
-    VERTEX_AI_API_KEY=your_vertex_and_firestore_api_key_here
+    # This single key powers all AI features including chat and the knowledge base (RAG).
+    # It MUST have permissions for Vertex AI, Cloud Firestore, and Generative Language APIs.
+    GOOGLE_AI_API_KEY=your_multi_permission_google_ai_api_key_here
     ```
 
 ### 3. Add Firebase Config (Required for Database/Storage)
 
-For features like saving settings, managing the knowledge base, or using Twilio integration, you need to connect the app to a Firebase project.
+For features like saving settings and managing the knowledge base, you need to connect the app to a Firebase project.
 
 *   Add the following lines to your `.env.local` file, replacing the placeholders with your actual Firebase project credentials:
 

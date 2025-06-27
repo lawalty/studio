@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, KeyRound, Speech, MessageSquare, Terminal } from 'lucide-react';
+import { Save, Speech, MessageSquare, Terminal } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -110,23 +110,16 @@ export default function ApiKeysPage() {
               <AlertTitle className="text-sky-800 font-bold">Important: Google AI API Key Configuration</AlertTitle>
               <AlertDescription className="text-sky-700 space-y-3">
                   <p className="font-semibold">
-                    All Google AI features are now managed via environment variables for improved security and stability.
+                    All Google AI features (chat, knowledge base, etc.) are managed by a single API key for improved security and stability.
                   </p>
                   <div>
-                    To enable all AI features, you must create a file named <code className="font-mono bg-gray-200 text-black px-1 py-0.5 rounded">.env.local</code> in the root of your project and add the following keys:
+                    To enable all AI features, you must create a file named <code className="font-mono bg-gray-200 text-black px-1 py-0.5 rounded">.env.local</code> in the root of your project and add the following line:
                   </div>
                   <pre className="my-2 p-3 bg-gray-100 rounded text-sm text-black">
                     <code>
-                      # Used for general AI chat and text generation.
+                      # This single key requires permissions for Vertex AI, Cloud Firestore, and Generative Language APIs.
                       <br/>
                       GOOGLE_AI_API_KEY=your_google_ai_api_key_here
-                      <br/>
-                      <br/>
-                      # Used for the knowledge base embeddings (RAG).
-                      <br/>
-                      # This key MUST have permissions for both Vertex AI and Cloud Firestore APIs.
-                      <br/>
-                      VERTEX_AI_API_KEY=your_vertex_and_firestore_api_key_here
                     </code>
                   </pre>
                   <p>

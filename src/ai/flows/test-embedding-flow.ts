@@ -9,9 +9,8 @@
  * - TestEmbeddingOutput - The return type for the function.
  */
 import { ai } from '@/ai/genkit';
-import { genkit } from 'genkit';
 import { z } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 
 
 const TestEmbeddingOutputSchema = z.object({
@@ -33,20 +32,7 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const vertexApiKey = process.env.VERTEX_AI_API_KEY;
-      if (!vertexApiKey) {
-        return {
-          success: false,
-          error: 'VERTEX_AI_API_KEY is not set in the environment. This key is required for testing embeddings.',
-        };
-      }
-      
-      // Create a temporary, dedicated client for embeddings using the Vertex key
-      const embeddingClient = genkit({
-        plugins: [googleAI({ apiKey: vertexApiKey })],
-      });
-
-      const result = await embeddingClient.embed({
+      const result = await ai.embed({
         embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
@@ -84,7 +70,7 @@ const testEmbeddingFlow = ai.defineFlow(
       if (e.message && e.message.includes('403 Forbidden')) {
           errorMessage = 'The test failed (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project. Please go to your Google Cloud Console, ensure you have the correct project selected, and enable these APIs. Also, verify that billing is enabled for the project.';
       } else if (e.message && e.message.includes('API key not valid')) {
-          errorMessage = 'The test failed because the provided VERTEX_AI_API_KEY is not valid. Please check the key in your .env.local file.';
+          errorMessage = 'The test failed because the provided GOOGLE_AI_API_KEY is not valid. Please check the key in your .env.local file.';
       }
       
       return {

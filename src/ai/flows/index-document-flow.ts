@@ -10,9 +10,8 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { genkit } from 'genkit';
 import { z } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
@@ -66,18 +65,6 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
-      const vertexApiKey = process.env.VERTEX_AI_API_KEY;
-      if (!vertexApiKey) {
-        const errorMsg = "VERTEX_AI_API_KEY is not set in the environment. This key is required for creating embeddings.";
-        console.error(`[indexDocumentFlow] ${errorMsg}`);
-        return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMsg };
-      }
-
-      // Create a temporary, dedicated client for embeddings using the Vertex key.
-      const embeddingClient = genkit({
-        plugins: [googleAI({ apiKey: vertexApiKey })],
-      });
-      
       if (admin.apps.length === 0) {
         admin.initializeApp();
       }
@@ -109,7 +96,7 @@ const indexDocumentFlow = ai.defineFlow(
             continue;
           }
           
-          const result = await embeddingClient.embed({
+          const result = await ai.embed({
             embedder: textEmbedding004,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',
@@ -151,7 +138,7 @@ const indexDocumentFlow = ai.defineFlow(
           if (error.message && error.message.includes('403 Forbidden')) {
               specificError = 'The embedding API call was blocked (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project. Please go to your Google Cloud Console, ensure you have the correct project selected, and enable these APIs. Also, verify that billing is enabled for the project.';
           } else if (error.message && error.message.includes('API key not valid')) {
-              specificError = 'The provided VERTEX_AI_API_KEY is not valid. Please check the key in your .env.local file and ensure it is correct.';
+              specificError = 'The provided GOOGLE_AI_API_KEY is not valid. Please check the key in your .env.local file and ensure it is correct.';
           }
           const errorMsg = `${specificError}\n\nThis is the first error encountered. Subsequent chunks may also have failed.`;
           if (!firstError) firstError = errorMsg;
