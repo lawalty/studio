@@ -26,7 +26,7 @@ import {firebase} from '@genkit-ai/firebase';
 // when running in a Google Cloud environment (like Firebase App Hosting).
 export const ai = genkit({
   plugins: [
-    firebase, // The firebase plugin is required for proper integration and auth.
+    firebase(), // The firebase plugin is required for proper integration and auth.
     googleAI({
       // By REMOVING the 'location' parameter, we allow Genkit to dynamically choose the endpoint.
       // - If an API key is provided from Firestore in a flow, it will use the Google AI (Gemini) API.
