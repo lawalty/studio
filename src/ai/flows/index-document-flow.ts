@@ -168,13 +168,13 @@ const indexDocumentFlow = ai.defineFlow(
     } catch (e: any) {
       // Stringify the error to make it searchable for keywords
       const errorString = JSON.stringify(e, Object.getOwnPropertyNames(e));
-      console.error(`[indexDocumentFlow - CRITICAL] Full error object:`, errorString);
+      console.error(`[indexDocumentFlow - CRITICAL] Full error object:`, e);
 
       let userFriendlyError: string;
 
       // Check for the specific Firestore PERMISSION_DENIED error
       if (errorString.includes('PERMISSION_DENIED') && (errorString.includes('firestore') || errorString.includes('datastore') || (e.code === 7))) {
-        userFriendlyError = "Firestore Write Failed (Permission Denied): The server's built-in identity is not authorized to write to the database. This is a one-time setup. Please go to your Google Cloud project's IAM page and grant the 'Cloud Datastore User' role to your App Hosting service account.";
+        userFriendlyError = "Firestore Write Failed (Permission Denied): The server's built-in identity is not authorized to write to the database. This is a one-time setup. Please go to your Google Cloud project's IAM page and grant the 'Cloud Datastore User' role to your App Hosting service account. See the documentation for detailed instructions.";
       } 
       // Check for an Embedding API PERMISSION_DENIED error
       else if (errorString.includes('403 Forbidden') || errorString.includes('PERMISSION_DENIED')) {
