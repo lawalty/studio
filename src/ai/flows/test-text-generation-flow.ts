@@ -8,9 +8,7 @@
  * - TestTextGenerationOutput - The return type.
  */
 import { ai } from '@/ai/genkit';
-import { genkit } from 'genkit';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
+import { gemini15Flash } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 
 const TestTextGenerationOutputSchema = z.object({
@@ -32,28 +30,8 @@ const testTextGenerationFlow = ai.defineFlow(
   },
   async () => {
     try {
-      // --- Start of API Key logic ---
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-      let chatAi = ai; // Default instance
-      if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
-          console.log('[testTextGenerationFlow] Using Google AI API Key from Firestore.');
-          chatAi = genkit({
-              plugins: [googleAI({ apiKey: apiKey.trim() })],
-          });
-      } else {
-          console.log('[testTextGenerationFlow] Using default Genkit instance (ADC).');
-      }
-      // --- End of API Key logic ---
-      
-      const result = await chatAi.generate({
+      // Use the default 'ai' instance which is configured to use ADC
+      const result = await ai.generate({
         model: gemini15Flash,
         prompt: 'Tell me a one-sentence joke.',
       });

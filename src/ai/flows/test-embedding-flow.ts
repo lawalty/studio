@@ -9,10 +9,8 @@
  * - TestEmbeddingOutput - The return type for the function.
  */
 import { ai } from '@/ai/genkit';
-import { genkit } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
@@ -33,28 +31,8 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      // --- Start of API Key logic ---
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
-
-      let embeddingAi = ai; // Default instance (uses ADC)
-      if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
-          console.log('[testEmbeddingFlow] Using API Key from Firestore for embedding.');
-          embeddingAi = genkit({
-              plugins: [googleAI({ apiKey: apiKey.trim() })],
-          });
-      } else {
-          console.log('[testEmbeddingFlow] Using default Genkit instance (ADC) for embedding.');
-      }
-      // --- End of API Key logic ---
-
-      const result = await embeddingAi.embed({
+      // Use the default 'ai' instance which is configured to use ADC
+      const result = await ai.embed({
         embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',

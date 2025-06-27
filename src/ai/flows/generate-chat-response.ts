@@ -9,9 +9,6 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -91,29 +88,8 @@ const generateChatResponseFlow = ai.defineFlow(
       return { model: msg.parts[0].text };
     });
     
-    // --- Start of API Key logic for Chat ---
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    const db = admin.firestore();
-    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-    const docRef = db.doc(FIRESTORE_KEYS_PATH);
-    const docSnap = await docRef.get();
-    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-    let chatAi = ai; // Default instance
-    if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
-        console.log('[generateChatResponseFlow] Using Google AI API Key from Firestore for chat.');
-        chatAi = genkit({
-            plugins: [googleAI({ apiKey: apiKey.trim() })],
-        });
-    } else {
-        console.log('[generateChatResponseFlow] Using default Genkit instance (ADC) for chat.');
-    }
-    // --- End of API Key logic ---
-
-    // Define the prompt dynamically with the correct AI instance
-    const prompt = chatAi.definePrompt({
+    // Define the prompt with the default AI instance.
+    const prompt = ai.definePrompt({
       name: 'generateChatResponsePrompt',
       input: {schema: PromptInputSchema}, // Use the new, more robust schema
       output: {schema: GenerateChatResponseOutputSchema},

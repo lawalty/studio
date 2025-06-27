@@ -10,9 +10,6 @@
  */
 
 import {ai} from '@/ai/genkit';
-import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
 import {z} from 'genkit';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
@@ -50,28 +47,7 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     outputSchema: AdjustAiPersonaAndPersonalityOutputSchema,
   },
   async input => {
-    // --- Start of API Key logic for Chat ---
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    const db = admin.firestore();
-    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-    const docRef = db.doc(FIRESTORE_KEYS_PATH);
-    const docSnap = await docRef.get();
-    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-    let chatAi = ai; // Default instance
-    if (apiKey && typeof apiKey === 'string' && apiKey.trim() !== '') {
-        console.log('[adjustAiPersonaAndPersonalityFlow] Using Google AI API Key from Firestore.');
-        chatAi = genkit({
-            plugins: [googleAI({ apiKey: apiKey.trim() })],
-        });
-    } else {
-        console.log('[adjustAiPersonaAndPersonalityFlow] Using default Genkit instance (ADC).');
-    }
-    // --- End of API Key logic ---
-    
-    const prompt = chatAi.definePrompt({
+    const prompt = ai.definePrompt({
       name: 'adjustAiPersonaAndPersonalityPrompt',
       input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
       output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
