@@ -106,15 +106,6 @@ const indexDocumentFlow = ai.defineFlow(
             embedder: geminiProEmbedder,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',
-            config: {
-              safetySettings: [
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
-              ]
-            }
           });
           
           console.log(`[indexDocumentFlow] Raw embedding result for chunk ${i+1}:`, JSON.stringify(result));
