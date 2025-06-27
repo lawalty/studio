@@ -82,11 +82,25 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error('[extractTextFromDocumentUrlFlow] Error during text extraction flow:', e);
-      let userFriendlyError = 'The AI model could not read the document. It might be corrupted, password-protected, or in an unsupported format. Please also verify your GOOGLE_AI_API_KEY is set correctly in your environment.';
-      if (e instanceof Error && (e.message.includes('PERMISSION_DENIED') || e.message.includes('403'))) {
-        userFriendlyError = 'Could not access the document. Please ensure the file URL is public and accessible.';
+
+      let userFriendlyError = 'An unexpected error occurred during document processing.';
+      const errorMessage = e instanceof Error ? e.message.toLowerCase() : '';
+
+      if (errorMessage.includes('permission_denied') || errorMessage.includes('403')) {
+          userFriendlyError = 'Could not access the document. Please ensure the file URL is public and accessible.';
+      } else if (errorMessage.includes('api key not valid')) {
+          userFriendlyError = 'The provided GOOGLE_AI_API_KEY is invalid. Please check the key in your .env.local file and ensure it is correct.';
+      } else if (errorMessage.includes('file format is not supported') || errorMessage.includes('unsupported file format')) {
+          userFriendlyError = 'The document format is not supported by the AI. Please try a different file type like PDF or a standard text file.';
+      } else if (errorMessage.includes('deadline_exceeded') || errorMessage.includes('timeout')) {
+          userFriendlyError = 'The request to process the document timed out. The file might be too large or the service is temporarily busy. Please try again later.';
+      } else if (errorMessage.includes('invalid argument') || errorMessage.includes('malformed')) {
+          userFriendlyError = 'The AI model could not read the document. It might be corrupted or in an unexpected format.';
+      } else {
+          // Fallback for other errors, but we remove the confusing API key suggestion
+          userFriendlyError = `The document could not be processed. Details: ${e.message || 'Unknown error'}`;
       }
-      // The original error is still useful for debugging in the console.
+
       throw new Error(userFriendlyError);
     }
   }
