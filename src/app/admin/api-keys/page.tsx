@@ -100,7 +100,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key & Services Management</CardTitle>
         <CardDescription>
-          Manage keys for third-party services like Google AI, Twilio SMS, and custom Text-to-Speech.
+          Manage keys for third-party services like Google AI and Twilio SMS.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -109,29 +109,35 @@ export default function ApiKeysPage() {
         ) : (
           <>
             <Alert variant="default" className="bg-sky-50 border-sky-200">
-              <Info className="h-4 w-4 text-sky-700" />
-              <AlertTitle className="text-sky-800">How AI Authentication Works</AlertTitle>
+              <KeyRound className="h-4 w-4 text-sky-700" />
+              <AlertTitle className="text-sky-800">Important: Google AI API Key Configuration</AlertTitle>
               <AlertDescription className="text-sky-700">
-                  This application authenticates with Google AI services using a two-step process:
+                  <p className="mb-2">
+                    To enable all AI features (chat responses, knowledge base embeddings, etc.), you must provide a single Google AI API key below.
+                  </p>
+                  <p>
+                    For this application to work correctly, this API key **must have permissions for both of the following services** in your Google Cloud project:
+                  </p>
                 <ol className="list-decimal pl-5 mt-2 space-y-1">
-                  <li>When running on App Hosting, the server authenticates with Firebase using its built-in identity (Application Default Credentials).</li>
-                  <li>The server then reads the <strong>Google AI API Key</strong> you provide below from Firestore.</li>
-                  <li>That key is then used to make calls to Google AI for embeddings and chat responses. For this to work, your API key must have permissions for both the <strong>Vertex AI API</strong> and <strong>Cloud Firestore API</strong>.</li>
+                  <li><strong>Vertex AI API</strong> (for chat, embeddings, etc.)</li>
+                  <li><strong>Cloud Firestore API</strong> (to allow the server to read its own configuration)</li>
                 </ol>
+                <p className="mt-2">
+                  You have already configured this correctly. The key you created with both permissions is the one to use here.
+                </p>
               </AlertDescription>
             </Alert>
 
             <Separator className="my-6" />
 
             <div className="flex items-center gap-2 mb-2">
-                <KeyRound className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Google AI / Vertex AI Key</h3>
+                <h3 className="text-lg font-semibold">Google AI Services</h3>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="googleAiApiKey" className="font-medium">Google AI API Key</Label>
-                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter your key for all Google AI services" />
+                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter the key with Vertex AI and Firestore permissions" />
                 <p className="text-xs text-muted-foreground">
-                    This single key is used for all Google AI services, including chat generation and RAG embeddings.
+                    This single key is used for all Google AI services, including chat generation and knowledge base (RAG) embeddings.
                 </p>
             </div>
 
