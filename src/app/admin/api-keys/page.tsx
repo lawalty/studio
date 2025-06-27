@@ -9,14 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, KeyRound, Speech, MessageSquare, Terminal, AlertTriangle } from 'lucide-react';
+import { Save, KeyRound, Speech, MessageSquare, Terminal, AlertTriangle, Info } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
-  googleAiApiKey: string; // This is now for reference only
-  vertexAiApiKey: string; // This is now for reference only
+  googleAiApiKey: string;
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -30,7 +29,6 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
     googleAiApiKey: '',
-    vertexAiApiKey: '',
     tts: '',
     voiceId: '',
     useTtsApi: true,
@@ -51,7 +49,6 @@ export default function ApiKeysPage() {
           const data = docSnap.data();
           setApiKeys({
             googleAiApiKey: data.googleAiApiKey || '',
-            vertexAiApiKey: data.vertexAiApiKey || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
@@ -85,7 +82,6 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      // We still save the keys here for reference and for non-Genkit services.
       await setDoc(docRef, apiKeys, { merge: true }); 
       toast({ title: "Settings Saved", description: "Your service settings have been saved to Firestore." });
     } catch (error) {
@@ -104,7 +100,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key & Services Management</CardTitle>
         <CardDescription>
-          Manage keys for third-party services like Twilio SMS and custom Text-to-Speech.
+          Manage keys for third-party services like Google AI, Twilio SMS, and custom Text-to-Speech.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -112,19 +108,16 @@ export default function ApiKeysPage() {
           <p>Loading settings...</p>
         ) : (
           <>
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Critical: Action Required for AI Functionality</AlertTitle>
-              <AlertDescription>
-                To enable all AI chat and knowledge base features, you **must** set your Google AI API Key as an environment variable.
+            <Alert variant="default" className="bg-sky-50 border-sky-200">
+              <Info className="h-4 w-4 text-sky-700" />
+              <AlertTitle className="text-sky-800">How AI Authentication Works</AlertTitle>
+              <AlertDescription className="text-sky-700">
+                  This application authenticates with Google AI services using a two-step process:
                 <ol className="list-decimal pl-5 mt-2 space-y-1">
-                  <li>Create a file named `.env.local` in the root directory of your project (if it doesn't exist).</li>
-                  <li>Add the following line to the file, replacing the placeholder with your key:
-                    <pre className="p-2 mt-1 bg-background/50 text-destructive-foreground/80 rounded-md text-xs"><code>GOOGLE_AI_API_KEY=your_google_ai_api_key_here</code></pre>
-                  </li>
-                  <li>Restart your application for the change to take effect.</li>
+                  <li>When running on App Hosting, the server authenticates with Firebase using its built-in identity (Application Default Credentials).</li>
+                  <li>The server then reads the <strong>Google AI API Key</strong> you provide below from Firestore.</li>
+                  <li>That key is then used to make calls to Google AI for embeddings and chat responses. For this to work, your API key must have permissions for both the <strong>Vertex AI API</strong> and <strong>Cloud Firestore API</strong>.</li>
                 </ol>
-                 The fields below are for reference or for other services, but the AI now runs on the environment variable.
               </AlertDescription>
             </Alert>
 
@@ -132,23 +125,15 @@ export default function ApiKeysPage() {
 
             <div className="flex items-center gap-2 mb-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Google AI / Vertex AI Keys (Reference)</h3>
+                <h3 className="text-lg font-semibold">Google AI / Vertex AI Key</h3>
             </div>
             <div className="space-y-2">
-                <Label htmlFor="googleAiApiKey" className="font-medium">Google AI API Key (from .env.local)</Label>
-                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Set in .env.local, stored here for reference" />
+                <Label htmlFor="googleAiApiKey" className="font-medium">Google AI API Key</Label>
+                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter your key for all Google AI services" />
                 <p className="text-xs text-muted-foreground">
-                    This key is now managed by the `GOOGLE_AI_API_KEY` in your `.env.local` file. Changes here are for reference only.
+                    This single key is used for all Google AI services, including chat generation and RAG embeddings.
                 </p>
             </div>
-             <div className="space-y-2">
-                <Label htmlFor="vertexAiApiKey" className="font-medium">Vertex AI API Key (Legacy)</Label>
-                <Input id="vertexAiApiKey" name="vertexAiApiKey" type="password" value={apiKeys.vertexAiApiKey} onChange={handleChange} placeholder="This field is no longer used by the AI" disabled />
-                <p className="text-xs text-muted-foreground">
-                    The single `GOOGLE_AI_API_KEY` is now used for all Google AI services, including embeddings.
-                </p>
-            </div>
-
 
             <Separator className="my-6" />
 

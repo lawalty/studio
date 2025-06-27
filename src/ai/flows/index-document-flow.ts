@@ -10,8 +10,8 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { textEmbedding004 } from '@genkit-ai/googleai';
-import { z } from 'genkit';
+import { genkit, z } from 'genkit';
+import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
@@ -57,7 +57,6 @@ function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: 
   return chunks;
 }
 
-
 const indexDocumentFlow = ai.defineFlow(
   {
     name: 'indexDocumentFlow',
@@ -66,8 +65,24 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
-      // The embedder is now globally configured in genkit.ts to use the environment variable.
-      const embedder = textEmbedding004;
+      // Initialize Firebase Admin SDK connection.
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      const db = admin.firestore();
+      
+      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+      const docRef = db.doc(FIRESTORE_KEYS_PATH);
+      const docSnap = await docRef.get();
+      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
+
+      let embeddingAi = ai; // Default instance (uses ADC)
+      if (apiKey) {
+        // If a key is found, create a temporary, key-configured Genkit instance for this operation.
+        embeddingAi = genkit({
+          plugins: [googleAI({ apiKey: apiKey })],
+        });
+      }
       
       const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
@@ -82,11 +97,6 @@ const indexDocumentFlow = ai.defineFlow(
         chunkOverlap: 150,
       });
       
-      // Initialize Firebase Admin SDK connection.
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
       const batch = db.batch();
       const chunksCollectionRef = db.collection('kb_chunks');
       let successfulChunks = 0;
@@ -100,9 +110,8 @@ const indexDocumentFlow = ai.defineFlow(
             continue;
           }
           
-          // Use the globally configured `ai` instance for embedding.
-          const result = await ai.embed({
-            embedder: embedder,
+          const result = await embeddingAi.embed({
+            embedder: textEmbedding004,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',
           });
@@ -132,7 +141,7 @@ const indexDocumentFlow = ai.defineFlow(
         } catch (error: any) {
           failedChunks++;
           const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-          const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY environment variable, API enablement, or billing. Full error: ${fullError}`;
+          const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with your API key, API enablement, or billing. Full error: ${fullError}`;
           if (!firstError) firstError = errorMsg;
           console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
         }

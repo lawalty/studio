@@ -1,26 +1,24 @@
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
-import {config} from 'dotenv';
-
-config(); // Load environment variables from .env files
 
 /**
  * @fileOverview Genkit Configuration
  *
  * This file configures the Genkit AI instance for the application.
  *
- * It is configured to use an API Key provided via the GOOGLE_AI_API_KEY
- * environment variable. You must set this in a .env.local file in the
- * root of your project for AI functionality to work.
+ * This default 'ai' instance is configured to use Application Default Credentials (ADC).
+ * This means it will automatically use the service account credentials provided by the
+ * Firebase App Hosting environment.
  *
- * See the README.md and the Admin > API Keys page for more details.
+ * For operations that require a user-provided API key (like embeddings), flows will
+ * dynamically create a temporary, key-configured Genkit instance.
+ *
+ * See individual flows and the Admin > API Keys page for more details.
  */
 export const ai = genkit({
   plugins: [
-    googleAI({
-      apiKey: process.env.GOOGLE_AI_API_KEY,
-    }),
+    googleAI(), // No API key here; relies on ADC.
   ],
   logLevel: 'debug',
   // Trace and flow state stores are not configured to use Firebase to avoid build issues.
