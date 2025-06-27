@@ -59,7 +59,7 @@ const testEmbeddingFlow = ai.defineFlow(
         const fullResponse = JSON.stringify(result, null, 2);
         return { 
           success: false, 
-          error: `The embedding service returned an empty or invalid embedding. This may indicate a problem with the API configuration or project billing. Full response: ${fullResponse}` 
+          error: `The embedding service returned an empty or invalid embedding. This may indicate a problem with the API configuration, project billing, or content being blocked by safety filters. Full response: ${fullResponse}` 
         };
       }
 

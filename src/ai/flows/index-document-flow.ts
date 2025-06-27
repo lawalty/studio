@@ -100,6 +100,14 @@ const indexDocumentFlow = ai.defineFlow(
             embedder: textEmbedding004,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',
+            config: {
+              safetySettings: [
+                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              ]
+            }
           });
           
           const embeddingVector = result.embedding;
@@ -138,14 +146,20 @@ const indexDocumentFlow = ai.defineFlow(
       return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: true };
 
     } catch (e: any) {
-      console.error(`[indexDocumentFlow - CRITICAL] An unexpected error occurred during the indexing flow for source '${sourceName}':`, e);
       const errorMessage = e instanceof Error ? e.message : 'An unknown server error occurred.';
+      console.error(`[indexDocumentFlow - CRITICAL] An unexpected error occurred during the indexing flow for source '${sourceName}':`, e);
+      
+      let userFriendlyError = `Indexing failed due to a critical error: ${errorMessage}`;
+      if (errorMessage.toLowerCase().includes('permission_denied') || errorMessage.includes('7 FAILED_PRECONDITION')) {
+          userFriendlyError = `Indexing failed due to a Firestore permission error. Please ensure the App Hosting service account has the "Cloud Datastore User" role in your Google Cloud project's IAM settings and that the "Cloud Firestore API" is enabled.`;
+      }
+      
       return {
         chunksCreated: chunks.length || 0,
         chunksIndexed: 0,
         sourceId,
         success: false,
-        error: `Indexing failed due to a critical error: ${errorMessage}`,
+        error: userFriendlyError,
       };
     }
   }
