@@ -1,6 +1,4 @@
 
-'use server';
-
 /**
  * @fileOverview Firebase Admin SDK Initialization
  *
