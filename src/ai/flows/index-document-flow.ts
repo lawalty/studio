@@ -75,7 +75,15 @@ const indexDocumentFlow = ai.defineFlow(
       }
       
       const storage = getStorage();
-      const bucket = storage.bucket(); 
+      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+      
+      if (!bucketName) {
+        const errorMsg = 'Firebase Storage bucket name is not configured. Please set NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET in your .env.local file.';
+        console.error(`[indexDocumentFlow - DIAGNOSTIC MODE - CRITICAL] ${errorMsg}`);
+        return { chunksCreated: 0, filesSaved: 0, sourceId, success: false, error: errorMsg };
+      }
+      // Explicitly specify the bucket name for the Admin SDK.
+      const bucket = storage.bucket(bucketName);
       
       const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
@@ -112,7 +120,10 @@ const indexDocumentFlow = ai.defineFlow(
           });
           
           if (!result || !result.embedding) {
-            throw new Error('The embedding service returned a null or invalid response. This can happen due to transient network issues or problems with the AI service configuration.');
+            const errorMsg = 'The embedding service returned a null or invalid response. This can happen due to transient network issues or problems with the AI service configuration.';
+            if (!firstError) firstError = errorMsg;
+            console.warn(`[indexDocumentFlow - DIAGNOSTIC MODE] ${errorMsg} (Source: '${sourceName}')`, result);
+            continue; // Skip to the next chunk
           }
 
           const embeddingVector = result.embedding;
