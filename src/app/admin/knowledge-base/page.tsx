@@ -686,7 +686,7 @@ export default function KnowledgeBasePage() {
           <CardContent className="space-y-4">
               <div className="space-y-2">
                   <Label htmlFor="test-query">Test Question</Label>
-                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?"/>
+                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?" suppressHydrationWarning />
               </div>
               <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery.trim()}>
                   {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
@@ -695,7 +695,7 @@ export default function KnowledgeBasePage() {
               {testResult && (
                   <div className="space-y-2 pt-4">
                       <Label>Retrieved Context for AI</Label>
-                      <Textarea readOnly value={testResult} className="h-64 font-mono text-xs bg-muted" />
+                      <Textarea readOnly value={testResult} className="h-64 font-mono text-xs bg-muted" suppressHydrationWarning />
                   </div>
               )}
           </CardContent>
@@ -711,7 +711,7 @@ export default function KnowledgeBasePage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="file-upload">File</Label>
-            <Input id="file-upload" type="file" ref={fileInputRef} onChange={handleFileChange} />
+            <Input id="file-upload" type="file" ref={fileInputRef} onChange={handleFileChange} suppressHydrationWarning />
           </div>
           <div className="space-y-2">
             <Label>Priority Level</Label>
@@ -723,7 +723,7 @@ export default function KnowledgeBasePage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="uploadDescription">Description (Optional)</Label>
-            <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." />
+            <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." suppressHydrationWarning />
           </div>
         </CardContent>
         <CardFooter>
@@ -744,7 +744,7 @@ export default function KnowledgeBasePage() {
         <CardContent className="space-y-4">
             <div className="space-y-2">
                 <Label htmlFor="pasted-text-source-name">Source Name</Label>
-                <Input id="pasted-text-source-name" value={pastedTextSourceName} onChange={(e) => setPastedTextSourceName(e.target.value)} placeholder="e.g., 'Company Mission Statement'" />
+                <Input id="pasted-text-source-name" value={pastedTextSourceName} onChange={(e) => setPastedTextSourceName(e.target.value)} placeholder="e.g., 'Company Mission Statement'" suppressHydrationWarning />
             </div>
             <div className="space-y-2">
                 <Label>Priority Level</Label>
@@ -756,11 +756,11 @@ export default function KnowledgeBasePage() {
             </div>
             <div className="space-y-2">
                 <Label htmlFor="pastedTextDescription">Description (Optional)</Label>
-                <Textarea id="pastedTextDescription" value={pastedTextDescription} onChange={(e) => setPastedTextDescription(e.target.value)} placeholder="Briefly describe the text..." />
+                <Textarea id="pastedTextDescription" value={pastedTextDescription} onChange={(e) => setPastedTextDescription(e.target.value)} placeholder="Briefly describe the text..." suppressHydrationWarning />
             </div>
             <div className="space-y-2">
                 <Label htmlFor="pasted-text-content">Text Content</Label>
-                <Textarea id="pasted-text-content" value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Paste your text content here..." rows={10} />
+                <Textarea id="pasted-text-content" value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Paste your text content here..." rows={10} suppressHydrationWarning />
             </div>
         </CardContent>
         <CardFooter>
@@ -806,7 +806,7 @@ export default function KnowledgeBasePage() {
       <Dialog open={showDescriptionDialog} onOpenChange={setShowDescriptionDialog}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit Description</DialogTitle><DialogDescription>For: {editingSourceDetails.source.name}</DialogDescription></DialogHeader>
-          <Textarea value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} rows={5} disabled={isSavingDescription} />
+          <Textarea value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} rows={5} disabled={isSavingDescription} suppressHydrationWarning />
           <DialogFooter>
             <DialogClose asChild><Button type="button" variant="outline" disabled={isSavingDescription}>Cancel</Button></DialogClose>
             <Button onClick={handleSaveDescription} disabled={isSavingDescription}>
