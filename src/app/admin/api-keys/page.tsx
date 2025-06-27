@@ -8,13 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, KeyRound, Speech, MessageSquare, CheckCircle } from 'lucide-react';
+import { Save, KeyRound, Speech, MessageSquare, CheckCircle, BrainCircuit } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
-  vertexAiApiKey: string;
+  googleAiApiKey: string; // Renamed for clarity: For chat, etc.
+  vertexAiApiKey: string; // New field specifically for embeddings
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -27,6 +28,7 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
+    googleAiApiKey: '',
     vertexAiApiKey: '',
     tts: '',
     voiceId: '',
@@ -47,6 +49,7 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setApiKeys({
+            googleAiApiKey: data.googleAiApiKey || '',
             vertexAiApiKey: data.vertexAiApiKey || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
@@ -57,7 +60,7 @@ export default function ApiKeysPage() {
           });
         } else {
           setApiKeys({
-            vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
+            googleAiApiKey: '', vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
           });
         }
@@ -69,7 +72,7 @@ export default function ApiKeysPage() {
           variant: "destructive",
         });
         setApiKeys({
-            vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
+            googleAiApiKey: '', vertexAiApiKey: '', tts: '', voiceId: '', useTtsApi: true,
             twilioAccountSid: '', twilioAuthToken: '', twilioPhoneNumber: '',
         });
       }
@@ -122,7 +125,7 @@ export default function ApiKeysPage() {
                   <div>
                     <h3 className="text-lg font-semibold text-green-800 dark:text-green-300">Default: Secure Service Account</h3>
                     <p className="text-sm text-green-700 dark:text-green-400 mt-1">
-                      By default, your application is authenticated to use Gemini AI through a secure service account. If that fails, providing an API key below can be used as an alternative.
+                      By default, your application is authenticated using a secure service account. Providing an API key below can be used as an alternative or for specific services.
                     </p>
                   </div>
               </div>
@@ -132,15 +135,28 @@ export default function ApiKeysPage() {
 
             <div className="flex items-center gap-2 mb-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Vertex AI API Key (Optional Override)</h3>
+                <h3 className="text-lg font-semibold">Google AI API Key (for Chat)</h3>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="googleAiApiKey" className="font-medium">API Key</Label>
+                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter Google AI (Gemini) API Key" />
+                <p className="text-xs text-muted-foreground">
+                    This key is used for general AI operations like chat responses. If left blank, the app will use its default credentials.
+                </p>
+            </div>
+            
+            <div className="flex items-center gap-2 mt-6 mb-2">
+                <BrainCircuit className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">Vertex AI API Key (for Embeddings)</h3>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="vertexAiApiKey" className="font-medium">API Key</Label>
                 <Input id="vertexAiApiKey" name="vertexAiApiKey" type="password" value={apiKeys.vertexAiApiKey} onChange={handleChange} placeholder="Enter Vertex AI API Key" />
                 <p className="text-xs text-muted-foreground">
-                    Using an API Key can be a helpful alternative for debugging. This will override the application's default credentials for AI operations. This key is used for all RAG embedding logic.
+                    This key is used specifically for the RAG embedding logic (knowledge base indexing and search).
                 </p>
             </div>
+
 
             <Separator className="my-6" />
 
