@@ -108,10 +108,15 @@ const indexDocumentFlow = ai.defineFlow(
             taskType: 'RETRIEVAL_DOCUMENT',
           });
           
+          // ROBUSTNESS CHECK: Ensure the result from the AI service is valid.
+          if (!result || !result.embedding) {
+            throw new Error('The embedding service returned a null or invalid response. This can happen due to transient network issues or problems with the AI service configuration.');
+          }
+
           console.log(`[indexDocumentFlow] Raw embedding result for chunk ${i+1}:`, JSON.stringify(result));
 
           const embeddingVector = result.embedding;
-          const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
+          const embeddingAsArray = Array.from(embeddingVector);
 
           if (embeddingAsArray.length > 0) {
             console.log(`[indexDocumentFlow] Embedding successful for chunk ${i+1}. Vector length: ${embeddingAsArray.length}.`);
