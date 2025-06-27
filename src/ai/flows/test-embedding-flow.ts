@@ -8,6 +8,7 @@
  * - testEmbedding - A function that calls the embedding model with a hardcoded string.
  * - TestEmbeddingOutput - The return type for the function.
  */
+import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { z } from 'genkit';
 import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
@@ -24,7 +25,7 @@ export async function testEmbedding(): Promise<TestEmbeddingOutput> {
   return testEmbeddingFlow();
 }
 
-const testEmbeddingFlow = genkit.defineFlow(
+const testEmbeddingFlow = ai.defineFlow(
   {
     name: 'testEmbeddingFlow',
     inputSchema: z.void(),
@@ -43,7 +44,6 @@ const testEmbeddingFlow = genkit.defineFlow(
       // Create a temporary, dedicated client for embeddings using the Vertex key
       const embeddingClient = genkit({
         plugins: [googleAI({ apiKey: vertexApiKey })],
-        logLevel: 'debug',
       });
 
       const result = await embeddingClient.embed({

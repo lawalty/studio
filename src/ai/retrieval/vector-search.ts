@@ -61,7 +61,6 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   // Create a temporary, dedicated client for embeddings using the Vertex key.
   const embeddingClient = genkit({
     plugins: [googleAI({ apiKey: vertexApiKey })],
-    logLevel: 'debug',
   });
 
   if (admin.apps.length === 0) {

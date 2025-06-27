@@ -9,6 +9,7 @@
  * - IndexDocumentOutput - The return type for the function.
  */
 
+import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { z } from 'genkit';
 import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
@@ -57,7 +58,7 @@ function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: 
   return chunks;
 }
 
-const indexDocumentFlow = genkit.defineFlow(
+const indexDocumentFlow = ai.defineFlow(
   {
     name: 'indexDocumentFlow',
     inputSchema: IndexDocumentInputSchema,
@@ -75,7 +76,6 @@ const indexDocumentFlow = genkit.defineFlow(
       // Create a temporary, dedicated client for embeddings using the Vertex key.
       const embeddingClient = genkit({
         plugins: [googleAI({ apiKey: vertexApiKey })],
-        logLevel: 'debug',
       });
       
       if (admin.apps.length === 0) {

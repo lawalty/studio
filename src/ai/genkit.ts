@@ -31,7 +31,6 @@ export const ai = genkit({
       apiKey: process.env.GOOGLE_AI_API_KEY,
     }),
   ],
-  logLevel: 'debug',
   // In-memory tracing for simplicity. For production, you might configure
   // a persistent trace store like Firebase.
 });
