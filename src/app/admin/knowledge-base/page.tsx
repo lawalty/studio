@@ -270,7 +270,7 @@ export default function KnowledgeBasePage() {
       }
       
       setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
-      toast({ title: "Text Extracted Successfully", description: `Now indexing ${sourceToProcess.name}...` });
+      toast({ title: "Text Extracted Successfully", description: `Now processing ${sourceToProcess.name}...` });
 
     } catch (error: any) {
       extractionFailed = true;
@@ -298,7 +298,7 @@ export default function KnowledgeBasePage() {
     if (!extractedText || extractedText.trim() === '') {
       const errorMessage = "Text content is missing or empty after processing, cannot index.";
       setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'failed', indexingError: errorMessage } : s));
-      toast({ title: "Indexing Failed", description: errorMessage, variant: "destructive" });
+      toast({ title: "Processing Failed", description: errorMessage, variant: "destructive" });
       setIsProcessingId(null);
       return;
     }
@@ -322,9 +322,9 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Indexing Successful", description: `${sourceToProcess.name} has been indexed with ${indexResult.chunksIndexed} chunks.` });
+      toast({ title: "Diagnostic Test Successful", description: `${sourceToProcess.name} saved ${indexResult.filesSaved} embedding files to Storage. Check the 'embeddings' folder.` });
     } else {
-      const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
+      const errorMessage = indexResult.error || 'An unknown error occurred during processing.';
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
           ...s,
@@ -334,7 +334,7 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Indexing Failed", description: `Could not index ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 15000 });
+      toast({ title: "Processing Failed", description: `Could not process ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 15000 });
     }
     
     setIsProcessingId(null);
@@ -833,7 +833,7 @@ export default function KnowledgeBasePage() {
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded</TableHead>
                 <TableHead>Download File</TableHead>
-                <TableHead>Indexing Status</TableHead>
+                <TableHead>Processing Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -921,7 +921,7 @@ export default function KnowledgeBasePage() {
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
               <CardDescription>
-                  Enter a question to see what context the AI would retrieve from the knowledge base. This helps verify that your sources are indexed and retrieved correctly.
+                  Enter a question to see what context the AI would retrieve from the knowledge base. This helps verify that your sources are indexed and retrieved correctly. **This test will not work until indexing to Firestore is restored.**
               </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1093,7 +1093,7 @@ export default function KnowledgeBasePage() {
                 <Label className="font-medium whitespace-nowrap shrink-0">Step 5:</Label>
                 <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || anyOperationGloballyInProgress || anyKbLoading}>
                   {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-                  {isIndexingPastedText ? 'Saving & Indexing...' : 'Save & Index Pasted Text'}
+                  {isIndexingPastedText ? 'Saving & Processing...' : 'Save & Process Pasted Text'}
                 </Button>
             </div>
         </CardFooter>
