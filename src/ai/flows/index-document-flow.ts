@@ -10,8 +10,8 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { genkit, z } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { z } from 'genkit';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
@@ -65,24 +65,11 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
-      // Initialize Firebase Admin SDK connection.
+      // The global `ai` instance configured with the environment variable API key is used directly.
       if (admin.apps.length === 0) {
         admin.initializeApp();
       }
       const db = admin.firestore();
-      
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-      let embeddingAi = ai; // Default instance (uses ADC)
-      if (apiKey) {
-        // If a key is found, create a temporary, key-configured Genkit instance for this operation.
-        embeddingAi = genkit({
-          plugins: [googleAI({ apiKey: apiKey })],
-        });
-      }
       
       const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
@@ -110,7 +97,8 @@ const indexDocumentFlow = ai.defineFlow(
             continue;
           }
           
-          const result = await embeddingAi.embed({
+          // Use the globally configured `ai` object.
+          const result = await ai.embed({
             embedder: textEmbedding004,
             content: trimmedChunk,
             taskType: 'RETRIEVAL_DOCUMENT',

@@ -10,9 +10,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
-import { genkit } from 'genkit';
-import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
+import { gemini15Flash } from '@genkit-ai/googleai';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
 
@@ -155,23 +153,8 @@ Your Conversational Answer as AI Blair:`,
 
     // 4. Call the LLM
     try {
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-      let generationAi = ai; // Default to ADC
-      if (apiKey) {
-        generationAi = genkit({
-          plugins: [googleAI({ apiKey: apiKey })],
-        });
-      }
-      
-      const {output} = await generationAi.run(prompt, promptInput);
+      // The global 'ai' instance is now configured with the environment variable API key.
+      const {output} = await ai.run(prompt, promptInput);
 
       if (!output || typeof output.aiResponse !== 'string') {
         console.error('[generateChatResponseFlow] Invalid or malformed output from prompt. Expected { aiResponse: string, ... }, received:', output);
@@ -183,7 +166,7 @@ Your Conversational Answer as AI Blair:`,
       return output;
     } catch (error: any) {
       console.error('[generateChatResponseFlow] Error calling AI model:', error);
-      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please check that a valid API key is set in the Admin Panel and try again.";
+      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please check that a valid GOOGLE_AI_API_KEY is set in your application environment and try again.";
       if (error.message && error.message.includes('503 Service Unavailable')) {
         userFriendlyMessage = "My apologies, it seems my core systems are a bit busy or temporarily unavailable. Could you please try your message again in a few moments?";
       } else if (error.message && error.message.toLowerCase().includes('network error')) {

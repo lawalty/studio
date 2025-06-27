@@ -9,13 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, KeyRound, Speech, MessageSquare, Terminal, AlertTriangle, Info } from 'lucide-react';
+import { Save, KeyRound, Speech, MessageSquare, Terminal } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
-  googleAiApiKey: string;
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -28,7 +27,6 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
-    googleAiApiKey: '',
     tts: '',
     voiceId: '',
     useTtsApi: true,
@@ -47,8 +45,8 @@ export default function ApiKeysPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
+          // Note: googleAiApiKey is no longer managed here.
           setApiKeys({
-            googleAiApiKey: data.googleAiApiKey || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
@@ -82,6 +80,8 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
+      // We are only saving the keys managed by this page.
+      // The googleAiApiKey is handled separately via environment variables.
       await setDoc(docRef, apiKeys, { merge: true }); 
       toast({ title: "Settings Saved", description: "Your service settings have been saved to Firestore." });
     } catch (error) {
@@ -100,7 +100,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key & Services Management</CardTitle>
         <CardDescription>
-          Manage keys for third-party services like Google AI and Twilio SMS.
+          Manage keys for third-party services like Twilio SMS and custom Text-to-Speech.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -112,34 +112,23 @@ export default function ApiKeysPage() {
               <KeyRound className="h-4 w-4 text-sky-700" />
               <AlertTitle className="text-sky-800">Important: Google AI API Key Configuration</AlertTitle>
               <AlertDescription className="text-sky-700">
-                  <p className="mb-2">
-                    To enable all AI features (chat responses, knowledge base embeddings, etc.), you must provide a single Google AI API key below.
+                  <p className="mb-2 font-semibold">
+                    The Google AI API Key is now managed via an environment variable for improved security and stability.
                   </p>
                   <p>
-                    For this application to work correctly, this API key **must have permissions for both of the following services** in your Google Cloud project:
+                    To enable all AI features (chat, knowledge base, etc.), you must create a file named `.env.local` in the root of your project and add the following line:
                   </p>
-                <ol className="list-decimal pl-5 mt-2 space-y-1">
-                  <li><strong>Vertex AI API</strong> (for chat, embeddings, etc.)</li>
-                  <li><strong>Cloud Firestore API</strong> (to allow the server to read its own configuration)</li>
-                </ol>
-                <p className="mt-2">
-                  You have already configured this correctly. The key you created with both permissions is the one to use here.
-                </p>
+                  <pre className="my-2 p-2 bg-gray-100 rounded text-sm text-black">
+                    <code>GOOGLE_AI_API_KEY=your_api_key_here</code>
+                  </pre>
+                  <p>
+                    For this application to work correctly, this API key **must have permissions for both the Vertex AI API and the Cloud Firestore API** in your Google Cloud project.
+                  </p>
+                   <p className="mt-2">
+                    After adding or changing this file, you must **restart the application** for the change to take effect.
+                  </p>
               </AlertDescription>
             </Alert>
-
-            <Separator className="my-6" />
-
-            <div className="flex items-center gap-2 mb-2">
-                <h3 className="text-lg font-semibold">Google AI Services</h3>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="googleAiApiKey" className="font-medium">Google AI API Key</Label>
-                <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter the key with Vertex AI and Firestore permissions" />
-                <p className="text-xs text-muted-foreground">
-                    This single key is used for all Google AI services, including chat generation and knowledge base (RAG) embeddings.
-                </p>
-            </div>
 
             <Separator className="my-6" />
 
@@ -195,7 +184,7 @@ export default function ApiKeysPage() {
       </CardContent>
       <CardFooter>
         <Button onClick={handleSave} disabled={isLoading}>
-          <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save Settings'}
+          <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save Service Settings'}
         </Button>
       </CardFooter>
     </Card>

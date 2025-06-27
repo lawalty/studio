@@ -7,8 +7,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { genkit } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
@@ -58,20 +57,9 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   }
   const db = admin.firestore();
 
-  const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-  const docRef = db.doc(FIRESTORE_KEYS_PATH);
-  const docSnap = await docRef.get();
-  const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-  let embeddingAi = ai; // Default instance (uses ADC)
-  if (apiKey) {
-    embeddingAi = genkit({
-      plugins: [googleAI({ apiKey: apiKey })],
-    });
-  }
-
+  // The global 'ai' instance is now used, which is configured via environment variables.
   // 1. Generate an embedding for the user's query
-  const { embedding } = await embeddingAi.embed({
+  const { embedding } = await ai.embed({
     embedder: textEmbedding004,
     content: query,
     taskType: 'RETRIEVAL_QUERY',

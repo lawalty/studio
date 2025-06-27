@@ -9,9 +9,8 @@
  * - TestEmbeddingOutput - The return type for the function.
  */
 import { ai } from '@/ai/genkit';
-import { genkit, z } from 'genkit';
-import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
+import { z } from 'genkit';
+import { textEmbedding004 } from '@genkit-ai/googleai';
 
 
 const TestEmbeddingOutputSchema = z.object({
@@ -33,23 +32,8 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-      let embeddingAi = ai; // Default to ADC
-      if (apiKey) {
-        embeddingAi = genkit({
-          plugins: [googleAI({ apiKey: apiKey })],
-        });
-      }
-
-      const result = await embeddingAi.embed({
+      // The global 'ai' instance is now configured with the environment variable API key.
+      const result = await ai.embed({
         embedder: textEmbedding004,
         content: 'This is a simple test sentence.',
         taskType: 'RETRIEVAL_DOCUMENT',
@@ -75,7 +59,7 @@ const testEmbeddingFlow = ai.defineFlow(
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
       const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
-      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with your API key, API enablement, or billing. Full error object: ${fullError}`;
+      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY, API enablement, or billing. Full error object: ${fullError}`;
       return {
           success: false,
           error: errorMessage,

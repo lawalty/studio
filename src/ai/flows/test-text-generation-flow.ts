@@ -10,9 +10,6 @@
 import { ai } from '@/ai/genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
-import { genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/googleai';
 
 const TestTextGenerationOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the generation was successful.'),
@@ -33,23 +30,8 @@ const testTextGenerationFlow = ai.defineFlow(
   },
   async () => {
     try {
-       if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      const db = admin.firestore();
-      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
-
-      let generationAi = ai; // Default to ADC
-      if (apiKey) {
-        generationAi = genkit({
-          plugins: [googleAI({ apiKey: apiKey })],
-        });
-      }
-
-      const result = await generationAi.generate({
+      // The global 'ai' instance is now configured with the environment variable API key.
+      const result = await ai.generate({
         model: gemini15Flash,
         prompt: 'Tell me a one-sentence joke.',
       });
@@ -70,7 +52,7 @@ const testTextGenerationFlow = ai.defineFlow(
       }
     } catch (e: any) {
       console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
-      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with your API key, API enablement, or billing. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
+      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY, API enablement, or billing. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
       return {
           success: false,
           error: errorMessage,
