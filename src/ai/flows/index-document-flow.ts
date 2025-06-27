@@ -20,7 +20,6 @@ import { getFirestore } from 'firebase-admin/firestore';
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
-const db = getFirestore();
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -73,6 +72,7 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
+    const db = getFirestore();
     // --- Start of API Key logic ---
     const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
     const docRef = db.doc(FIRESTORE_KEYS_PATH);
