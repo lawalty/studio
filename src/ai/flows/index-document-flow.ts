@@ -150,7 +150,7 @@ const indexDocumentFlow = ai.defineFlow(
       console.error(`[indexDocumentFlow - CRITICAL] An unexpected error occurred during the indexing flow for source '${sourceName}':`, e);
       
       let userFriendlyError = `Indexing failed due to a critical error: ${errorMessage}`;
-      if (errorMessage.toLowerCase().includes('permission_denied') || errorMessage.includes('7 FAILED_PRECONDITION')) {
+      if (errorMessage.toLowerCase().includes('permission_denied') || errorMessage.includes('7 failed_precondition')) {
           userFriendlyError = `Indexing failed due to a Firestore permission error. Please ensure the App Hosting service account has the "Cloud Datastore User" role in your Google Cloud project's IAM settings and that the "Cloud Firestore API" is enabled.`;
       }
       
