@@ -23,4 +23,4 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore();
 
-export { db, admin };
+export { db };

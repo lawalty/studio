@@ -11,7 +11,7 @@ import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileT
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
-import { doc, getDoc, setDoc, writeBatch, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, writeBatch, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -56,7 +56,7 @@ export interface KnowledgeSource {
   description?: string;
   extractionStatus?: KnowledgeSourceExtractionStatus;
   extractionError?: string;
-  indexingStatus?: KnowledgeSourceIndexingStatus;
+  indexingStatus?: KnowledgeSourceIndexingStatus; // pending, indexed (chunks written), failed
   indexingError?: string;
 }
 
@@ -82,7 +82,7 @@ const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFold
   Archive: {
     firestorePath: "configurations/kb_archive_meta_v1",
     storageFolder: "knowledge_base_files_archive_v1/",
-    title: "Archive Knowledge Base"
+    title: "Archived Sources"
   }
 };
 
@@ -126,19 +126,16 @@ export default function KnowledgeBasePage() {
   const [isSavingDescription, setIsSavingDescription] = useState(false);
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
 
-  // State for pasted text feature
   const [pastedText, setPastedText] = useState('');
   const [pastedTextSourceName, setPastedTextSourceName] = useState('');
   const [pastedTextDescription, setPastedTextDescription] = useState('');
   const [selectedKBTargetForPastedText, setSelectedKBTargetForPastedText] = useState<KnowledgeBaseLevel>('Medium');
   const [isIndexingPastedText, setIsIndexingPastedText] = useState(false);
 
-  // State for testing RAG
   const [testQuery, setTestQuery] = useState('');
   const [testResult, setTestResult] = useState('');
   const [isTesting, setIsTesting] = useState(false);
 
-  // State for testing embedding
   const [isTestingEmbedding, setIsTestingEmbedding] = useState(false);
   const [isTestingGeneration, setIsTestingGeneration] = useState(false);
 
@@ -243,10 +240,8 @@ export default function KnowledgeBasePage() {
     let extractedText: string | null = null;
     let extractionFailed = false;
 
-    // Update UI to show pending status
-    setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending' } : s));
+    setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending', extractionError: '', indexingError: '' } : s));
 
-    // Outer try/catch for text extraction step
     try {
       if (sourceToProcess.type === 'text') {
         toast({ title: "Processing Text File", description: `Reading content from ${sourceToProcess.name}...` });
@@ -254,27 +249,17 @@ export default function KnowledgeBasePage() {
         if (!response.ok) throw new Error(`Failed to fetch text file: ${response.statusText}`);
         extractedText = await response.text();
       } else {
-        let topics = '';
-        try {
-          const topicsDocRef = doc(db, "configurations/site_display_assets");
-          const topicsDocSnap = await getDoc(topicsDocRef);
-          if (topicsDocSnap.exists() && topicsDocSnap.data()?.conversationalTopics) {
-            topics = topicsDocSnap.data().conversationalTopics;
-          }
-        } catch (e) {
-          console.warn("Could not fetch conversational topics for extraction, proceeding without them.", e);
-        }
         toast({ title: "Extraction Started", description: `AI is processing ${sourceToProcess.name}...` });
-        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: topics });
+        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL });
         extractedText = result.extractedText;
       }
       
       setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
-      toast({ title: "Text Extracted Successfully", description: `Now processing ${sourceToProcess.name}...` });
+      toast({ title: "Text Extracted Successfully", description: `Now writing chunks for ${sourceToProcess.name}...` });
 
     } catch (error: any) {
       extractionFailed = true;
-      console.error(`[KBPage - triggerProcessing - Extraction Error] for ${sourceToProcess.name}:`, error);
+      console.error(`[KBPage - Extraction Error] for ${sourceToProcess.name}:`, error);
       const errorMessage = error.message || 'An unknown error occurred during text extraction.';
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
@@ -287,7 +272,7 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Extraction Failed", description: `Could not extract text from ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive" });
+      toast({ title: "Extraction Failed", description: errorMessage, variant: "destructive" });
     }
 
     if (extractionFailed) {
@@ -296,14 +281,13 @@ export default function KnowledgeBasePage() {
     }
 
     if (!extractedText || extractedText.trim() === '') {
-      const errorMessage = "Text content is missing or empty after processing, cannot index.";
-      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'failed', indexingError: errorMessage } : s));
-      toast({ title: "Processing Failed", description: errorMessage, variant: "destructive" });
+      const errorMessage = "Text content is missing or empty after extraction, cannot index.";
+      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'failed', indexingError: errorMessage, extractionStatus: 'failed', extractionError: errorMessage } : s));
+      toast({ title: "Indexing Failed", description: errorMessage, variant: "destructive" });
       setIsProcessingId(null);
       return;
     }
 
-    // Indexing Step
     const indexResult = await indexDocument({
       sourceId: sourceToProcess.id,
       sourceName: sourceToProcess.name,
@@ -322,9 +306,9 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Diagnostic Test Successful", description: `${sourceToProcess.name} saved ${indexResult.filesSaved} embedding files to Storage. Check the 'embeddings' folder.` });
+      toast({ title: "Indexing Successful", description: `${indexResult.chunksWritten} chunks for ${sourceToProcess.name} written to Firestore for embedding.` });
     } else {
-      const errorMessage = indexResult.error || 'An unknown error occurred during processing.';
+      const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
           ...s,
@@ -334,7 +318,7 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Processing Failed", description: `Could not process ${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 15000 });
+      toast({ title: "Indexing Failed", description: errorMessage, variant: "destructive", duration: 15000 });
     }
     
     setIsProcessingId(null);
@@ -346,10 +330,6 @@ export default function KnowledgeBasePage() {
       toast({ title: "No file selected", variant: "destructive" });
       return;
     }
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId || isIndexingPastedText) {
-      toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
-      return;
-    }
 
     setIsCurrentlyUploading(true);
     const currentFile = selectedFile;
@@ -357,44 +337,32 @@ export default function KnowledgeBasePage() {
     const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
         
-    const timestampForFile = Date.now();
-    const sanitizedOriginalName = currentFile.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
-    const filenameInStorageWithTimestamp = `${timestampForFile}-${sanitizedOriginalName}`;
-    const filePath = `${config.storageFolder}${filenameInStorageWithTimestamp}`;
+    const permanentId = `fb-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const filePath = `${config.storageFolder}${permanentId}-${currentFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const fileRef = storageRef(storage, filePath);
     
-    const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-
     try {
-      toast({ title: "Upload Started", description: `Uploading ${currentFile.name} to ${targetLevel} KB...` });
+      toast({ title: "Upload Started", description: `Uploading ${currentFile.name}...` });
       await uploadBytes(fileRef, currentFile);
       const downloadURL = await getDownloadURL(fileRef);
 
-      if (!downloadURL) {
-        toast({ title: "URL Retrieval Failed", description: `Could not get URL for ${currentFile.name}. Metadata not saved.`, variant: "destructive"});
-        setIsCurrentlyUploading(false);
-        return;
-      }
-
       let fileType: KnowledgeSource['type'] = 'other';
-      const mimeType = currentFile.type;
-      if (mimeType.startsWith('audio/')) fileType = 'audio';
-      else if (mimeType.startsWith('image/')) fileType = 'image';
-      else if (mimeType === 'application/pdf') fileType = 'pdf';
-      else if (mimeType.startsWith('text/plain') || currentFile.name.toLowerCase().endsWith('.txt')) fileType = 'text';
-      else if (mimeType === 'application/msword' || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') fileType = 'document';
+      if (currentFile.type.startsWith('audio/')) fileType = 'audio';
+      else if (currentFile.type.startsWith('image/')) fileType = 'image';
+      else if (currentFile.type === 'application/pdf') fileType = 'pdf';
+      else if (currentFile.type.startsWith('text/')) fileType = 'text';
+      else if (currentFile.name.match(/\.(doc|docx|rtf|odt)$/i)) fileType = 'document';
 
-      const isProcessable = fileType === 'pdf' || fileType === 'text' || fileType === 'document';
+      const isProcessable = ['pdf', 'text', 'document'].includes(fileType);
 
       const newSource: KnowledgeSource = {
         id: permanentId, name: currentFile.name, type: fileType,
-        size: `${(currentFile.size / (1024 * 1024)).toFixed(2)}MB`,
-        uploadedAt: new Date().toISOString().split('T')[0],
+        size: `${(currentFile.size / 1024 / 1024).toFixed(2)} MB`,
+        uploadedAt: new Date().toISOString(),
         storagePath: filePath, downloadURL: downloadURL,
         description: uploadDescription || '',
-        extractionStatus: isProcessable ? 'pending' : 'not_applicable', 
+        extractionStatus: isProcessable ? 'pending' : 'not_applicable',
         indexingStatus: isProcessable ? 'pending' : 'not_applicable',
-        extractionError: '', indexingError: '',
       };
       
       const updatedList = [newSource, ...getSourcesState(targetLevel)];
@@ -407,33 +375,29 @@ export default function KnowledgeBasePage() {
           triggerProcessing(newSource, targetLevel);
         }
       } else {
-        toast({ title: "Database Save Failed", description: `File uploaded but DB save failed. Reverting.`, variant: "destructive"});
-        deleteObject(fileRef).catch(delError => console.warn("Failed to clean up orphaned file:", delError));
+        toast({ title: "DB Save Failed", description: "Reverting upload.", variant: "destructive"});
+        await deleteObject(fileRef).catch(e => console.error("Orphaned file cleanup failed:", e));
         setSources(prev => prev.filter(s => s.id !== newSource.id));
       }
 
     } catch (error: any) {
-      toast({ title: "Upload Failed", description: `Could not upload/save: ${error.message || 'Unknown'}.`, variant: "destructive"});
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive"});
     } finally {
       setIsCurrentlyUploading(false);
       setSelectedFile(null);
       setUploadDescription('');
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, saveSourcesToFirestore, uploadDescription, isCurrentlyUploading, isMovingSource, isSavingDescription, triggerProcessing, isProcessingId, getSourcesState, isIndexingPastedText]);
+  }, [selectedFile, toast, selectedKBTargetForUpload, getSourcesSetter, saveSourcesToFirestore, uploadDescription, getSourcesState, triggerProcessing]);
 
   const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId || isIndexingPastedText) {
-      toast({ title: "Operation in Progress", description: "Please wait.", variant: "default" });
-      return;
-    }
     const setSources = getSourcesSetter(level);
     const sources = getSourcesState(level);
     const sourceToDelete = sources.find(s => s.id === id);
     if (!sourceToDelete) return;
 
     try {
-        if (sourceToDelete.storagePath && sourceToDelete.storagePath !== 'pasted-text') {
+        if (sourceToDelete.storagePath) {
             await deleteObject(storageRef(storage, sourceToDelete.storagePath));
         }
 
@@ -443,69 +407,45 @@ export default function KnowledgeBasePage() {
             const batch = writeBatch(db);
             chunksSnapshot.forEach(doc => batch.delete(doc.ref));
             await batch.commit();
-            toast({ title: "Indexed Data Removed", description: `${chunksSnapshot.size} associated chunks deleted.` });
+            toast({ title: "Indexed Chunks Removed", description: `${chunksSnapshot.size} associated chunks deleted.` });
         }
 
         const updatedSources = sources.filter(source => source.id !== id);
         setSources(updatedSources);
-        const dbUpdated = await saveSourcesToFirestore(updatedSources, level);
+        await saveSourcesToFirestore(updatedSources, level);
+        toast({ title: "Source Removed", description: `${sourceToDelete.name} and its data removed.` });
 
-        if (dbUpdated) {
-            toast({ title: "Source Removed", description: `${sourceToDelete.name} and its data removed.` });
-        } else {
-            toast({ title: "Deletion Error", description: "DB update failed. UI reverted.", variant: "destructive" });
-            setSources(sources); 
-        }
     } catch (error: any) {
         console.error(`[KBPage - handleDelete] Error:`, error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name}: ${error.message}`, variant: "destructive" });
-        setSources(sources); 
     }
-  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
+  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
 
   const handleOpenMoveDialog = useCallback((source: KnowledgeSource, currentLevel: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId || isIndexingPastedText) {
-      toast({ title: "Operation in Progress", description: "Please wait.", variant: "default" });
-      return;
-    }
     setSourceToMoveDetails({ source, currentLevel });
     setSelectedTargetMoveLevel(null);
     setShowMoveDialog(true);
-  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
+  }, []);
 
   const handleConfirmMoveSource = useCallback(async () => {
-    if (!sourceToMoveDetails || !selectedTargetMoveLevel || isMovingSource) return;
+    if (!sourceToMoveDetails || !selectedTargetMoveLevel) return;
 
     const { source, currentLevel } = sourceToMoveDetails;
     const targetLevel = selectedTargetMoveLevel;
-
-    if (currentLevel === targetLevel) {
-      toast({ title: "Invalid Move", description: "Source is already in the selected priority level.", variant: "default" });
-      return;
-    }
+    if (currentLevel === targetLevel) return;
 
     setIsMovingSource(true);
-    toast({ title: "Move Started", description: `Moving ${source.name} from ${currentLevel} to ${targetLevel}...` });
+    toast({ title: "Move Started", description: `Moving ${source.name}...` });
 
     try {
         const blob = await getBlob(storageRef(storage, source.storagePath));
-        const newFilenameInStorage = `${Date.now()}-${source.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '')}`;
-        const newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${newFilenameInStorage}`;
+        const newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${source.storagePath.split('/').pop()}`;
         const newFileRef = storageRef(storage, newStoragePath);
-        
         await uploadBytes(newFileRef, blob, { contentType: blob.type });
         const newDownloadURL = await getDownloadURL(newFileRef);
-
+        await deleteObject(storageRef(storage, source.storagePath));
+        
         const movedSource: KnowledgeSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL };
-
-        const targetSetSources = getSourcesSetter(targetLevel);
-        const originalSetSources = getSourcesSetter(currentLevel);
-        
-        const originalSources = getSourcesState(currentLevel);
-        const targetSources = getSourcesState(targetLevel);
-        
-        const updatedTargetSources = [movedSource, ...targetSources];
-        const updatedOriginalSources = originalSources.filter(s => s.id !== source.id);
 
         const chunksQuery = query(collection(db, "kb_chunks"), where("sourceId", "==", source.id));
         const chunksSnapshot = await getDocs(chunksQuery);
@@ -513,16 +453,14 @@ export default function KnowledgeBasePage() {
             const batch = writeBatch(db);
             chunksSnapshot.forEach(doc => batch.update(doc.ref, { level: targetLevel }));
             await batch.commit();
-            toast({ title: "Indexed Data Updated", description: `Level updated for ${chunksSnapshot.size} chunks.` });
+            toast({ title: "Chunk Levels Updated", description: `${chunksSnapshot.size} chunks updated.` });
         }
         
-        await deleteObject(storageRef(storage, source.storagePath));
+        getSourcesSetter(targetLevel)(prev => [movedSource, ...prev]);
+        getSourcesSetter(currentLevel)(prev => prev.filter(s => s.id !== source.id));
         
-        targetSetSources(updatedTargetSources);
-        originalSetSources(updatedOriginalSources);
-
-        await saveSourcesToFirestore(updatedTargetSources, targetLevel);
-        await saveSourcesToFirestore(updatedOriginalSources, currentLevel);
+        await saveSourcesToFirestore([movedSource, ...getSourcesState(targetLevel)], targetLevel);
+        await saveSourcesToFirestore(getSourcesState(currentLevel).filter(s => s.id !== source.id), currentLevel);
 
         toast({ title: "Move Successful", description: `${source.name} moved to ${targetLevel}.` });
 
@@ -533,44 +471,26 @@ export default function KnowledgeBasePage() {
     } finally {
       setIsMovingSource(false);
       setShowMoveDialog(false);
-      setSourceToMoveDetails(null);
-      setSelectedTargetMoveLevel(null);
     }
-  }, [sourceToMoveDetails, selectedTargetMoveLevel, isMovingSource, toast, getSourcesSetter, saveSourcesToFirestore, fetchSourcesForLevel, getSourcesState]);
+  }, [sourceToMoveDetails, selectedTargetMoveLevel, toast, getSourcesSetter, saveSourcesToFirestore, fetchSourcesForLevel, getSourcesState]);
 
   const handleOpenDescriptionDialog = useCallback((source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId || isIndexingPastedText) {
-      toast({ title: "Operation in Progress", description: "Please wait.", variant: "default" });
-      return;
-    }
     setEditingSourceDetails({ source, level });
     setDescriptionInput(source.description || '');
     setShowDescriptionDialog(true);
-  }, [toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
+  }, []);
 
   const handleSaveDescription = useCallback(async () => {
     if (!editingSourceDetails) return;
     setIsSavingDescription(true);
-
     const { source, level } = editingSourceDetails;
-    const setSources = getSourcesSetter(level);
     const sources = getSourcesState(level);
-
     const updatedSources = sources.map(s => s.id === source.id ? { ...s, description: descriptionInput } : s);
-    setSources(updatedSources); 
-
-    const success = await saveSourcesToFirestore(updatedSources, level);
-    if (success) {
-      toast({ title: "Description Saved", description: `Description for ${source.name} updated.` });
-    } else {
-      toast({ title: "Error Saving Description", description: `Could not save description.`, variant: "destructive" });
-      setSources(sources); 
-    }
-
+    getSourcesSetter(level)(updatedSources);
+    await saveSourcesToFirestore(updatedSources, level);
+    toast({ title: "Description Saved" });
     setIsSavingDescription(false);
     setShowDescriptionDialog(false);
-    setEditingSourceDetails(null);
-    setDescriptionInput('');
   }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
   
   const handleIndexPastedText = useCallback(async () => {
@@ -578,71 +498,26 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please provide a source name and text to index.", variant: "destructive" });
       return;
     }
-    if (isCurrentlyUploading || isMovingSource || isSavingDescription || isProcessingId || isIndexingPastedText) {
-      toast({ title: "Operation in Progress", description: "Please wait for the current operation to complete.", variant: "default" });
-      return;
-    }
-
     setIsIndexingPastedText(true);
     const targetLevel = selectedKBTargetForPastedText;
-    const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
     
     const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') ? pastedTextSourceName : `${pastedTextSourceName}.txt`;
     const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
     const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
 
-    const permanentId = `firebase-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const filePath = `${config.storageFolder}${permanentId}-${textAsFile.name}`;
-    const fileRef = storageRef(storage, filePath);
-
-    try {
-      toast({ title: "Saving Text", description: `Saving "${textAsFile.name}" to Storage...` });
-      
-      await uploadBytes(fileRef, textAsFile);
-      const downloadURL = await getDownloadURL(fileRef);
-
-      const newSource: KnowledgeSource = {
-        id: permanentId,
-        name: textAsFile.name,
-        type: 'text',
-        size: `${(textAsFile.size / 1024).toFixed(2)}KB`,
-        uploadedAt: new Date().toISOString().split('T')[0],
-        storagePath: filePath,
-        downloadURL: downloadURL,
-        description: pastedTextDescription || '',
-        extractionStatus: 'pending',
-        indexingStatus: 'pending',
-        extractionError: '',
-        indexingError: '',
-      };
-
-      const updatedList = [newSource, ...getSourcesState(targetLevel)];
-      setSources(updatedList);
-      const savedToDb = await saveSourcesToFirestore(updatedList, targetLevel);
-
-      if (savedToDb) {
-        toast({ title: "Source Saved", description: `"${textAsFile.name}" is now ready for processing.` });
-        triggerProcessing(newSource, targetLevel);
-      } else {
-        toast({ title: "Database Save Failed", description: "File created but DB save failed. Reverting.", variant: "destructive"});
-        deleteObject(fileRef).catch(delError => console.warn("Failed to clean up orphaned file:", delError));
-        setSources(prev => prev.filter(s => s.id !== newSource.id));
-      }
-    } catch (error: any) {
-      toast({ title: "Operation Failed", description: `Could not save/process pasted text: ${error.message || 'Unknown'}.`, variant: "destructive"});
-    } finally {
-      setIsIndexingPastedText(false);
-      setPastedText('');
-      setPastedTextSourceName('');
-      setPastedTextDescription('');
-    }
-  }, [pastedText, pastedTextSourceName, pastedTextDescription, selectedKBTargetForPastedText, getSourcesSetter, getSourcesState, triggerProcessing, saveSourcesToFirestore, toast, isCurrentlyUploading, isMovingSource, isSavingDescription, isProcessingId, isIndexingPastedText]);
+    await handleUpload(); // Re-use the main upload logic
+    
+    setIsIndexingPastedText(false);
+    setPastedText('');
+    setPastedTextSourceName('');
+    setPastedTextDescription('');
+  }, [pastedText, pastedTextSourceName, selectedKBTargetForPastedText, getSourcesSetter, toast, handleUpload]);
 
 
   const handleTestKnowledgeBase = async () => {
     if (!testQuery.trim()) {
-      toast({ title: "No query provided", description: "Please enter a question to test.", variant: "destructive" });
+      toast({ title: "No query provided", variant: "destructive" });
       return;
     }
     setIsTesting(true);
@@ -652,86 +527,43 @@ export default function KnowledgeBasePage() {
       setTestResult(result.retrievedContext);
       toast({ title: "Test Complete", description: "Retrieved context is shown below." });
     } catch (error: any) {
-      console.error("[KBPage - Test] Error:", error);
-      const errorMessage = error.message || 'An unknown error occurred.';
-      setTestResult(`Error retrieving context: ${errorMessage}`);
-      toast({ title: "Test Failed", description: errorMessage, variant: "destructive" });
+      setTestResult(`Error: ${error.message}`);
+      toast({ title: "Test Failed", description: error.message, variant: "destructive" });
     }
     setIsTesting(false);
   };
 
   const handleTestEmbedding = async () => {
     setIsTestingEmbedding(true);
-    try {
-      const result = await testEmbedding();
-      if (result.success) {
-        toast({
-          title: "Embedding Test Successful!",
-          description: `Successfully received an embedding vector with ${result.embeddingVectorLength} dimensions from Vertex AI.`,
-        });
-      } else {
-        toast({
-          title: "Embedding Test Failed",
-          description: `The test failed: ${result.error}`,
-          variant: "destructive",
-          duration: 15000,
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Embedding Test Error",
-        description: `An unexpected error occurred: ${error.message}`,
-        variant: "destructive",
-        duration: 15000,
-      });
+    const result = await testEmbedding();
+    if (result.success) {
+      toast({ title: "Embedding Test Successful!", description: `Vector length: ${result.embeddingVectorLength}` });
+    } else {
+      toast({ title: "Embedding Test Failed", description: result.error, variant: "destructive", duration: 15000 });
     }
     setIsTestingEmbedding(false);
   };
 
   const handleTestGeneration = async () => {
     setIsTestingGeneration(true);
-    try {
-      const result = await testTextGeneration();
-      if (result.success) {
-        toast({
-          title: "Text Generation Test Successful!",
-          description: `Model said: "${result.generatedText}"`,
-        });
-      } else {
-        toast({
-          title: "Text Generation Test Failed",
-          description: `The test failed: ${result.error}`,
-          variant: "destructive",
-          duration: 15000,
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: "Text Generation Test Error",
-        description: `An unexpected error occurred: ${error.message}`,
-        variant: "destructive",
-        duration: 15000,
-      });
+    const result = await testTextGeneration();
+    if (result.success) {
+      toast({ title: "Text Generation Test Successful!", description: `Model said: "${result.generatedText}"` });
+    } else {
+      toast({ title: "Text Generation Test Failed", description: result.error, variant: "destructive", duration: 15000 });
     }
     setIsTestingGeneration(false);
   };
 
-  const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
   const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    const isProcessingThisFile = isProcessingId === source.id;
-
     if (!['pdf', 'text', 'document'].includes(source.type)) {
       return <span className="text-xs text-muted-foreground">N/A</span>;
     }
 
-    if (isProcessingThisFile) {
-        return (
-            <div className="flex items-center gap-1 text-xs text-yellow-600">
-                <Loader2 className="h-3 w-3 animate-spin" /> Processing...
-            </div>
-        );
+    if (isProcessingId === source.id) {
+      return <div className="flex items-center gap-1 text-xs text-yellow-600"><Loader2 className="h-3 w-3 animate-spin" /> Processing...</div>;
     }
 
     switch (source.indexingStatus) {
@@ -740,26 +572,15 @@ export default function KnowledgeBasePage() {
         case 'failed':
             return (
                 <div className="flex items-center gap-1">
-                    <span className="text-xs text-red-600" title={source.indexingError || 'Indexing failed'}>Failed</span>
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                 <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={() => triggerProcessing(source, level)}
-                                    disabled={anyOperationGloballyInProgress}
-                                    aria-label={`Reprocess ${source.name}`}
-                                    className="h-6 w-6"
-                                >
-                                    <RefreshCw className="h-4 w-4 text-blue-600" />
-                                </Button>
+                                <span className="text-xs text-red-600 cursor-help">Failed</span>
                             </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Reprocess File</p>
-                            </TooltipContent>
+                            <TooltipContent><p>{source.indexingError || 'Unknown indexing error'}</p></TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
+                    <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
                 </div>
             );
         case 'pending':
@@ -767,25 +588,7 @@ export default function KnowledgeBasePage() {
              return (
                 <div className="flex items-center gap-1">
                     <span className="text-xs text-yellow-600">Pending</span>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                 <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={() => triggerProcessing(source, level)}
-                                    disabled={anyOperationGloballyInProgress}
-                                    aria-label={`Process ${source.name}`}
-                                    className="h-6 w-6"
-                                >
-                                    <RefreshCw className="h-4 w-4 text-blue-600" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Start Processing</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                    <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
                 </div>
             );
     }
@@ -794,46 +597,34 @@ export default function KnowledgeBasePage() {
 
   const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
     const sources = getSourcesState(level);
-    const isLoadingSources = 
-        level === 'High' ? isLoadingHigh :
-        level === 'Medium' ? isLoadingMedium :
-        level === 'Low' ? isLoadingLow :
-        isLoadingArchive;
+    const isLoadingSources = anyKbLoading;
     const config = KB_CONFIG[level];
 
-    const descriptionText = level === 'Archive'
-      ? "Archived sources. Files here are not used by AI Blair for responses but are kept for record-keeping."
-      : `View and manage sources. For PDF and text files, content is extracted and indexed as vector embeddings for semantic search. Other file types are stored for reference.`;
-    
     return (
       <Card className="mt-6">
         <CardHeader>
           <CardTitle className="font-headline">{config.title}</CardTitle>
-          <CardDescription>{descriptionText}</CardDescription>
+          <CardDescription>
+            {level === 'Archive' ? "Archived sources are not used by the AI." : `Manage ${level.toLowerCase()} priority sources.`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingSources ? (
-             <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
-                <RefreshCw className="h-12 w-12 text-muted-foreground mb-4 animate-spin" />
-                <p className="text-muted-foreground">Loading {level.toLowerCase()} priority sources...</p>
-            </div>
+             <div className="flex justify-center py-10"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>
           ) : sources.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-border rounded-md">
-              <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No sources found for {level.toLowerCase()} priority.</p>
-            </div>
+            <div className="text-center py-10 text-muted-foreground"><AlertCircle className="mx-auto h-12 w-12 mb-4" /><p>No sources found.</p></div>
           ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]"></TableHead>
+                <TableHead></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded</TableHead>
-                <TableHead>Download File</TableHead>
-                <TableHead>Processing Status</TableHead>
+                <TableHead>Download</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -841,39 +632,16 @@ export default function KnowledgeBasePage() {
               {sources.map((source) => (
                 <TableRow key={source.id}>
                   <TableCell>{getFileIcon(source.type)}</TableCell>
-                  <TableCell className="font-medium break-all max-w-xs truncate" title={source.name}>{source.name}</TableCell>
+                  <TableCell className="font-medium truncate max-w-xs">{source.name}</TableCell>
                   <TableCell className="capitalize">{source.type}</TableCell>
-                  <TableCell>
-                    <Button variant="link" size="sm" className="p-0 h-auto text-xs" onClick={() => handleOpenDescriptionDialog(source, level)} disabled={anyOperationGloballyInProgress || isLoadingSources}>
-                      <Edit3 className="h-3 w-3 mr-1" /> View/Edit
-                    </Button>
-                  </TableCell>
+                  <TableCell><Button variant="link" size="sm" onClick={() => handleOpenDescriptionDialog(source, level)}><Edit3 className="h-3 w-3 mr-1" /> View/Edit</Button></TableCell>
                   <TableCell>{source.size}</TableCell>
-                  <TableCell>{source.uploadedAt}</TableCell>
-                  <TableCell>
-                    {source.downloadURL ? (
-                      <a
-                        href={source.downloadURL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={source.name}
-                        className="text-xs text-primary hover:underline flex items-center gap-1"
-                      >
-                        <Download className="h-3 w-3" />
-                        Download
-                      </a>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">N/A</span>
-                    )}
-                  </TableCell>
+                  <TableCell>{new Date(source.uploadedAt).toLocaleDateString()}</TableCell>
+                  <TableCell><a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><Download className="h-4 w-4" /></a></TableCell>
                   <TableCell>{renderProcessingStatus(source, level)}</TableCell>
                   <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} aria-label="Move source" disabled={anyOperationGloballyInProgress || isLoadingSources}>
-                      <ArrowRightLeft className="h-4 w-4 text-blue-600" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} aria-label="Delete source" disabled={anyOperationGloballyInProgress || isLoadingSources}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} disabled={anyOperationGloballyInProgress}><ArrowRightLeft className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} disabled={anyOperationGloballyInProgress}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -885,34 +653,25 @@ export default function KnowledgeBasePage() {
     );
   };
 
+  const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
+
   return (
     <div className="space-y-6">
        <Card>
           <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><MessageSquareText /> Test Text Generation</CardTitle>
-              <CardDescription>
-                  This performs a direct test of the Gemini text generation model through Vertex AI. This helps confirm that the core AI service is reachable and configured correctly.
-              </CardDescription>
+            <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Core Service Diagnostics</CardTitle>
+            <CardDescription>
+                Use these buttons to perform direct, isolated tests of the core Google AI services. This helps confirm your API key and project setup are correct, bypassing the RAG pipeline.
+            </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-wrap gap-4">
               <Button onClick={handleTestGeneration} disabled={anyOperationGloballyInProgress}>
                   {isTestingGeneration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
-                  {isTestingGeneration ? 'Testing Generation...' : 'Run Generation Test'}
+                  Test Text Generation
               </Button>
-          </CardContent>
-      </Card>
-
-      <Card>
-          <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Test Core Embedding Service</CardTitle>
-              <CardDescription>
-                  This performs a direct, isolated test of the Vertex AI embedding service with a hardcoded sentence, bypassing file processing and chunking. A success here confirms your project setup is correct.
-              </CardDescription>
-          </CardHeader>
-          <CardContent>
               <Button onClick={handleTestEmbedding} disabled={anyOperationGloballyInProgress}>
                   {isTestingEmbedding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Beaker className="mr-2 h-4 w-4" />}
-                  {isTestingEmbedding ? 'Testing Embedding...' : 'Run Embedding Test'}
+                  Test Embedding Service
               </Button>
           </CardContent>
       </Card>
@@ -921,35 +680,22 @@ export default function KnowledgeBasePage() {
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
               <CardDescription>
-                  Enter a question to see what context the AI would retrieve from the knowledge base. This helps verify that your sources are indexed and retrieved correctly. **This test will not work until indexing to Firestore is restored.**
+                  Enter a question to see what context the AI would retrieve from the knowledge base. This tests the full RAG pipeline, including your indexed data in Firestore.
               </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
               <div className="space-y-2">
                   <Label htmlFor="test-query">Test Question</Label>
-                  <Input
-                      id="test-query"
-                      value={testQuery}
-                      onChange={(e) => setTestQuery(e.target.value)}
-                      placeholder="e.g., What are the regulations for jewelry?"
-                      disabled={anyOperationGloballyInProgress}
-                      suppressHydrationWarning
-                  />
+                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?"/>
               </div>
               <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery.trim()}>
                   {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
-                  {isTesting ? 'Retrieving Context...' : 'Test Retrieval'}
+                  Test Retrieval
               </Button>
               {testResult && (
                   <div className="space-y-2 pt-4">
                       <Label>Retrieved Context for AI</Label>
-                      <Textarea
-                          readOnly
-                          value={testResult}
-                          className="h-64 font-mono text-xs bg-muted"
-                          placeholder="Context will be displayed here..."
-                          suppressHydrationWarning
-                      />
+                      <Textarea readOnly value={testResult} className="h-64 font-mono text-xs bg-muted" />
                   </div>
               )}
           </CardContent>
@@ -959,72 +705,32 @@ export default function KnowledgeBasePage() {
         <CardHeader>
           <CardTitle className="font-headline">Upload New Source</CardTitle>
           <CardDescription>
-            Add content to AI Blair's knowledge base. PDF and .txt files will be processed and indexed for semantic search.
+            Add content to the knowledge base. Processable files (PDF, TXT, DOCX) will be chunked and written to Firestore for the Vector Search extension to index.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
-            <Label htmlFor="file-upload" className="font-medium whitespace-nowrap shrink-0">Step 1: File</Label>
-            <div className="flex items-center gap-2">
-                <Input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                id="file-upload"
-                disabled={anyOperationGloballyInProgress || anyKbLoading}
-                />
-                <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={anyOperationGloballyInProgress || anyKbLoading} className="w-full sm:w-auto">
-                <UploadCloud className="mr-2 h-4 w-4" /> Choose File
-                </Button>
-                {selectedFile && <span className="text-sm text-muted-foreground truncate">{selectedFile.name}</span>}
-            </div>
-            {selectedFile && (
-                <> 
-                  <div/>
-                  <p className="text-xs text-muted-foreground col-start-2"> 
-                  Selected: {selectedFile.name} ({(selectedFile.size / (1024*1024)).toFixed(2)} MB) - Type: {selectedFile.type || "unknown"}
-                  </p>
-                </>
-            )}
-
-            <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label> 
-            <div className="flex flex-col">
-              <RadioGroup
-                value={selectedKBTargetForUpload}
-                onValueChange={(value: string) => setSelectedKBTargetForUpload(value as KnowledgeBaseLevel)}
-                className="flex flex-col sm:flex-row sm:space-x-4 pt-2"
-              >
-                {KB_LEVELS.map(level => (
-                  <div key={level} className="flex items-center space-x-2">
-                    <RadioGroupItem value={level} id={`r-upload-${level.toLowerCase()}`} disabled={anyOperationGloballyInProgress || anyKbLoading}/>
-                    <Label htmlFor={`r-upload-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
-                  </div>
+          <div className="space-y-2">
+            <Label htmlFor="file-upload">File</Label>
+            <Input id="file-upload" type="file" ref={fileInputRef} onChange={handleFileChange} />
+          </div>
+          <div className="space-y-2">
+            <Label>Priority Level</Label>
+            <RadioGroup value={selectedKBTargetForUpload} onValueChange={(v) => setSelectedKBTargetForUpload(v as KnowledgeBaseLevel)} className="flex space-x-4">
+                {KB_LEVELS.filter(l => l !== 'Archive').map(level => (
+                  <div key={level} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`r-${level}`} /><Label htmlFor={`r-${level}`}>{level}</Label></div>
                 ))}
-              </RadioGroup>
-            </div>
-
-            <Label htmlFor="uploadDescription" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 3: Description (Optional)</Label>
-            <Textarea
-                id="uploadDescription"
-                value={uploadDescription}
-                onChange={(e) => setUploadDescription(e.target.value)}
-                placeholder="Enter a brief description for this source (for admin use only)..."
-                rows={2}
-                className="mt-1"
-                disabled={anyOperationGloballyInProgress || anyKbLoading}
-                suppressHydrationWarning
-            />
+            </RadioGroup>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="uploadDescription">Description (Optional)</Label>
+            <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." />
           </div>
         </CardContent>
         <CardFooter>
-          <div className="flex items-center gap-2">
-            <Label className="font-medium whitespace-nowrap shrink-0">Step 4:</Label>
-            <Button onClick={handleUpload} disabled={!selectedFile || anyOperationGloballyInProgress || anyKbLoading}>
-              {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-              {isCurrentlyUploading ? 'Uploading...' : `Upload to ${selectedKBTargetForUpload === 'Archive' ? 'Archive' : selectedKBTargetForUpload + ' KB'}`}
-            </Button>
-          </div>
+          <Button onClick={handleUpload} disabled={!selectedFile || anyOperationGloballyInProgress}>
+            {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+            Upload and Process
+          </Button>
         </CardFooter>
       </Card>
       
@@ -1032,153 +738,85 @@ export default function KnowledgeBasePage() {
         <CardHeader>
             <CardTitle className="font-headline">Index Pasted Text</CardTitle>
             <CardDescription>
-                Paste text directly into the field below to index it. This will save the content as a .txt file in Firebase Storage and then process it like any other file.
+                Paste text directly to index it. It will be saved as a .txt file and processed.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] items-start gap-x-4 gap-y-3">
-                <Label htmlFor="pasted-text-source-name" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 1: Source Name</Label>
-                <Input
-                    id="pasted-text-source-name"
-                    value={pastedTextSourceName}
-                    onChange={(e) => setPastedTextSourceName(e.target.value)}
-                    placeholder="e.g., 'Company Mission Statement' (will be saved as .txt)"
-                    disabled={anyOperationGloballyInProgress || anyKbLoading}
-                    suppressHydrationWarning
-                />
-
-                <Label className="font-medium whitespace-nowrap shrink-0 pt-2">Step 2: Level</Label>
-                <div className="flex flex-col">
-                  <RadioGroup
-                    value={selectedKBTargetForPastedText}
-                    onValueChange={(value: string) => setSelectedKBTargetForPastedText(value as KnowledgeBaseLevel)}
-                    className="flex flex-col sm:flex-row sm:space-x-4 pt-2"
-                  >
-                    {KB_LEVELS.map(level => (
-                      <div key={`pasted-level-${level}`} className="flex items-center space-x-2">
-                        <RadioGroupItem value={level} id={`r-pasted-${level.toLowerCase()}`} disabled={anyOperationGloballyInProgress || anyKbLoading}/>
-                        <Label htmlFor={`r-pasted-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
-                      </div>
+            <div className="space-y-2">
+                <Label htmlFor="pasted-text-source-name">Source Name</Label>
+                <Input id="pasted-text-source-name" value={pastedTextSourceName} onChange={(e) => setPastedTextSourceName(e.target.value)} placeholder="e.g., 'Company Mission Statement'" />
+            </div>
+            <div className="space-y-2">
+                <Label>Priority Level</Label>
+                <RadioGroup value={selectedKBTargetForPastedText} onValueChange={(v) => setSelectedKBTargetForPastedText(v as KnowledgeBaseLevel)} className="flex space-x-4">
+                    {KB_LEVELS.filter(l => l !== 'Archive').map(level => (
+                        <div key={`pasted-${level}`} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`rp-${level}`} /><Label htmlFor={`rp-${level}`}>{level}</Label></div>
                     ))}
-                  </RadioGroup>
-                </div>
-
-                <Label htmlFor="pastedTextDescription" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 3: Description (Optional)</Label>
-                <Textarea
-                    id="pastedTextDescription"
-                    value={pastedTextDescription}
-                    onChange={(e) => setPastedTextDescription(e.target.value)}
-                    placeholder="Enter a brief description for this source (for admin use only)..."
-                    rows={2}
-                    className="mt-1"
-                    disabled={anyOperationGloballyInProgress || anyKbLoading}
-                    suppressHydrationWarning
-                />
-
-                <Label htmlFor="pasted-text-content" className="font-medium whitespace-nowrap shrink-0 pt-2">Step 4: Text Content</Label>
-                <Textarea
-                    id="pasted-text-content"
-                    value={pastedText}
-                    onChange={(e) => setPastedText(e.target.value)}
-                    placeholder="Paste your text content here..."
-                    rows={10}
-                    className="md:col-start-2"
-                    disabled={anyOperationGloballyInProgress || anyKbLoading}
-                    suppressHydrationWarning
-                />
+                </RadioGroup>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="pastedTextDescription">Description (Optional)</Label>
+                <Textarea id="pastedTextDescription" value={pastedTextDescription} onChange={(e) => setPastedTextDescription(e.target.value)} placeholder="Briefly describe the text..." />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="pasted-text-content">Text Content</Label>
+                <Textarea id="pasted-text-content" value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Paste your text content here..." rows={10} />
             </div>
         </CardContent>
         <CardFooter>
-            <div className="flex items-center gap-2">
-                <Label className="font-medium whitespace-nowrap shrink-0">Step 5:</Label>
-                <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || anyOperationGloballyInProgress || anyKbLoading}>
-                  {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-                  {isIndexingPastedText ? 'Saving & Processing...' : 'Save & Process Pasted Text'}
-                </Button>
-            </div>
+            <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || anyOperationGloballyInProgress}>
+              {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
+              Save & Process Pasted Text
+            </Button>
         </CardFooter>
     </Card>
 
+    <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb']} className="w-full">
+      {KB_LEVELS.map(level => (
+          <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
+          <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
+          <AccordionContent>
+              {renderKnowledgeBaseSection(level)}
+          </AccordionContent>
+          </AccordionItem>
+      ))}
+    </Accordion>
 
-      <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb']} className="w-full">
-        {KB_LEVELS.map(level => (
-            <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
-            <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
-            <AccordionContent>
-                {renderKnowledgeBaseSection(level)}
-            </AccordionContent>
-            </AccordionItem>
-        ))}
-      </Accordion>
+    {sourceToMoveDetails && (
+      <AlertDialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Move Knowledge Source</AlertDialogTitle><AlertDialogDescription>Move &quot;{sourceToMoveDetails.source.name}&quot; from {sourceToMoveDetails.currentLevel} to:</AlertDialogDescription></AlertDialogHeader>
+          <RadioGroup value={selectedTargetMoveLevel ?? undefined} onValueChange={(v) => setSelectedTargetMoveLevel(v as KnowledgeBaseLevel)} className="my-4 space-y-2">
+            {KB_LEVELS.filter(l => l !== sourceToMoveDetails.currentLevel).map(level => (
+              <div key={`move-${level}`} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`rm-${level}`} /><Label htmlFor={`rm-${level}`}>{level}</Label></div>
+            ))}
+          </RadioGroup>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isMovingSource}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmMoveSource} disabled={!selectedTargetMoveLevel || isMovingSource}>
+              {isMovingSource && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Move
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    )}
 
-      {sourceToMoveDetails && (
-        <AlertDialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Move Knowledge Source</AlertDialogTitle>
-              <AlertDialogDescription>
-                Move &quot;{sourceToMoveDetails.source.name}&quot; from {sourceToMoveDetails.currentLevel} Priority to:
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <RadioGroup
-              value={selectedTargetMoveLevel ?? undefined}
-              onValueChange={(value) => setSelectedTargetMoveLevel(value as KnowledgeBaseLevel)}
-              className="my-4 space-y-2"
-            >
-              {KB_LEVELS.filter(level => level !== sourceToMoveDetails.currentLevel).map(level => (
-                <div key={`move-target-${level}`} className="flex items-center space-x-2">
-                  <RadioGroupItem value={level} id={`r-move-${level.toLowerCase()}`} />
-                  <Label htmlFor={`r-move-${level.toLowerCase()}`}>{level === 'Archive' ? 'Archive' : `${level} Priority`}</Label>
-                </div>
-              ))}
-            </RadioGroup>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setShowMoveDialog(false)} disabled={isMovingSource}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmMoveSource} disabled={!selectedTargetMoveLevel || isMovingSource}>
-                {isMovingSource ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isMovingSource ? 'Moving...' : 'Confirm Move'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-
-      {editingSourceDetails && (
-        <Dialog open={showDescriptionDialog} onOpenChange={(open) => {
-          if (!open) { 
-            setEditingSourceDetails(null); 
-            setDescriptionInput(''); 
-          }
-          setShowDescriptionDialog(open);
-        }}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Edit Description for: {editingSourceDetails.source.name}</DialogTitle>
-              <DialogDescription>
-                This description is for administrative purposes only and is not used by the AI.
-              </DialogDescription>
-            </DialogHeader>
-            <Textarea
-              value={descriptionInput}
-              onChange={(e) => setDescriptionInput(e.target.value)}
-              placeholder="Enter description..."
-              rows={5}
-              className="mt-2"
-              disabled={isSavingDescription}
-              suppressHydrationWarning
-            />
-            <DialogFooter className="mt-4">
-              <DialogClose asChild>
-                  <Button type="button" variant="outline" disabled={isSavingDescription}>Cancel</Button>
-              </DialogClose>
-              <Button onClick={handleSaveDescription} disabled={isSavingDescription}>
-                {isSavingDescription ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {isSavingDescription ? 'Saving...' : 'Save Description'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+    {editingSourceDetails && (
+      <Dialog open={showDescriptionDialog} onOpenChange={setShowDescriptionDialog}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit Description</DialogTitle><DialogDescription>For: {editingSourceDetails.source.name}</DialogDescription></DialogHeader>
+          <Textarea value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} rows={5} disabled={isSavingDescription} />
+          <DialogFooter>
+            <DialogClose asChild><Button type="button" variant="outline" disabled={isSavingDescription}>Cancel</Button></DialogClose>
+            <Button onClick={handleSaveDescription} disabled={isSavingDescription}>
+              {isSavingDescription ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )}
     </div>
   );
 }

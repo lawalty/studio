@@ -1,19 +1,18 @@
 
 'use server';
 /**
- * @fileOverview A flow to index a document by chunking its text,
- * generating vector embeddings, and storing them for diagnostic purposes.
+ * @fileOverview A flow to index a document by chunking its text and writing
+ * the chunks to Firestore, where a vector search extension will handle embedding.
  *
- * - indexDocument - Chunks and embeds text from a document.
+ * - indexDocument - Chunks text and writes it to Firestore.
  * - IndexDocumentInput - The input type for the function.
  * - IndexDocumentOutput - The return type for the function.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { geminiProEmbedder } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
-import { getStorage } from 'firebase-admin/storage';
+import { db } from '@/lib/firebase-admin';
+import { writeBatch, collection } from 'firebase/firestore';
 
 
 const IndexDocumentInputSchema = z.object({
@@ -21,16 +20,15 @@ const IndexDocumentInputSchema = z.object({
   sourceName: z.string().describe('The original filename of the source document.'),
   text: z.string().describe('The full text content of the document to be indexed.'),
   level: z.string().describe('The priority level of the knowledge base (e.g., High, Medium).'),
-  downloadURL: z.string().url().optional().describe('The public download URL for the source file. Omit for sources without a URL, like pasted text.'),
+  downloadURL: z.string().url().optional().describe('The public downloadURL for the source file.'),
 });
 export type IndexDocumentInput = z.infer<typeof IndexDocumentInputSchema>;
 
 const IndexDocumentOutputSchema = z.object({
-  chunksCreated: z.number().describe('The number of chunks the text was split into.'),
-  filesSaved: z.number().describe('The number of embedding files saved to Storage.'),
+  chunksWritten: z.number().describe('The number of text chunks written to Firestore.'),
   sourceId: z.string().describe('The unique ID of the source document that was processed.'),
-  success: z.boolean().describe('Indicates whether the diagnostic test completed without critical errors.'),
-  error: z.string().optional().describe('An error message if the test failed.'),
+  success: z.boolean().describe('Indicates whether the operation completed without errors.'),
+  error: z.string().optional().describe('An error message if the operation failed.'),
 });
 export type IndexDocumentOutput = z.infer<typeof IndexDocumentOutputSchema>;
 
@@ -38,6 +36,7 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
   return indexDocumentFlow(input);
 }
 
+// A simple text splitter function.
 function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: number; chunkOverlap: number }): string[] {
   if (chunkOverlap >= chunkSize) {
     throw new Error("chunkOverlap must be smaller than chunkSize.");
@@ -66,121 +65,61 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    let chunks: string[] = [];
-    console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Starting test for source: ${sourceName} (ID: ${sourceId})`);
-
     try {
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      
-      const storage = getStorage();
-      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-      
-      if (!bucketName) {
-        const errorMsg = 'Firebase Storage bucket name is not configured. Please set NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET in your .env.local file.';
-        console.error(`[indexDocumentFlow - DIAGNOSTIC MODE - CRITICAL] ${errorMsg}`);
-        return { chunksCreated: 0, filesSaved: 0, sourceId, success: false, error: errorMsg };
-      }
-      // Explicitly specify the bucket name for the Admin SDK.
-      const bucket = storage.bucket(bucketName);
-      
-      // Reverted the sanitization change. We will use the raw text.
       const cleanText = text.trim();
-
       if (!cleanText) {
-         const errorMessage = "No readable text content was found in the document after processing. Test aborted.";
-         console.warn(`[indexDocumentFlow - DIAGNOSTIC MODE] ${errorMessage} Document: '${sourceName}'.`);
-         return { chunksCreated: 0, filesSaved: 0, sourceId, success: false, error: errorMessage };
+         const errorMessage = "No readable text content was found in the document. Aborting indexing.";
+         console.warn(`[indexDocumentFlow] ${errorMessage} Document: '${sourceName}'.`);
+         return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
       }
       
-      chunks = simpleSplitter(cleanText, {
-        chunkSize: 1500,
+      const chunks = simpleSplitter(cleanText, {
+        chunkSize: 1500, // A reasonable size for embedding models
         chunkOverlap: 150,
       });
-      console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Split text into ${chunks.length} chunks.`);
-      
-      let successfulSaves = 0;
-      let firstError: string | null = null;
 
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        try {
-          const trimmedChunk = chunk.trim();
-          if (trimmedChunk.length === 0) {
-            console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Chunk ${i+1} is empty after trimming. Skipping.`);
-            continue;
-          }
-          
-          console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Processing chunk ${i+1}/${chunks.length}. Text starts with: "${trimmedChunk.substring(0, 50)}..."`);
-          
-          const result = await ai.embed({
-            embedder: geminiProEmbedder,
-            content: trimmedChunk,
-            taskType: 'RETRIEVAL_DOCUMENT',
-          });
-          
-          if (!result || !result.embedding) {
-            const errorMsg = 'The embedding service returned a null or invalid response. This can happen due to transient network issues or problems with the AI service configuration.';
-            if (!firstError) firstError = errorMsg;
-            console.warn(`[indexDocumentFlow - DIAGNOSTIC MODE] ${errorMsg} (Source: '${sourceName}')`, result);
-            continue; // Skip to the next chunk
-          }
-
-          const embeddingVector = result.embedding;
-          const embeddingAsArray = Array.from(embeddingVector);
-
-          if (embeddingAsArray.length > 0) {
-            console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Embedding successful for chunk ${i+1}. Vector length: ${embeddingAsArray.length}.`);
-            
-            const embeddingFileName = `embeddings/${sourceId}/chunk_${i+1}.json`;
-            const file = bucket.file(embeddingFileName);
-            const contents = JSON.stringify({
-              sourceId,
-              sourceName,
-              level,
-              text: trimmedChunk,
-              embedding: embeddingAsArray,
-              createdAt: new Date().toISOString(),
-              downloadURL: downloadURL || null,
-            }, null, 2);
-            
-            console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Attempting to save chunk ${i+1} to Storage at path: ${embeddingFileName}`);
-            await file.save(contents, { contentType: 'application/json' });
-            console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Successfully saved chunk ${i+1} to Storage.`);
-
-            successfulSaves++;
-          } else {
-            const errorMsg = `The embedding service returned an empty vector for chunk ${i+1}. This can happen if the content is blocked by safety filters.`;
-            console.warn(`[indexDocumentFlow - DIAGNOSTIC MODE] ${errorMsg} (Source: '${sourceName}')`);
-            if (!firstError) firstError = errorMsg;
-          }
-        } catch (error: any) {
-          const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-          const specificError = `Failed to process chunk ${i+1} of '${sourceName}'. Details: ${errorMessage}`;
-          if (!firstError) firstError = specificError;
-          console.error(`[indexDocumentFlow - DIAGNOSTIC MODE] Error on chunk ${i+1} from '${sourceName}':`, error);
-        }
-      }
-      
-      console.log(`[indexDocumentFlow - DIAGNOSTIC MODE] Finished processing. Successful saves: ${successfulSaves}/${chunks.length}.`);
-
-      if (successfulSaves < chunks.length) {
-          const finalError = `Completed with ${chunks.length - successfulSaves} errors. The first error was: ${firstError || 'Unknown error'}`;
-          return { chunksCreated: chunks.length, filesSaved: successfulSaves, sourceId, success: false, error: finalError };
+      if (chunks.length === 0) {
+        return { chunksWritten: 0, sourceId, success: true };
       }
 
-      return { chunksCreated: chunks.length, filesSaved: successfulSaves, sourceId, success: true };
+      console.log(`[indexDocumentFlow] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
+
+      // Use a batched write for efficiency
+      const batch = writeBatch(db);
+      const chunksCollection = collection(db, 'kb_chunks');
+
+      chunks.forEach((chunkText, index) => {
+        const chunkDocRef = doc(chunksCollection); // Auto-generate a new document ID
+        batch.set(chunkDocRef, {
+          sourceId,
+          sourceName,
+          level,
+          text: chunkText,
+          chunkNumber: index + 1,
+          createdAt: new Date().toISOString(),
+          downloadURL: downloadURL || null,
+          // The vector search extension will add the 'embedding' field automatically.
+        });
+      });
+
+      await batch.commit();
+
+      console.log(`[indexDocumentFlow] Successfully wrote ${chunks.length} chunks for source '${sourceName}'.`);
+
+      return {
+        chunksWritten: chunks.length,
+        sourceId,
+        success: true,
+      };
 
     } catch (e: any) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown server error occurred.';
-      console.error(`[indexDocumentFlow - DIAGNOSTIC MODE - CRITICAL] An unexpected error occurred for source '${sourceName}':`, e);
+      console.error(`[indexDocumentFlow] An unexpected error occurred for source '${sourceName}':`, e);
       return {
-        chunksCreated: chunks.length || 0,
-        filesSaved: 0,
+        chunksWritten: 0,
         sourceId,
         success: false,
-        error: `A critical error occurred: ${errorMessage}`,
+        error: `A critical error occurred while writing to Firestore: ${errorMessage}`,
       };
     }
   }
