@@ -134,15 +134,18 @@ const indexDocumentFlow = ai.defineFlow(
           }
         } catch (error: any) {
           failedChunks++;
-          let specificError = `The embedding API call failed: ${error.message || 'Unknown error'}.`;
-          if (error.message && error.message.includes('403 Forbidden')) {
+          // Ensure the error is always a readable string.
+          const errorDetails = error instanceof Error ? error.message : JSON.stringify(error, Object.getOwnPropertyNames(error));
+
+          let specificError = `The embedding API call failed: ${errorDetails || 'Unknown error'}.`;
+          if (errorDetails.includes('403 Forbidden') || errorDetails.includes('PERMISSION_DENIED')) {
               specificError = 'The embedding API call was blocked (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project. Please go to your Google Cloud Console, ensure you have the correct project selected, and enable these APIs. Also, verify that billing is enabled for the project.';
-          } else if (error.message && error.message.includes('API key not valid')) {
+          } else if (errorDetails.includes('API key not valid')) {
               specificError = 'The provided GOOGLE_AI_API_KEY is not valid. Please check the key in your .env.local file and ensure it is correct.';
           }
           const errorMsg = `${specificError}\n\nThis is the first error encountered. Subsequent chunks may also have failed.`;
           if (!firstError) firstError = errorMsg;
-          console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
+          console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'. Full error object:`, error);
         }
       }
       
@@ -163,8 +166,10 @@ const indexDocumentFlow = ai.defineFlow(
 
       return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: true };
     } catch (e: any) {
-      let errorMessage = `A critical error occurred during the indexing process for '${sourceName}': ${e.message || 'Unknown error'}. Please check the server logs for details.`;
-       if (e.message && e.message.includes('403 Forbidden')) {
+      // Ensure the error is always a readable string.
+      const errorDetails = e instanceof Error ? e.message : JSON.stringify(e);
+      let errorMessage = `A critical error occurred during the indexing process for '${sourceName}': ${errorDetails || 'Unknown error'}. Please check the server logs for details.`;
+       if (errorDetails.includes('403 Forbidden') || errorDetails.includes('PERMISSION_DENIED')) {
          errorMessage = `A critical error occurred: The API call was blocked (403 Forbidden). This strongly indicates that the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project, or billing is not set up. Please verify these settings in your Google Cloud Console.`;
       }
       console.error(`[indexDocumentFlow - CRITICAL] Unhandled exception in flow:`, e);
