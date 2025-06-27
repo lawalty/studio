@@ -127,11 +127,15 @@ const indexDocumentFlow = ai.defineFlow(
       let userFriendlyError = `A critical error occurred while writing to Firestore: ${e.message || 'Unknown error'}`;
 
       const errorMessage = e instanceof Error ? e.message.toLowerCase() : JSON.stringify(e).toLowerCase();
-      
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+      const serviceAccountEmail = projectId
+        ? `${projectId}@gcp-sa-apphosting.iam.gserviceaccount.com`
+        : '[Your Project ID]@gcp-sa-apphosting.iam.gserviceaccount.com (Could not determine Project ID from environment variables)';
+
       if (errorMessage.includes('could not refresh access token') || (errorMessage.includes('getting metadata from plugin failed') && errorMessage.includes('500'))) {
-          userFriendlyError = 'Indexing failed due to a Google Cloud authentication error. This usually means the service account for your App Hosting environment is missing the "Service Account Token Creator" IAM role. Please check the permissions in your Google Cloud Console for the service account associated with your project.';
+          userFriendlyError = `Indexing failed due to a Google Cloud authentication error. In your Google Cloud project's "IAM" page, please ensure the following service account has the "Service Account Token Creator" role:\n\n${serviceAccountEmail}`;
       } else if (errorMessage.includes('permission_denied') || errorMessage.includes('7 permission_denied')) {
-          userFriendlyError = 'Indexing failed due to a Firestore permissions error. Please ensure the service account for your App Hosting environment has the "Cloud Datastore User" or "Editor" role in your Google Cloud project.';
+          userFriendlyError = `Indexing failed due to a Firestore permissions error. In your Google Cloud project's "IAM" page, please ensure the following service account has the "Cloud Datastore User" or "Editor" role:\n\n${serviceAccountEmail}`;
       } else if (errorMessage.includes('api key not valid')) {
           userFriendlyError = 'The provided GOOGLE_AI_API_KEY is invalid. Please check the key in your .env.local file and ensure it is correct and has "Cloud Firestore API" permissions enabled.';
       }
