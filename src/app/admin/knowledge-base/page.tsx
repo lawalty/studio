@@ -322,7 +322,7 @@ export default function KnowledgeBasePage() {
         saveSourcesToFirestore(updated, level);
         return updated;
       });
-      toast({ title: "Processing Successful", description: `${sourceToProcess.name} has been indexed with ${indexResult.chunksIndexed} chunks.` });
+      toast({ title: "Indexing Successful", description: `${sourceToProcess.name} has been indexed with ${indexResult.chunksIndexed} chunks.` });
     } else {
       const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
       setSources(prev => {
