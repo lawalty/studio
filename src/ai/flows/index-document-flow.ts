@@ -65,87 +65,96 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    // The embedder is now pre-configured in genkit.ts.
-    // We can use the default instance directly.
-    const embedder = textEmbedding004;
-    
-    const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
+    try {
+      const embedder = textEmbedding004;
+      
+      const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
-    if (!cleanText) {
-       const errorMessage = "No readable text content was found in the document after processing. Indexing aborted.";
-       console.warn(`[indexDocumentFlow] ${errorMessage} Document: '${sourceName}'.`);
-       return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMessage };
-    }
-    
-    const chunks = simpleSplitter(cleanText, {
-      chunkSize: 1500,
-      chunkOverlap: 150,
-    });
-    
-    // Initialize Firestore connection inside the flow for serverless environments.
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    const db = admin.firestore();
-    const batch = db.batch();
-    const chunksCollectionRef = db.collection('kb_chunks');
-    let successfulChunks = 0;
-    let failedChunks = 0;
-    let firstError: string | null = null;
-
-    for (const chunk of chunks) {
-      try {
-        const trimmedChunk = chunk.trim();
-        if (trimmedChunk.length === 0) {
-          continue;
-        }
-        
-        const result = await ai.embed({
-          embedder: embedder,
-          content: trimmedChunk,
-          taskType: 'RETRIEVAL_DOCUMENT',
-        });
-        
-        const embeddingVector = result.embedding;
-        const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
-
-        if (embeddingAsArray.length > 0) {
-          const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
-          batch.set(chunkDocRef, {
-            sourceId,
-            sourceName,
-            level,
-            text: trimmedChunk,
-            embedding: embeddingAsArray,
-            createdAt: new Date(),
-            downloadURL: downloadURL || null,
-          });
-          successfulChunks++;
-        } else {
-          failedChunks++;
-          const fullResponse = JSON.stringify(result, null, 2);
-          const errorMsg = `The embedding service returned an empty or invalid embedding. This can happen if the API is not enabled or if there's a billing issue. Full response: ${fullResponse}`;
-          if (!firstError) firstError = errorMsg;
-          console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
-        }
-      } catch (error: any) {
-        failedChunks++;
-        const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
-        const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY environment variable, API enablement, or billing. Full error: ${fullError}`;
-        if (!firstError) firstError = errorMsg;
-        console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
+      if (!cleanText) {
+         const errorMessage = "No readable text content was found in the document after processing. Indexing aborted.";
+         console.warn(`[indexDocumentFlow] ${errorMessage} Document: '${sourceName}'.`);
+         return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMessage };
       }
-    }
-    
-    if (successfulChunks > 0) {
-        await batch.commit();
-    }
+      
+      const chunks = simpleSplitter(cleanText, {
+        chunkSize: 1500,
+        chunkOverlap: 150,
+      });
+      
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      const db = admin.firestore();
+      const batch = db.batch();
+      const chunksCollectionRef = db.collection('kb_chunks');
+      let successfulChunks = 0;
+      let failedChunks = 0;
+      let firstError: string | null = null;
 
-    if (failedChunks > 0 && successfulChunks === 0) {
-        const finalError = `Failed to embed any chunks for '${sourceName}'. The first error was: ${firstError}`;
-        return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
-    }
+      for (const chunk of chunks) {
+        try {
+          const trimmedChunk = chunk.trim();
+          if (trimmedChunk.length === 0) {
+            continue;
+          }
+          
+          const result = await ai.embed({
+            embedder: embedder,
+            content: trimmedChunk,
+            taskType: 'RETRIEVAL_DOCUMENT',
+          });
+          
+          const embeddingVector = result.embedding;
+          const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
 
-    return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: true };
+          if (embeddingAsArray.length > 0) {
+            const chunkDocRef = chunksCollectionRef.doc(); // Auto-generate ID
+            batch.set(chunkDocRef, {
+              sourceId,
+              sourceName,
+              level,
+              text: trimmedChunk,
+              embedding: embeddingAsArray,
+              createdAt: new Date(),
+              downloadURL: downloadURL || null,
+            });
+            successfulChunks++;
+          } else {
+            failedChunks++;
+            const fullResponse = JSON.stringify(result, null, 2);
+            const errorMsg = `The embedding service returned an empty or invalid embedding. This can happen if the API is not enabled or if there's a billing issue. Full response: ${fullResponse}`;
+            if (!firstError) firstError = errorMsg;
+            console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
+          }
+        } catch (error: any) {
+          failedChunks++;
+          const fullError = JSON.stringify(error, Object.getOwnPropertyNames(error), 2);
+          const errorMsg = `The embedding API call failed: ${error.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY environment variable, API enablement, or billing. Full error: ${fullError}`;
+          if (!firstError) firstError = errorMsg;
+          console.error(`[indexDocumentFlow] Error embedding a chunk from '${sourceName}'.`, error);
+        }
+      }
+      
+      if (successfulChunks > 0) {
+          await batch.commit();
+      }
+
+      if (failedChunks > 0 && successfulChunks === 0) {
+          const finalError = `Failed to embed any chunks for '${sourceName}'. The first error was: ${firstError}`;
+          return { chunksCreated: chunks.length, chunksIndexed: 0, sourceId, success: false, error: finalError };
+      }
+
+      return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: true };
+    } catch (e: any) {
+      const errorMessage = `A critical error occurred during the indexing process for '${sourceName}': ${e.message || 'Unknown error'}. Please check the server logs for details.`;
+      console.error(`[indexDocumentFlow - CRITICAL] Unhandled exception in flow:`, e);
+      return {
+        chunksCreated: 0,
+        chunksIndexed: 0,
+        sourceId,
+        success: false,
+        error: errorMessage,
+      };
+    }
   }
 );
