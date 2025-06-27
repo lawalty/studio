@@ -65,6 +65,8 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     let chunks: string[] = [];
+    console.log(`[indexDocumentFlow] Starting indexing for source: ${sourceName} (ID: ${sourceId})`);
+
     try {
       if (admin.apps.length === 0) {
         admin.initializeApp();
@@ -83,6 +85,7 @@ const indexDocumentFlow = ai.defineFlow(
         chunkSize: 1500,
         chunkOverlap: 150,
       });
+      console.log(`[indexDocumentFlow] Split text into ${chunks.length} chunks.`);
       
       const chunksCollectionRef = db.collection('kb_chunks');
       let successfulChunks = 0;
@@ -93,8 +96,11 @@ const indexDocumentFlow = ai.defineFlow(
         try {
           const trimmedChunk = chunk.trim();
           if (trimmedChunk.length === 0) {
+            console.log(`[indexDocumentFlow] Chunk ${i+1} is empty after trimming. Skipping.`);
             continue;
           }
+          
+          console.log(`[indexDocumentFlow] Processing chunk ${i+1}/${chunks.length}. Text starts with: "${trimmedChunk.substring(0, 50)}..."`);
           
           const result = await ai.embed({
             embedder: geminiProEmbedder,
@@ -111,11 +117,16 @@ const indexDocumentFlow = ai.defineFlow(
             }
           });
           
+          console.log(`[indexDocumentFlow] Raw embedding result for chunk ${i+1}:`, JSON.stringify(result));
+
           const embeddingVector = result.embedding;
           const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
 
           if (embeddingAsArray.length > 0) {
+            console.log(`[indexDocumentFlow] Embedding successful for chunk ${i+1}. Vector length: ${embeddingAsArray.length}.`);
             const chunkDocRef = chunksCollectionRef.doc();
+            
+            console.log(`[indexDocumentFlow] Attempting to save chunk ${i+1} to Firestore...`);
             await chunkDocRef.set({
               sourceId,
               sourceName,
@@ -125,11 +136,13 @@ const indexDocumentFlow = ai.defineFlow(
               createdAt: new Date(),
               downloadURL: downloadURL || null,
             });
+            console.log(`[indexDocumentFlow] Successfully saved chunk ${i+1} to Firestore.`);
+
             successfulChunks++;
           } else {
             const errorMsg = `The embedding service returned an empty vector for chunk ${i+1}. This can happen if the content is blocked by safety filters.`;
+            console.warn(`[indexDocumentFlow] ${errorMsg} (Source: '${sourceName}')`);
             if (!firstError) firstError = errorMsg;
-            console.warn(`[indexDocumentFlow] Skipped a chunk from '${sourceName}' due to empty embedding.`);
           }
         } catch (error: any) {
           const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
@@ -139,6 +152,8 @@ const indexDocumentFlow = ai.defineFlow(
         }
       }
       
+      console.log(`[indexDocumentFlow] Finished processing. Successful chunks: ${successfulChunks}/${chunks.length}.`);
+
       if (successfulChunks < chunks.length) {
           const finalError = `Completed with ${chunks.length - successfulChunks} errors. The first error was: ${firstError || 'Unknown error'}`;
           return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: false, error: finalError };
