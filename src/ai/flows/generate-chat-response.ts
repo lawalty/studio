@@ -12,6 +12,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 import * as admin from 'firebase-admin';
+import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
 
 // Define a schema for individual chat messages for history
 const ChatMessageSchema = z.object({
@@ -75,6 +76,15 @@ const generateChatResponseFlow = ai.defineFlow(
     if (admin.apps.length === 0) {
       admin.initializeApp();
     }
+    const db = admin.firestore();
+
+    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+    const docRef = db.doc(FIRESTORE_KEYS_PATH);
+    const docSnap = await docRef.get();
+    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
+
+    const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
+    const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
     
     // 1. Search the knowledge base for relevant context, with error handling.
     let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
@@ -96,6 +106,7 @@ const generateChatResponseFlow = ai.defineFlow(
     // Define the prompt with the default AI instance.
     const prompt = ai.definePrompt({
       name: 'generateChatResponsePrompt',
+      model: model,
       input: {schema: PromptInputSchema}, // Use the new, more robust schema
       output: {schema: GenerateChatResponseOutputSchema},
       prompt: `You are AI Blair. Your personality and style are defined by the following traits:

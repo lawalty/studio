@@ -12,6 +12,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import * as admin from 'firebase-admin';
+import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
   personaTraits: z
@@ -51,9 +52,19 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     if (admin.apps.length === 0) {
       admin.initializeApp();
     }
+    const db = admin.firestore();
+
+    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+    const docRef = db.doc(FIRESTORE_KEYS_PATH);
+    const docSnap = await docRef.get();
+    const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
+
+    const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
+    const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
     
     const prompt = ai.definePrompt({
       name: 'adjustAiPersonaAndPersonalityPrompt',
+      model: model,
       input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
       output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
       prompt: `You are AI Blair. Your personality settings have just been updated with the following traits:
@@ -66,7 +77,7 @@ Confirmation:`,
     const {output} = await prompt(input);
     if (!output || typeof output.updatedPersonaDescription !== 'string') {
       console.error('[adjustAiPersonaAndPersonalityFlow] Invalid or malformed output from prompt. Expected { updatedPersonaDescription: string }, received:', output);
-      throw new Error('AI model returned an unexpected data structure for persona confirmation.');
+      throw new Error('AI model returned an unexpected data-structure for persona confirmation.');
     }
     return output;
   }

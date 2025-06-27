@@ -70,6 +70,14 @@ const indexDocumentFlow = ai.defineFlow(
       admin.initializeApp();
     }
     const db = admin.firestore();
+
+    const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+    const docRef = db.doc(FIRESTORE_KEYS_PATH);
+    const docSnap = await docRef.get();
+    const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
+
+    const vertexAi = apiKey ? googleAI({ apiKey }) : undefined;
+    const embedder = vertexAi ? vertexAi.embedder('text-embedding-004') : textEmbedding004;
     
     const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
 
@@ -97,9 +105,8 @@ const indexDocumentFlow = ai.defineFlow(
           continue;
         }
         
-        // Use the default 'ai' instance which is configured to use ADC
         const result = await ai.embed({
-          embedder: textEmbedding004,
+          embedder: embedder,
           content: trimmedChunk,
           taskType: 'RETRIEVAL_DOCUMENT',
         });

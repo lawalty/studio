@@ -10,6 +10,9 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
+import * as admin from 'firebase-admin';
+
 
 const ExtractTextFromDocumentUrlInputSchema = z.object({
   documentUrl: z.string().url().describe('The public URL of the document file to process.'),
@@ -28,33 +31,6 @@ export async function extractTextFromDocumentUrl(
   return extractTextFromDocumentUrlFlow(input);
 }
 
-// This is the core of the user's suggestion: Use AI to intelligently extract text.
-const extractTextPrompt = ai.definePrompt({
-  name: 'extractTextFromDocumentUrlPrompt',
-  input: { schema: ExtractTextFromDocumentUrlInputSchema },
-  output: { schema: ExtractTextFromDocumentUrlOutputSchema },
-  prompt: `You are an expert text extraction and cleaning tool. Your task is to extract all human-readable textual content from the document provided.
-{{#if conversationalTopics}}
-To improve the indexing for a conversational AI, use the following topics as a guide to identify the most relevant information and structure. Pay special attention to content related to these topics, but do not omit other relevant information.
-Conversational Topics:
-{{{conversationalTopics}}}
-{{/if}}
-- Identify and extract the main body of text.
-- Ignore headers, footers, page numbers, and irrelevant metadata unless they are part of the main content.
-- Preserve paragraph breaks and essential formatting.
-- Correct common character encoding errors (e.g., replace sequences like 'â€™' with a standard apostrophe ').
-- Remove all other non-readable characters, control characters, and gibberish.
-- Do not add any commentary, preamble, explanation, or summary.
-- Do not wrap the output in code blocks or JSON formatting.
-- Your final output should only be the clean, extracted text, ready for processing.
-
-Document to process: {{media url=documentUrl}}`,
-  model: 'googleai/gemini-1.5-flash-latest',
-  config: {
-    temperature: 0.0, // For deterministic extraction
-  }
-});
-
 const extractTextFromDocumentUrlFlow = ai.defineFlow(
   {
     name: 'extractTextFromDocumentUrlFlow',
@@ -63,6 +39,44 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
   },
   async (input) => {
     try {
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      const db = admin.firestore();
+      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+      const docRef = db.doc(FIRESTORE_KEYS_PATH);
+      const docSnap = await docRef.get();
+      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
+      
+      const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
+      const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
+
+      const extractTextPrompt = ai.definePrompt({
+        name: 'extractTextFromDocumentUrlPrompt',
+        input: { schema: ExtractTextFromDocumentUrlInputSchema },
+        output: { schema: ExtractTextFromDocumentUrlOutputSchema },
+        prompt: `You are an expert text extraction and cleaning tool. Your task is to extract all human-readable textual content from the document provided.
+      {{#if conversationalTopics}}
+      To improve the indexing for a conversational AI, use the following topics as a guide to identify the most relevant information and structure. Pay special attention to content related to these topics, but do not omit other relevant information.
+      Conversational Topics:
+      {{{conversationalTopics}}}
+      {{/if}}
+      - Identify and extract the main body of text.
+      - Ignore headers, footers, page numbers, and irrelevant metadata unless they are part of the main content.
+      - Preserve paragraph breaks and essential formatting.
+      - Correct common character encoding errors (e.g., replace sequences like 'â€™' with a standard apostrophe ').
+      - Remove all other non-readable characters, control characters, and gibberish.
+      - Do not add any commentary, preamble, explanation, or summary.
+      - Do not wrap the output in code blocks or JSON formatting.
+      - Your final output should only be the clean, extracted text, ready for processing.
+
+      Document to process: {{media url=documentUrl}}`,
+        model: model,
+        config: {
+          temperature: 0.0, // For deterministic extraction
+        }
+      });
+
       const { output } = await extractTextPrompt(input);
 
       if (!output || typeof output.extractedText !== 'string') {

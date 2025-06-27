@@ -8,8 +8,9 @@
  * - TestTextGenerationOutput - The return type.
  */
 import { ai } from '@/ai/genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
+import { googleAI, gemini15Flash } from '@genkit-ai/googleai';
 import { z } from 'genkit';
+import * as admin from 'firebase-admin';
 
 const TestTextGenerationOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the generation was successful.'),
@@ -30,9 +31,20 @@ const testTextGenerationFlow = ai.defineFlow(
   },
   async () => {
     try {
-      // Use the default 'ai' instance which is configured to use ADC
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      const db = admin.firestore();
+      const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+      const docRef = db.doc(FIRESTORE_KEYS_PATH);
+      const docSnap = await docRef.get();
+      const apiKey = docSnap.exists() ? docSnap.data()?.googleAiApiKey : null;
+
+      const googleAiPlugin = apiKey ? googleAI({ apiKey }) : undefined;
+      const model = googleAiPlugin ? googleAiPlugin.model('gemini-1.5-flash-latest') : gemini15Flash;
+
       const result = await ai.generate({
-        model: gemini15Flash,
+        model: model,
         prompt: 'Tell me a one-sentence joke.',
       });
 

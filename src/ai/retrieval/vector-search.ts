@@ -56,9 +56,17 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   }
   const db = admin.firestore();
 
-  // 1. Generate an embedding for the user's query using the default 'ai' instance
+  const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+  const docRef = db.doc(FIRESTORE_KEYS_PATH);
+  const docSnap = await docRef.get();
+  const apiKey = docSnap.exists() ? docSnap.data()?.vertexAiApiKey : null;
+  
+  const vertexAi = apiKey ? googleAI({ apiKey }) : undefined;
+  const embedder = vertexAi ? vertexAi.embedder('text-embedding-004') : textEmbedding004;
+
+  // 1. Generate an embedding for the user's query
   const { embedding } = await ai.embed({
-    embedder: textEmbedding004,
+    embedder: embedder,
     content: query,
     taskType: 'RETRIEVAL_QUERY',
   });
