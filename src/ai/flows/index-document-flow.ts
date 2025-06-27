@@ -166,19 +166,31 @@ const indexDocumentFlow = ai.defineFlow(
 
       return { chunksCreated: chunks.length, chunksIndexed: successfulChunks, sourceId, success: true };
     } catch (e: any) {
-      // Ensure the error is always a readable string.
-      const errorDetails = e instanceof Error ? e.message : JSON.stringify(e);
-      let errorMessage = `A critical error occurred during the indexing process for '${sourceName}': ${errorDetails || 'Unknown error'}. Please check the server logs for details.`;
-       if (errorDetails.includes('403 Forbidden') || errorDetails.includes('PERMISSION_DENIED')) {
-         errorMessage = `A critical error occurred: The API call was blocked (403 Forbidden). This strongly indicates that the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project, or billing is not set up. Please verify these settings in your Google Cloud Console.`;
+      // Stringify the error to make it searchable for keywords
+      const errorString = JSON.stringify(e, Object.getOwnPropertyNames(e));
+      console.error(`[indexDocumentFlow - CRITICAL] Full error object:`, errorString);
+
+      let userFriendlyError: string;
+
+      // Check for the specific Firestore PERMISSION_DENIED error
+      if (errorString.includes('PERMISSION_DENIED') && (errorString.includes('firestore') || errorString.includes('datastore') || (e.code === 7))) {
+        userFriendlyError = "Firestore Write Failed (Permission Denied): The server's built-in identity is not authorized to write to the database. This is a one-time setup. Please go to your Google Cloud project's IAM page and grant the 'Cloud Datastore User' role to your App Hosting service account.";
+      } 
+      // Check for an Embedding API PERMISSION_DENIED error
+      else if (errorString.includes('403 Forbidden') || errorString.includes('PERMISSION_DENIED')) {
+          userFriendlyError = 'The embedding API call was blocked (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project, or billing is not set up.';
+      } else {
+        // Generic fallback for any other unexpected errors
+        const clippedError = e.message ? e.message.substring(0, 150) : errorString.substring(0, 150);
+        userFriendlyError = `An unexpected critical error occurred: ${clippedError}... Check server logs for details.`;
       }
-      console.error(`[indexDocumentFlow - CRITICAL] Unhandled exception in flow:`, e);
+
       return {
         chunksCreated: 0,
         chunksIndexed: 0,
         sourceId,
         success: false,
-        error: errorMessage,
+        error: userFriendlyError,
       };
     }
   }
