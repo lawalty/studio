@@ -11,7 +11,6 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { gemini15Flash } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
 
 
 const ExtractTextFromDocumentUrlInputSchema = z.object({
