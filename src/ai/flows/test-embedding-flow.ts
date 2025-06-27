@@ -79,8 +79,14 @@ const testEmbeddingFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
-      const fullError = JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
-      const errorMessage = `The test failed with an unexpected exception. Details: ${e.message || 'Unknown error'}. This often points to an issue with your VERTEX_AI_API_KEY, API enablement, or billing. Full error object: ${fullError}`;
+      let errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}.`;
+
+      if (e.message && e.message.includes('403 Forbidden')) {
+          errorMessage = 'The test failed (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project. Please go to your Google Cloud Console, ensure you have the correct project selected, and enable these APIs. Also, verify that billing is enabled for the project.';
+      } else if (e.message && e.message.includes('API key not valid')) {
+          errorMessage = 'The test failed because the provided VERTEX_AI_API_KEY is not valid. Please check the key in your .env.local file.';
+      }
+      
       return {
           success: false,
           error: errorMessage,
