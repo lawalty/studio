@@ -48,8 +48,7 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     outputSchema: AdjustAiPersonaAndPersonalityOutputSchema,
   },
   async input => {
-    // The AI model is now pre-configured in genkit.ts.
-    // We can use the default instance directly.
+    // The AI model is now pre-configured in genkit.ts to use the environment variable.
     const model = gemini15Flash;
     
     const prompt = ai.definePrompt({

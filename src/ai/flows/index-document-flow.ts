@@ -66,6 +66,7 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
+      // The embedder is now globally configured in genkit.ts to use the environment variable.
       const embedder = textEmbedding004;
       
       const cleanText = text.replace(/[^\\x20-\\x7E\\n\\r\\t]/g, '').trim();
@@ -81,6 +82,7 @@ const indexDocumentFlow = ai.defineFlow(
         chunkOverlap: 150,
       });
       
+      // Initialize Firebase Admin SDK connection.
       if (admin.apps.length === 0) {
         admin.initializeApp();
       }
@@ -98,6 +100,7 @@ const indexDocumentFlow = ai.defineFlow(
             continue;
           }
           
+          // Use the globally configured `ai` instance for embedding.
           const result = await ai.embed({
             embedder: embedder,
             content: trimmedChunk,

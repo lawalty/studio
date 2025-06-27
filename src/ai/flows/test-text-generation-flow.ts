@@ -30,8 +30,7 @@ const testTextGenerationFlow = ai.defineFlow(
   },
   async () => {
     try {
-      // The model is now pre-configured in genkit.ts.
-      // We can use the default instance directly.
+      // The model is now pre-configured in genkit.ts to use GOOGLE_AI_API_KEY.
       const model = gemini15Flash;
 
       const result = await ai.generate({

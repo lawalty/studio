@@ -51,8 +51,7 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  // The embedder is now pre-configured in genkit.ts.
-  // We can use the default instance directly.
+  // The embedder is now pre-configured in genkit.ts to use the environment variable.
   const embedder = textEmbedding004;
 
   // 1. Generate an embedding for the user's query

@@ -31,8 +31,7 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      // The embedder is now pre-configured in genkit.ts.
-      // We can use the default instance directly.
+      // The embedder is now pre-configured in genkit.ts to use GOOGLE_AI_API_KEY.
       const embedder = textEmbedding004;
 
       const result = await ai.embed({
