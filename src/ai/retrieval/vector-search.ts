@@ -8,7 +8,8 @@
 
 import { ai } from '@/ai/genkit';
 import { geminiProEmbedder } from '@genkit-ai/googleai';
-import { db } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+import '@/lib/firebase-admin'; // Ensures the admin SDK is initialized
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -59,6 +60,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   });
   
   // 2. Fetch all chunks from the Firestore collection.
+  const db = getFirestore();
   const chunksCollectionRef = db.collection('kb_chunks');
   const querySnapshot = await chunksCollectionRef.get();
 
