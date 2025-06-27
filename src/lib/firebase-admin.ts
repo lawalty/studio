@@ -7,12 +7,10 @@
  * in the application's lifecycle (singleton pattern), which is a best practice
  * for serverless environments like Next.js on Firebase App Hosting.
  *
- * The exported `db` instance can be safely imported and used in any server-side
- * code (e.g., Genkit flows) to interact with Firestore with proper authentication.
+ * The initialized SDK can then be used by other server-side modules.
  */
 
 import * as admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
 
 // Check if the app is already initialized to prevent errors
 if (admin.apps.length === 0) {
@@ -20,7 +18,3 @@ if (admin.apps.length === 0) {
   // the Admin SDK can automatically detect the service account credentials.
   admin.initializeApp();
 }
-
-const db = getFirestore();
-
-export { db };

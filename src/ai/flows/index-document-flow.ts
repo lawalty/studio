@@ -11,7 +11,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { db } from '@/lib/firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
+import '@/lib/firebase-admin'; // Ensures the admin SDK is initialized
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -83,6 +84,7 @@ const indexDocumentFlow = ai.defineFlow(
       console.log(`[indexDocumentFlow] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
 
       // Use a batched write for efficiency, using the Admin SDK
+      const db = getFirestore();
       const batch = db.batch();
       const chunksCollection = db.collection('kb_chunks');
 
