@@ -53,9 +53,7 @@ interface SearchResult {
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
   // Initialize Firebase Admin SDK with a named instance to avoid conflicts.
   const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
-    admin.initializeApp({
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    }, 'RAG_APP');
+    admin.initializeApp({}, 'RAG_APP');
 
   // 1. Generate an embedding for the user's query.
   const { embedding: queryEmbedding } = await ai.embed({

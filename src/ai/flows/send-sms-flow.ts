@@ -43,9 +43,7 @@ const sendSmsFlow = ai.defineFlow(
     try {
       // Initialize Firebase connection using a named instance to avoid conflicts.
       const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
-        admin.initializeApp({
-            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        }, 'RAG_APP');
+        admin.initializeApp({}, 'RAG_APP');
       
       const db = getFirestore(app);
       const docRef = db.doc(FIRESTORE_KEYS_PATH);

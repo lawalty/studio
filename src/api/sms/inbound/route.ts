@@ -29,9 +29,7 @@ export async function POST(request: NextRequest) {
     let personaTraits = DEFAULT_PERSONA_TRAITS;
     try {
         const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
-            admin.initializeApp({
-                projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-            }, 'RAG_APP');
+            admin.initializeApp({}, 'RAG_APP');
         const db = getFirestore(app);
         const docRef = db.doc(FIRESTORE_SITE_ASSETS_PATH);
         const docSnap = await docRef.get();
