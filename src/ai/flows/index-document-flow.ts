@@ -16,11 +16,6 @@ import { z } from 'genkit';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin SDK if it hasn't been already.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
   sourceName: z.string().describe('The original filename of the source document.'),
@@ -72,7 +67,12 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
+    // Initialize Firebase Admin SDK if it hasn't been already.
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
     const db = getFirestore();
+
     // --- Start of API Key logic ---
     const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
     const docRef = db.doc(FIRESTORE_KEYS_PATH);

@@ -7,11 +7,6 @@ import { sendSms } from '@/ai/flows/send-sms-flow';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin SDK if it hasn't been already.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
 
@@ -21,6 +16,11 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
  * @returns A TwiML response to acknowledge receipt.
  */
 export async function POST(request: NextRequest) {
+  // Initialize Firebase Admin SDK if it hasn't been already.
+  if (admin.apps.length === 0) {
+    admin.initializeApp();
+  }
+
   try {
     const formData = await request.formData();
     const fromPhoneNumber = formData.get('From') as string;

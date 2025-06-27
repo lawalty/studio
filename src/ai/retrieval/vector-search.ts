@@ -12,11 +12,6 @@ import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin SDK if it hasn't been already.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
   if (vecA.length !== vecB.length) {
@@ -58,7 +53,12 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
+  // Initialize Firebase Admin SDK if it hasn't been already.
+  if (admin.apps.length === 0) {
+    admin.initializeApp();
+  }
   const db = getFirestore();
+
   // --- Start of API Key logic ---
   const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
   const docRef = db.doc(FIRESTORE_KEYS_PATH);

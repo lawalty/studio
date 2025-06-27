@@ -14,11 +14,6 @@ import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import twilio from 'twilio';
 
-// Initialize Firebase Admin SDK if it hasn't been already.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 const SendSmsInputSchema = z.object({
@@ -45,6 +40,11 @@ const sendSmsFlow = ai.defineFlow(
     outputSchema: SendSmsOutputSchema,
   },
   async ({ toPhoneNumber, messageBody }) => {
+    // Initialize Firebase Admin SDK if it hasn't been already.
+    if (admin.apps.length === 0) {
+      admin.initializeApp();
+    }
+    
     try {
       // Get Firestore instance from Admin SDK
       const db = getFirestore();
