@@ -23,7 +23,7 @@ config();
  */
 export const ai = genkit({
   plugins: [
-    firebase,
+    firebase(),
     googleAI({
       // Genkit and the googleAI plugin will automatically pick up
       // process.env.GOOGLE_AI_API_KEY if apiKey is unspecified.
