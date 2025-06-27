@@ -13,8 +13,7 @@ import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -67,9 +66,6 @@ const indexDocumentFlow = ai.defineFlow(
     outputSchema: IndexDocumentOutputSchema,
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
-    // The Genkit firebase() plugin handles initialization. Manual init is no longer needed.
-    const db = getFirestore();
-
     // --- Start of API Key logic ---
     const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
     const docRef = db.doc(FIRESTORE_KEYS_PATH);

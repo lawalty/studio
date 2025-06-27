@@ -4,7 +4,7 @@
 import { NextRequest } from 'next/server';
 import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
 import { sendSms } from '@/ai/flows/send-sms-flow';
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase-admin';
 
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
@@ -15,9 +15,6 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
  * @returns A TwiML response to acknowledge receipt.
  */
 export async function POST(request: NextRequest) {
-  // The Genkit firebase() plugin (if used in flows called from here) handles initialization.
-  // We do NOT need to initialize firebase-admin here manually.
-
   try {
     const formData = await request.formData();
     const fromPhoneNumber = formData.get('From') as string;
@@ -26,9 +23,6 @@ export async function POST(request: NextRequest) {
     if (!fromPhoneNumber || !userMessage) {
       return new Response('Missing "From" or "Body" in the request payload.', { status: 400 });
     }
-
-    // Initialize Admin Firestore instance
-    const db = getFirestore();
 
     // 1. Fetch persona traits for the AI to use in its response.
     let personaTraits = DEFAULT_PERSONA_TRAITS;

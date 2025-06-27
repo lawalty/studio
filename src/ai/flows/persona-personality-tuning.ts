@@ -12,7 +12,7 @@
 import {ai} from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase-admin';
 import {z} from 'genkit';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
@@ -51,8 +51,6 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
   },
   async input => {
     // --- Start of API Key logic for Chat ---
-    // The Genkit firebase() plugin handles initialization. Manual init is no longer needed.
-    const db = getFirestore();
     const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
     const docRef = db.doc(FIRESTORE_KEYS_PATH);
     const docSnap = await docRef.get();

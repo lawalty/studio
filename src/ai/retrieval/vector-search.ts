@@ -9,7 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { genkit } from 'genkit';
 import { googleAI, textEmbedding004 } from '@genkit-ai/googleai';
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -52,9 +52,6 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  // The Genkit firebase() plugin handles initialization. Manual init is no longer needed.
-  const db = getFirestore();
-
   // --- Start of API Key logic ---
   const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
   const docRef = db.doc(FIRESTORE_KEYS_PATH);
