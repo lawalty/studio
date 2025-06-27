@@ -1,6 +1,7 @@
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
+import {firebase} from '@genkit-ai/firebase';
 import { config } from 'dotenv';
 
 // Load environment variables from .env.local, .env, etc.
@@ -22,6 +23,7 @@ config();
  */
 export const ai = genkit({
   plugins: [
+    firebase(),
     googleAI({
       // Genkit and the googleAI plugin will automatically pick up
       // process.env.GOOGLE_AI_API_KEY if apiKey is unspecified.
