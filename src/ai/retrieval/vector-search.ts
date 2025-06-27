@@ -58,12 +58,12 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
     return errorMsg;
   }
 
+  // Create a temporary, dedicated client for embeddings using the Vertex key.
   const embeddingClient = genkit({
     plugins: [googleAI({ apiKey: vertexApiKey })],
     logLevel: 'debug',
   });
 
-  // Initialize Firestore connection inside the function for serverless environments.
   if (admin.apps.length === 0) {
     admin.initializeApp();
   }

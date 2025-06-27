@@ -72,6 +72,7 @@ const indexDocumentFlow = genkit.defineFlow(
         return { chunksCreated: 0, chunksIndexed: 0, sourceId, success: false, error: errorMsg };
       }
 
+      // Create a temporary, dedicated client for embeddings using the Vertex key.
       const embeddingClient = genkit({
         plugins: [googleAI({ apiKey: vertexApiKey })],
         logLevel: 'debug',

@@ -40,6 +40,7 @@ const testEmbeddingFlow = genkit.defineFlow(
         };
       }
       
+      // Create a temporary, dedicated client for embeddings using the Vertex key
       const embeddingClient = genkit({
         plugins: [googleAI({ apiKey: vertexApiKey })],
         logLevel: 'debug',
