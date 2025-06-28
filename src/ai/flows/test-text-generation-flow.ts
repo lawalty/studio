@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to test the core text generation functionality.
@@ -51,10 +50,10 @@ const testTextGenerationFlow = ai.defineFlow(
       }
     } catch (e: any) {
       console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
-      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with service account permissions, API enablement, or billing. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
+      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
       return {
           success: false,
-          error: errorMessage,
+          error: `The test failed. This often points to a Google Cloud project configuration issue. Please check your IAM permissions and enabled APIs as described in the README file. Full technical error: ${errorMessage}`,
       };
     }
   }

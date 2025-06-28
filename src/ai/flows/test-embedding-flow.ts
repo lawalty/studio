@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to test the core embedding functionality.
@@ -57,21 +56,11 @@ const testEmbeddingFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error('[testEmbeddingFlow] Exception caught:', e);
-      let errorMessage = "The test failed with an unexpected exception. ";
-      
-      const errorDetails = e instanceof Error ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
-
-      if (errorDetails.includes('403 Forbidden') || errorDetails.includes('PERMISSION_DENIED')) {
-          errorMessage = 'The test failed (403 Forbidden). This usually means the "Vertex AI API" is not enabled in your Google Cloud project or the service account is missing the "Vertex AI User" role. Please check your project configuration.';
-      } else if (errorDetails.includes('api key not valid')) {
-          errorMessage = 'The test failed due to an authentication error. The application uses service account credentials, not API keys. Please check your IAM & API settings in Google Cloud.';
-      } else {
-          errorMessage += `Details: ${errorDetails}`;
-      }
+      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
       
       return {
           success: false,
-          error: errorMessage,
+          error: `The test failed. This often points to a Google Cloud project configuration issue. Please check your IAM permissions and enabled APIs as described in the README file. Full technical error: ${errorMessage}`,
       };
     }
   }

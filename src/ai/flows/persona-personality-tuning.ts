@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -72,7 +71,9 @@ Confirmation:`,
       return output;
     } catch (e: any) {
        console.error('[adjustAiPersonaAndPersonalityFlow] Error during flow:', e);
-       throw new Error(`The AI persona could not be updated. This may be due to a service account or API configuration issue. Original error: ${e.message}`);
+       // Re-throw the original error to provide full context to the client for debugging.
+       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+       throw new Error(`The AI persona could not be updated. Details: ${errorMessage}`);
     }
   }
 );

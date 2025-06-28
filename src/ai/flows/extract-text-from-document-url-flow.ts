@@ -80,27 +80,11 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
       return { extractedText: cleanedText };
 
     } catch (e: any) {
-      console.error('[extractTextFromDocumentUrlFlow] Error during text extraction flow:', e);
-
-      let userFriendlyError = 'An unexpected error occurred during document processing.';
-      const errorMessage = e instanceof Error ? e.message.toLowerCase() : '';
-
-      if (errorMessage.includes('permission_denied') || errorMessage.includes('403')) {
-          userFriendlyError = 'Could not access the document. Please ensure the file URL is public and accessible.';
-      } else if (errorMessage.includes('api key not valid')) {
-          userFriendlyError = 'Authentication failed. The application is configured to use service account credentials, not an API key. Please check your project\'s IAM and API settings.';
-      } else if (errorMessage.includes('file format is not supported') || errorMessage.includes('unsupported file format')) {
-          userFriendlyError = 'The document format is not supported by the AI. Please try a different file type like PDF or a standard text file.';
-      } else if (errorMessage.includes('deadline_exceeded') || errorMessage.includes('timeout')) {
-          userFriendlyError = 'The request to process the document timed out. The file might be too large or the service is temporarily busy. Please try again later.';
-      } else if (errorMessage.includes('invalid argument') || errorMessage.includes('malformed')) {
-          userFriendlyError = 'The AI model could not read the document. It might be corrupted or in an unexpected format.';
-      } else {
-          // Fallback for other errors, but we remove the confusing API key suggestion
-          userFriendlyError = `The document could not be processed. Details: ${e.message || 'Unknown error'}`;
-      }
-
-      throw new Error(userFriendlyError);
+      console.error('[extractTextFromDocumentUrlFlow] A critical error occurred during the text extraction flow:', e);
+      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+      // Re-throw the original error to provide full context to the client for debugging.
+      // This is more helpful than a generic message.
+      throw new Error(`Text extraction failed: ${errorMessage}`);
     }
   }
 );

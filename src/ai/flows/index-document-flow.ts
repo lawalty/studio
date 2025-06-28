@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text and writing
@@ -115,33 +114,17 @@ const indexDocumentFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error(`[indexDocumentFlow] Raw error for source '${sourceName}':`, e);
-      
       const rawError = e instanceof Error ? e.message : JSON.stringify(e);
-      let userFriendlyError = `Indexing failed with a critical error. This is very likely an issue with your Google Cloud Project configuration.
-
-Please check the following and try again:
-
-1.  **REQUIRED APIS ARE ENABLED:**
-    Your project must have these APIs enabled. Click the link to check:
-    - **IAM Service Account Credentials API**: https://console.cloud.google.com/apis/library/iamcredentials.googleapis.com
-    - **Cloud Firestore API**: https://console.cloud.google.com/apis/library/firestore.googleapis.com
-    - **Vertex AI API**: https://console.cloud.google.com/apis/library/aiplatform.googleapis.com
-
-2.  **CORRECT IAM PERMISSIONS:**
-    The service account running this application needs these two roles:
-    - **'Service Account Token Creator'**
-    - **'Cloud Datastore User'**
-
----
-**Full Technical Error Details:**
----
-${rawError}`;
+      
+      // Return the raw, technical error. This is more useful for debugging project configuration issues
+      // than a pre-written friendly message.
+      const detailedError = `Indexing failed. This often points to a Google Cloud project configuration issue. Please check your IAM permissions and enabled APIs as described in the README file. Full technical error: ${rawError}`;
 
       return {
         chunksWritten: 0,
         sourceId,
         success: false,
-        error: userFriendlyError,
+        error: detailedError,
       };
     }
   }
