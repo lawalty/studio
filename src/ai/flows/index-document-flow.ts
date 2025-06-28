@@ -12,7 +12,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -65,11 +64,10 @@ const indexDocumentFlow = ai.defineFlow(
   },
   async ({ sourceId, sourceName, text, level, downloadURL }) => {
     try {
-      // Ensure Firebase Admin SDK is initialized using a named instance
-      // to prevent conflicts in serverless environments. Rely on Application Default Credentials.
-      const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
-        admin.initializeApp({}, 'RAG_APP');
-
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
+      
       const cleanText = text.trim();
       if (!cleanText) {
          const errorMessage = "No readable text content was found in the document. Aborting indexing.";
@@ -88,13 +86,11 @@ const indexDocumentFlow = ai.defineFlow(
 
       console.log(`[indexDocumentFlow] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
 
-      // Use a batched write for efficiency, using the named app instance.
-      const db = getFirestore(app);
+      const db = admin.firestore();
       const batch = db.batch();
       const chunksCollection = db.collection('kb_chunks');
 
       chunks.forEach((chunkText, index) => {
-        // Admin SDK syntax for auto-generating a new document ID
         const chunkDocRef = chunksCollection.doc(); 
         batch.set(chunkDocRef, {
           sourceId,
@@ -104,7 +100,6 @@ const indexDocumentFlow = ai.defineFlow(
           chunkNumber: index + 1,
           createdAt: new Date().toISOString(),
           downloadURL: downloadURL || null,
-          // The vector search extension will add the 'embedding' field automatically.
         });
       });
 
@@ -119,19 +114,28 @@ const indexDocumentFlow = ai.defineFlow(
       };
 
     } catch (e: any) {
-      console.error(`[indexDocumentFlow] An unexpected error occurred for source '${sourceName}':`, e);
-
-      // Construct a detailed, raw error message for the user.
-      const fullErrorDetails = e instanceof Error ? e.message : JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
+      console.error(`[indexDocumentFlow] Raw error for source '${sourceName}':`, e);
       
-      const userFriendlyError = `Indexing failed with a critical error. This is likely an issue with your Google Cloud Project configuration (Permissions, Billing, or APIs) rather than an application bug.
+      const rawError = e instanceof Error ? e.message : JSON.stringify(e);
+      let userFriendlyError = `Indexing failed with a critical error. This is very likely an issue with your Google Cloud Project configuration.
 
-Please review the full technical error details below, as they may contain specific links or instructions from Google.
+Please check the following and try again:
+
+1.  **REQUIRED APIS ARE ENABLED:**
+    Your project must have these APIs enabled. Click the link to check:
+    - **IAM Service Account Credentials API**: https://console.cloud.google.com/apis/library/iamcredentials.googleapis.com
+    - **Cloud Firestore API**: https://console.cloud.google.com/apis/library/firestore.googleapis.com
+    - **Vertex AI API**: https://console.cloud.google.com/apis/library/aiplatform.googleapis.com
+
+2.  **CORRECT IAM PERMISSIONS:**
+    The service account running this application needs these two roles:
+    - **'Service Account Token Creator'**
+    - **'Cloud Datastore User'**
 
 ---
-**Full Error Details:**
+**Full Technical Error Details:**
 ---
-${fullErrorDetails}`;
+${rawError}`;
 
       return {
         chunksWritten: 0,

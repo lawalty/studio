@@ -9,7 +9,6 @@
 import { ai } from '@/ai/genkit';
 import { geminiProEmbedder } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -51,9 +50,11 @@ interface SearchResult {
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
-  // Initialize Firebase Admin SDK with a named instance to avoid conflicts.
-  const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
-    admin.initializeApp({}, 'RAG_APP');
+  // Initialize Firebase Admin SDK if it hasn't been already.
+  // It will use Application Default Credentials from the environment.
+  if (admin.apps.length === 0) {
+    admin.initializeApp();
+  }
 
   // 1. Generate an embedding for the user's query.
   const { embedding: queryEmbedding } = await ai.embed({
@@ -63,7 +64,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   });
   
   // 2. Fetch all chunks from the Firestore collection.
-  const db = getFirestore(app);
+  const db = admin.firestore();
   const chunksCollectionRef = db.collection('kb_chunks');
   const querySnapshot = await chunksCollectionRef.get();
 

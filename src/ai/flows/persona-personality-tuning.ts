@@ -48,7 +48,7 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     outputSchema: AdjustAiPersonaAndPersonalityOutputSchema,
   },
   async input => {
-    // The AI model is now pre-configured in genkit.ts to use the environment variable.
+    // The AI model is now pre-configured in genkit.ts
     const model = gemini15Flash;
     
     const prompt = ai.definePrompt({
@@ -72,7 +72,7 @@ Confirmation:`,
       return output;
     } catch (e: any) {
        console.error('[adjustAiPersonaAndPersonalityFlow] Error during flow:', e);
-       throw new Error(`The AI persona could not be updated. This may be due to an invalid GOOGLE_AI_API_KEY. Original error: ${e.message}`);
+       throw new Error(`The AI persona could not be updated. This may be due to a service account or API configuration issue. Original error: ${e.message}`);
     }
   }
 );

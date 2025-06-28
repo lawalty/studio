@@ -11,7 +11,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
 import twilio from 'twilio';
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
@@ -41,11 +40,12 @@ const sendSmsFlow = ai.defineFlow(
   },
   async ({ toPhoneNumber, messageBody }) => {
     try {
-      // Initialize Firebase connection using a named instance to avoid conflicts.
-      const app = admin.apps.find((a) => a?.name === 'RAG_APP') ||
-        admin.initializeApp({}, 'RAG_APP');
+      // Initialize Firebase Admin SDK if it hasn't been already.
+      if (admin.apps.length === 0) {
+        admin.initializeApp();
+      }
       
-      const db = getFirestore(app);
+      const db = admin.firestore();
       const docRef = db.doc(FIRESTORE_KEYS_PATH);
       const docSnap = await docRef.get();
 

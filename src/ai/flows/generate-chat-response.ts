@@ -153,7 +153,6 @@ Your Conversational Answer as AI Blair:`,
 
     // 4. Call the LLM
     try {
-      // The global 'ai' instance is now configured with the environment variable API key.
       const {output} = await ai.run(prompt, promptInput);
 
       if (!output || typeof output.aiResponse !== 'string') {
@@ -166,7 +165,7 @@ Your Conversational Answer as AI Blair:`,
       return output;
     } catch (error: any) {
       console.error('[generateChatResponseFlow] Error calling AI model:', error);
-      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please check that a valid GOOGLE_AI_API_KEY is set in your application environment and try again.";
+      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please check that the application's service account has the correct IAM permissions and that the necessary Google Cloud APIs are enabled, then try again.";
       if (error.message && error.message.includes('503 Service Unavailable')) {
         userFriendlyMessage = "My apologies, it seems my core systems are a bit busy or temporarily unavailable. Could you please try your message again in a few moments?";
       } else if (error.message && error.message.toLowerCase().includes('network error')) {

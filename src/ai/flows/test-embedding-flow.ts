@@ -62,9 +62,9 @@ const testEmbeddingFlow = ai.defineFlow(
       const errorDetails = e instanceof Error ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
 
       if (errorDetails.includes('403 Forbidden') || errorDetails.includes('PERMISSION_DENIED')) {
-          errorMessage = 'The test failed (403 Forbidden). This usually means the "Generative Language API" and/or "Vertex AI API" are not enabled in your Google Cloud project. Please go to your Google Cloud Console, ensure you have the correct project selected, and enable these APIs. Also, verify that billing is enabled for the project.';
+          errorMessage = 'The test failed (403 Forbidden). This usually means the "Vertex AI API" is not enabled in your Google Cloud project or the service account is missing the "Vertex AI User" role. Please check your project configuration.';
       } else if (errorDetails.includes('API key not valid')) {
-          errorMessage = 'The test failed because the provided GOOGLE_AI_API_KEY is not valid. Please check the key in your .env.local file.';
+          errorMessage = 'The test failed due to an authentication error. The application uses service account credentials, not API keys. Please check your IAM & API settings in Google Cloud.';
       } else {
           errorMessage += `Details: ${errorDetails}`;
       }

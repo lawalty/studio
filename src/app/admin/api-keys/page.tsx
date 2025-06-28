@@ -107,23 +107,16 @@ export default function ApiKeysPage() {
           <>
             <Alert variant="default" className="bg-sky-50 border-sky-200">
               <Terminal className="h-4 w-4 text-sky-700" />
-              <AlertTitle className="text-sky-800 font-bold">Important: Google AI API Key Configuration</AlertTitle>
+              <AlertTitle className="text-sky-800 font-bold">Important: Google AI Authentication</AlertTitle>
               <AlertDescription className="text-sky-700 space-y-3">
                   <p className="font-semibold">
-                    All Google AI features (chat, knowledge base, etc.) are managed by a single API key for improved security and stability.
+                    All Google Cloud and AI features in this app (chat, knowledge base, etc.) use Service Account credentials.
                   </p>
-                  <div>
-                    To enable all AI features, you must create a file named <code className="font-mono bg-gray-200 text-black px-1 py-0.5 rounded">.env.local</code> in the root of your project and add the following line:
-                  </div>
-                  <pre className="my-2 p-3 bg-gray-100 rounded text-sm text-black">
-                    <code>
-                      # This single key requires permissions for Vertex AI, Cloud Firestore, and Generative Language APIs.
-                      <br/>
-                      GOOGLE_AI_API_KEY=your_multi_permission_google_ai_api_key_here
-                    </code>
-                  </pre>
                   <p>
-                    After adding or changing this file, you must **restart the application** for the change to take effect.
+                    You do **not** need to set a `GOOGLE_AI_API_KEY` environment variable. The application automatically and securely authenticates using the permissions of the service account it's running under in your Google Cloud project.
+                  </p>
+                  <p>
+                    Please ensure the service account has the required IAM roles as described in the README file.
                   </p>
               </AlertDescription>
             </Alert>

@@ -30,7 +30,6 @@ const testTextGenerationFlow = ai.defineFlow(
   },
   async () => {
     try {
-      // The global 'ai' instance is now configured with the environment variable API key.
       const result = await ai.generate({
         model: gemini15Flash,
         prompt: 'Tell me a one-sentence joke.',
@@ -47,12 +46,12 @@ const testTextGenerationFlow = ai.defineFlow(
         const fullResponse = JSON.stringify(result, null, 2);
         return {
           success: false,
-          error: `The text generation service returned a successful but empty response. This may indicate a problem with your API key or billing. Full response: ${fullResponse}`,
+          error: `The text generation service returned a successful but empty response. This may indicate a problem with your project configuration or billing. Full response: ${fullResponse}`,
         };
       }
     } catch (e: any) {
       console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
-      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with your GOOGLE_AI_API_KEY, API enablement, or billing. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
+      const errorMessage = `The test failed with an unexpected exception: ${e.message || 'Unknown error'}. This often points to an issue with service account permissions, API enablement, or billing. Full details: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
       return {
           success: false,
           error: errorMessage,

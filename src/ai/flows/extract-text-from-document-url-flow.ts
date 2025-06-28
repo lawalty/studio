@@ -88,7 +88,7 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
       if (errorMessage.includes('permission_denied') || errorMessage.includes('403')) {
           userFriendlyError = 'Could not access the document. Please ensure the file URL is public and accessible.';
       } else if (errorMessage.includes('api key not valid')) {
-          userFriendlyError = 'The provided GOOGLE_AI_API_KEY is invalid. Please check the key in your .env.local file and ensure it is correct.';
+          userFriendlyError = 'Authentication failed. The application is configured to use service account credentials, not an API key. Please check your project\'s IAM and API settings.';
       } else if (errorMessage.includes('file format is not supported') || errorMessage.includes('unsupported file format')) {
           userFriendlyError = 'The document format is not supported by the AI. Please try a different file type like PDF or a standard text file.';
       } else if (errorMessage.includes('deadline_exceeded') || errorMessage.includes('timeout')) {

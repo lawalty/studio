@@ -6,32 +6,32 @@ To get started, take a look at src/app/page.tsx.
 
 ## Environment Variables
 
-This project requires environment variables to connect to services like Firebase and Google AI.
+This project may require environment variables to connect to certain Firebase services.
 
 ### 1. Create `.env.local`
 
 Create a new file named `.env.local` in the root directory of this project. This file is for your local secrets and will not be checked into version control.
 
-### 2. Add Google AI API Key (Required for ALL AI Features)
+### 2. Google Cloud Authentication (IMPORTANT)
 
-For any AI features to work (chat, knowledge base, etc.), you must provide a single, powerful Google AI API Key.
+This application is designed to run on Google Cloud infrastructure (like Firebase App Hosting) and uses **Application Default Credentials (ADC)**. This means it automatically authenticates using the permissions of its runtime service account.
 
-*   Get a key from **[Google AI Studio](https://makersuite.google.com/app/apikey)** or the Google Cloud Console.
-*   **IMPORTANT**: For the application to function correctly, this single key **MUST** have permissions for all three of the following APIs in your Google Cloud project:
-    1.  **Vertex AI API**
-    2.  **Cloud Firestore API**
-    3.  **Generative Language API**
-*   Add the following line to your `.env.local` file, replacing the placeholder with your actual key:
+**You do NOT need to set a `GOOGLE_AI_API_KEY` in your `.env.local` file.**
 
-    ```
-    # This single key powers all AI features including chat and the knowledge base (RAG).
-    # It MUST have permissions for Vertex AI, Cloud Firestore, and Generative Language APIs.
-    GOOGLE_AI_API_KEY=your_multi_permission_google_ai_api_key_here
-    ```
+For the application to function correctly, the service account running the app (e.g., the App Hosting service account) **MUST** have the following IAM roles enabled in your Google Cloud project:
+1.  **Service Account Token Creator**: Allows the service account to create access tokens for other APIs.
+2.  **Cloud Datastore User**: Allows reading from and writing to Firestore.
+3.  **Vertex AI User**: Allows access to Vertex AI models.
+4.  **(Optional) Service Usage Consumer**: May be needed to access certain services.
 
-### 3. Add Firebase Config (Required for Database/Storage)
+Additionally, you must ensure the following APIs are **enabled** in your Google Cloud project:
+1.  **IAM Service Account Credentials API**
+2.  **Vertex AI API**
+3.  **Cloud Firestore API**
 
-For features like saving settings and managing the knowledge base, you need to connect the app to a Firebase project.
+### 3. Add Firebase Config (Required for Database/Storage on Client)
+
+For client-side features to connect to your Firebase project, you need to provide the public Firebase configuration.
 
 *   Add the following lines to your `.env.local` file, replacing the placeholders with your actual Firebase project credentials:
 
