@@ -11,7 +11,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
-import { gemini15Flash } from '@genkit-ai/googleai';
 
 const GenerateSmsResponseInputSchema = z.object({
   userMessage: z.string().describe('The user message to respond to.'),
@@ -53,7 +52,7 @@ const generateSmsResponseFlow = ai.defineFlow(
 
     const prompt = ai.definePrompt({
         name: 'generateSmsResponsePrompt',
-        model: gemini15Flash,
+        model: 'googleai/gemini-1.5-flash-latest',
         input: {schema: SmsPromptInputSchema},
         output: {schema: GenerateSmsResponseOutputSchema},
         prompt: `You are AI Blair. Your personality is: {{{personaTraits}}}

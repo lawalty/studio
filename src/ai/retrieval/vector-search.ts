@@ -7,7 +7,6 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { geminiProEmbedder } from '@genkit-ai/googleai';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
@@ -58,7 +57,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
 
   // 1. Generate an embedding for the user's query.
   const { embedding: queryEmbedding } = await ai.embed({
-    embedder: geminiProEmbedder,
+    embedder: 'googleai/embedding-004',
     content: query,
     taskType: 'RETRIEVAL_QUERY',
   });

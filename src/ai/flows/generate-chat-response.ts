@@ -10,7 +10,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
 
@@ -93,7 +92,7 @@ const generateChatResponseFlow = ai.defineFlow(
     // Define the prompt with the default AI instance.
     const prompt = ai.definePrompt({
       name: 'generateChatResponsePrompt',
-      model: gemini15Flash,
+      model: 'googleai/gemini-1.5-flash-latest',
       input: {schema: PromptInputSchema}, // Use the new, more robust schema
       output: {schema: GenerateChatResponseOutputSchema},
       prompt: `You are AI Blair. Your personality and style are defined by the following traits:

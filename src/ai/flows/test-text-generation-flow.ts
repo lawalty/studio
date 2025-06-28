@@ -7,7 +7,6 @@
  * - TestTextGenerationOutput - The return type.
  */
 import { ai } from '@/ai/genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
 import { z } from 'genkit';
 
 const TestTextGenerationOutputSchema = z.object({
@@ -30,7 +29,7 @@ const testTextGenerationFlow = ai.defineFlow(
   async () => {
     try {
       const result = await ai.generate({
-        model: gemini15Flash,
+        model: 'googleai/gemini-1.5-flash-latest',
         prompt: 'Tell me a one-sentence joke.',
       });
 

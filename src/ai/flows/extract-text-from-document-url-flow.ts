@@ -9,7 +9,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
 
 
 const ExtractTextFromDocumentUrlInputSchema = z.object({
@@ -57,7 +56,7 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
       - Your final output should only be the clean, extracted text, ready for processing.
 
       Document to process: {{media url=documentUrl}}`,
-        model: gemini15Flash, // Use the default model instance
+        model: 'googleai/gemini-1.5-flash-latest',
         config: {
           temperature: 0.0, // For deterministic extraction
         }

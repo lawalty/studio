@@ -10,7 +10,6 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { gemini15Flash } from '@genkit-ai/googleai';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
   personaTraits: z
@@ -47,12 +46,10 @@ const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
     outputSchema: AdjustAiPersonaAndPersonalityOutputSchema,
   },
   async input => {
-    // The AI model is now pre-configured in genkit.ts
-    const model = gemini15Flash;
     
     const prompt = ai.definePrompt({
       name: 'adjustAiPersonaAndPersonalityPrompt',
-      model: model,
+      model: 'googleai/gemini-1.5-flash-latest',
       input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
       output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
       prompt: `You are AI Blair. Your personality settings have just been updated with the following traits:
