@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -339,14 +340,13 @@ export default function KnowledgeBasePage() {
   }, [getSourcesSetter, saveSourcesToFirestore, toast, conversationalTopics]);
 
 
-  const handleUpload = useCallback(async (fileToUpload: File) => {
+  const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, description: string) => {
     if (!fileToUpload) {
       toast({ title: "No file provided", variant: "destructive" });
       return;
     }
 
     setIsCurrentlyUploading(true);
-    const targetLevel = selectedKBTargetForUpload;
     const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
         
@@ -373,7 +373,7 @@ export default function KnowledgeBasePage() {
         size: `${(fileToUpload.size / 1024 / 1024).toFixed(2)} MB`,
         uploadedAt: new Date().toISOString(),
         storagePath: filePath, downloadURL: downloadURL,
-        description: uploadDescription || '',
+        description: description || '',
         extractionStatus: isProcessable ? 'pending' : 'not_applicable',
         indexingStatus: isProcessable ? 'pending' : 'not_applicable',
       };
@@ -401,15 +401,15 @@ export default function KnowledgeBasePage() {
       setUploadDescription('');
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [selectedKBTargetForUpload, getSourcesSetter, saveSourcesToFirestore, uploadDescription, getSourcesState, triggerProcessing, toast]);
+  }, [getSourcesSetter, saveSourcesToFirestore, getSourcesState, triggerProcessing, toast]);
 
   const handleFileUpload = useCallback(() => {
     if (selectedFile) {
-        handleUpload(selectedFile);
+        handleUpload(selectedFile, selectedKBTargetForUpload, uploadDescription);
     } else {
         toast({ title: "No file selected", variant: "destructive" });
     }
-  }, [selectedFile, handleUpload, toast]);
+  }, [selectedFile, handleUpload, toast, selectedKBTargetForUpload, uploadDescription]);
 
 
   const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
@@ -529,12 +529,7 @@ export default function KnowledgeBasePage() {
     const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
     const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
     
-    // Set the selected file and description for the main upload function to use
-    setSelectedFile(textAsFile);
-    setUploadDescription(pastedTextDescription);
-    setSelectedKBTargetForUpload(selectedKBTargetForPastedText);
-    
-    await handleUpload(textAsFile);
+    await handleUpload(textAsFile, selectedKBTargetForPastedText, pastedTextDescription);
     
     setIsIndexingPastedText(false);
     setPastedText('');
@@ -870,3 +865,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
