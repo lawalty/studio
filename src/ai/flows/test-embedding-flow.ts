@@ -63,7 +63,7 @@ const testEmbeddingFlow = ai.defineFlow(
 
       if (errorDetails.includes('403 Forbidden') || errorDetails.includes('PERMISSION_DENIED')) {
           errorMessage = 'The test failed (403 Forbidden). This usually means the "Vertex AI API" is not enabled in your Google Cloud project or the service account is missing the "Vertex AI User" role. Please check your project configuration.';
-      } else if (errorDetails.includes('API key not valid')) {
+      } else if (errorDetails.includes('api key not valid')) {
           errorMessage = 'The test failed due to an authentication error. The application uses service account credentials, not API keys. Please check your IAM & API settings in Google Cloud.';
       } else {
           errorMessage += `Details: ${errorDetails}`;
