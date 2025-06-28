@@ -152,7 +152,7 @@ Your Conversational Answer as AI Blair:`,
 
     // 4. Call the LLM
     try {
-      const {output} = await ai.run(prompt, promptInput);
+      const {output} = await prompt(promptInput);
 
       if (!output || typeof output.aiResponse !== 'string') {
         console.error('[generateChatResponseFlow] Invalid or malformed output from prompt. Expected { aiResponse: string, ... }, received:', output);
