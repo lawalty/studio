@@ -23,15 +23,6 @@ const nextConfig = {
       },
     ],
   },
-  async redirects() {
-    return [
-      {
-        source: '/',
-        destination: '/temp-start',
-        permanent: false,
-      },
-    ]
-  },
 };
 
 module.exports = nextConfig;
