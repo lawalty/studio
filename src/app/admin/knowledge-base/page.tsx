@@ -338,14 +338,12 @@ export default function KnowledgeBasePage() {
     
     setIsProcessingId(null);
   }, [getSourcesSetter, saveSourcesToFirestore, toast, conversationalTopics]);
-
+  
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, description: string) => {
     if (!fileToUpload) {
-      toast({ title: "No file provided", variant: "destructive" });
-      return;
+      throw new Error("No file was provided to the upload handler.");
     }
 
-    setIsCurrentlyUploading(true);
     const config = KB_CONFIG[targetLevel];
     const setSources = getSourcesSetter(targetLevel);
         
@@ -377,34 +375,44 @@ export default function KnowledgeBasePage() {
         indexingStatus: isProcessable ? 'pending' : 'not_applicable',
       };
       
-      const updatedList = [newSource, ...getSourcesState(targetLevel)];
-      setSources(updatedList);
-      const savedToDb = await saveSourcesToFirestore(updatedList, targetLevel);
+      setSources(prev => {
+        const updatedList = [newSource, ...prev];
+        saveSourcesToFirestore(updatedList, targetLevel)
+          .then(savedToDb => {
+            if (!savedToDb) {
+              console.error(`[KBPage - saveSources] Failed to save DB state for ${targetLevel}, but UI was updated.`);
+              toast({ title: "DB Save Failed", description: "UI updated, but backend save failed. Please refresh.", variant: "destructive" });
+            }
+          });
+        return updatedList;
+      });
 
-      if (savedToDb) {
-        toast({ title: "Upload Successful", description: `${fileToUpload.name} saved to ${targetLevel} KB.` });
-        if (isProcessable) {
-          triggerProcessing(newSource, targetLevel);
-        }
-      } else {
-        toast({ title: "DB Save Failed", description: "Reverting upload.", variant: "destructive"});
-        await deleteObject(fileRef).catch(e => console.error("Orphaned file cleanup failed:", e));
-        setSources(prev => prev.filter(s => s.id !== newSource.id));
+      toast({ title: "Upload Successful", description: `${fileToUpload.name} saved to ${targetLevel} KB.` });
+      
+      if (isProcessable) {
+        triggerProcessing(newSource, targetLevel);
       }
-
     } catch (error: any) {
+      console.error("[KBPage - handleUpload] Error:", error);
       toast({ title: "Upload Failed", description: error.message, variant: "destructive"});
-    } finally {
-      setIsCurrentlyUploading(false);
-      setSelectedFile(null);
-      setUploadDescription('');
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      throw error;
     }
-  }, [getSourcesSetter, saveSourcesToFirestore, getSourcesState, triggerProcessing, toast]);
+  }, [getSourcesSetter, saveSourcesToFirestore, triggerProcessing, toast]);
 
-  const handleFileUpload = () => {
+  const handleFileUpload = async () => {
     if (selectedFile) {
-      handleUpload(selectedFile, selectedKBTargetForUpload, uploadDescription);
+      setIsCurrentlyUploading(true);
+      try {
+        await handleUpload(selectedFile, selectedKBTargetForUpload, uploadDescription);
+        // On success, clear the file input form
+        setSelectedFile(null);
+        setUploadDescription('');
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      } catch (error) {
+        // Error toast is already shown in handleUpload
+      } finally {
+        setIsCurrentlyUploading(false);
+      }
     } else {
       toast({ title: "No file selected", variant: "destructive" });
     }
@@ -520,19 +528,32 @@ export default function KnowledgeBasePage() {
     }
     setIsIndexingPastedText(true);
     
-    const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') 
-      ? pastedTextSourceName 
-      : `${pastedTextSourceName}.txt`;
+    try {
+        const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') 
+          ? pastedTextSourceName 
+          : `${pastedTextSourceName}.txt`;
 
-    const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
-    const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
-    
-    await handleUpload(textAsFile, selectedKBTargetForPastedText, pastedTextDescription);
-    
-    setIsIndexingPastedText(false);
-    setPastedText('');
-    setPastedTextSourceName('');
-    setPastedTextDescription('');
+        const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
+        const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
+        
+        await handleUpload(textAsFile, selectedKBTargetForPastedText, pastedTextDescription);
+        
+        toast({ title: "Text Submitted Successfully", description: `Now processing for the ${selectedKBTargetForPastedText} knowledge base.` });
+        setPastedText('');
+        setPastedTextSourceName('');
+        setPastedTextDescription('');
+
+    } catch (error: any) {
+        console.error("[KBPage - handleIndexPastedText] Error:", error);
+        toast({
+            title: "Pasted Text Submission Failed",
+            description: `An error occurred: ${error.message || 'Please check the console for details.'}`,
+            variant: "destructive",
+            duration: 10000,
+        });
+    } finally {
+        setIsIndexingPastedText(false);
+    }
   };
 
   const handleTestKnowledgeBase = async () => {
