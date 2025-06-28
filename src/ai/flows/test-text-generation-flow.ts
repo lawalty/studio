@@ -8,7 +8,6 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { VertexAI } from '@google-cloud/vertexai';
 
 
 const TestTextGenerationOutputSchema = z.object({
@@ -30,21 +29,10 @@ const testTextGenerationFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
-      if (!projectId) {
-        throw new Error('Google Cloud Project ID not found in environment variables. This is required for server-side authentication with Vertex AI.');
-      }
-      
-      const vertex_ai = new VertexAI({ project: projectId, location: 'us-central1' });
-      const model = vertex_ai.getGenerativeModel({
-          model: 'gemini-1.5-flash-001',
+      const { text } = await ai.generate({
+          model: 'googleai/gemini-1.5-flash-latest',
+          prompt: 'Tell me a one-sentence joke.',
       });
-      
-      const result = await model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: 'Tell me a one-sentence joke.' }] }]
-      });
-
-      const text = result.response.candidates?.[0]?.content?.parts?.[0]?.text;
 
       if (text) {
         return {
@@ -52,10 +40,9 @@ const testTextGenerationFlow = ai.defineFlow(
           generatedText: text,
         };
       } else {
-        const fullResponse = JSON.stringify(result, null, 2);
         return {
           success: false,
-          error: `The text generation service returned a successful but empty response. Full response: ${fullResponse}`,
+          error: `The text generation service returned a successful but empty response.`,
         };
       }
     } catch (e: any) {

@@ -9,7 +9,6 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { VertexAI } from '@google-cloud/vertexai';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
@@ -30,35 +29,21 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
-      if (!projectId) {
-        throw new Error('Google Cloud Project ID not found in environment variables. This is required for server-side authentication with Vertex AI.');
-      }
-      
-      const vertex_ai = new VertexAI({ project: projectId, location: 'us-central1' });
-      const model = vertex_ai.getGenerativeModel({
-          model: 'text-embedding-004', // The Vertex AI model name for embedding
+      const embedding = await ai.embed({
+        model: 'googleai/text-embedding-004',
+        content: 'This is a simple test sentence.',
+        taskType: 'RETRIEVAL_DOCUMENT',
       });
 
-      const result = await model.embedContent({
-        requests: [{
-          content: { parts: [{ text: 'This is a simple test sentence.' }] },
-          taskType: 'RETRIEVAL_DOCUMENT',
-        }]
-      });
-      
-      const embeddingVector = result[0]?.embedding?.values;
-
-      if (embeddingVector && embeddingVector.length > 0) {
+      if (embedding && embedding.length > 0) {
         return {
           success: true,
-          embeddingVectorLength: embeddingVector.length,
+          embeddingVectorLength: embedding.length,
         };
       } else {
-        const fullResponse = JSON.stringify(result, null, 2);
         return { 
           success: false, 
-          error: `The embedding service returned an empty or invalid embedding. Full response: ${fullResponse}` 
+          error: `The embedding service returned an empty or invalid embedding.` 
         };
       }
 

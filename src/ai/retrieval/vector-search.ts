@@ -4,8 +4,7 @@
  *
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
  */
-
-import { VertexAI } from '@google-cloud/vertexai';
+import { ai } from '@/ai/genkit';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
@@ -53,24 +52,14 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   if (admin.apps.length === 0) {
     admin.initializeApp();
   }
-
-  const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
-  if (!projectId) {
-    throw new Error('Google Cloud Project ID not found in environment variables. This is required for server-side authentication with Vertex AI.');
-  }
   
-  // 1. Generate an embedding for the user's query using the Vertex AI SDK.
-  const vertex_ai = new VertexAI({ project: projectId, location: 'us-central1' });
-  const model = vertex_ai.getGenerativeModel({ model: 'text-embedding-004' });
-  
-  const result = await model.embedContent({
-      requests: [{
-          content: { parts: [{ text: query }] },
-          taskType: 'RETRIEVAL_QUERY',
-      }]
+  // 1. Generate an embedding for the user's query using the Genkit AI SDK.
+  const queryEmbedding = await ai.embed({
+      model: 'googleai/text-embedding-004',
+      content: query,
+      taskType: 'RETRIEVAL_QUERY',
   });
-  
-  const queryEmbedding = result[0]?.embedding?.values;
+
   if (!queryEmbedding) {
       throw new Error("Failed to generate an embedding for the search query.");
   }
