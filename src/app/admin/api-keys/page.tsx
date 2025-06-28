@@ -109,13 +109,10 @@ export default function ApiKeysPage() {
               <AlertTitle className="text-sky-800 font-bold">Important: Google AI Authentication</AlertTitle>
               <AlertDescription className="text-sky-700 space-y-3">
                   <p className="font-semibold">
-                    All Google Cloud and AI features in this app (chat, knowledge base, etc.) use Service Account credentials.
+                    All Google Cloud and AI features in this app (chat, knowledge base, etc.) require a `GOOGLE_AI_API_KEY`.
                   </p>
                   <p>
-                    You do **not** need to set a `GOOGLE_AI_API_KEY` environment variable. The application automatically and securely authenticates using the permissions of the service account it's running under in your Google Cloud project.
-                  </p>
-                  <p>
-                    Please ensure the service account has the required IAM roles as described in the README file.
+                    Please create a `.env.local` file in the root of your project and add your API key to it, as described in the updated README file.
                   </p>
               </AlertDescription>
             </Alert>

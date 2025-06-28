@@ -72,7 +72,7 @@ const extractTextFromDocumentUrlFlow = ai.defineFlow(
       console.error('[extractTextFromDocumentUrlFlow] A critical error occurred:', e);
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred during text extraction.';
       // Provide a more detailed error message for easier debugging.
-      throw new Error(`Text extraction failed. This might be due to an issue with permissions, networking, or the document itself. Please check the service account IAM roles and enabled APIs in your Google Cloud project. Full technical error: ${errorMessage}`);
+      throw new Error(`Text extraction failed. This might be due to an issue with permissions, networking, or the document itself. Please check that the GOOGLE_AI_API_KEY is set correctly. Full technical error: ${errorMessage}`);
     }
   }
 );

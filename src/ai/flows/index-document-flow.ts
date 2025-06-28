@@ -118,7 +118,7 @@ const indexDocumentFlow = ai.defineFlow(
       
       // Return the raw, technical error. This is more useful for debugging project configuration issues
       // than a pre-written friendly message.
-      const detailedError = `Indexing failed. This often points to a Google Cloud project configuration issue. Please check your IAM permissions and enabled APIs as described in the README file. Full technical error: ${rawError}`;
+      const detailedError = `Indexing failed. This may be due to an issue with your GOOGLE_AI_API_KEY or Firestore permissions. Full technical error: ${rawError}`;
 
       return {
         chunksWritten: 0,

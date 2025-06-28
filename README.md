@@ -6,28 +6,24 @@ To get started, take a look at src/app/page.tsx.
 
 ## Environment Variables
 
-This project may require environment variables to connect to certain Firebase services.
+This project requires environment variables to connect to Google AI and Firebase services.
 
 ### 1. Create `.env.local`
 
 Create a new file named `.env.local` in the root directory of this project. This file is for your local secrets and will not be checked into version control.
 
-### 2. Google Cloud Authentication (IMPORTANT)
+### 2. Add Google AI API Key (Required)
 
-This application is designed to run on Google Cloud infrastructure (like Firebase App Hosting) and uses **Application Default Credentials (ADC)**. This means it automatically and securely authenticates using the permissions of its runtime service account.
+For the application's AI features to function correctly, you must provide a Google AI API key.
 
-**You do NOT need to set a `GOOGLE_AI_API_KEY` in your `.env.local` file.**
+*   Go to **[Google AI Studio](https://aistudio.google.com/app/apikey)** to create and copy your API key.
+*   Add the key to your `.env.local` file:
 
-For the application to function correctly, the service account running the app (e.g., the App Hosting service account) **MUST** have the following IAM roles enabled in your Google Cloud project:
-1.  **Service Account Token Creator**: Allows the service account to create access tokens for other APIs.
-2.  **Cloud Datastore User**: Allows reading from and writing to Firestore.
-3.  **Vertex AI User**: Allows access to Vertex AI models.
-4.  **(Optional) Service Usage Consumer**: May be needed to access certain services.
+    ```
+    GOOGLE_AI_API_KEY=your_api_key_here
+    ```
 
-Additionally, you must ensure the following APIs are **enabled** in your Google Cloud project:
-1.  **IAM Service Account Credentials API** (`iamcredentials.googleapis.com`)
-2.  **Vertex AI API** (`aiplatform.googleapis.com`)
-3.  **Cloud Firestore API** (`firestore.googleapis.com`)
+*   **IMPORTANT**: Ensure the API key is associated with a Google Cloud project that has the **"Vertex AI API"** enabled.
 
 ### 3. Add Firebase Config (Required for Database/Storage on Client)
 

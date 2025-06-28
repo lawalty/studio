@@ -53,7 +53,7 @@ const testEmbeddingFlow = ai.defineFlow(
       
       return {
           success: false,
-          error: `The test failed. This often points to a Google Cloud project configuration issue. Please check your IAM permissions and enabled APIs as described in the README file. Full technical error: ${errorMessage}`,
+          error: `The test failed. This often points to an issue with your GOOGLE_AI_API_KEY or project configuration. Full technical error: ${errorMessage}`,
       };
     }
   }
