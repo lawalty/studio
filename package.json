@@ -59,6 +59,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@opentelemetry/exporter-jaeger": "^1.2.0",
     "@types/dotenv": "^8.2.0",
     "@types/node": "^20",
     "@types/react": "^18",
