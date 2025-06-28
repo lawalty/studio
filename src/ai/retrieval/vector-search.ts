@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Performs vector-based semantic search on the knowledge base.
@@ -6,7 +5,7 @@
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
  */
 
-import { ai } from '@/ai/genkit';
+import { VertexAI } from '@google-cloud/vertexai';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
@@ -55,12 +54,26 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
     admin.initializeApp();
   }
 
-  // 1. Generate an embedding for the user's query.
-  const { embedding: queryEmbedding } = await ai.embed({
-    embedder: 'googleai/embedding-004',
-    content: query,
-    taskType: 'RETRIEVAL_QUERY',
+  const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+  if (!projectId) {
+    throw new Error('Google Cloud Project ID not found in environment variables. This is required for server-side authentication with Vertex AI.');
+  }
+  
+  // 1. Generate an embedding for the user's query using the Vertex AI SDK.
+  const vertex_ai = new VertexAI({ project: projectId, location: 'us-central1' });
+  const model = vertex_ai.getGenerativeModel({ model: 'text-embedding-004' });
+  
+  const result = await model.embedContent({
+      requests: [{
+          content: { parts: [{ text: query }] },
+          taskType: 'RETRIEVAL_QUERY',
+      }]
   });
+  
+  const queryEmbedding = result[0]?.embedding?.values;
+  if (!queryEmbedding) {
+      throw new Error("Failed to generate an embedding for the search query.");
+  }
   
   // 2. Fetch all chunks from the Firestore collection.
   const db = admin.firestore();
@@ -78,8 +91,8 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   for (const chunk of allChunks) {
     // The 'embedding' field is added by the Firestore Vector Search extension.
     // If it doesn't exist, the extension hasn't processed this chunk yet.
-    if (chunk.embedding && Array.isArray(chunk.embedding) && chunk.embedding.length > 0) {
-      const similarity = cosineSimilarity(queryEmbedding, chunk.embedding);
+    if (chunk.embedding && Array.isArray(chunk.embedding.values) && chunk.embedding.values.length > 0) {
+      const similarity = cosineSimilarity(queryEmbedding, chunk.embedding.values);
       
       // Filter out results that are not very similar.
       if (similarity > 0.7) { 

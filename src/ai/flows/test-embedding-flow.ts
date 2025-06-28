@@ -9,7 +9,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-
+import { VertexAI } from '@google-cloud/vertexai';
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),
@@ -30,26 +30,35 @@ const testEmbeddingFlow = ai.defineFlow(
   },
   async () => {
     try {
-      const result = await ai.embed({
-        embedder: 'googleai/embedding-004',
-        content: 'This is a simple test sentence.',
-        taskType: 'RETRIEVAL_DOCUMENT',
+      const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+      if (!projectId) {
+        throw new Error('Google Cloud Project ID not found in environment variables. This is required for server-side authentication with Vertex AI.');
+      }
+      
+      const vertex_ai = new VertexAI({ project: projectId, location: 'us-central1' });
+      const model = vertex_ai.getGenerativeModel({
+          model: 'text-embedding-004', // The Vertex AI model name for embedding
       });
 
-      const embeddingVector = result.embedding;
-      const embeddingAsArray = embeddingVector ? Array.from(embeddingVector) : [];
+      const result = await model.embedContent({
+        requests: [{
+          content: { parts: [{ text: 'This is a simple test sentence.' }] },
+          taskType: 'RETRIEVAL_DOCUMENT',
+        }]
+      });
+      
+      const embeddingVector = result[0]?.embedding?.values;
 
-      if (embeddingAsArray.length > 0) {
-        // SUCCESS!
+      if (embeddingVector && embeddingVector.length > 0) {
         return {
           success: true,
-          embeddingVectorLength: embeddingAsArray.length,
+          embeddingVectorLength: embeddingVector.length,
         };
       } else {
         const fullResponse = JSON.stringify(result, null, 2);
         return { 
           success: false, 
-          error: `The embedding service returned an empty or invalid embedding. This may indicate a problem with the API configuration, project billing, or content being blocked by safety filters. Full response: ${fullResponse}` 
+          error: `The embedding service returned an empty or invalid embedding. Full response: ${fullResponse}` 
         };
       }
 
