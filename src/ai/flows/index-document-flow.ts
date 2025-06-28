@@ -120,44 +120,18 @@ const indexDocumentFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error(`[indexDocumentFlow] An unexpected error occurred for source '${sourceName}':`, e);
-      let userFriendlyError = `A critical error occurred while writing to Firestore: ${e.message || 'Unknown error'}`;
 
-      const errorMessage = e instanceof Error ? e.message.toLowerCase() : JSON.stringify(e).toLowerCase();
-      const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-
-      const appHostingSA = projectId
-        ? `${projectId}@gcp-sa-apphosting.iam.gserviceaccount.com`
-        : 'YOUR_PROJECT_ID@gcp-sa-apphosting.iam.gserviceaccount.com (Could not determine Project ID from .env.local)';
+      // Construct a detailed, raw error message for the user.
+      const fullErrorDetails = e instanceof Error ? e.message : JSON.stringify(e, Object.getOwnPropertyNames(e), 2);
       
-      const computeSA = projectId
-        ? `${projectId}-compute@developer.gserviceaccount.com`
-        : 'YOUR_PROJECT_ID-compute@developer.gserviceaccount.com (Could not determine Project ID from .env.local)';
+      const userFriendlyError = `Indexing failed with a critical error. This is likely an issue with your Google Cloud Project configuration (Permissions, Billing, or APIs) rather than an application bug.
 
-      if (errorMessage.includes('could not refresh access token') || (errorMessage.includes('getting metadata from plugin failed') && errorMessage.includes('500'))) {
-          userFriendlyError = `Indexing failed due to a Google Cloud authentication error. This means the service account for your backend is missing permissions.
+Please review the full technical error details below, as they may contain specific links or instructions from Google.
 
-ACTION REQUIRED: In your Google Cloud project's "IAM & Admin" page, you must grant the 'Service Account Token Creator' role to the correct principal.
-
-- If you are using Firebase App Hosting (default for this app), the service account is:
-  ${appHostingSA}
-
-- If running on Google Compute Engine, the service account is likely:
-  ${computeSA}
-
-Please grant the 'Service Account Token Creator' role to the correct service account for your environment.`;
-      } else if (errorMessage.includes('permission_denied') || errorMessage.includes('7 permission_denied')) {
-          userFriendlyError = `Indexing failed due to a Firestore permissions error. This means the service account can authenticate, but cannot write to the database.
-
-ACTION REQUIRED: In your Google Cloud project's "IAM & Admin" page, ensure the correct service account has the 'Cloud Datastore User' or 'Editor' role.
-
-- If you are using Firebase App Hosting (default for this app), the service account is:
-  ${appHostingSA}
-
-- If running on Google Compute Engine, the service account is likely:
-  ${computeSA}`;
-      } else if (errorMessage.includes('api key not valid')) {
-          userFriendlyError = 'The provided GOOGLE_AI_API_KEY is invalid. Please check the key in your .env.local file and ensure it is correct and has "Cloud Firestore API" permissions enabled.';
-      }
+---
+**Full Error Details:**
+---
+${fullErrorDetails}`;
 
       return {
         chunksWritten: 0,
