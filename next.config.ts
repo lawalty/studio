@@ -1,7 +1,5 @@
-
-import type {NextConfig} from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   /* config options here */
   images: {
     remotePatterns: [
@@ -22,9 +20,9 @@ const nextConfig: NextConfig = {
         hostname: 'i.imgur.com',
         port: '',
         pathname: '/**',
-      }
+      },
     ],
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
