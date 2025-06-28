@@ -339,7 +339,6 @@ export default function KnowledgeBasePage() {
     setIsProcessingId(null);
   }, [getSourcesSetter, saveSourcesToFirestore, toast, conversationalTopics]);
 
-
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, description: string) => {
     if (!fileToUpload) {
       toast({ title: "No file provided", variant: "destructive" });
@@ -403,14 +402,13 @@ export default function KnowledgeBasePage() {
     }
   }, [getSourcesSetter, saveSourcesToFirestore, getSourcesState, triggerProcessing, toast]);
 
-  const handleFileUpload = useCallback(() => {
+  const handleFileUpload = () => {
     if (selectedFile) {
-        handleUpload(selectedFile, selectedKBTargetForUpload, uploadDescription);
+      handleUpload(selectedFile, selectedKBTargetForUpload, uploadDescription);
     } else {
-        toast({ title: "No file selected", variant: "destructive" });
+      toast({ title: "No file selected", variant: "destructive" });
     }
-  }, [selectedFile, handleUpload, toast, selectedKBTargetForUpload, uploadDescription]);
-
+  };
 
   const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
     const setSources = getSourcesSetter(level);
@@ -515,7 +513,7 @@ export default function KnowledgeBasePage() {
     setShowDescriptionDialog(false);
   }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
   
-  const handleIndexPastedText = useCallback(async () => {
+  const handleIndexPastedText = async () => {
     if (!pastedText.trim() || !pastedTextSourceName.trim()) {
       toast({ title: "Missing Information", description: "Please provide a source name and text to index.", variant: "destructive" });
       return;
@@ -535,8 +533,7 @@ export default function KnowledgeBasePage() {
     setPastedText('');
     setPastedTextSourceName('');
     setPastedTextDescription('');
-  }, [pastedText, pastedTextSourceName, pastedTextDescription, selectedKBTargetForPastedText, toast, handleUpload]);
-
+  };
 
   const handleTestKnowledgeBase = async () => {
     if (!testQuery.trim()) {
@@ -865,5 +862,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
