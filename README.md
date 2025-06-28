@@ -14,7 +14,7 @@ Create a new file named `.env.local` in the root directory of this project. This
 
 ### 2. Google Cloud Authentication (IMPORTANT)
 
-This application is designed to run on Google Cloud infrastructure (like Firebase App Hosting) and uses **Application Default Credentials (ADC)**. This means it automatically authenticates using the permissions of its runtime service account.
+This application is designed to run on Google Cloud infrastructure (like Firebase App Hosting) and uses **Application Default Credentials (ADC)**. This means it automatically and securely authenticates using the permissions of its runtime service account.
 
 **You do NOT need to set a `GOOGLE_AI_API_KEY` in your `.env.local` file.**
 
@@ -25,9 +25,9 @@ For the application to function correctly, the service account running the app (
 4.  **(Optional) Service Usage Consumer**: May be needed to access certain services.
 
 Additionally, you must ensure the following APIs are **enabled** in your Google Cloud project:
-1.  **IAM Service Account Credentials API**
-2.  **Vertex AI API**
-3.  **Cloud Firestore API**
+1.  **IAM Service Account Credentials API** (`iamcredentials.googleapis.com`)
+2.  **Vertex AI API** (`aiplatform.googleapis.com`)
+3.  **Cloud Firestore API** (`firestore.googleapis.com`)
 
 ### 3. Add Firebase Config (Required for Database/Storage on Client)
 
