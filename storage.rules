@@ -1,10 +1,11 @@
 rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Allow public read/write access to all documents.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow public read and write access to all files.
     // This is suitable for a demo application without user authentication.
     // For a production app, you would implement more secure rules.
-    match /{document=**} {
+    match /{allPaths=**} {
       allow read, write;
     }
   }
