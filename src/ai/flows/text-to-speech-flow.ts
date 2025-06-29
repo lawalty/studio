@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Converts text to speech using Gemini TTS.
@@ -61,11 +60,13 @@ const textToSpeechFlow = ai.defineFlow(
       const { media } = await ai.generate({
         model: 'googleai/gemini-2.5-flash-preview-tts',
         prompt: query,
-        custom: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Algenib' },
+        config: {
+          custom: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Algenib' },
+              },
             },
           },
         },
