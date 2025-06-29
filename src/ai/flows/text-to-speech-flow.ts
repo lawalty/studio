@@ -60,17 +60,15 @@ const textToSpeechFlow = ai.defineFlow(
     try {
       const { media } = await ai.generate({
         model: 'googleai/gemini-2.5-flash-preview-tts',
-        config: {
-          custom: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Algenib' },
-              },
+        prompt: query,
+        custom: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Algenib' },
             },
           },
         },
-        prompt: query,
       });
 
       if (!media) {
