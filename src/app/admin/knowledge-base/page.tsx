@@ -279,9 +279,9 @@ export default function KnowledgeBasePage() {
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
           ...s,
-          extractionStatus: 'failed',
+          extractionStatus: 'failed' as const,
           extractionError: errorMessage,
-          indexingStatus: 'failed',
+          indexingStatus: 'failed' as const,
           indexingError: 'Did not attempt indexing due to extraction failure.'
         } : s);
         saveSourcesToFirestore(updated, level);
