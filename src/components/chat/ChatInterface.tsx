@@ -20,7 +20,7 @@ import { doc, getDoc } from 'firebase/firestore';
 export interface Message {
   id: string;
   text: string;
-  sender: 'user' | 'ai';
+  sender: 'user' | 'model';
   timestamp: number;
   pdfReference?: {
     fileName: string;
@@ -155,7 +155,7 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
   const lastMessage = allMessages[allMessages.length - 1];
   const secondLastMessage = allMessages[allMessages.length - 2];
 
-  if (lastMessage.sender === 'ai') {
+  if (lastMessage.sender === 'model') {
     if (secondLastMessage.sender === 'user') {
       return [secondLastMessage, lastMessage];
     } else {
@@ -226,7 +226,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const accumulatedTranscriptRef = useRef<string>('');
   const sendTranscriptTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const addMessage = useCallback((text: string, sender: 'user' | 'ai', pdfReference?: Message['pdfReference'], audioDurationMs?: number): string => {
+  const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference'], audioDurationMs?: number): string => {
     const newMessageId = Date.now().toString() + Math.random();
     setMessages((prevMessages) => [
       ...prevMessages,
@@ -420,7 +420,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       if (isListeningRef.current && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
       if (sendTranscriptTimerRef.current) { clearTimeout(sendTranscriptTimerRef.current); sendTranscriptTimerRef.current = null; }
       setIsSpeaking(false);
-      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'ai')) {
+      if (!isAcknowledgement && messagesRef.current.length <= 1 && messagesRef.current.find(m => m.sender === 'model')) {
         setShowPreparingGreeting(true);
       }
 
@@ -533,7 +533,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
     const historyForGenkit = messagesRef.current
         .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
-        .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] }));
+        .map(msg => ({ role: msg.sender, parts: [{ text: msg.text }] }));
 
     try {
       const flowInput: GenerateChatResponseInput = {
@@ -555,7 +555,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       const onSpeechActuallyStarting = () => {
         setTimeout(() => {
           if (!isEndingSessionRef.current || (isEndingSessionRef.current && result.shouldEndConversation)) {
-            newAiMessageId = addMessage(result.aiResponse, 'ai', result.pdfReference);
+            newAiMessageId = addMessage(result.aiResponse, 'model', result.pdfReference);
             currentAiMessageIdRef.current = newAiMessageId;
           }
           setIsSendingMessage(false);
@@ -575,7 +575,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       const errorMessage = "Sorry, I encountered an error. Please try again.";
       let errorAiMessageId: string | null = null;
       if (!isEndingSessionRef.current) {
-        errorAiMessageId = addMessage(errorMessage, 'ai');
+        errorAiMessageId = addMessage(errorMessage, 'model');
         setIsSendingMessage(false);
         if (communicationModeRef.current !== 'text-only') {
           await speakTextRef.current(errorMessage, errorAiMessageId, undefined, false);
@@ -690,8 +690,8 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                 let endMsgId: string | null = null;
                 const onEndSpeechStart = () => {
                     setTimeout(() => {
-                        if (!messagesRef.current.some(m => m.text === endMsg && m.sender === 'ai')) {
-                            endMsgId = addMessage(endMsg, 'ai');
+                        if (!messagesRef.current.some(m => m.text === endMsg && m.sender === 'model')) {
+                            endMsgId = addMessage(endMsg, 'model');
                             currentAiMessageIdRef.current = endMsgId;
                         }
                     }, 50);
@@ -703,8 +703,8 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                 let promptMsgId: string | null = null;
                 const onPromptSpeechStart = () => {
                     setTimeout(() => {
-                       if (!messagesRef.current.some(m => m.text === promptMessage && m.sender === 'ai')) {
-                           promptMsgId = addMessage(promptMessage, 'ai');
+                       if (!messagesRef.current.some(m => m.text === promptMessage && m.sender === 'model')) {
+                           promptMsgId = addMessage(promptMessage, 'model');
                            currentAiMessageIdRef.current = promptMsgId;
                         }
                     }, 50);
@@ -861,7 +861,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         const onGreetingSpeechActuallyStarting = () => {
           setTimeout(() => {
             if (!isEndingSessionRef.current) {
-              greetingMessageId = addMessage(greetingToUse, 'ai');
+              greetingMessageId = addMessage(greetingToUse, 'model');
               currentAiMessageIdRef.current = greetingMessageId;
             }
           }, 50);
