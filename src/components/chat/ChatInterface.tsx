@@ -502,7 +502,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       }
       tryBrowserFallback();
     });
-  }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, communicationMode, hasConversationEnded]);
+  }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, hasConversationEnded]);
 
 
   const speakTextRef = useRef(speakText);
@@ -730,7 +730,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         sendTranscriptTimerRef.current = null;
       }
     };
-  }, [communicationMode, responsePauseTimeMs, toast, addMessage, isSendingMessage, hasConversationEnded]);
+  }, [responsePauseTimeMs, toast, addMessage, isSendingMessage, hasConversationEnded]);
 
 
   const handleEndChatManually = () => {
