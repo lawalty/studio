@@ -255,7 +255,7 @@ export default function KnowledgeBasePage() {
     let extractedText: string | null = null;
     let extractionFailed = false;
 
-    setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending', indexingStatus: 'pending', extractionError: '', indexingError: '' } : s));
+    setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending' as const, indexingStatus: 'pending' as const, extractionError: '', indexingError: '' } : s));
 
     try {
       if (sourceToProcess.type === 'text') {
@@ -269,7 +269,7 @@ export default function KnowledgeBasePage() {
         extractedText = result.extractedText;
       }
       
-      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success', extractionError: '' } : s));
+      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success' as const, extractionError: '' } : s));
       toast({ title: "Text Extracted Successfully", description: `Now writing chunks for ${sourceToProcess.name}...` });
 
     } catch (error: any) {
@@ -297,7 +297,7 @@ export default function KnowledgeBasePage() {
 
     if (!extractedText || extractedText.trim() === '') {
       const errorMessage = "Text content is missing or empty after extraction, cannot index.";
-      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'failed', indexingError: errorMessage, extractionStatus: 'failed', extractionError: errorMessage } : s));
+      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'failed' as const, indexingError: errorMessage, extractionStatus: 'failed' as const, extractionError: errorMessage } : s));
       toast({ title: "Indexing Failed", description: errorMessage, variant: "destructive" });
       setIsProcessingId(null);
       return;
@@ -315,7 +315,7 @@ export default function KnowledgeBasePage() {
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
           ...s,
-          indexingStatus: 'indexed',
+          indexingStatus: 'indexed' as const,
           indexingError: ''
         } : s);
         saveSourcesToFirestore(updated, level);
@@ -327,7 +327,7 @@ export default function KnowledgeBasePage() {
       setSources(prev => {
         const updated = prev.map(s => s.id === sourceToProcess.id ? {
           ...s,
-          indexingStatus: 'failed',
+          indexingStatus: 'failed' as const,
           indexingError: errorMessage
         } : s);
         saveSourcesToFirestore(updated, level);
@@ -883,3 +883,4 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
