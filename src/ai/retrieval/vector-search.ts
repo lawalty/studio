@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Performs vector-based semantic search on the knowledge base.
@@ -57,7 +58,6 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
       content: query,
-      custom: { taskType: 'RETRIEVAL_QUERY' },
   });
 
   const queryEmbeddingVector = embeddingResponse[0]?.embedding;
