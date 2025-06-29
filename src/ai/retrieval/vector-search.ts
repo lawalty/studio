@@ -54,14 +54,16 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   }
   
   // 1. Generate an embedding for the user's query using the Genkit AI SDK.
-  const queryEmbedding = await ai.embed({
-      model: 'googleai/text-embedding-004',
+  const embeddingResponse = await ai.embed({
+      embedder: 'googleai/text-embedding-004',
       content: query,
       taskType: 'RETRIEVAL_QUERY',
   });
 
-  if (!queryEmbedding) {
-      throw new Error("Failed to generate an embedding for the search query.");
+  const queryEmbeddingVector = embeddingResponse[0]?.embedding;
+
+  if (!queryEmbeddingVector || queryEmbeddingVector.length === 0) {
+      throw new Error("Failed to generate a valid embedding for the search query.");
   }
   
   // 2. Fetch all chunks from the Firestore collection.
@@ -81,7 +83,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
     // The 'embedding' field is added by the Firestore Vector Search extension.
     // If it doesn't exist, the extension hasn't processed this chunk yet.
     if (chunk.embedding && Array.isArray(chunk.embedding.values) && chunk.embedding.values.length > 0) {
-      const similarity = cosineSimilarity(queryEmbedding, chunk.embedding.values);
+      const similarity = cosineSimilarity(queryEmbeddingVector, chunk.embedding.values);
       
       // Filter out results that are not very similar.
       if (similarity > 0.7) { 
