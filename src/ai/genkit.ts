@@ -11,9 +11,11 @@ import {googleAI} from '@genkit-ai/googleai';
  * use the `GOOGLE_AI_API_KEY` from your `.env.local` file.
  */
 
+export const googleAi = googleAI();
+
 export const ai = genkit({
   plugins: [
-    googleAI(), // This will automatically look for GOOGLE_AI_API_KEY in the environment.
+    googleAi, // This will automatically look for GOOGLE_AI_API_KEY in the environment.
   ],
   // In-memory tracing for simplicity. For production, you might configure
   // a persistent trace store like Firebase.
