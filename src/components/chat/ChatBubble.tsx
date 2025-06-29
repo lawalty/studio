@@ -120,11 +120,12 @@ export default function ChatBubble({
           if (isNewline) {
             fullContent.push(<br key={`br-${index}`} />);
           } else if (isBold) {
-            const lastElement = fullContent[fullContent.length - 1] as React.ReactElement;
-            if (lastElement && lastElement.type === 'strong' && React.isValidElement(lastElement)) {
-              fullContent[fullContent.length - 1] = React.cloneElement(lastElement, {
-                children: lastElement.props.children + char,
-              });
+            const lastElement = fullContent[fullContent.length - 1];
+            // This is the corrected, type-safe logic
+            if (lastElement && typeof lastElement === 'object' && (lastElement as React.ReactElement).type === 'strong') {
+              const element = lastElement as React.ReactElement;
+              const currentChildren = element.props.children;
+              fullContent[fullContent.length - 1] = <strong key={element.key}>{currentChildren + char}</strong>;
             } else {
               fullContent.push(<strong key={`str-${index}`}>{char}</strong>);
             }
