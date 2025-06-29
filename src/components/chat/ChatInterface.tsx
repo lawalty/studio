@@ -197,7 +197,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const router = useRouter();
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
 
   const isSpeakingRef = useRef(isSpeaking);
@@ -444,7 +444,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
               const duration = Date.now() - startTime;
               commonCleanupAndResolve(duration);
           };
-          utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+          utterance.onerror = (event: any) => {
             if (event.error !== 'interrupted' && event.error !== 'aborted' && event.error !== 'canceled') console.error("Browser TTS Error:", event.error);
             commonCleanupAndResolve(0);
           };
@@ -587,7 +587,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
 
   useEffect(() => {
-    let recognition: SpeechRecognition | null = null;
+    let recognition: any | null = null;
     const initializeSpeechRecognition = () => {
         if (typeof window === 'undefined') { return; }
         const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -604,7 +604,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         recognition.interimResults = true;
         recognition.lang = 'en-US';
 
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
+        recognition.onresult = (event: any) => {
           if (isSpeakingRef.current || isSendingMessage) {
             if(recognitionRef.current && isListeningRef.current) try { recognitionRef.current.abort(); } catch(e){}
             return;
@@ -641,7 +641,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           }
         };
 
-        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        recognition.onerror = (event: any) => {
           setIsListening(false);
           if (sendTranscriptTimerRef.current) {
             clearTimeout(sendTranscriptTimerRef.current);
