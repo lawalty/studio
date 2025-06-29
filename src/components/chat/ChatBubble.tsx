@@ -73,7 +73,7 @@ export default function ChatBubble({
       return;
     }
 
-    const shouldAnimate = message.sender === 'ai' && isNewlyAddedAiMessage;
+    const shouldAnimate = message.sender === 'model' && isNewlyAddedAiMessage;
 
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -164,7 +164,7 @@ export default function ChatBubble({
 
 
   const renderPdfLink = () => {
-    if (message.sender === 'ai' && message.pdfReference?.downloadURL) {
+    if (message.sender === 'model' && message.pdfReference?.downloadURL) {
       return (
         <a
           href={message.pdfReference.downloadURL}
