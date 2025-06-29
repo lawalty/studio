@@ -174,9 +174,9 @@ export default function KnowledgeBasePage() {
         id: s.id, name: s.name, type: s.type, size: s.size,
         uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
         description: s.description || '',
-        extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
+        extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
         extractionError: s.extractionError || '',
-        indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
+        indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
         indexingError: s.indexingError || '',
       }));
 
@@ -210,9 +210,9 @@ export default function KnowledgeBasePage() {
         const fetchedSources = (docSnap.data().sources as KnowledgeSource[]).map(s => ({
           ...s,
           description: s.description || '',
-          extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
+          extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
           extractionError: s.extractionError || '',
-          indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' : 'not_applicable'),
+          indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
           indexingError: s.indexingError || '',
         }));
         setSources(fetchedSources);
@@ -371,8 +371,8 @@ export default function KnowledgeBasePage() {
         uploadedAt: new Date().toISOString(),
         storagePath: filePath, downloadURL: downloadURL,
         description: description || '',
-        extractionStatus: isProcessable ? 'pending' : 'not_applicable',
-        indexingStatus: isProcessable ? 'pending' : 'not_applicable',
+        extractionStatus: isProcessable ? 'pending' as const : 'not_applicable' as const,
+        indexingStatus: isProcessable ? 'pending' as const : 'not_applicable' as const,
       };
       
       setSources(prev => {
@@ -883,4 +883,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
