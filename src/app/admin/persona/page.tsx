@@ -292,7 +292,7 @@ export default function PersonaPage() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><Bot /> AI Persona &amp; Main Settings</CardTitle>
           <CardDescription>
-            Define AI Blair's conversational style, traits, avatars, and other core interaction settings.
+            Define AI Blair&apos;s conversational style, traits, avatars, and other core interaction settings.
             All settings here are saved together in Firestore.
           </CardDescription>
         </CardHeader>
@@ -407,7 +407,7 @@ export default function PersonaPage() {
                         suppressHydrationWarning
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                        Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, >1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
+                        Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, &gt;1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
                     </p>
                 </div>
               </div>

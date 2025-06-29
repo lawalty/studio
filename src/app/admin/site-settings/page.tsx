@@ -219,7 +219,7 @@ export default function SiteSettingsPage() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Splash Screen Welcome Message</CardTitle>
           <CardDescription>
-            Customize the main welcome message displayed on the application's splash screen.
+            Customize the main welcome message displayed on the application&apos;s splash screen.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -237,7 +237,7 @@ export default function SiteSettingsPage() {
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Default: "{DEFAULT_SPLASH_WELCOME_MESSAGE}"
+                Default: &quot;{DEFAULT_SPLASH_WELCOME_MESSAGE}&quot;
               </p>
             </>
           )}
@@ -263,7 +263,7 @@ export default function SiteSettingsPage() {
               </div>
           ) : (
             <div className="flex flex-col items-center space-y-4">
-              <Label htmlFor="splash-image-upload" className="font-medium self-start sr-only">Splash Image Preview & Upload</Label>
+              <Label htmlFor="splash-image-upload" className="font-medium self-start sr-only">Splash Image Preview &amp; Upload</Label>
               <Image
                 src={splashImagePreview}
                 alt="Splash Screen Preview"
@@ -301,7 +301,7 @@ export default function SiteSettingsPage() {
         <CardHeader>
             <CardTitle className="font-headline flex items-center gap-2"><Construction /> Maintenance Mode</CardTitle>
             <CardDescription>
-            Enable this to show an "Updates Are Coming" page to all users, preventing access to the chat.
+            Enable this to show an &quot;Updates Are Coming&quot; page to all users, preventing access to the chat.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -312,7 +312,7 @@ export default function SiteSettingsPage() {
                 <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
                     <div className="flex-1 space-y-1">
                         <Label htmlFor="maintenanceModeEnabled" className="font-medium">
-                            Enable "Updates Are Coming" Page
+                            Enable &quot;Updates Are Coming&quot; Page
                         </Label>
                         <p className="text-xs text-muted-foreground">
                             If ON, all users will be redirected to this page.
@@ -338,7 +338,7 @@ export default function SiteSettingsPage() {
                         disabled={isLoadingData || !maintenanceModeEnabled}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                    This message will be shown to users. Default: "{DEFAULT_MAINTENANCE_MESSAGE}"
+                    This message will be shown to users. Default: &quot;{DEFAULT_MAINTENANCE_MESSAGE}&quot;
                     </p>
                 </div>
             </>
@@ -355,7 +355,7 @@ export default function SiteSettingsPage() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><Type className="h-5 w-5" /> AI Speech Text Typing Animation</CardTitle>
           <CardDescription>
-            Configure the letter-by-letter typing animation effect for AI Blair's speech.
+            Configure the letter-by-letter typing animation effect for AI Blair&apos;s speech.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

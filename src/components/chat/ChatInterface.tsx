@@ -502,7 +502,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       }
       tryBrowserFallback();
     });
-  }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, communicationMode]);
+  }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleActualAudioStart, handleAudioProcessEnd, communicationMode, hasConversationEnded]);
 
 
   const speakTextRef = useRef(speakText);
@@ -730,7 +730,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         sendTranscriptTimerRef.current = null;
       }
     };
-  }, [communicationMode, responsePauseTimeMs, toast, addMessage]);
+  }, [communicationMode, responsePauseTimeMs, toast, addMessage, isSendingMessage, hasConversationEnded]);
 
 
   const handleEndChatManually = () => {
@@ -1000,7 +1000,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
-          {!hasConversationEnded && <Image {...imageProps} />}
+          {!hasConversationEnded && <Image {...imageProps} alt="AI Blair Avatar" />}
           {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}</h2>}
            <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {audioOnlyLiveIndicator()}
@@ -1038,7 +1038,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
           <Card className="w-full shadow-xl">
             <CardContent className="pt-6 flex flex-col items-center">
-              <Image {...imageProps} />
+              <Image {...imageProps} alt="AI Blair Avatar" />
               <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}</h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
                 <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
