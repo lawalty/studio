@@ -57,7 +57,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
       content: query,
-      taskType: 'RETRIEVAL_QUERY',
+      custom: { taskType: 'RETRIEVAL_QUERY' },
   });
 
   const queryEmbeddingVector = embeddingResponse[0]?.embedding;

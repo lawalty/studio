@@ -32,7 +32,7 @@ const testEmbeddingFlow = ai.defineFlow(
       const response = await ai.embed({
         embedder: 'googleai/text-embedding-004',
         content: 'This is a simple test sentence.',
-        taskType: 'RETRIEVAL_DOCUMENT',
+        custom: { taskType: 'RETRIEVAL_DOCUMENT' },
       });
       
       const embedding = response[0]?.embedding;
