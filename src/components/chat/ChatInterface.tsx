@@ -478,8 +478,14 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
               commonCleanupAndResolve(durationMs);
               if (audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
             };
-            audio.onerror = (e) => {
-              console.warn("HTMLAudioElement.onerror triggered:", (e.target as HTMLAudioElement)?.error?.message);
+            audio.onerror = (e: Event | string) => {
+              let errorMessage = "Unknown audio error";
+              if (typeof e !== 'string' && e.target) {
+                errorMessage = (e.target as HTMLAudioElement)?.error?.message || "Audio element error";
+              } else if (typeof e === 'string') {
+                errorMessage = e;
+              }
+              console.warn("HTMLAudioElement.onerror triggered:", errorMessage);
               tryBrowserFallback();
             };
             const playPromise = audio.play();
