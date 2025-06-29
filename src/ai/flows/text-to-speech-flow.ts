@@ -61,14 +61,11 @@ const textToSpeechFlow = ai.defineFlow(
         model: googleAi.model('gemini-2.5-flash-preview-tts'),
         prompt: query,
         config: {
-          // TTS-specific options have been moved out of config
-          // General options like temperature would go here
-        },
-        // TTS-specific options are top-level properties for this model type
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'echo' },
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'echo' },
+            },
           },
         },
       });
