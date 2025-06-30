@@ -35,11 +35,11 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-// import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
-// import { indexDocument } from '@/ai/flows/index-document-flow';
-// import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
-// import { testEmbedding } from '@/ai/flows/test-embedding-flow';
-// import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
+import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
+import { indexDocument } from '@/ai/flows/index-document-flow';
+import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
+import { testEmbedding } from '@/ai/flows/test-embedding-flow';
+import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -111,7 +111,7 @@ export default function KnowledgeBasePage() {
   const [isLoadingLow, setIsLoadingLow] = useState(true);
   const [isLoadingArchive, setIsLoadingArchive] = useState(true);
 
-  // const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
+  const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadDescription, setUploadDescription] = useState('');
@@ -226,16 +226,89 @@ export default function KnowledgeBasePage() {
     }
     setIsLoading(false);
   }, [toast, getIsLoadingSetter, getSourcesSetter]); 
+  
+  useEffect(() => {
+    const fetchConversationalTopics = async () => {
+        try {
+          const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists() && docSnap.data()?.conversationalTopics) {
+              setConversationalTopics(docSnap.data()?.conversationalTopics);
+          }
+        } catch (error) {
+            console.warn("Could not fetch conversational topics for text extraction.", error);
+        }
+    };
+    fetchConversationalTopics();
+  }, []);
 
   // Effect for fetching all KB levels
   useEffect(() => {
     KB_LEVELS.forEach(level => fetchSourcesForLevel(level));
   }, [fetchSourcesForLevel]);
 
+  const updateSourceStatus = useCallback(async (
+    id: string,
+    level: KnowledgeBaseLevel,
+    updates: Partial<Pick<KnowledgeSource, 'extractionStatus' | 'extractionError' | 'indexingStatus' | 'indexingError'>>
+  ) => {
+    const sources = getSourcesState(level);
+    const setSources = getSourcesSetter(level);
+    
+    const updatedSources = sources.map(s => s.id === id ? { ...s, ...updates } : s);
+    setSources(updatedSources);
+    await saveSourcesToFirestore(updatedSources, level);
+  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore]);
+
   const triggerProcessing = useCallback(async (sourceToProcess: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    toast({ title: "AI Functionality Disabled", description: "Processing is temporarily disabled.", variant: "destructive"});
-    return;
-  }, [toast]);
+    if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) {
+      console.log(`[KBPage] Skipping processing for non-text file: ${sourceToProcess.name}`);
+      return;
+    }
+    setIsProcessingId(sourceToProcess.id);
+    let extractedText = '';
+    
+    // Step 1: Extract Text
+    try {
+      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'pending', extractionError: '', indexingStatus: 'pending', indexingError: '' });
+      const { extractedText: text, } = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: conversationalTopics });
+      extractedText = text;
+      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'success' });
+    } catch (e: any) {
+      console.error(`[KBPage - triggerProcessing - Extraction] Error for source ${sourceToProcess.name}:`, e);
+      const errorMessage = e.message || 'An unknown error occurred during text extraction.';
+      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'failed', extractionError: errorMessage });
+      toast({ title: "Text Extraction Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
+      setIsProcessingId(null);
+      return; // Stop if extraction fails
+    }
+
+    // Step 2: Index Text
+    try {
+      await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'pending' });
+      const { chunksWritten, success, error } = await indexDocument({
+        sourceId: sourceToProcess.id,
+        sourceName: sourceToProcess.name,
+        text: extractedText,
+        level: level,
+        downloadURL: sourceToProcess.downloadURL,
+      });
+
+      if (success) {
+        await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'indexed' });
+        toast({ title: "Indexing Complete", description: `Wrote ${chunksWritten} chunks for ${sourceToProcess.name}.` });
+      } else {
+        throw new Error(error || "An unknown indexing error occurred.");
+      }
+    } catch (e: any) {
+      console.error(`[KBPage - triggerProcessing - Indexing] Error for source ${sourceToProcess.name}:`, e);
+      const errorMessage = e.message || 'An unknown error occurred during indexing.';
+      await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'failed', indexingError: errorMessage });
+      toast({ title: "Indexing Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
+    } finally {
+      setIsProcessingId(null);
+    }
+  }, [updateSourceStatus, toast, conversationalTopics]);
   
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, description: string) => {
     if (!fileToUpload) {
@@ -454,21 +527,87 @@ export default function KnowledgeBasePage() {
   };
 
   const handleTestKnowledgeBase = async () => {
-    toast({ title: "AI Functionality Disabled", description: "Testing is temporarily disabled.", variant: "destructive"});
+    if (!testQuery) {
+        toast({ title: "No Query", description: "Please enter a test question.", variant: "destructive" });
+        return;
+    }
+    setIsTesting(true);
+    setTestResult('');
+    try {
+        const { retrievedContext } = await testKnowledgeBase({ query: testQuery });
+        setTestResult(retrievedContext);
+    } catch (e: any) {
+        console.error("[KBPage - Test] Error:", e);
+        setTestResult(`An error occurred: ${e.message}`);
+        toast({ title: "Test Failed", description: e.message, variant: "destructive", duration: 10000 });
+    }
+    setIsTesting(false);
   };
 
   const handleTestEmbedding = async () => {
-    toast({ title: "AI Functionality Disabled", description: "Testing is temporarily disabled.", variant: "destructive"});
+    setIsTestingEmbedding(true);
+    try {
+      const { success, error, embeddingVectorLength } = await testEmbedding();
+      if (success) {
+        toast({ title: "Embedding Test Successful", description: `Successfully generated an embedding with ${embeddingVectorLength} dimensions.` });
+      } else {
+        toast({ title: "Embedding Test Failed", description: error, variant: "destructive", duration: 10000 });
+      }
+    } catch (e: any) {
+      toast({ title: "Embedding Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
+    }
+    setIsTestingEmbedding(false);
   };
 
   const handleTestGeneration = async () => {
-    toast({ title: "AI Functionality Disabled", description: "Testing is temporarily disabled.", variant: "destructive"});
+    setIsTestingGeneration(true);
+    try {
+      const { success, error, generatedText } = await testTextGeneration();
+      if (success) {
+        toast({ title: "Text Generation Test Successful", description: `AI response: "${generatedText}"` });
+      } else {
+        toast({ title: "Text Generation Test Failed", description: error, variant: "destructive", duration: 10000 });
+      }
+    } catch (e: any) {
+      toast({ title: "Generation Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
+    }
+    setIsTestingGeneration(false);
   };
 
   const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    return <span className="text-xs text-muted-foreground">Disabled</span>;
+    const isThisSourceProcessing = isProcessingId === source.id;
+    const processable = ['pdf', 'text', 'document'].includes(source.type);
+
+    if (isThisSourceProcessing) {
+      return <div className="flex items-center gap-2 text-blue-600"><Loader2 className="h-4 w-4 animate-spin" /><span>Processing...</span></div>;
+    }
+    if (!processable) {
+      return <span className="text-xs text-muted-foreground">Not Applicable</span>;
+    }
+
+    const hasFailed = source.extractionStatus === 'failed' || source.indexingStatus === 'failed';
+    const isIndexed = source.indexingStatus === 'indexed';
+
+    return (
+      <div className="flex items-center gap-2">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress}>
+                    <RefreshCw className={`h-4 w-4 ${isIndexed ? 'text-green-600' : hasFailed ? 'text-destructive' : ''}`} />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{isIndexed ? "Successfully indexed. Click to re-process." : hasFailed ? "Processing failed. Click to retry." : "Ready to process."}</p>
+              {source.extractionError && <p className="text-destructive text-xs">Extraction: {source.extractionError}</p>}
+              {source.indexingError && <p className="text-destructive text-xs">Indexing: {source.indexingError}</p>}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+    );
   };
 
 
@@ -544,16 +683,16 @@ export default function KnowledgeBasePage() {
           <CardHeader>
             <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Core Service Diagnostics</CardTitle>
             <CardDescription>
-                Use these buttons to perform direct, isolated tests of the core Google AI services. This helps confirm your API key and project setup are correct, bypassing the RAG pipeline. (Temporarily Disabled)
+                Use these buttons to perform direct, isolated tests of the core Google AI services. This helps confirm your API key and project setup are correct, bypassing the RAG pipeline.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-4">
-              <Button onClick={handleTestGeneration} disabled={true}>
-                  <MessageSquareText className="mr-2 h-4 w-4" />
+              <Button onClick={handleTestGeneration} disabled={anyOperationGloballyInProgress}>
+                  {isTestingGeneration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
                   Test Text Generation
               </Button>
-              <Button onClick={handleTestEmbedding} disabled={true}>
-                  <Beaker className="mr-2 h-4 w-4" />
+              <Button onClick={handleTestEmbedding} disabled={anyOperationGloballyInProgress}>
+                  {isTestingEmbedding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Beaker className="mr-2 h-4 w-4" />}
                   Test Embedding Service
               </Button>
           </CardContent>
@@ -563,22 +702,22 @@ export default function KnowledgeBasePage() {
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
               <CardDescription>
-                  Enter a question to see what context the AI would retrieve from the knowledge base. This tests the full RAG pipeline, including your indexed data in Firestore. (Temporarily Disabled)
+                  Enter a question to see what context the AI would retrieve from the knowledge base. This tests the full RAG pipeline, including your indexed data in Firestore.
               </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
               <div className="space-y-2">
                   <Label htmlFor="test-query">Test Question</Label>
-                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?" suppressHydrationWarning disabled={true}/>
+                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?" suppressHydrationWarning disabled={anyOperationGloballyInProgress}/>
               </div>
-              <Button onClick={handleTestKnowledgeBase} disabled={true}>
-                  <SearchCheck className="mr-2 h-4 w-4" />
+              <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery}>
+                  {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
                   Test Retrieval
               </Button>
-              {testResult && (
+              {(isTesting || testResult) && (
                   <div className="space-y-2 pt-4">
                       <Label>Retrieved Context for AI</Label>
-                      <Textarea readOnly value={testResult} className="h-64 font-mono text-xs bg-muted" suppressHydrationWarning />
+                      <Textarea readOnly value={isTesting ? "Testing..." : testResult} className="h-64 font-mono text-xs bg-muted" suppressHydrationWarning />
                   </div>
               )}
           </CardContent>

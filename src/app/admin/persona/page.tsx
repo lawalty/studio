@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
 import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2 } from 'lucide-react';
-// import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
+import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -138,10 +138,22 @@ export default function PersonaPage() {
 
   const handleSaveAllSettings = async () => {
     setIsSaving(true);
-
-    // AI functionality is temporarily disabled.
-    toast({ title: "AI Disabled", description: "Saving settings to Firestore, but AI persona update is paused.", variant: "default"});
-
+    let personaUpdatedSuccessfully = false;
+    
+    try {
+      const flowInput: AdjustAiPersonaAndPersonalityInput = { personaTraits };
+      const { updatedPersonaDescription } = await adjustAiPersonaAndPersonality(flowInput);
+      toast({ title: "AI Persona Updated", description: `AI Blair says: "${updatedPersonaDescription}"` });
+      personaUpdatedSuccessfully = true;
+    } catch (personaError: any) {
+      console.error("[PersonaPage] Error calling AI to adjust persona:", personaError);
+      toast({
+        title: "AI Persona Update Failed",
+        description: `The AI's personality could not be set. Your other settings were still saved. Error: ${personaError.message || 'Unknown'}.`,
+        variant: "destructive",
+        duration: 10000,
+      });
+    }
 
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     let newAvatarUrl = avatarPreview;
@@ -215,7 +227,11 @@ export default function PersonaPage() {
 
       await setDoc(siteAssetsDocRef, dataToSave, { merge: true });
 
-      toast({ title: "Persona Settings Saved", description: "Your settings have been saved to Firestore." });
+      if(personaUpdatedSuccessfully) {
+        toast({ title: "Persona Settings Saved", description: "Your settings have been saved to Firestore." });
+      } else {
+        toast({ title: "Persona Settings Saved (with AI error)", description: "Your settings were saved to Firestore, but the AI persona itself failed to update. See other error message for details." });
+      }
 
     } catch (error) {
       console.error("Failed to save persona/avatars:", error);
