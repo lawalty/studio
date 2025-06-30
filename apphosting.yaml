@@ -8,3 +8,17 @@ runConfig:
   # Give the application a temporary CPU boost during its startup phase
   # to help it launch faster and avoid timeout errors.
   startupCpuBoost: true
+  # Increase memory to 1GiB to avoid memory pressure during cold starts.
+  memoryMiB: 1024
+
+# Defines the health check for the application to ensure it's ready for traffic.
+healthCheck:
+  # Use an HTTP check on the root path to confirm the app is fully responsive.
+  startupProbe:
+    # Maximum timeout to give the container plenty of time to start.
+    timeoutSeconds: 300
+    # Number of times to try the probe before failing the deployment.
+    failureThreshold: 1
+    # Check for an HTTP GET request.
+    httpGet:
+      path: /
