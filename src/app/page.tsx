@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,10 +5,10 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Mic, Bot, MessageSquareText, Construction } from 'lucide-react';
+import { Mic, Bot, MessageSquareText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
@@ -24,6 +23,21 @@ export default function StartPage() {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const router = useRouter();
+
+  // Added keydown listener for admin access
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        router.push('/admin');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [router]);
+
 
   useEffect(() => {
     // This event is fired by the Header component in the standard layout,
@@ -154,6 +168,10 @@ export default function StartPage() {
   return (
     <div className="flex flex-col items-center justify-center flex-grow p-4">
       {renderContent()}
+       {/* Added admin panel access instruction */}
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Press Ctrl + Shift + A to access the admin panel.
+      </p>
     </div>
   );
 }
