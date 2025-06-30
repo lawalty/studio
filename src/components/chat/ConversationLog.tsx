@@ -58,7 +58,7 @@ export default function ConversationLog({
             typingSpeedMs={typingSpeedMs}
             animationSyncFactor={animationSyncFactor}
             communicationMode={communicationMode}
-            isNewlyAddedAiMessage={msg.sender === 'ai' && msg.id === lastOverallMessageId && !hasConversationEnded}
+            isNewlyAddedAiMessage={msg.sender === 'model' && msg.id === lastOverallMessageId && !hasConversationEnded}
             forceFinishAnimation={forceFinishAnimationForMessageId === msg.id}
           />
         ))}
