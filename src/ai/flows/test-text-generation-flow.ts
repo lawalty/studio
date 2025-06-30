@@ -6,7 +6,7 @@
  * - testTextGeneration - A function that calls the text generation model.
  * - TestTextGenerationOutput - The return type.
  */
-import { ai } from '@/ai/genkit';
+import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 
 
@@ -18,40 +18,42 @@ const TestTextGenerationOutputSchema = z.object({
 export type TestTextGenerationOutput = z.infer<typeof TestTextGenerationOutputSchema>;
 
 export async function testTextGeneration(): Promise<TestTextGenerationOutput> {
-  return testTextGenerationFlow();
-}
+  const ai = await getGenkitAi();
 
-const testTextGenerationFlow = ai.defineFlow(
-  {
-    name: 'testTextGenerationFlow',
-    inputSchema: z.void(),
-    outputSchema: TestTextGenerationOutputSchema,
-  },
-  async () => {
-    try {
-      const { text } = await ai.generate({
-          model: 'googleai/gemini-1.5-flash-latest',
-          prompt: 'Tell me a one-sentence joke.',
-      });
+  const testTextGenerationFlow = ai.defineFlow(
+    {
+      name: 'testTextGenerationFlow',
+      inputSchema: z.void(),
+      outputSchema: TestTextGenerationOutputSchema,
+    },
+    async () => {
+      try {
+        const { text } = await ai.generate({
+            model: 'googleai/gemini-1.5-flash-latest',
+            prompt: 'Tell me a one-sentence joke.',
+        });
 
-      if (text) {
+        if (text) {
+          return {
+            success: true,
+            generatedText: text,
+          };
+        } else {
+          return {
+            success: false,
+            error: `The text generation service returned a successful but empty response.`,
+          };
+        }
+      } catch (e: any) {
+        console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
         return {
-          success: true,
-          generatedText: text,
-        };
-      } else {
-        return {
-          success: false,
-          error: `The text generation service returned a successful but empty response.`,
+            success: false,
+            error: `The test failed. This often points to an issue with your GOOGLE_AI_API_KEY or project configuration. Full technical error: ${errorMessage}`,
         };
       }
-    } catch (e: any) {
-      console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
-      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-      return {
-          success: false,
-          error: `The test failed. This often points to an issue with your GOOGLE_AI_API_KEY or project configuration. Full technical error: ${errorMessage}`,
-      };
     }
-  }
-);
+  );
+  
+  return testTextGenerationFlow();
+}

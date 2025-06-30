@@ -5,7 +5,7 @@
  *
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
  */
-import { ai } from '@/ai/genkit';
+import { getGenkitAi } from '@/ai/genkit';
 import * as admin from 'firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
@@ -37,24 +37,19 @@ interface SearchResult {
 
 /**
  * Searches the knowledge base for text chunks semantically similar to the query.
- *
- * WARNING: This implementation fetches ALL chunks from Firestore and performs the
- * similarity calculation in memory. This is NOT scalable for large knowledge bases.
- * For production use, this should be replaced with a true vector query against
- * Firestore once the Vector Search extension is fully configured and indexed.
- *
  * @param query The user's search query.
  * @param topK The number of top results to return.
  * @returns A formatted string of the top K results, or a message if none are found.
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
+  const ai = await getGenkitAi();
+
   // Initialize Firebase Admin SDK if it hasn't been already.
-  // It will use Application Default Credentials from the environment.
   if (admin.apps.length === 0) {
     admin.initializeApp();
   }
   
-  // 1. Generate an embedding for the user's query using the Genkit AI SDK.
+  // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
       content: query,
@@ -80,12 +75,9 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   // 3. Calculate similarity for each chunk in memory.
   const rankedResults: SearchResult[] = [];
   for (const chunk of allChunks) {
-    // The 'embedding' field is added by the Firestore Vector Search extension.
-    // If it doesn't exist, the extension hasn't processed this chunk yet.
     if (chunk.embedding && Array.isArray(chunk.embedding.values) && chunk.embedding.values.length > 0) {
       const similarity = cosineSimilarity(queryEmbeddingVector, chunk.embedding.values);
       
-      // Filter out results that are not very similar.
       if (similarity > 0.7) { 
         rankedResults.push({
           text: chunk.text,

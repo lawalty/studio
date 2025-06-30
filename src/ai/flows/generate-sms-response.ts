@@ -8,7 +8,7 @@
  * - GenerateSmsResponseOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
+import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -37,25 +37,24 @@ const SmsPromptInputSchema = z.object({
 export async function generateSmsResponse(
   input: GenerateSmsResponseInput
 ): Promise<GenerateSmsResponseOutput> {
-  return generateSmsResponseFlow(input);
-}
+  const ai = await getGenkitAi();
 
-const generateSmsResponseFlow = ai.defineFlow(
-  {
-    name: 'generateSmsResponseFlow',
-    inputSchema: GenerateSmsResponseInputSchema,
-    outputSchema: GenerateSmsResponseOutputSchema,
-  },
-  async (input) => {
-    // 1. Search the knowledge base for relevant context
-    const context = await searchKnowledgeBase(input.userMessage);
+  const generateSmsResponseFlow = ai.defineFlow(
+    {
+      name: 'generateSmsResponseFlow',
+      inputSchema: GenerateSmsResponseInputSchema,
+      outputSchema: GenerateSmsResponseOutputSchema,
+    },
+    async (flowInput) => {
+      // 1. Search the knowledge base for relevant context
+      const context = await searchKnowledgeBase(flowInput.userMessage);
 
-    const prompt = ai.definePrompt({
-        name: 'generateSmsResponsePrompt',
-        model: 'googleai/gemini-1.5-flash-latest',
-        input: {schema: SmsPromptInputSchema},
-        output: {schema: GenerateSmsResponseOutputSchema},
-        prompt: `You are AI Blair. Your personality is: {{{personaTraits}}}
+      const prompt = ai.definePrompt({
+          name: 'generateSmsResponsePrompt',
+          model: 'googleai/gemini-1.5-flash-latest',
+          input: {schema: SmsPromptInputSchema},
+          output: {schema: GenerateSmsResponseOutputSchema},
+          prompt: `You are AI Blair. Your personality is: {{{personaTraits}}}
 
 You have been given context from a knowledge base to answer the user's question.
 Your task is to generate a response that is EXTREMELY CONCISE and suitable for an SMS message.
@@ -75,29 +74,32 @@ User message: {{{userMessage}}}
 
 ---
 Your concise SMS-ready response:`,
-    });
+      });
 
-    // 2. Construct the input for the prompt
-    const promptInput = {
-        ...input,
-        context: context,
-    };
+      // 2. Construct the input for the prompt
+      const promptInput = {
+          ...flowInput,
+          context: context,
+      };
 
-    // 3. Call the LLM
-    try {
-      const {output} = await prompt(promptInput);
-      if (!output || typeof output.smsResponse !== 'string') {
-        console.error('[generateSmsResponseFlow] Invalid or malformed output from prompt.', output);
+      // 3. Call the LLM
+      try {
+        const {output} = await prompt(promptInput);
+        if (!output || typeof output.smsResponse !== 'string') {
+          console.error('[generateSmsResponseFlow] Invalid or malformed output from prompt.', output);
+          return {
+            smsResponse: "Error: Could not generate a valid response.",
+          };
+        }
+        return output;
+      } catch (error: any) {
+        console.error('[generateSmsResponseFlow] Error calling AI model:', error);
         return {
-          smsResponse: "Error: Could not generate a valid response.",
+          smsResponse: "Sorry, I'm having trouble connecting right now.",
         };
       }
-      return output;
-    } catch (error: any) {
-      console.error('[generateSmsResponseFlow] Error calling AI model:', error);
-      return {
-        smsResponse: "Sorry, I'm having trouble connecting right now.",
-      };
     }
-  }
-);
+  );
+  
+  return generateSmsResponseFlow(input);
+}

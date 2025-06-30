@@ -11,10 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
 import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2 } from 'lucide-react';
-// import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
+import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?text=GIF";
@@ -140,22 +140,20 @@ export default function PersonaPage() {
     setIsSaving(true);
     let personaUpdatedSuccessfully = false;
     
-    // try {
-    //   const flowInput: AdjustAiPersonaAndPersonalityInput = { personaTraits };
-    //   const { updatedPersonaDescription } = await adjustAiPersonaAndPersonality(flowInput);
-    //   toast({ title: "AI Persona Updated", description: `AI Blair says: "${updatedPersonaDescription}"` });
-    //   personaUpdatedSuccessfully = true;
-    // } catch (personaError: any) {
-    //   console.error("[PersonaPage] Error calling AI to adjust persona:", personaError);
-    //   toast({
-    //     title: "AI Persona Update Failed",
-    //     description: `The AI's personality could not be set. Your other settings were still saved. Error: ${personaError.message || 'Unknown'}.`,
-    //     variant: "destructive",
-    //     duration: 10000,
-    //   });
-    // }
-    console.log("AI Persona update is temporarily disabled for diagnostics.");
-    personaUpdatedSuccessfully = true; // Assume success for saving other settings
+    try {
+      const flowInput: AdjustAiPersonaAndPersonalityInput = { personaTraits };
+      const { updatedPersonaDescription } = await adjustAiPersonaAndPersonality(flowInput);
+      toast({ title: "AI Persona Updated", description: `AI Blair says: "${updatedPersonaDescription}"` });
+      personaUpdatedSuccessfully = true;
+    } catch (personaError: any) {
+      console.error("[PersonaPage] Error calling AI to adjust persona:", personaError);
+      toast({
+        title: "AI Persona Update Failed",
+        description: `The AI's personality could not be set. Your other settings were still saved. Error: ${personaError.message || 'Unknown'}.`,
+        variant: "destructive",
+        duration: 10000,
+      });
+    }
 
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     let newAvatarUrl = avatarPreview;

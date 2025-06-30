@@ -8,7 +8,7 @@
  * - SendSmsOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
+import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';
 import twilio from 'twilio';
@@ -29,57 +29,55 @@ const SendSmsOutputSchema = z.object({
 export type SendSmsOutput = z.infer<typeof SendSmsOutputSchema>;
 
 export async function sendSms(input: SendSmsInput): Promise<SendSmsOutput> {
+  const ai = await getGenkitAi(); // AI instance not strictly needed here but good practice for consistency
+
+  const sendSmsFlow = ai.defineFlow(
+    {
+      name: 'sendSmsFlow',
+      inputSchema: SendSmsInputSchema,
+      outputSchema: SendSmsOutputSchema,
+    },
+    async ({ toPhoneNumber, messageBody }) => {
+      try {
+        if (admin.apps.length === 0) {
+          admin.initializeApp();
+        }
+        
+        const db = admin.firestore();
+        const docRef = db.doc(FIRESTORE_KEYS_PATH);
+        const docSnap = await docRef.get();
+
+        if (!docSnap.exists) {
+          throw new Error("Twilio configuration not found in Firestore.");
+        }
+
+        const { twilioAccountSid, twilioAuthToken, twilioPhoneNumber } = docSnap.data()!;
+
+        if (!twilioAccountSid || !twilioAuthToken || !twilioPhoneNumber) {
+          throw new Error("Incomplete Twilio credentials in Firestore. Please configure Account SID, Auth Token, and Phone Number.");
+        }
+
+        const client = twilio(twilioAccountSid, twilioAuthToken);
+
+        const message = await client.messages.create({
+          body: messageBody,
+          from: twilioPhoneNumber,
+          to: toPhoneNumber,
+        });
+
+        return {
+          success: true,
+          messageSid: message.sid,
+        };
+      } catch (error: any) {
+        console.error("[sendSmsFlow] Error sending SMS:", error);
+        return {
+          success: false,
+          error: error.message || 'An unknown error occurred while sending the SMS.',
+        };
+      }
+    }
+  );
+
   return sendSmsFlow(input);
 }
-
-const sendSmsFlow = ai.defineFlow(
-  {
-    name: 'sendSmsFlow',
-    inputSchema: SendSmsInputSchema,
-    outputSchema: SendSmsOutputSchema,
-  },
-  async ({ toPhoneNumber, messageBody }) => {
-    try {
-      // Initialize Firebase Admin SDK if it hasn't been already.
-      if (admin.apps.length === 0) {
-        admin.initializeApp();
-      }
-      
-      const db = admin.firestore();
-      const docRef = db.doc(FIRESTORE_KEYS_PATH);
-      const docSnap = await docRef.get();
-
-      if (!docSnap.exists) {
-        throw new Error("Twilio configuration not found in Firestore.");
-      }
-
-      const { twilioAccountSid, twilioAuthToken, twilioPhoneNumber } = docSnap.data()!;
-
-      if (!twilioAccountSid || !twilioAuthToken || !twilioPhoneNumber) {
-        throw new Error("Incomplete Twilio credentials in Firestore. Please configure Account SID, Auth Token, and Phone Number.");
-      }
-
-      // 2. Initialize Twilio client
-      const client = twilio(twilioAccountSid, twilioAuthToken);
-
-      // 3. Send the message
-      const message = await client.messages.create({
-        body: messageBody,
-        from: twilioPhoneNumber,
-        to: toPhoneNumber,
-      });
-
-      // 4. Return success response
-      return {
-        success: true,
-        messageSid: message.sid,
-      };
-    } catch (error: any) {
-      console.error("[sendSmsFlow] Error sending SMS:", error);
-      return {
-        success: false,
-        error: error.message || 'An unknown error occurred while sending the SMS.',
-      };
-    }
-  }
-);

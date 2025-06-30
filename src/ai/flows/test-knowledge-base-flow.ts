@@ -8,7 +8,7 @@
  * - TestKnowledgeBaseOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
+import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -25,19 +25,19 @@ export type TestKnowledgeBaseOutput = z.infer<typeof TestKnowledgeBaseOutputSche
 export async function testKnowledgeBase(
   input: TestKnowledgeBaseInput
 ): Promise<TestKnowledgeBaseOutput> {
+  const ai = await getGenkitAi(); // AI instance not strictly needed here but good practice for consistency
+
+  const testKnowledgeBaseFlow = ai.defineFlow(
+    {
+      name: 'testKnowledgeBaseFlow',
+      inputSchema: TestKnowledgeBaseInputSchema,
+      outputSchema: TestKnowledgeBaseOutputSchema,
+    },
+    async ({ query }) => {
+      const context = await searchKnowledgeBase(query);
+      return { retrievedContext: context };
+    }
+  );
+
   return testKnowledgeBaseFlow(input);
 }
-
-const testKnowledgeBaseFlow = ai.defineFlow(
-  {
-    name: 'testKnowledgeBaseFlow',
-    inputSchema: TestKnowledgeBaseInputSchema,
-    outputSchema: TestKnowledgeBaseOutputSchema,
-  },
-  async ({ query }) => {
-    // This flow directly calls the search function and returns its raw output.
-    // This is useful for debugging and testing the retrieval part of the RAG pipeline.
-    const context = await searchKnowledgeBase(query);
-    return { retrievedContext: context };
-  }
-);

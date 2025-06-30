@@ -8,12 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, MessageSquare, Terminal } from 'lucide-react';
+import { Save, Speech, MessageSquare, KeyRound, Terminal } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 
 interface ApiKeys {
+  googleAiApiKey: string;
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -26,6 +27,7 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
+    googleAiApiKey: '',
     tts: '',
     voiceId: '',
     useTtsApi: true,
@@ -45,6 +47,7 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setApiKeys({
+            googleAiApiKey: data.googleAiApiKey || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
@@ -96,7 +99,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key & Services Management</CardTitle>
         <CardDescription>
-          Manage keys for third-party services like Twilio SMS and custom Text-to-Speech.
+          Manage keys for all AI services and third-party integrations like Twilio.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -106,14 +109,15 @@ export default function ApiKeysPage() {
           <>
             <Alert variant="default" className="bg-sky-50 border-sky-200">
               <Terminal className="h-4 w-4 text-sky-700" />
-              <AlertTitle className="text-sky-800 font-bold">Important: Google AI Authentication</AlertTitle>
+              <AlertTitle className="text-sky-800 font-bold">Important: Central API Key Management</AlertTitle>
               <AlertDescription className="text-sky-700 space-y-3">
                   <p className="font-semibold">
-                    All Google Cloud and AI features in this app (chat, knowledge base, etc.) require a `GOOGLE_AI_API_KEY`.
+                    This is the central place to manage your Google AI API Key. It is stored in Firestore and used by the server for all AI features.
                   </p>
-                  <p>
-                    Please create a `.env.local` file in the root of your project and add your API key to it, as described in the updated README file.
-                  </p>
+                  <div className="space-y-2 pt-2">
+                    <Label htmlFor="googleAiApiKey" className="font-medium text-sky-800">Google AI API Key</Label>
+                    <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter your Google AI API Key" />
+                  </div>
               </AlertDescription>
             </Alert>
 

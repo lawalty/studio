@@ -8,7 +8,7 @@
  * - GenerateChatResponseOutput - The return type for the generateChatResponse function.
  */
 
-import { ai } from '@/ai/genkit';
+import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -62,40 +62,37 @@ const PromptInputSchema = z.object({
 export async function generateChatResponse(
   input: GenerateChatResponseInput
 ): Promise<GenerateChatResponseOutput> {
-  return generateChatResponseFlow(input);
-}
-
-const generateChatResponseFlow = ai.defineFlow(
-  {
-    name: 'generateChatResponseFlow',
-    inputSchema: GenerateChatResponseInputSchema,
-    outputSchema: GenerateChatResponseOutputSchema,
-  },
-  async (input) => {
-    // 1. Search the knowledge base for relevant context, with error handling.
-    let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
-    try {
-        context = await searchKnowledgeBase(input.userMessage);
-    } catch (error: any) {
-        console.warn(`[generateChatResponseFlow] Knowledge base search failed: ${error.message}. The AI will respond without external context. This is non-fatal.`);
-        // The default context string above will be used.
-    }
-
-    // 2. Prepare chat history
-    const processedChatHistory = (input.chatHistory || []).map(msg => {
-      if (msg.role === 'user') {
-        return { user: msg.parts[0].text };
+  const ai = await getGenkitAi();
+  
+  const generateChatResponseFlow = ai.defineFlow(
+    {
+      name: 'generateChatResponseFlow',
+      inputSchema: GenerateChatResponseInputSchema,
+      outputSchema: GenerateChatResponseOutputSchema,
+    },
+    async (flowInput) => {
+      // 1. Search the knowledge base for relevant context, with error handling.
+      let context = 'An attempt to retrieve context from the knowledge base failed. You must answer using only your general knowledge.';
+      try {
+          context = await searchKnowledgeBase(flowInput.userMessage);
+      } catch (error: any) {
+          console.warn(`[generateChatResponseFlow] Knowledge base search failed: ${error.message}. The AI will respond without external context. This is non-fatal.`);
       }
-      return { model: msg.parts[0].text };
-    });
-    
-    // Define the prompt with the default AI instance.
-    const prompt = ai.definePrompt({
-      name: 'generateChatResponsePrompt',
-      model: 'googleai/gemini-1.5-flash-latest',
-      input: {schema: PromptInputSchema}, // Use the new, more robust schema
-      output: {schema: GenerateChatResponseOutputSchema},
-      prompt: `You are AI Blair. Your personality and style are defined by the following traits:
+
+      // 2. Prepare chat history
+      const processedChatHistory = (flowInput.chatHistory || []).map(msg => {
+        if (msg.role === 'user') {
+          return { user: msg.parts[0].text };
+        }
+        return { model: msg.parts[0].text };
+      });
+      
+      const prompt = ai.definePrompt({
+        name: 'generateChatResponsePrompt',
+        model: 'googleai/gemini-1.5-flash-latest',
+        input: {schema: PromptInputSchema},
+        output: {schema: GenerateChatResponseOutputSchema},
+        prompt: `You are AI Blair. Your personality and style are defined by the following traits:
 {{{personaTraits}}}
 
 {{#if conversationalTopics}}
@@ -140,44 +137,47 @@ Special instructions for greetings, ending the conversation, and asking follow-u
 ---
 
 Your Conversational Answer as AI Blair:`,
-    });
+      });
 
 
-    // 3. Construct the input for the prompt with the retrieved context
-    const promptInput = {
-        ...input,
-        chatHistory: processedChatHistory,
-        context: context,
-    };
+      // 3. Construct the input for the prompt with the retrieved context
+      const promptInput = {
+          ...flowInput,
+          chatHistory: processedChatHistory,
+          context: context,
+      };
 
-    // 4. Call the LLM
-    try {
-      const {output} = await prompt(promptInput);
+      // 4. Call the LLM
+      try {
+        const {output} = await prompt(promptInput);
 
-      if (!output || typeof output.aiResponse !== 'string') {
-        console.error('[generateChatResponseFlow] Invalid or malformed output from prompt. Expected { aiResponse: string, ... }, received:', output);
+        if (!output || typeof output.aiResponse !== 'string') {
+          console.error('[generateChatResponseFlow] Invalid or malformed output from prompt. Expected { aiResponse: string, ... }, received:', output);
+          return {
+            aiResponse: "I seem to have lost my train of thought! Could you please try sending your message again?",
+            shouldEndConversation: false,
+          };
+        }
+        return output;
+      } catch (error: any) {
+        console.error('[generateChatResponseFlow] Error calling AI model:', error);
+        let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please try again in a moment.";
+
+        if (error.message && (error.message.includes('permission denied') || error.message.includes('IAM'))) {
+            userFriendlyMessage = "Connection to AI services failed. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled.";
+        } else if (error.message && error.message.includes('503 Service Unavailable')) {
+          userFriendlyMessage = "My apologies, it seems my core systems are a bit busy or temporarily unavailable. Could you please try your message again in a few moments?";
+        } else if (error.message && error.message.toLowerCase().includes('network error')) {
+           userFriendlyMessage = "I'm experiencing some network issues. Please check your connection and try again.";
+        }
+        
         return {
-          aiResponse: "I seem to have lost my train of thought! Could you please try sending your message again?",
+          aiResponse: userFriendlyMessage,
           shouldEndConversation: false,
         };
       }
-      return output;
-    } catch (error: any) {
-      console.error('[generateChatResponseFlow] Error calling AI model:', error);
-      let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please try again in a moment.";
-
-      if (error.message && (error.message.includes('permission denied') || error.message.includes('IAM'))) {
-          userFriendlyMessage = "Connection to AI services failed. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled.";
-      } else if (error.message && error.message.includes('503 Service Unavailable')) {
-        userFriendlyMessage = "My apologies, it seems my core systems are a bit busy or temporarily unavailable. Could you please try your message again in a few moments?";
-      } else if (error.message && error.message.toLowerCase().includes('network error')) {
-         userFriendlyMessage = "I'm experiencing some network issues. Please check your connection and try again.";
-      }
-      
-      return {
-        aiResponse: userFriendlyMessage,
-        shouldEndConversation: false,
-      };
     }
-  }
-);
+  );
+
+  return generateChatResponseFlow(input);
+}
