@@ -10,7 +10,7 @@
 
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
+import { db } from '@/lib/firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -62,10 +62,6 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
     },
     async ({ sourceId, sourceName, text, level, downloadURL }) => {
       try {
-        if (admin.apps.length === 0) {
-          admin.initializeApp();
-        }
-        
         const cleanText = text.trim();
         if (!cleanText) {
            const errorMessage = "No readable text content was found in the document. Aborting indexing.";
@@ -84,7 +80,6 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
 
         console.log(`[indexDocumentFlow] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
 
-        const db = admin.firestore();
         const batch = db.batch();
         const chunksCollection = db.collection('kb_chunks');
 

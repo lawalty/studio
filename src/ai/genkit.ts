@@ -2,7 +2,7 @@
 'use server';
 import { genkit, type Genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
+import { db } from '@/lib/firebase-admin';
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
@@ -27,12 +27,6 @@ export async function getGenkitAi(): Promise<Genkit> {
   }
 
   try {
-    // Initialize Firebase Admin SDK if it hasn't been already.
-    if (admin.apps.length === 0) {
-      admin.initializeApp();
-    }
-    
-    const db = admin.firestore();
     const docRef = db.doc(FIRESTORE_KEYS_PATH);
     const docSnap = await docRef.get();
 

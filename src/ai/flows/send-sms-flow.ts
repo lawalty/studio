@@ -10,7 +10,7 @@
 
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
-import * as admin from 'firebase-admin';
+import { db } from '@/lib/firebase-admin';
 import twilio from 'twilio';
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
@@ -39,11 +39,6 @@ export async function sendSms(input: SendSmsInput): Promise<SendSmsOutput> {
     },
     async ({ toPhoneNumber, messageBody }) => {
       try {
-        if (admin.apps.length === 0) {
-          admin.initializeApp();
-        }
-        
-        const db = admin.firestore();
         const docRef = db.doc(FIRESTORE_KEYS_PATH);
         const docSnap = await docRef.get();
 

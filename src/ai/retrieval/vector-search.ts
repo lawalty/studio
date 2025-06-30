@@ -6,7 +6,7 @@
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
  */
 import { getGenkitAi } from '@/ai/genkit';
-import * as admin from 'firebase-admin';
+import { db } from '@/lib/firebase-admin';
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -43,11 +43,6 @@ interface SearchResult {
  */
 export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
   const ai = await getGenkitAi();
-
-  // Initialize Firebase Admin SDK if it hasn't been already.
-  if (admin.apps.length === 0) {
-    admin.initializeApp();
-  }
   
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
@@ -62,7 +57,6 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   }
   
   // 2. Fetch all chunks from the Firestore collection.
-  const db = admin.firestore();
   const chunksCollectionRef = db.collection('kb_chunks');
   const querySnapshot = await chunksCollectionRef.get();
 
