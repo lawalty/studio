@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -15,16 +16,20 @@ import Link from 'next/link';
 const DEFAULT_SPLASH_IMAGE_SRC = "https://placehold.co/800x600.png";
 const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const DEFAULT_TYPING_SPEED_MS = 50;
+const TARGET_ANIMATION_MESSAGE = "Let's have a conversation.";
 
 export default function StartPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [welcomeMessage, setWelcomeMessage] = useState<string>(DEFAULT_WELCOME_MESSAGE);
+  const [typingSpeedMs, setTypingSpeedMs] = useState(DEFAULT_TYPING_SPEED_MS);
+  const [typedMessage, setTypedMessage] = useState('');
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const router = useRouter();
 
-  // Added keydown listener for admin access
+  // Keydown listener for admin access
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a') {
@@ -38,17 +43,7 @@ export default function StartPage() {
     };
   }, [router]);
 
-
-  useEffect(() => {
-    // This event is fired by the Header component in the standard layout,
-    // signaling this page should behave as a splash screen.
-    const handleSplashScreenActive = () => {
-      // Logic for splash screen can go here if needed.
-    };
-    window.addEventListener('splashScreenActive', handleSplashScreenActive);
-    return () => window.removeEventListener('splashScreenActive', handleSplashScreenActive);
-  }, []);
-
+  // Firestore listener for dynamic settings
   useEffect(() => {
     const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
@@ -59,12 +54,14 @@ export default function StartPage() {
         } else {
           setWelcomeMessage(data.splashWelcomeMessage || DEFAULT_WELCOME_MESSAGE);
           setSplashImageSrc(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
+          setTypingSpeedMs(data.typingSpeedMs === undefined ? DEFAULT_TYPING_SPEED_MS : data.typingSpeedMs);
           setIsMaintenanceMode(false);
         }
       } else {
-        // If doc doesn't exist, default to non-maintenance mode
+        // Default to non-maintenance mode if doc doesn't exist
         setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
         setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+        setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
         setIsMaintenanceMode(false);
       }
       setIsLoading(false);
@@ -74,12 +71,31 @@ export default function StartPage() {
       setIsLoading(false);
       setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
       setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+      setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
       setIsMaintenanceMode(false);
     });
 
     return () => unsubscribe();
   }, []);
+
+  // Typing animation effect
+  useEffect(() => {
+    if (isLoading || !isImageLoaded) return;
+    setTypedMessage(''); // Reset on re-render
+    
+    let i = 0;
+    const timer = setInterval(() => {
+      setTypedMessage(TARGET_ANIMATION_MESSAGE.substring(0, i + 1));
+      i++;
+      if (i >= TARGET_ANIMATION_MESSAGE.length) {
+        clearInterval(timer);
+      }
+    }, typingSpeedMs);
+
+    return () => clearInterval(timer);
+  }, [isLoading, isImageLoaded, typingSpeedMs]);
   
+  // Image loading effect
   useEffect(() => {
     if (splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || !splashImageSrc) {
       setIsImageLoaded(true);
@@ -88,6 +104,7 @@ export default function StartPage() {
     }
   }, [splashImageSrc]);
 
+  // Maintenance mode redirect effect
   useEffect(() => {
     if (isMaintenanceMode === true) {
       router.replace('/updates-coming');
@@ -98,9 +115,13 @@ export default function StartPage() {
     if (isLoading || isMaintenanceMode === null) {
       return (
         <Card className="w-full max-w-2xl p-6 text-center shadow-2xl border">
-          <CardHeader><Skeleton className="h-8 w-3/4 mx-auto" /></CardHeader>
-          <CardContent className="space-y-6">
+          <CardHeader>
+            <Skeleton className="h-8 w-3/4 mx-auto" />
+            <Skeleton className="h-6 w-1/2 mx-auto mt-2" />
+          </CardHeader>
+          <CardContent className="space-y-6 mt-6">
             <Skeleton className="w-full h-[267px] rounded-lg" />
+            <Skeleton className="h-6 w-3/4 mx-auto" />
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Skeleton className="h-24 w-full" />
               <Skeleton className="h-24 w-full" />
@@ -117,9 +138,9 @@ export default function StartPage() {
           <CardTitle className="text-4xl font-headline text-primary">
             {welcomeMessage}
           </CardTitle>
-          <CardDescription className="text-lg">
-            Choose your interaction mode to begin.
-          </CardDescription>
+          <p className="text-lg text-muted-foreground h-7 animate-in fade-in delay-500">
+            {typedMessage}
+          </p>
         </CardHeader>
         <CardContent className="p-0 space-y-6">
           <Image
@@ -140,6 +161,9 @@ export default function StartPage() {
             }}
             data-ai-hint="technology abstract welcome"
           />
+          <CardDescription className="text-lg">
+            Choose your interaction mode to begin.
+          </CardDescription>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
               <Link href="/chat/text-only">
@@ -168,7 +192,6 @@ export default function StartPage() {
   return (
     <div className="flex flex-col items-center justify-center flex-grow p-4">
       {renderContent()}
-       {/* Added admin panel access instruction */}
       <p className="mt-4 text-center text-xs text-muted-foreground">
         Press Ctrl + Shift + A to access the admin panel.
       </p>
