@@ -114,11 +114,14 @@ const indexDocumentFlow = ai.defineFlow(
 
     } catch (e: any) {
       console.error(`[indexDocumentFlow] Raw error for source '${sourceName}':`, e);
+      let detailedError = `Indexing failed for an unknown reason. Please check the logs.`;
       const rawError = e instanceof Error ? e.message : JSON.stringify(e);
       
-      // Return the raw, technical error. This is more useful for debugging project configuration issues
-      // than a pre-written friendly message.
-      const detailedError = `Indexing failed. This may be due to an issue with your GOOGLE_AI_API_KEY or Firestore permissions. Full technical error: ${rawError}`;
+      if (e.message && (e.message.includes('permission denied') || e.message.includes('IAM') || e.code === 7)) {
+          detailedError = `Indexing failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Firestore User, Vertex AI User) and that the necessary Google Cloud APIs are enabled. Full technical error: ${rawError}`;
+      } else {
+          detailedError = `Indexing failed. This may be due to a configuration or service issue. Full technical error: ${rawError}`;
+      }
 
       return {
         chunksWritten: 0,
