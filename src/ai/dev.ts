@@ -1,7 +1,13 @@
-
 import { config } from 'dotenv';
 config();
 
-// All Genkit flow imports have been temporarily removed to diagnose a container startup issue.
-// If the deployment succeeds with this change, the issue is isolated to one of the imported flows or their dependencies.
-// These can be restored one by one after a successful deployment is achieved.
+import './flows/extract-text-from-document-url-flow';
+import './flows/generate-chat-response';
+import './flows/generate-sms-response';
+import './flows/index-document-flow';
+import './flows/persona-personality-tuning';
+import './flows/send-sms-flow';
+import './flows/test-embedding-flow';
+import './flows/test-knowledge-base-flow';
+import './flows/test-text-generation-flow';
+import './flows/text-to-speech-flow';
