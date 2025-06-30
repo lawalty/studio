@@ -35,11 +35,11 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
-import { indexDocument } from '@/ai/flows/index-document-flow';
-import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
-import { testEmbedding } from '@/ai/flows/test-embedding-flow';
-import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
+// import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
+// import { indexDocument } from '@/ai/flows/index-document-flow';
+// import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
+// import { testEmbedding } from '@/ai/flows/test-embedding-flow';
+// import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -261,54 +261,55 @@ export default function KnowledgeBasePage() {
   }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore]);
 
   const triggerProcessing = useCallback(async (sourceToProcess: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) {
-      console.log(`[KBPage] Skipping processing for non-text file: ${sourceToProcess.name}`);
-      return;
-    }
-    setIsProcessingId(sourceToProcess.id);
-    let extractedText = '';
+    // if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) {
+    //   console.log(`[KBPage] Skipping processing for non-text file: ${sourceToProcess.name}`);
+    //   return;
+    // }
+    // setIsProcessingId(sourceToProcess.id);
+    // let extractedText = '';
     
-    // Step 1: Extract Text
-    try {
-      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'pending', extractionError: '', indexingStatus: 'pending', indexingError: '' });
-      const { extractedText: text, } = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: conversationalTopics });
-      extractedText = text;
-      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'success' });
-    } catch (e: any) {
-      console.error(`[KBPage - triggerProcessing - Extraction] Error for source ${sourceToProcess.name}:`, e);
-      const errorMessage = e.message || 'An unknown error occurred during text extraction.';
-      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'failed', extractionError: errorMessage });
-      toast({ title: "Text Extraction Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
-      setIsProcessingId(null);
-      return; // Stop if extraction fails
-    }
+    // // Step 1: Extract Text
+    // try {
+    //   await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'pending', extractionError: '', indexingStatus: 'pending', indexingError: '' });
+    //   const { extractedText: text, } = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: conversationalTopics });
+    //   extractedText = text;
+    //   await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'success' });
+    // } catch (e: any) {
+    //   console.error(`[KBPage - triggerProcessing - Extraction] Error for source ${sourceToProcess.name}:`, e);
+    //   const errorMessage = e.message || 'An unknown error occurred during text extraction.';
+    //   await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'failed', extractionError: errorMessage });
+    //   toast({ title: "Text Extraction Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
+    //   setIsProcessingId(null);
+    //   return; // Stop if extraction fails
+    // }
 
-    // Step 2: Index Text
-    try {
-      await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'pending' });
-      const { chunksWritten, success, error } = await indexDocument({
-        sourceId: sourceToProcess.id,
-        sourceName: sourceToProcess.name,
-        text: extractedText,
-        level: level,
-        downloadURL: sourceToProcess.downloadURL,
-      });
+    // // Step 2: Index Text
+    // try {
+    //   await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'pending' });
+    //   const { chunksWritten, success, error } = await indexDocument({
+    //     sourceId: sourceToProcess.id,
+    //     sourceName: sourceToProcess.name,
+    //     text: extractedText,
+    //     level: level,
+    //     downloadURL: sourceToProcess.downloadURL,
+    //   });
 
-      if (success) {
-        await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'indexed' });
-        toast({ title: "Indexing Complete", description: `Wrote ${chunksWritten} chunks for ${sourceToProcess.name}.` });
-      } else {
-        throw new Error(error || "An unknown indexing error occurred.");
-      }
-    } catch (e: any) {
-      console.error(`[KBPage - triggerProcessing - Indexing] Error for source ${sourceToProcess.name}:`, e);
-      const errorMessage = e.message || 'An unknown error occurred during indexing.';
-      await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'failed', indexingError: errorMessage });
-      toast({ title: "Indexing Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
-    } finally {
-      setIsProcessingId(null);
-    }
-  }, [updateSourceStatus, toast, conversationalTopics]);
+    //   if (success) {
+    //     await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'indexed' });
+    //     toast({ title: "Indexing Complete", description: `Wrote ${chunksWritten} chunks for ${sourceToProcess.name}.` });
+    //   } else {
+    //     throw new Error(error || "An unknown indexing error occurred.");
+    //   }
+    // } catch (e: any) {
+    //   console.error(`[KBPage - triggerProcessing - Indexing] Error for source ${sourceToProcess.name}:`, e);
+    //   const errorMessage = e.message || 'An unknown error occurred during indexing.';
+    //   await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'failed', indexingError: errorMessage });
+    //   toast({ title: "Indexing Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
+    // } finally {
+    //   setIsProcessingId(null);
+    // }
+    toast({ title: "Processing Disabled", description: "AI processing is temporarily disabled for diagnostics.", variant: "default" });
+  }, [toast]);
   
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, description: string) => {
     if (!fileToUpload) {
@@ -533,44 +534,47 @@ export default function KnowledgeBasePage() {
     }
     setIsTesting(true);
     setTestResult('');
-    try {
-        const { retrievedContext } = await testKnowledgeBase({ query: testQuery });
-        setTestResult(retrievedContext);
-    } catch (e: any) {
-        console.error("[KBPage - Test] Error:", e);
-        setTestResult(`An error occurred: ${e.message}`);
-        toast({ title: "Test Failed", description: e.message, variant: "destructive", duration: 10000 });
-    }
+    // try {
+    //     const { retrievedContext } = await testKnowledgeBase({ query: testQuery });
+    //     setTestResult(retrievedContext);
+    // } catch (e: any) {
+    //     console.error("[KBPage - Test] Error:", e);
+    //     setTestResult(`An error occurred: ${e.message}`);
+    //     toast({ title: "Test Failed", description: e.message, variant: "destructive", duration: 10000 });
+    // }
+    toast({ title: "Testing Disabled", description: "AI testing is temporarily disabled for diagnostics.", variant: "default" });
     setIsTesting(false);
   };
 
   const handleTestEmbedding = async () => {
     setIsTestingEmbedding(true);
-    try {
-      const { success, error, embeddingVectorLength } = await testEmbedding();
-      if (success) {
-        toast({ title: "Embedding Test Successful", description: `Successfully generated an embedding with ${embeddingVectorLength} dimensions.` });
-      } else {
-        toast({ title: "Embedding Test Failed", description: error, variant: "destructive", duration: 10000 });
-      }
-    } catch (e: any) {
-      toast({ title: "Embedding Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
-    }
+    // try {
+    //   const { success, error, embeddingVectorLength } = await testEmbedding();
+    //   if (success) {
+    //     toast({ title: "Embedding Test Successful", description: `Successfully generated an embedding with ${embeddingVectorLength} dimensions.` });
+    //   } else {
+    //     toast({ title: "Embedding Test Failed", description: error, variant: "destructive", duration: 10000 });
+    //   }
+    // } catch (e: any) {
+    //   toast({ title: "Embedding Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
+    // }
+    toast({ title: "Testing Disabled", description: "AI testing is temporarily disabled for diagnostics.", variant: "default" });
     setIsTestingEmbedding(false);
   };
 
   const handleTestGeneration = async () => {
     setIsTestingGeneration(true);
-    try {
-      const { success, error, generatedText } = await testTextGeneration();
-      if (success) {
-        toast({ title: "Text Generation Test Successful", description: `AI response: "${generatedText}"` });
-      } else {
-        toast({ title: "Text Generation Test Failed", description: error, variant: "destructive", duration: 10000 });
-      }
-    } catch (e: any) {
-      toast({ title: "Generation Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
-    }
+    // try {
+    //   const { success, error, generatedText } = await testTextGeneration();
+    //   if (success) {
+    //     toast({ title: "Text Generation Test Successful", description: `AI response: "${generatedText}"` });
+    //   } else {
+    //     toast({ title: "Text Generation Test Failed", description: error, variant: "destructive", duration: 10000 });
+    //   }
+    // } catch (e: any) {
+    //   toast({ title: "Generation Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
+    // }
+    toast({ title: "Testing Disabled", description: "AI testing is temporarily disabled for diagnostics.", variant: "default" });
     setIsTestingGeneration(false);
   };
 
