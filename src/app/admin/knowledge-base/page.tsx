@@ -35,11 +35,11 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
-import { indexDocument } from '@/ai/flows/index-document-flow';
-import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
-import { testEmbedding } from '@/ai/flows/test-embedding-flow';
-import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
+// import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
+// import { indexDocument } from '@/ai/flows/index-document-flow';
+// import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
+// import { testEmbedding } from '@/ai/flows/test-embedding-flow';
+// import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -56,7 +56,7 @@ export interface KnowledgeSource {
   description?: string;
   extractionStatus?: KnowledgeSourceExtractionStatus;
   extractionError?: string;
-  indexingStatus?: KnowledgeSourceIndexingStatus; // pending, indexed (chunks written), failed
+  indexingStatus?: KnowledgeSourceIndexingStatus; 
   indexingError?: string;
 }
 
@@ -111,7 +111,7 @@ export default function KnowledgeBasePage() {
   const [isLoadingLow, setIsLoadingLow] = useState(true);
   const [isLoadingArchive, setIsLoadingArchive] = useState(true);
 
-  const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
+  // const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadDescription, setUploadDescription] = useState('');
@@ -232,112 +232,10 @@ export default function KnowledgeBasePage() {
     KB_LEVELS.forEach(level => fetchSourcesForLevel(level));
   }, [fetchSourcesForLevel]);
 
-  // Effect for fetching conversational topics
-  useEffect(() => {
-    const fetchTopics = async () => {
-      try {
-        const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data()?.conversationalTopics) {
-          setConversationalTopics(docSnap.data()!.conversationalTopics);
-        }
-      } catch (e) {
-        console.error("Failed to fetch conversational topics", e);
-      }
-    };
-    fetchTopics();
-  }, []);
-
   const triggerProcessing = useCallback(async (sourceToProcess: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) return;
-    setIsProcessingId(sourceToProcess.id);
-    const setSources = getSourcesSetter(level);
-    let extractedText: string | null = null;
-    let extractionFailed = false;
-
-    setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'pending' as const, indexingStatus: 'pending' as const, extractionError: '', indexingError: '' } : s));
-
-    try {
-      if (sourceToProcess.type === 'text') {
-        toast({ title: "Processing Text File", description: `Reading content from ${sourceToProcess.name}...` });
-        const response = await fetch(sourceToProcess.downloadURL);
-        if (!response.ok) throw new Error(`Failed to fetch text file: ${response.statusText}`);
-        extractedText = await response.text();
-      } else {
-        toast({ title: "Extraction Started", description: `AI is processing ${sourceToProcess.name}...` });
-        const result = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics });
-        extractedText = result.extractedText;
-      }
-      
-      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, extractionStatus: 'success' as const, extractionError: '' } : s));
-      toast({ title: "Text Extracted Successfully", description: `Now writing chunks for ${sourceToProcess.name}...` });
-
-    } catch (error: any) {
-      extractionFailed = true;
-      console.error(`[KBPage - Extraction Error] for ${sourceToProcess.name}:`, error);
-      const errorMessage = error.message || 'An unknown error occurred during text extraction.';
-      setSources(prev => {
-        const updated = prev.map(s => s.id === sourceToProcess.id ? {
-          ...s,
-          extractionStatus: 'failed' as const,
-          extractionError: errorMessage,
-          indexingStatus: 'failed' as const,
-          indexingError: 'Did not attempt indexing due to extraction failure.'
-        } : s);
-        saveSourcesToFirestore(updated, level);
-        return updated;
-      });
-      toast({ title: "Extraction Failed", description: errorMessage, variant: "destructive" });
-    }
-
-    if (extractionFailed) {
-      setIsProcessingId(null);
-      return;
-    }
-
-    if (!extractedText || extractedText.trim() === '') {
-      const errorMessage = "Text content is missing or empty after extraction, cannot index.";
-      setSources(prev => prev.map(s => s.id === sourceToProcess.id ? { ...s, indexingStatus: 'failed' as const, indexingError: errorMessage, extractionStatus: 'failed' as const, extractionError: errorMessage } : s));
-      toast({ title: "Indexing Failed", description: errorMessage, variant: "destructive" });
-      setIsProcessingId(null);
-      return;
-    }
-
-    const indexResult = await indexDocument({
-      sourceId: sourceToProcess.id,
-      sourceName: sourceToProcess.name,
-      text: extractedText,
-      level: level,
-      downloadURL: sourceToProcess.downloadURL,
-    });
-
-    if (indexResult.success) {
-      setSources(prev => {
-        const updated = prev.map(s => s.id === sourceToProcess.id ? {
-          ...s,
-          indexingStatus: 'indexed' as const,
-          indexingError: ''
-        } : s);
-        saveSourcesToFirestore(updated, level);
-        return updated;
-      });
-      toast({ title: "Indexing Successful", description: `${indexResult.chunksWritten} chunks for ${sourceToProcess.name} written to Firestore for embedding.` });
-    } else {
-      const errorMessage = indexResult.error || 'An unknown error occurred during indexing.';
-      setSources(prev => {
-        const updated = prev.map(s => s.id === sourceToProcess.id ? {
-          ...s,
-          indexingStatus: 'failed' as const,
-          indexingError: errorMessage
-        } : s);
-        saveSourcesToFirestore(updated, level);
-        return updated;
-      });
-      toast({ title: "Indexing Failed", description: errorMessage, variant: "destructive", duration: 15000 });
-    }
-    
-    setIsProcessingId(null);
-  }, [getSourcesSetter, saveSourcesToFirestore, toast, conversationalTopics]);
+    toast({ title: "AI Functionality Disabled", description: "Processing is temporarily disabled.", variant: "destructive"});
+    return;
+  }, [toast]);
   
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, description: string) => {
     if (!fileToUpload) {
@@ -404,7 +302,6 @@ export default function KnowledgeBasePage() {
       setIsCurrentlyUploading(true);
       try {
         await handleUpload(selectedFile, selectedKBTargetForUpload, uploadDescription);
-        // On success, clear the file input form
         setSelectedFile(null);
         setUploadDescription('');
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -557,98 +454,21 @@ export default function KnowledgeBasePage() {
   };
 
   const handleTestKnowledgeBase = async () => {
-    if (!testQuery.trim()) {
-      toast({ title: "No query provided", variant: "destructive" });
-      return;
-    }
-    setIsTesting(true);
-    setTestResult('');
-    try {
-      const result = await testKnowledgeBase({ query: testQuery });
-      setTestResult(result.retrievedContext);
-      toast({ title: "Test Complete", description: "Retrieved context is shown below." });
-    } catch (error: any) {
-      setTestResult(`Error: ${error.message}`);
-      toast({ title: "Test Failed", description: error.message, variant: "destructive" });
-    }
-    setIsTesting(false);
+    toast({ title: "AI Functionality Disabled", description: "Testing is temporarily disabled.", variant: "destructive"});
   };
 
   const handleTestEmbedding = async () => {
-    setIsTestingEmbedding(true);
-    const result = await testEmbedding();
-    if (result.success) {
-      toast({ title: "Embedding Test Successful!", description: `Vector length: ${result.embeddingVectorLength}` });
-    } else {
-      toast({ title: "Embedding Test Failed", description: result.error, variant: "destructive", duration: 15000 });
-    }
-    setIsTestingEmbedding(false);
+    toast({ title: "AI Functionality Disabled", description: "Testing is temporarily disabled.", variant: "destructive"});
   };
 
   const handleTestGeneration = async () => {
-    setIsTestingGeneration(true);
-    const result = await testTextGeneration();
-    if (result.success) {
-      toast({ title: "Text Generation Test Successful!", description: `Model said: "${result.generatedText}"` });
-    } else {
-      toast({ title: "Text Generation Test Failed", description: result.error, variant: "destructive", duration: 15000 });
-    }
-    setIsTestingGeneration(false);
+    toast({ title: "AI Functionality Disabled", description: "Testing is temporarily disabled.", variant: "destructive"});
   };
 
   const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    if (!['pdf', 'text', 'document'].includes(source.type)) {
-      return <span className="text-xs text-muted-foreground">N/A</span>;
-    }
-
-    if (isProcessingId === source.id) {
-      return <div className="flex items-center gap-1 text-xs text-yellow-600"><Loader2 className="h-3 w-3 animate-spin" /> Processing...</div>;
-    }
-
-    if (source.extractionStatus === 'failed') {
-        return (
-            <div className="flex items-center gap-1">
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span className="text-xs text-red-600 cursor-help flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Extraction Failed</span>
-                        </TooltipTrigger>
-                        <TooltipContent><p>{source.extractionError || 'Unknown extraction error'}</p></TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-                <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
-            </div>
-        );
-    }
-
-    if (source.indexingStatus === 'failed') {
-        return (
-            <div className="flex items-center gap-1">
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span className="text-xs text-red-600 cursor-help flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Indexing Failed</span>
-                        </TooltipTrigger>
-                        <TooltipContent><p>{source.indexingError || 'Unknown indexing error'}</p></TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-                <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
-            </div>
-        );
-    }
-
-    if (source.indexingStatus === 'indexed') {
-        return <span className="text-xs text-green-600 flex items-center gap-1"><SearchCheck className="h-3 w-3" /> Indexed</span>;
-    }
-
-    return (
-        <div className="flex items-center gap-1">
-            <span className="text-xs text-yellow-600">Pending</span>
-            <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress} className="h-6 w-6"><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
-        </div>
-    );
+    return <span className="text-xs text-muted-foreground">Disabled</span>;
   };
 
 
@@ -724,16 +544,16 @@ export default function KnowledgeBasePage() {
           <CardHeader>
             <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Core Service Diagnostics</CardTitle>
             <CardDescription>
-                Use these buttons to perform direct, isolated tests of the core Google AI services. This helps confirm your API key and project setup are correct, bypassing the RAG pipeline.
+                Use these buttons to perform direct, isolated tests of the core Google AI services. This helps confirm your API key and project setup are correct, bypassing the RAG pipeline. (Temporarily Disabled)
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-4">
-              <Button onClick={handleTestGeneration} disabled={anyOperationGloballyInProgress}>
-                  {isTestingGeneration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
+              <Button onClick={handleTestGeneration} disabled={true}>
+                  <MessageSquareText className="mr-2 h-4 w-4" />
                   Test Text Generation
               </Button>
-              <Button onClick={handleTestEmbedding} disabled={anyOperationGloballyInProgress}>
-                  {isTestingEmbedding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Beaker className="mr-2 h-4 w-4" />}
+              <Button onClick={handleTestEmbedding} disabled={true}>
+                  <Beaker className="mr-2 h-4 w-4" />
                   Test Embedding Service
               </Button>
           </CardContent>
@@ -743,16 +563,16 @@ export default function KnowledgeBasePage() {
           <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
               <CardDescription>
-                  Enter a question to see what context the AI would retrieve from the knowledge base. This tests the full RAG pipeline, including your indexed data in Firestore.
+                  Enter a question to see what context the AI would retrieve from the knowledge base. This tests the full RAG pipeline, including your indexed data in Firestore. (Temporarily Disabled)
               </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
               <div className="space-y-2">
                   <Label htmlFor="test-query">Test Question</Label>
-                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?" suppressHydrationWarning />
+                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?" suppressHydrationWarning disabled={true}/>
               </div>
-              <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery.trim()}>
-                  {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
+              <Button onClick={handleTestKnowledgeBase} disabled={true}>
+                  <SearchCheck className="mr-2 h-4 w-4" />
                   Test Retrieval
               </Button>
               {testResult && (

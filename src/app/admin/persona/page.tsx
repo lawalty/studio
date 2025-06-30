@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
 import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2 } from 'lucide-react';
-import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
+// import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -139,6 +139,10 @@ export default function PersonaPage() {
   const handleSaveAllSettings = async () => {
     setIsSaving(true);
 
+    // AI functionality is temporarily disabled.
+    toast({ title: "AI Disabled", description: "Saving settings to Firestore, but AI persona update is paused.", variant: "default"});
+
+
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     let newAvatarUrl = avatarPreview;
     let newAnimatedAvatarUrl = animatedAvatarPreview;
@@ -159,10 +163,8 @@ export default function PersonaPage() {
         setIsSaving(false); return;
       }
     } else if (avatarPreview === DEFAULT_AVATAR_PLACEHOLDER) {
-       // If preview is placeholder, ensure we save the placeholder or an empty string if that's desired
-       // For now, let's ensure it's the actual placeholder URL if it was reset to it.
        newAvatarUrl = DEFAULT_AVATAR_PLACEHOLDER;
-       avatarUpdated = true; // Consider it "updated" if it was reset to default
+       avatarUpdated = true; 
     }
 
 
@@ -181,7 +183,7 @@ export default function PersonaPage() {
       }
     } else if (animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER) {
        newAnimatedAvatarUrl = DEFAULT_ANIMATED_AVATAR_PLACEHOLDER;
-       animatedAvatarUpdated = true; // Consider it "updated" if it was reset to default
+       animatedAvatarUpdated = true; 
     }
 
 
@@ -195,18 +197,15 @@ export default function PersonaPage() {
       const currentDocSnap = await getDoc(siteAssetsDocRef);
       const currentData = currentDocSnap.data() || {};
 
-      // Prepare data to save, only including fields that have changed or are new.
       const dataToSave: { [key: string]: any } = {
-        // Always include these as they might change from their text fields
         personaTraits,
         conversationalTopics,
         useKnowledgeInGreeting,
-        customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage, // Store empty string if cleared
+        customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
         responsePauseTimeMs: validPauseTime,
         animationSyncFactor: validSyncFactor,
       };
 
-      // Only add avatar URLs if they've been updated or are different from stored
       if (avatarUpdated || newAvatarUrl !== currentData.avatarUrl) {
         dataToSave.avatarUrl = newAvatarUrl;
       }
@@ -214,58 +213,12 @@ export default function PersonaPage() {
         dataToSave.animatedAvatarUrl = newAnimatedAvatarUrl;
       }
 
+      await setDoc(siteAssetsDocRef, dataToSave, { merge: true });
 
-      // Determine if any actual settings changed to avoid unnecessary writes/AI calls
-      let settingsActuallyChanged = false;
-      if (Object.keys(dataToSave).some(key => dataToSave[key] !== (currentData[key] ))) {
-        settingsActuallyChanged = true;
-      }
-      // More explicit checks for defaults might be needed if currentData[key] could be undefined vs. default
-      if (dataToSave.personaTraits !== (currentData.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT)) settingsActuallyChanged = true;
-      if (dataToSave.conversationalTopics !== (currentData.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS)) settingsActuallyChanged = true;
-      if (dataToSave.useKnowledgeInGreeting !== (currentData.useKnowledgeInGreeting === undefined ? true : currentData.useKnowledgeInGreeting)) settingsActuallyChanged = true;
-      if (dataToSave.customGreetingMessage !== (currentData.customGreetingMessage || DEFAULT_CUSTOM_GREETING)) settingsActuallyChanged = true;
-      if (dataToSave.responsePauseTimeMs !== (currentData.responsePauseTimeMs === undefined ? DEFAULT_RESPONSE_PAUSE_TIME_MS : currentData.responsePauseTimeMs)) settingsActuallyChanged = true;
-      if (dataToSave.animationSyncFactor !== (currentData.animationSyncFactor === undefined ? DEFAULT_ANIMATION_SYNC_FACTOR : currentData.animationSyncFactor)) settingsActuallyChanged = true;
-
-
-      if (settingsActuallyChanged || avatarUpdated || animatedAvatarUpdated) {
-        if (currentDocSnap.exists()) {
-          // Only update the fields that are part of this page's concerns
-          const updatePayload = { ...dataToSave };
-          // Ensure we don't accidentally wipe other fields from site_display_assets
-          // by explicitly merging only what this page manages.
-          await updateDoc(siteAssetsDocRef, updatePayload);
-        } else {
-          // If document doesn't exist, create it with all fields this page manages + defaults for others
-          await setDoc(siteAssetsDocRef, {
-             // Fields managed by this page
-             ...dataToSave, // This includes personaTraits, avatars, greeting settings, pause time
-             avatarUrl: dataToSave.avatarUrl !== undefined ? dataToSave.avatarUrl : DEFAULT_AVATAR_PLACEHOLDER,
-             animatedAvatarUrl: dataToSave.animatedAvatarUrl !== undefined ? dataToSave.animatedAvatarUrl : DEFAULT_ANIMATED_AVATAR_PLACEHOLDER,
-             // Default values for fields NOT managed by this page but potentially in the same doc
-             splashImageUrl: currentData.splashImageUrl || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", // Default transparent GIF
-             splashWelcomeMessage: currentData.splashWelcomeMessage || "Welcome to AI Chat",
-             enableTextAnimation: currentData.enableTextAnimation === undefined ? false : currentData.enableTextAnimation,
-             textAnimationSpeedMs: currentData.textAnimationSpeedMs === undefined ? 800 : currentData.textAnimationSpeedMs,
-          });
-        }
-
-        // Call the AI flow to update persona
-        const input: AdjustAiPersonaAndPersonalityInput = { personaTraits };
-        const result = await adjustAiPersonaAndPersonality(input);
-
-        let toastMessages = ["AI persona and avatar settings have been updated."];
-        if (avatarUpdated && newAvatarUrl !== currentData.avatarUrl) toastMessages.unshift("Static avatar updated.");
-        if (animatedAvatarUpdated && newAnimatedAvatarUrl !== currentData.animatedAvatarUrl) toastMessages.unshift("Animated avatar updated.");
-
-        toast({ title: "Persona Settings Saved", description: result.updatedPersonaDescription + " " + toastMessages.join(" ") });
-      } else {
-        toast({ title: "No Changes", description: "No settings were changed." });
-      }
+      toast({ title: "Persona Settings Saved", description: "Your settings have been saved to Firestore." });
 
     } catch (error) {
-      console.error("Failed to save persona/avatars or call AI flow:", error);
+      console.error("Failed to save persona/avatars:", error);
       toast({ title: "Error Saving Settings", description: "Could not save all settings. Please check console.", variant: "destructive" });
     }
 
@@ -274,15 +227,15 @@ export default function PersonaPage() {
 
   const handleResetAvatar = async () => {
     setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
-    setSelectedAvatarFile(null); // Clear any selected file
-    if (avatarInputRef.current) avatarInputRef.current.value = ""; // Reset file input
+    setSelectedAvatarFile(null); 
+    if (avatarInputRef.current) avatarInputRef.current.value = ""; 
     toast({ title: "Static Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
   };
 
   const handleResetAnimatedAvatar = async () => {
     setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
-    setSelectedAnimatedAvatarFile(null); // Clear any selected file
-    if (animatedAvatarInputRef.current) animatedAvatarInputRef.current.value = ""; // Reset file input
+    setSelectedAnimatedAvatarFile(null); 
+    if (animatedAvatarInputRef.current) animatedAvatarInputRef.current.value = ""; 
     toast({ title: "Animated Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
   };
 
