@@ -1,1 +1,9 @@
-// This file's content has been restored to src/app/page.tsx. This file can be safely deleted.
+
+'use client';
+
+// This file is a temporary placeholder to resolve a build error.
+// It can be safely ignored or deleted.
+
+export default function TempStartPage() {
+  return null;
+}
