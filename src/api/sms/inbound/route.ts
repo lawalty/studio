@@ -2,8 +2,8 @@
 'use server';
 
 import { NextRequest } from 'next/server';
-// import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
-// import { sendSms } from '@/ai/flows/send-sms-flow';
+import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
+import { sendSms } from '@/ai/flows/send-sms-flow';
 import * as admin from 'firebase-admin';
 
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
         }
         const db = admin.firestore();
         const docRef = db.doc(FIRESTORE_SITE_ASSETS_PATH);
-        const docSnap = await getDoc(docRef);
+        const docSnap = await docRef.get(); // Corrected: Used .get() for Admin SDK
         if (docSnap.exists && docSnap.data()?.personaTraits) {
             personaTraits = docSnap.data()!.personaTraits;
         }
@@ -41,27 +41,25 @@ export async function POST(request: NextRequest) {
     }
     
     // 2. Generate a concise, SMS-friendly response using the AI flow.
-    // const { smsResponse } = await generateSmsResponse({
-    //   userMessage,
-    //   personaTraits,
-    // });
-    const smsResponse = "SMS AI responses are temporarily disabled."; // Temporary diagnostic response
+    const { smsResponse } = await generateSmsResponse({
+      userMessage,
+      personaTraits,
+    });
 
     // If the AI generates an empty response, don't send anything back.
     if (!smsResponse || smsResponse.trim() === '') {
         console.log("Generated SMS response was empty, so no reply was sent.");
     } else {
-    //    // 3. Send the AI's response back to the user via the Twilio SMS flow.
-    //     const sendResult = await sendSms({
-    //         toPhoneNumber: fromPhoneNumber,
-    //         messageBody: smsResponse,
-    //     });
+       // 3. Send the AI's response back to the user via the Twilio SMS flow.
+        const sendResult = await sendSms({
+            toPhoneNumber: fromPhoneNumber,
+            messageBody: smsResponse,
+        });
 
-    //     if (!sendResult.success) {
-    //         // Log the error if the SMS fails to send, but don't crash the webhook.
-    //         console.error("Failed to send outbound SMS via flow:", sendResult.error);
-    //     }
-      console.log("SMS sending is temporarily disabled for diagnostics.");
+        if (!sendResult.success) {
+            // Log the error if the SMS fails to send, but don't crash the webhook.
+            console.error("Failed to send outbound SMS via flow:", sendResult.error);
+        }
     }
 
     // 4. Respond to Twilio's webhook request with empty TwiML.
