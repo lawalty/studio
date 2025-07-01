@@ -1,22 +1,25 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
+# This is a minimal configuration.
+# The build system will apply default settings for memory, CPU, and health checks.
+# For more advanced options, see the documentation.
+# runConfig:
+#   cpu: 1
+#   memoryMiB: 512
+#   maxInstances: 2
+#   minInstances: 0
+# healthCheck:
+#   startupProbe:
+#     timeoutSeconds: 300
+#     httpGet:
+#       path: /
+#       port: 8080
+#   livenessProbe:
+#     httpGet:
+#       path: /
+#       port: 8080
+#     periodSeconds: 30
+#     timeoutSeconds: 30
 
-runConfig:
-  # Give the application a temporary CPU boost during its startup phase
-  # to help it launch faster and avoid timeout errors.
-  startupCpuBoost: true
-  # Increase memory to 1GiB to avoid memory pressure during cold starts.
-  memoryMiB: 1024
-
-# Defines the health check for the application to ensure it's ready for traffic.
-healthCheck:
-  # Use an HTTP check on the root path to confirm the app is fully responsive.
-  startupProbe:
-    # Maximum timeout to give the container plenty of time to start.
-    timeoutSeconds: 300
-    # Number of times to try the probe before failing the deployment.
-    failureThreshold: 1
-    # Check for an HTTP GET request on the specified port.
-    httpGet:
-      path: /
-      port: 8080
+# Ingress is "all" by default, allowing public traffic.
+# ingress: all

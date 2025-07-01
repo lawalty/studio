@@ -1,12 +1,17 @@
-
-'use server';
 /**
  * @fileOverview Performs vector-based semantic search on the knowledge base.
  *
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
  */
 import { getGenkitAi } from '@/ai/genkit';
-import { db } from '@/lib/firebase-admin';
+import * as admin from 'firebase-admin';
+
+// Initialize Firebase Admin SDK if not already done.
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
+
 
 // Helper function to calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {

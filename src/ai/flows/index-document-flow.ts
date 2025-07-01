@@ -7,10 +7,16 @@
  * - IndexDocumentInput - The input type for the function.
  * - IndexDocumentOutput - The return type for the function.
  */
-
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
-import { db } from '@/lib/firebase-admin';
+import * as admin from 'firebase-admin';
+
+// Initialize Firebase Admin SDK if not already done.
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
+
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),

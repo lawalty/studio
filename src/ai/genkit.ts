@@ -1,12 +1,6 @@
-
 import { genkit, type Genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import { db } from '@/lib/firebase-admin';
-
-const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-
-// Cached instance of the Genkit AI object
-let aiInstance: Genkit | null = null;
+import * as admin from 'firebase-admin';
 
 /**
  * @fileOverview Dynamic Genkit Configuration
@@ -19,8 +13,21 @@ let aiInstance: Genkit | null = null;
  * The getGenkitAi function initializes Genkit with the fetched key
  * and caches the instance for subsequent calls to improve performance.
  */
+
+// Initialize Firebase Admin SDK only if it hasn't been already.
+if (admin.apps.length === 0) {
+  try {
+    admin.initializeApp();
+  } catch (error) {
+    console.error('Firebase Admin initialization error in genkit.ts', error);
+  }
+}
+const db = admin.firestore();
+
+const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+let aiInstance: Genkit | null = null;
+
 export async function getGenkitAi(): Promise<Genkit> {
-  // Return the cached instance if it already exists.
   if (aiInstance) {
     return aiInstance;
   }
@@ -40,24 +47,17 @@ export async function getGenkitAi(): Promise<Genkit> {
       throw new Error("Google AI API Key is missing or invalid in Firestore configuration. Please add it in the admin panel.");
     }
     
-    // Configure Genkit with the API key from Firestore
     const newAiInstance = genkit({
       plugins: [
         googleAI({ apiKey: apiKey }),
       ],
-      // In-memory tracing for simplicity.
-      // For production, you might configure a persistent trace store.
     });
 
-    // Cache the new instance
     aiInstance = newAiInstance;
-
     return aiInstance;
 
   } catch (error) {
     console.error("[getGenkitAi] FATAL: Failed to initialize Genkit AI with key from Firestore:", error);
-    // This re-throws the error, which will cause the calling flow to fail.
-    // This is important for stopping execution if the AI cannot be configured.
     throw new Error(`Failed to configure Genkit: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }

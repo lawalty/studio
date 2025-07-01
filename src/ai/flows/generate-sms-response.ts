@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Generates a concise, SMS-friendly response using RAG.
  *
@@ -10,6 +9,11 @@
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
+import * as admin from 'firebase-admin';
+
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
 const GenerateSmsResponseInputSchema = z.object({
   userMessage: z.string().describe('The user message to respond to.'),
