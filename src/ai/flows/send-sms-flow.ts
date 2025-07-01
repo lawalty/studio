@@ -1,5 +1,4 @@
 
-'use server';
 /**
  * @fileOverview A flow to send an SMS message using Twilio.
  *

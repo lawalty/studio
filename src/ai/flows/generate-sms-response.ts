@@ -1,5 +1,4 @@
 
-'use server';
 /**
  * @fileOverview Generates a concise, SMS-friendly response using RAG.
  *
