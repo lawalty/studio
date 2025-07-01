@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextRequest } from 'next/server';
 import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
 import { sendSms } from '@/ai/flows/send-sms-flow';
