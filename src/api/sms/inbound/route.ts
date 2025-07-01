@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     let personaTraits = DEFAULT_PERSONA_TRAITS;
     try {
         const docRef = db.doc(FIRESTORE_SITE_ASSETS_PATH);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data()?.personaTraits) {
+        const docSnap = await docRef.get();
+        if (docSnap.exists && docSnap.data()?.personaTraits) {
             personaTraits = docSnap.data()!.personaTraits;
         }
     } catch (e) {
