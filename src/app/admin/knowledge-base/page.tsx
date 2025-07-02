@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText, FileQuestion } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText, FileQuestion, ShieldAlert } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
@@ -25,6 +25,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -156,6 +157,9 @@ export default function KnowledgeBasePage() {
 
   const [isTestingEmbedding, setIsTestingEmbedding] = useState(false);
   const [isTestingGeneration, setIsTestingGeneration] = useState(false);
+  
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
 
   const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
@@ -631,8 +635,30 @@ export default function KnowledgeBasePage() {
     }
     setIsTestingGeneration(false);
   };
+  
+  const handleDeleteAllSources = useCallback(async () => {
+    setIsDeletingAll(true);
+    toast({ title: "Deleting All Sources...", description: "This may take a few moments. Please wait." });
+    try {
+      for (const level of KB_LEVELS) {
+        // We get a fresh copy of the sources list to ensure we're not working with stale data
+        const currentSources = getSourcesState(level); 
+        for (const source of currentSources) {
+          // Re-using the existing single-delete logic for safety and consistency
+          await handleDelete(source.id, level);
+        }
+      }
+      toast({ title: "All Sources Deleted", description: "The knowledge base is now empty." });
+    } catch (error: any) {
+      console.error("Error during 'Delete All' operation:", error);
+      toast({ title: "Deletion Error", description: `An error occurred: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsDeletingAll(false);
+      setShowDeleteAllDialog(false);
+    }
+  }, [getSourcesState, handleDelete, toast]);
 
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration || isProcessingSme;
+  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration || isProcessingSme || isDeletingAll;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isThisSourceProcessing = isProcessingId === source.id;
@@ -916,6 +942,39 @@ export default function KnowledgeBasePage() {
             </Button>
         </CardFooter>
     </Card>
+    
+      <Card className="border-destructive">
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2 text-destructive"><ShieldAlert /> Danger Zone</CardTitle>
+          <CardDescription>
+            This action will permanently delete all knowledge base sources and their indexed data from all tiers. This is irreversible.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={anyOperationGloballyInProgress}>
+                <Trash2 className="mr-2 h-4 w-4" /> Delete All Sources
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all knowledge sources and their data from High, Medium, Low, and Archive tiers. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeletingAll}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAllSources} disabled={isDeletingAll} className="bg-destructive hover:bg-destructive/90">
+                  {isDeletingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Yes, delete everything
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </CardContent>
+      </Card>
 
     <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb']} className="w-full">
       {KB_LEVELS.map(level => (
@@ -966,5 +1025,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
