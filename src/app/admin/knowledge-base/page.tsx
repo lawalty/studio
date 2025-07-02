@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText, FileQuestion, ShieldAlert } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText, ShieldAlert } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
@@ -144,13 +144,6 @@ export default function KnowledgeBasePage() {
   const [selectedTopicForPastedText, setSelectedTopicForPastedText] = useState<string>('');
   const [isIndexingPastedText, setIsIndexingPastedText] = useState(false);
   
-  const [smeTranscript, setSmeTranscript] = useState('');
-  const [smeTranscriptSourceName, setSmeTranscriptSourceName] = useState('');
-  const [selectedKBTargetForSme, setSelectedKBTargetForSme] = useState<KnowledgeBaseLevel>('Medium');
-  const [selectedTopicForSme, setSelectedTopicForSme] = useState<string>('');
-  const [isProcessingSme, setIsProcessingSme] = useState(false);
-
-
   const [testQuery, setTestQuery] = useState('');
   const [testResult, setTestResult] = useState('');
   const [isTesting, setIsTesting] = useState(false);
@@ -576,37 +569,6 @@ export default function KnowledgeBasePage() {
     }
   };
 
-  const handleProcessSmeTranscript = async () => {
-    if (!smeTranscript.trim() || !smeTranscriptSourceName.trim() || !selectedTopicForSme) {
-      toast({ title: "Missing Information", description: "Please provide a source name, topic, and transcript.", variant: "destructive" });
-      return;
-    }
-    setIsProcessingSme(true);
-    try {
-        const { success, error } = await ingestSmeTranscript({
-            transcript: smeTranscript,
-            sourceName: smeTranscriptSourceName,
-            level: selectedKBTargetForSme,
-            topic: selectedTopicForSme,
-        });
-
-        if (success) {
-            toast({ title: "SME Transcript Submitted", description: "Successfully redacted and indexed transcript." });
-            setSmeTranscript('');
-            setSmeTranscriptSourceName('');
-            setSelectedTopicForSme('');
-            fetchSourcesForLevel(selectedKBTargetForSme); // Refresh the list
-        } else {
-            throw new Error(error || "An unknown error occurred during SME transcript processing.");
-        }
-    } catch (e: any) {
-        toast({ title: "Transcript Processing Failed", description: e.message, variant: "destructive", duration: 10000 });
-    } finally {
-        setIsProcessingSme(false);
-    }
-  };
-
-
   const handleTestKnowledgeBase = async () => {
     if (!testQuery) {
         toast({ title: "No Query", description: "Please enter a test question.", variant: "destructive" });
@@ -677,7 +639,7 @@ export default function KnowledgeBasePage() {
     }
   }, [getSourcesState, handleDelete, toast]);
 
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration || isProcessingSme || isDeletingAll;
+  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration || isDeletingAll;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isThisSourceProcessing = isProcessingId === source.id;
@@ -920,49 +882,7 @@ export default function KnowledgeBasePage() {
         </CardFooter>
     </Card>
     
-    <Card>
-        <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><FileQuestion /> Ingest SME Transcript</CardTitle>
-            <CardDescription>
-                Paste an anonymized SME conversation. It will be automatically redacted for any remaining PII and then indexed.
-            </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="sme-source-name">Source Name</Label>
-                <Input id="sme-source-name" value={smeTranscriptSourceName} onChange={(e) => setSmeTranscriptSourceName(e.target.value)} placeholder="e.g., 'SME Chat on Loan Performance'" suppressHydrationWarning />
-            </div>
-             <div className="space-y-2">
-              <Label>Topic</Label>
-              <Select value={selectedTopicForSme} onValueChange={setSelectedTopicForSme}>
-                  <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
-                  <SelectContent>
-                      {availableTopics.map(topic => <SelectItem key={`sme-${topic}`} value={topic}>{topic}</SelectItem>)}
-                  </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-                <Label>Priority Level</Label>
-                <RadioGroup value={selectedKBTargetForSme} onValueChange={(v) => setSelectedKBTargetForSme(v as KnowledgeBaseLevel)} className="flex space-x-4">
-                    {KB_LEVELS.filter(l => l !== 'Archive').map(level => (
-                        <div key={`sme-${level}`} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`rs-${level}`} /><Label htmlFor={`rs-${level}`}>{level}</Label></div>
-                    ))}
-                </RadioGroup>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="sme-transcript-content">SME Transcript</Label>
-                <Textarea id="sme-transcript-content" value={smeTranscript} onChange={(e) => setSmeTranscript(e.target.value)} placeholder="Paste the full SME Q&A transcript here..." rows={10} suppressHydrationWarning />
-            </div>
-        </CardContent>
-        <CardFooter>
-            <Button onClick={handleProcessSmeTranscript} disabled={!smeTranscript.trim() || !smeTranscriptSourceName.trim() || !selectedTopicForSme || anyOperationGloballyInProgress}>
-              {isProcessingSme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-              Redact & Process Transcript
-            </Button>
-        </CardFooter>
-    </Card>
-    
-      <Card className="border-destructive">
+    <Card className="border-destructive">
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2 text-destructive"><ShieldAlert /> Danger Zone</CardTitle>
           <CardDescription>
@@ -1044,5 +964,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
