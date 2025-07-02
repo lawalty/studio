@@ -1,4 +1,10 @@
-// This file is not currently in use.
-// Firebase Admin SDK initialization has been decentralized to the specific
-// server-side files that require it. This was done to revert to a previous,
-// more stable state for build and deployment debugging.
+import * as admin from 'firebase-admin';
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
+}
+
+export const adminDb = admin.firestore();
+export const adminAuth = admin.auth();
