@@ -7,8 +7,7 @@
  * - IndexDocumentInput - The input type for the function.
  * - IndexDocumentOutput - The return type for the function.
  */
-import { getGenkitAi } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin SDK if not already done.
@@ -36,11 +35,8 @@ const IndexDocumentOutputSchema = z.object({
 });
 export type IndexDocumentOutput = z.infer<typeof IndexDocumentOutputSchema>;
 
-export async function indexDocument(input: IndexDocumentInput): Promise<IndexDocumentOutput> {
-  const ai = await getGenkitAi(); // AI instance not strictly needed here but good practice for consistency
-
-  // A simple text splitter function.
-  function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: number; chunkOverlap: number }): string[] {
+// A simple text splitter function.
+function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: number; chunkOverlap: number }): string[] {
     if (chunkOverlap >= chunkSize) {
       throw new Error("chunkOverlap must be smaller than chunkSize.");
     }
@@ -61,18 +57,19 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
     return chunks;
   }
 
-  const indexDocumentFlow = ai.defineFlow(
-    {
-      name: 'indexDocumentFlow',
-      inputSchema: IndexDocumentInputSchema,
-      outputSchema: IndexDocumentOutputSchema,
-    },
-    async ({ sourceId, sourceName, text, level, topic, downloadURL }) => {
+export async function indexDocument({ 
+    sourceId, 
+    sourceName, 
+    text, 
+    level, 
+    topic, 
+    downloadURL 
+}: IndexDocumentInput): Promise<IndexDocumentOutput> {
       try {
         const cleanText = text.trim();
         if (!cleanText) {
            const errorMessage = "No readable text content was found in the document. Aborting indexing.";
-           console.warn(`[indexDocumentFlow] ${errorMessage} Document: '${sourceName}'.`);
+           console.warn(`[indexDocument] ${errorMessage} Document: '${sourceName}'.`);
            return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
@@ -86,7 +83,7 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
           return { chunksWritten: 0, sourceId, success: true };
         }
 
-        console.log(`[indexDocumentFlow] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
+        console.log(`[indexDocument] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
 
         const batch = db.batch();
         const chunksCollection = db.collection('kb_chunks');
@@ -107,7 +104,7 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
 
         await batch.commit();
 
-        console.log(`[indexDocumentFlow] Successfully wrote ${chunks.length} chunks for source '${sourceName}'.`);
+        console.log(`[indexDocument] Successfully wrote ${chunks.length} chunks for source '${sourceName}'.`);
 
         return {
           chunksWritten: chunks.length,
@@ -116,7 +113,7 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
         };
 
       } catch (e: any) {
-        console.error(`[indexDocumentFlow] Raw error for source '${sourceName}':`, e);
+        console.error(`[indexDocument] Raw error for source '${sourceName}':`, e);
         let detailedError = `Indexing failed for an unknown reason. Please check the logs.`;
         const rawError = e instanceof Error ? e.message : JSON.stringify(e);
         
@@ -133,8 +130,4 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
           error: detailedError,
         };
       }
-    }
-  );
-
-  return indexDocumentFlow(input);
 }

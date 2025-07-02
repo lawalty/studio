@@ -279,9 +279,14 @@ export default function KnowledgeBasePage() {
     // Step 1: Extract Text
     try {
       if (!sourceToProcess.downloadURL) throw new Error("Source has no download URL to process.");
+      
+      toast({ title: `Processing: ${sourceToProcess.name}`, description: "Step 1: Starting text extraction..." });
       await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'pending', extractionError: '', indexingStatus: 'pending', indexingError: '' });
-      const { extractedText: text, } = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: conversationalTopics });
+      
+      const { extractedText: text } = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: conversationalTopics });
       extractedText = text;
+
+      toast({ title: `Processing: ${sourceToProcess.name}`, description: "Step 1: Text extraction successful." });
       await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'success' });
     } catch (e: any) {
       console.error(`[KBPage - triggerProcessing - Extraction] Error for source ${sourceToProcess.name}:`, e);
@@ -294,7 +299,9 @@ export default function KnowledgeBasePage() {
 
     // Step 2: Index Text
     try {
+      toast({ title: `Processing: ${sourceToProcess.name}`, description: "Step 2: Indexing content..." });
       await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'pending' });
+
       const { chunksWritten, success, error } = await indexDocument({
         sourceId: sourceToProcess.id,
         sourceName: sourceToProcess.name,
@@ -306,7 +313,7 @@ export default function KnowledgeBasePage() {
 
       if (success) {
         await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'indexed' });
-        toast({ title: "Indexing Complete", description: `Wrote ${chunksWritten} chunks for ${sourceToProcess.name}.` });
+        toast({ title: "Indexing Complete", description: `Wrote ${chunksWritten} chunks for ${sourceToProcess.name}. The embeddings will be generated in the background.` });
       } else {
         throw new Error(error || "An unknown indexing error occurred.");
       }
