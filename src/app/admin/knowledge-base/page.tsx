@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -34,7 +35,7 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
@@ -965,3 +966,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
