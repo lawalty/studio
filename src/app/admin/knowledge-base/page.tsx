@@ -422,26 +422,45 @@ export default function KnowledgeBasePage() {
     if (!sourceToDelete) return;
 
     try {
-        if (sourceToDelete.storagePath && sourceToDelete.downloadURL) { // Only delete from storage if it's a real file
-            await deleteObject(storageRef(storage, sourceToDelete.storagePath));
+        // Step 1: Attempt to delete the file from Storage.
+        // We will catch 'object-not-found' errors and continue, as it means the file is already gone.
+        if (sourceToDelete.storagePath && sourceToDelete.downloadURL) {
+            try {
+                await deleteObject(storageRef(storage, sourceToDelete.storagePath));
+            } catch (storageError: any) {
+                if (storageError.code === 'storage/object-not-found') {
+                    console.warn(`[KBPage - handleDelete] Storage object already deleted for ${sourceToDelete.name}. Continuing to clean up metadata.`);
+                } else {
+                    // For any other storage error, re-throw it to fail the whole operation.
+                    throw storageError;
+                }
+            }
         }
 
+        // Step 2: Delete all associated chunks from Firestore.
         const chunksQuery = query(collection(db, "kb_chunks"), where("sourceId", "==", id));
         const chunksSnapshot = await getDocs(chunksQuery);
         if (!chunksSnapshot.empty) {
             const batch = writeBatch(db);
             chunksSnapshot.forEach(doc => batch.delete(doc.ref));
             await batch.commit();
-            toast({ title: "Indexed Chunks Removed", description: `${chunksSnapshot.size} associated chunks deleted.` });
+            toast({ title: "Indexed Chunks Removed", description: `${chunksSnapshot.size} associated chunks deleted from database.` });
         }
 
+        // Step 3: Remove the source metadata from the local state and Firestore.
         const updatedSources = sources.filter(source => source.id !== id);
-        setSources(updatedSources);
-        await saveSourcesToFirestore(updatedSources, level);
-        toast({ title: "Source Removed", description: `${sourceToDelete.name} and its data removed.` });
+        setSources(updatedSources); // Update UI immediately
+        const saveSuccess = await saveSourcesToFirestore(updatedSources, level);
+        
+        if (saveSuccess) {
+            toast({ title: "Source Removed", description: `${sourceToDelete.name} and its data have been removed.` });
+        } else {
+            // If saving fails, the UI might be out of sync. Prompting a refresh is the safest option.
+            toast({ title: "Finalization Error", description: `Could not save metadata changes for ${sourceToDelete.name}. Please refresh the page.`, variant: "destructive" });
+        }
 
     } catch (error: any) {
-        console.error(`[KBPage - handleDelete] Error:`, error);
+        console.error(`[KBPage - handleDelete] A critical error occurred while deleting ${sourceToDelete.name}:`, error);
         toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name}: ${error.message}`, variant: "destructive" });
     }
   }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
