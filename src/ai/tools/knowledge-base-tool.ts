@@ -1,4 +1,3 @@
-'use server';
 /**
  * @fileOverview Defines a Genkit tool for searching the knowledge base.
  * This allows the AI agent to decide when to search for information.
