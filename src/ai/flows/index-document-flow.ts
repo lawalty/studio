@@ -8,14 +8,7 @@
  * - IndexDocumentOutput - The return type for the function.
  */
 import { z } from 'zod';
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin SDK if not already done.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-const db = admin.firestore();
-
+import { db } from '@/lib/firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -83,8 +76,6 @@ export async function indexDocument({
           return { chunksWritten: 0, sourceId, success: true };
         }
 
-        console.log(`[indexDocument] Writing ${chunks.length} chunks for source '${sourceName}' to Firestore.`);
-
         const batch = db.batch();
         const chunksCollection = db.collection('kb_chunks');
 
@@ -103,9 +94,7 @@ export async function indexDocument({
         });
 
         await batch.commit();
-
-        console.log(`[indexDocument] Successfully wrote ${chunks.length} chunks for source '${sourceName}'.`);
-
+        
         return {
           chunksWritten: chunks.length,
           sourceId,

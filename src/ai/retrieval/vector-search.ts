@@ -4,15 +4,8 @@
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query and filters.
  */
 import { getGenkitAi } from '@/ai/genkit';
-import * as admin from 'firebase-admin';
+import { db, admin } from '@/lib/firebase-admin';
 import type { FieldPath, WhereFilterOp } from 'firebase-admin/firestore';
-
-
-// Initialize Firebase Admin SDK if not already done.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-const db = admin.firestore();
 
 
 // Helper function to calculate cosine similarity between two vectors

@@ -8,20 +8,9 @@
  * The getGenkitAi function initializes Genkit with the fetched key
  * and caches the instance for subsequent calls to improve performance.
  */
-
 import { genkit, type Genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin SDK only if it hasn't been already.
-if (admin.apps.length === 0) {
-  try {
-    admin.initializeApp();
-  } catch (error) {
-    console.error('Firebase Admin initialization error in genkit.ts', error);
-  }
-}
-const db = admin.firestore();
+import { db } from '@/lib/firebase-admin';
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 let aiInstance: Genkit | null = null;
@@ -62,7 +51,7 @@ export async function getGenkitAi(): Promise<Genkit> {
     return aiInstance;
 
   } catch (error) {
-    console.error("[getGenkitAi] FATAL: Failed to initialize Genkit AI with key from Firestore:", error);
+    console.error("[getGenkitAi] FATAL: Failed to initialize Genkit with key from Firestore:", error);
     // Fallback to the default instance if Firestore fetch fails
     return ai;
   }
