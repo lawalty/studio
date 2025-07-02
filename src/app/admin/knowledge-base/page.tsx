@@ -1025,3 +1025,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
