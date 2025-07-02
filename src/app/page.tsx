@@ -12,7 +12,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
-const DEFAULT_SPLASH_IMAGE_SRC = "https://placehold.co/800x600.png";
+const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_TYPING_SPEED_MS = 50;

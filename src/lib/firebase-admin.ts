@@ -15,7 +15,11 @@ if (admin.apps.length === 0) {
   try {
     // In a Google Cloud environment (like App Hosting), initializeApp()
     // with no arguments will automatically use the project's service account.
-    admin.initializeApp();
+    // However, explicitly passing the projectId from the environment can prevent
+    // "NOT_FOUND" errors if the automatic discovery process fails.
+    admin.initializeApp({
+      projectId: process.env.GCLOUD_PROJECT,
+    });
   } catch (error) {
     console.error('Firebase Admin SDK initialization error:', error);
   }

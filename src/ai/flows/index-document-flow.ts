@@ -103,10 +103,12 @@ export async function indexDocument({
 
       } catch (e: any) {
         console.error(`[indexDocument] Raw error for source '${sourceName}':`, e);
-        let detailedError = `Indexing failed for an unknown reason. Please check the logs.`;
         const rawError = e instanceof Error ? e.message : JSON.stringify(e);
-        
-        if (e.message && (e.message.includes('permission denied') || e.message.includes('IAM') || e.code === 7)) {
+        let detailedError: string;
+
+        if (e.code === 5) {
+            detailedError = `Indexing failed with a 'NOT_FOUND' error. This often means the Firestore database hasn't been created or is not accessible in the configured project ('${process.env.GCLOUD_PROJECT || 'auto-detected'}'). Please verify your Firebase project setup. Full technical error: ${rawError}`;
+        } else if (e.code === 7 || (e.message && (e.message.includes('permission denied') || e.message.includes('IAM')))) {
             detailedError = `Indexing failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Firestore User, Vertex AI User) and that the necessary Google Cloud APIs are enabled. Full technical error: ${rawError}`;
         } else {
             detailedError = `Indexing failed. This may be due to a configuration or service issue. Full technical error: ${rawError}`;
