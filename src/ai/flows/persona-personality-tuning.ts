@@ -48,7 +48,7 @@ export async function adjustAiPersonaAndPersonality(
       
       const prompt = ai.definePrompt({
         name: 'adjustAiPersonaAndPersonalityPrompt',
-        model: 'googleai/gemini-1.5-flash-latest',
+        model: 'googleai/gemini-1.5-flash',
         input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
         output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
         prompt: `You are AI Blair. Your personality settings have just been updated with the following traits:

@@ -7,7 +7,7 @@
  * - GenerateChatResponseOutput - The return type for the function.
  */
 
-import ai, { getGenkitAi } from '@/ai/genkit';
+import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { knowledgeBaseSearchTool } from '../tools/knowledge-base-tool';
 
@@ -56,7 +56,7 @@ export async function generateChatResponse(
       
       const prompt = ai.definePrompt({
         name: 'generateChatResponseAgentPrompt',
-        model: 'googleai/gemini-1.5-flash-latest',
+        model: 'googleai/gemini-1.5-flash',
         tools: [knowledgeBaseSearchTool],
         output: {schema: GenerateChatResponseOutputSchema},
         system: `You are AI Blair, a conversational diagnostic expert. Your personality is: {{{personaTraits}}}

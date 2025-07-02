@@ -55,7 +55,7 @@ export async function generateSmsResponse(
 
       const prompt = ai.definePrompt({
           name: 'generateSmsResponsePrompt',
-          model: 'googleai/gemini-1.5-flash-latest',
+          model: 'googleai/gemini-1.5-flash',
           input: {schema: SmsPromptInputSchema},
           output: {schema: GenerateSmsResponseOutputSchema},
           prompt: `You are AI Blair. Your personality is: {{{personaTraits}}}

@@ -49,7 +49,7 @@ export async function extractTextFromDocumentUrl(
         - Your final output should only be the clean, extracted text, ready for processing.`;
 
         const { text } = await ai.generate({
-          model: 'googleai/gemini-1.5-flash-latest',
+          model: 'googleai/gemini-1.5-flash',
           prompt: [{ text: prompt }, { media: { url: documentUrl } }],
           config: {
             temperature: 0.0,

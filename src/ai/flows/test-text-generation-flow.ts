@@ -29,7 +29,7 @@ export async function testTextGeneration(): Promise<TestTextGenerationOutput> {
     async () => {
       try {
         const { text } = await ai.generate({
-            model: 'googleai/gemini-1.5-flash-latest',
+            model: 'googleai/gemini-1.5-flash',
             prompt: 'Tell me a one-sentence joke.',
         });
 
