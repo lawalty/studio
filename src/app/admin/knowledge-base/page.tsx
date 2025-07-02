@@ -42,7 +42,6 @@ import { indexDocument } from '@/ai/flows/index-document-flow';
 import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
 import { testEmbedding } from '@/ai/flows/test-embedding-flow';
 import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
-import { ingestSmeTranscript } from '@/ai/flows/ingest-sme-transcript-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -136,13 +135,6 @@ export default function KnowledgeBasePage() {
   const [descriptionInput, setDescriptionInput] = useState('');
   const [isSavingDescription, setIsSavingDescription] = useState(false);
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
-
-  const [pastedText, setPastedText] = useState('');
-  const [pastedTextSourceName, setPastedTextSourceName] = useState('');
-  const [pastedTextDescription, setPastedTextDescription] = useState('');
-  const [selectedKBTargetForPastedText, setSelectedKBTargetForPastedText] = useState<KnowledgeBaseLevel>('Medium');
-  const [selectedTopicForPastedText, setSelectedTopicForPastedText] = useState<string>('');
-  const [isIndexingPastedText, setIsIndexingPastedText] = useState(false);
   
   const [testQuery, setTestQuery] = useState('');
   const [testResult, setTestResult] = useState('');
@@ -533,42 +525,6 @@ export default function KnowledgeBasePage() {
     setShowDescriptionDialog(false);
   }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
   
-  const handleIndexPastedText = async () => {
-    if (!pastedText.trim() || !pastedTextSourceName.trim() || !selectedTopicForPastedText) {
-      toast({ title: "Missing Information", description: "Please provide a source name, topic, and text to index.", variant: "destructive" });
-      return;
-    }
-    setIsIndexingPastedText(true);
-    
-    try {
-        const finalSourceName = pastedTextSourceName.toLowerCase().endsWith('.txt') 
-          ? pastedTextSourceName 
-          : `${pastedTextSourceName}.txt`;
-
-        const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
-        const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
-        
-        await handleUpload(textAsFile, selectedKBTargetForPastedText, selectedTopicForPastedText, pastedTextDescription);
-        
-        toast({ title: "Text Submitted Successfully", description: `Now processing for the ${selectedKBTargetForPastedText} knowledge base.` });
-        setPastedText('');
-        setPastedTextSourceName('');
-        setPastedTextDescription('');
-        setSelectedTopicForPastedText('');
-
-    } catch (error: any) {
-        console.error("[KBPage - handleIndexPastedText] Error:", error);
-        toast({
-            title: "Pasted Text Submission Failed",
-            description: `An error occurred: ${error.message || 'Please check the console for details.'}`,
-            variant: "destructive",
-            duration: 10000,
-        });
-    } finally {
-        setIsIndexingPastedText(false);
-    }
-  };
-
   const handleTestKnowledgeBase = async () => {
     if (!testQuery) {
         toast({ title: "No Query", description: "Please enter a test question.", variant: "destructive" });
@@ -639,7 +595,7 @@ export default function KnowledgeBasePage() {
     }
   }, [getSourcesState, handleDelete, toast]);
 
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration || isDeletingAll;
+  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isTesting || isTestingEmbedding || isTestingGeneration || isDeletingAll;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isThisSourceProcessing = isProcessingId === source.id;
@@ -836,52 +792,6 @@ export default function KnowledgeBasePage() {
         </CardFooter>
       </Card>
       
-      <Card>
-        <CardHeader>
-            <CardTitle className="font-headline">Index Pasted Text</CardTitle>
-            <CardDescription>
-                Paste text directly to index it. It will be saved as a .txt file and processed.
-            </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="pasted-text-source-name">Source Name</Label>
-                <Input id="pasted-text-source-name" value={pastedTextSourceName} onChange={(e) => setPastedTextSourceName(e.target.value)} placeholder="e.g., 'Company Mission Statement'" suppressHydrationWarning />
-            </div>
-             <div className="space-y-2">
-              <Label>Topic</Label>
-              <Select value={selectedTopicForPastedText} onValueChange={setSelectedTopicForPastedText}>
-                  <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
-                  <SelectContent>
-                      {availableTopics.map(topic => <SelectItem key={`pasted-${topic}`} value={topic}>{topic}</SelectItem>)}
-                  </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-                <Label>Priority Level</Label>
-                <RadioGroup value={selectedKBTargetForPastedText} onValueChange={(v) => setSelectedKBTargetForPastedText(v as KnowledgeBaseLevel)} className="flex space-x-4">
-                    {KB_LEVELS.filter(l => l !== 'Archive').map(level => (
-                        <div key={`pasted-${level}`} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`rp-${level}`} /><Label htmlFor={`rp-${level}`}>{level}</Label></div>
-                    ))}
-                </RadioGroup>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="pastedTextDescription">Description (Optional)</Label>
-                <Textarea id="pastedTextDescription" value={pastedTextDescription} onChange={(e) => setPastedTextDescription(e.target.value)} placeholder="Briefly describe the text..." suppressHydrationWarning />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="pasted-text-content">Text Content</Label>
-                <Textarea id="pasted-text-content" value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Paste your text content here..." rows={10} suppressHydrationWarning />
-            </div>
-        </CardContent>
-        <CardFooter>
-            <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || !selectedTopicForPastedText || anyOperationGloballyInProgress}>
-              {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
-              Save & Process Pasted Text
-            </Button>
-        </CardFooter>
-    </Card>
-    
     <Card className="border-destructive">
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2 text-destructive"><ShieldAlert /> Danger Zone</CardTitle>
