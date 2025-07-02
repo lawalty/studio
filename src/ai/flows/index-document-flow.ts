@@ -23,6 +23,7 @@ const IndexDocumentInputSchema = z.object({
   sourceName: z.string().describe('The original filename of the source document.'),
   text: z.string().describe('The full text content of the document to be indexed.'),
   level: z.string().describe('The priority level of the knowledge base (e.g., High, Medium).'),
+  topic: z.string().describe('The topic category for the document.'),
   downloadURL: z.string().url().optional().describe('The public downloadURL for the source file.'),
 });
 export type IndexDocumentInput = z.infer<typeof IndexDocumentInputSchema>;
@@ -66,7 +67,7 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
       inputSchema: IndexDocumentInputSchema,
       outputSchema: IndexDocumentOutputSchema,
     },
-    async ({ sourceId, sourceName, text, level, downloadURL }) => {
+    async ({ sourceId, sourceName, text, level, topic, downloadURL }) => {
       try {
         const cleanText = text.trim();
         if (!cleanText) {
@@ -75,9 +76,10 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
            return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
+        // Updated chunk size to be more token-friendly
         const chunks = simpleSplitter(cleanText, {
-          chunkSize: 1500, // A reasonable size for embedding models
-          chunkOverlap: 150,
+          chunkSize: 1000, 
+          chunkOverlap: 100,
         });
 
         if (chunks.length === 0) {
@@ -95,6 +97,7 @@ export async function indexDocument(input: IndexDocumentInput): Promise<IndexDoc
             sourceId,
             sourceName,
             level,
+            topic, // Added topic
             text: chunkText,
             chunkNumber: index + 1,
             createdAt: new Date().toISOString(),

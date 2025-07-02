@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText } from 'lucide-react';
+import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText, FileQuestion } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
 import { doc, getDoc, setDoc, writeBatch, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
   AlertDialog,
@@ -40,6 +41,7 @@ import { indexDocument } from '@/ai/flows/index-document-flow';
 import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
 import { testEmbedding } from '@/ai/flows/test-embedding-flow';
 import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
+import { ingestSmeTranscript } from '@/ai/flows/ingest-sme-transcript-flow';
 
 
 export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
@@ -52,8 +54,9 @@ export interface KnowledgeSource {
   size: string;
   uploadedAt: string;
   storagePath: string;
-  downloadURL: string;
+  downloadURL: string | null;
   description?: string;
+  topic?: string;
   extractionStatus?: KnowledgeSourceExtractionStatus;
   extractionError?: string;
   indexingStatus?: KnowledgeSourceIndexingStatus; 
@@ -111,12 +114,14 @@ export default function KnowledgeBasePage() {
   const [isLoadingLow, setIsLoadingLow] = useState(true);
   const [isLoadingArchive, setIsLoadingArchive] = useState(true);
 
+  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadDescription, setUploadDescription] = useState('');
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
   const [selectedKBTargetForUpload, setSelectedKBTargetForUpload] = useState<KnowledgeBaseLevel>('Medium');
+  const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -135,7 +140,15 @@ export default function KnowledgeBasePage() {
   const [pastedTextSourceName, setPastedTextSourceName] = useState('');
   const [pastedTextDescription, setPastedTextDescription] = useState('');
   const [selectedKBTargetForPastedText, setSelectedKBTargetForPastedText] = useState<KnowledgeBaseLevel>('Medium');
+  const [selectedTopicForPastedText, setSelectedTopicForPastedText] = useState<string>('');
   const [isIndexingPastedText, setIsIndexingPastedText] = useState(false);
+  
+  const [smeTranscript, setSmeTranscript] = useState('');
+  const [smeTranscriptSourceName, setSmeTranscriptSourceName] = useState('');
+  const [selectedKBTargetForSme, setSelectedKBTargetForSme] = useState<KnowledgeBaseLevel>('Medium');
+  const [selectedTopicForSme, setSelectedTopicForSme] = useState<string>('');
+  const [isProcessingSme, setIsProcessingSme] = useState(false);
+
 
   const [testQuery, setTestQuery] = useState('');
   const [testResult, setTestResult] = useState('');
@@ -174,6 +187,7 @@ export default function KnowledgeBasePage() {
         id: s.id, name: s.name, type: s.type, size: s.size,
         uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
         description: s.description || '',
+        topic: s.topic || 'General',
         extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
         extractionError: s.extractionError || '',
         indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
@@ -210,6 +224,7 @@ export default function KnowledgeBasePage() {
         const fetchedSources = (docSnap.data().sources as KnowledgeSource[]).map(s => ({
           ...s,
           description: s.description || '',
+          topic: s.topic || 'General',
           extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
           extractionError: s.extractionError || '',
           indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
@@ -233,10 +248,14 @@ export default function KnowledgeBasePage() {
           const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists() && docSnap.data()?.conversationalTopics) {
-              setConversationalTopics(docSnap.data()?.conversationalTopics);
+              const topicsString = docSnap.data()?.conversationalTopics;
+              setConversationalTopics(topicsString);
+              const topicsArray = topicsString.split('\n').map((t: string) => t.replace(/^-/, '').trim()).filter(Boolean);
+              setAvailableTopics(['General', ...topicsArray]);
           }
         } catch (error) {
             console.warn("Could not fetch conversational topics for text extraction.", error);
+            setAvailableTopics(['General']);
         }
     };
     fetchConversationalTopics();
@@ -270,6 +289,7 @@ export default function KnowledgeBasePage() {
     
     // Step 1: Extract Text
     try {
+      if (!sourceToProcess.downloadURL) throw new Error("Source has no download URL to process.");
       await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'pending', extractionError: '', indexingStatus: 'pending', indexingError: '' });
       const { extractedText: text, } = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: conversationalTopics });
       extractedText = text;
@@ -291,6 +311,7 @@ export default function KnowledgeBasePage() {
         sourceName: sourceToProcess.name,
         text: extractedText,
         level: level,
+        topic: sourceToProcess.topic || 'General',
         downloadURL: sourceToProcess.downloadURL,
       });
 
@@ -310,7 +331,7 @@ export default function KnowledgeBasePage() {
     }
   }, [toast, conversationalTopics, updateSourceStatus]);
   
-  const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, description: string) => {
+  const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, topic: string, description: string) => {
     if (!fileToUpload) {
       throw new Error("No file was provided to the upload handler.");
     }
@@ -342,6 +363,7 @@ export default function KnowledgeBasePage() {
         uploadedAt: new Date().toISOString(),
         storagePath: filePath, downloadURL: downloadURL,
         description: description || '',
+        topic: topic,
         extractionStatus: isProcessable ? 'pending' as const : 'not_applicable' as const,
         indexingStatus: isProcessable ? 'pending' as const : 'not_applicable' as const,
       };
@@ -371,12 +393,13 @@ export default function KnowledgeBasePage() {
   }, [getSourcesSetter, saveSourcesToFirestore, triggerProcessing, toast]);
 
   const handleFileUpload = async () => {
-    if (selectedFile) {
+    if (selectedFile && selectedTopicForUpload) {
       setIsCurrentlyUploading(true);
       try {
-        await handleUpload(selectedFile, selectedKBTargetForUpload, uploadDescription);
+        await handleUpload(selectedFile, selectedKBTargetForUpload, selectedTopicForUpload, uploadDescription);
         setSelectedFile(null);
         setUploadDescription('');
+        setSelectedTopicForUpload('');
         if (fileInputRef.current) fileInputRef.current.value = "";
       } catch (error) {
         // Error toast is already shown in handleUpload
@@ -384,7 +407,7 @@ export default function KnowledgeBasePage() {
         setIsCurrentlyUploading(false);
       }
     } else {
-      toast({ title: "No file selected", variant: "destructive" });
+      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
     }
   };
 
@@ -395,7 +418,7 @@ export default function KnowledgeBasePage() {
     if (!sourceToDelete) return;
 
     try {
-        if (sourceToDelete.storagePath) {
+        if (sourceToDelete.storagePath && sourceToDelete.downloadURL) { // Only delete from storage if it's a real file
             await deleteObject(storageRef(storage, sourceToDelete.storagePath));
         }
 
@@ -436,15 +459,18 @@ export default function KnowledgeBasePage() {
     toast({ title: "Move Started", description: `Moving ${source.name}...` });
 
     try {
-        const blob = await getBlob(storageRef(storage, source.storagePath));
-        const newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${source.storagePath.split('/').pop()}`;
-        const newFileRef = storageRef(storage, newStoragePath);
-        await uploadBytes(newFileRef, blob, { contentType: blob.type });
-        const newDownloadURL = await getDownloadURL(newFileRef);
-        await deleteObject(storageRef(storage, source.storagePath));
-        
-        const movedSource: KnowledgeSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL };
+        let movedSource: KnowledgeSource = { ...source };
 
+        if (source.downloadURL && source.storagePath) {
+            const blob = await getBlob(storageRef(storage, source.storagePath));
+            const newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${source.storagePath.split('/').pop()}`;
+            const newFileRef = storageRef(storage, newStoragePath);
+            await uploadBytes(newFileRef, blob, { contentType: blob.type });
+            const newDownloadURL = await getDownloadURL(newFileRef);
+            await deleteObject(storageRef(storage, source.storagePath));
+            movedSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL };
+        }
+        
         const chunksQuery = query(collection(db, "kb_chunks"), where("sourceId", "==", source.id));
         const chunksSnapshot = await getDocs(chunksQuery);
         if (!chunksSnapshot.empty) {
@@ -454,7 +480,7 @@ export default function KnowledgeBasePage() {
             toast({ title: "Chunk Levels Updated", description: `${chunksSnapshot.size} chunks updated.` });
         }
         
-        getSourcesSetter(targetLevel)(prev => [movedSource, ...prev]);
+        getSourcesSetter(targetLevel)(prev => [movedSource, ...prev].sort((a,b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()));
         getSourcesSetter(currentLevel)(prev => prev.filter(s => s.id !== source.id));
         
         await saveSourcesToFirestore([movedSource, ...getSourcesState(targetLevel)], targetLevel);
@@ -492,8 +518,8 @@ export default function KnowledgeBasePage() {
   }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
   
   const handleIndexPastedText = async () => {
-    if (!pastedText.trim() || !pastedTextSourceName.trim()) {
-      toast({ title: "Missing Information", description: "Please provide a source name and text to index.", variant: "destructive" });
+    if (!pastedText.trim() || !pastedTextSourceName.trim() || !selectedTopicForPastedText) {
+      toast({ title: "Missing Information", description: "Please provide a source name, topic, and text to index.", variant: "destructive" });
       return;
     }
     setIsIndexingPastedText(true);
@@ -506,12 +532,13 @@ export default function KnowledgeBasePage() {
         const textAsBlob = new Blob([pastedText], { type: 'text/plain' });
         const textAsFile = new File([textAsBlob], finalSourceName.replace(/[^a-zA-Z0-9._-]/g, '_'), { type: 'text/plain' });
         
-        await handleUpload(textAsFile, selectedKBTargetForPastedText, pastedTextDescription);
+        await handleUpload(textAsFile, selectedKBTargetForPastedText, selectedTopicForPastedText, pastedTextDescription);
         
         toast({ title: "Text Submitted Successfully", description: `Now processing for the ${selectedKBTargetForPastedText} knowledge base.` });
         setPastedText('');
         setPastedTextSourceName('');
         setPastedTextDescription('');
+        setSelectedTopicForPastedText('');
 
     } catch (error: any) {
         console.error("[KBPage - handleIndexPastedText] Error:", error);
@@ -525,6 +552,37 @@ export default function KnowledgeBasePage() {
         setIsIndexingPastedText(false);
     }
   };
+
+  const handleProcessSmeTranscript = async () => {
+    if (!smeTranscript.trim() || !smeTranscriptSourceName.trim() || !selectedTopicForSme) {
+      toast({ title: "Missing Information", description: "Please provide a source name, topic, and transcript.", variant: "destructive" });
+      return;
+    }
+    setIsProcessingSme(true);
+    try {
+        const { success, error } = await ingestSmeTranscript({
+            transcript: smeTranscript,
+            sourceName: smeTranscriptSourceName,
+            level: selectedKBTargetForSme,
+            topic: selectedTopicForSme,
+        });
+
+        if (success) {
+            toast({ title: "SME Transcript Submitted", description: "Successfully redacted and indexed transcript." });
+            setSmeTranscript('');
+            setSmeTranscriptSourceName('');
+            setSelectedTopicForSme('');
+            fetchSourcesForLevel(selectedKBTargetForSme); // Refresh the list
+        } else {
+            throw new Error(error || "An unknown error occurred during SME transcript processing.");
+        }
+    } catch (e: any) {
+        toast({ title: "Transcript Processing Failed", description: e.message, variant: "destructive", duration: 10000 });
+    } finally {
+        setIsProcessingSme(false);
+    }
+  };
+
 
   const handleTestKnowledgeBase = async () => {
     if (!testQuery) {
@@ -574,7 +632,7 @@ export default function KnowledgeBasePage() {
     setIsTestingGeneration(false);
   };
 
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration;
+  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isIndexingPastedText || isTesting || isTestingEmbedding || isTestingGeneration || isProcessingSme;
 
   const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
     const isThisSourceProcessing = isProcessingId === source.id;
@@ -635,7 +693,7 @@ export default function KnowledgeBasePage() {
               <TableRow>
                 <TableHead></TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>Topic</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Uploaded</TableHead>
@@ -649,11 +707,17 @@ export default function KnowledgeBasePage() {
                 <TableRow key={source.id}>
                   <TableCell>{getFileIcon(source.type)}</TableCell>
                   <TableCell className="font-medium truncate max-w-xs">{source.name}</TableCell>
-                  <TableCell className="capitalize">{source.type}</TableCell>
+                  <TableCell className="font-medium capitalize">{source.topic || 'General'}</TableCell>
                   <TableCell><Button variant="link" size="sm" onClick={() => handleOpenDescriptionDialog(source, level)}><Edit3 className="h-3 w-3 mr-1" /> View/Edit</Button></TableCell>
                   <TableCell>{source.size}</TableCell>
                   <TableCell>{new Date(source.uploadedAt).toLocaleDateString()}</TableCell>
-                  <TableCell><a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><Download className="h-4 w-4" /></a></TableCell>
+                  <TableCell>
+                    {source.downloadURL ? (
+                        <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><Download className="h-4 w-4" /></a>
+                    ) : (
+                        <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
                   <TableCell>{renderProcessingStatus(source, level)}</TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} disabled={anyOperationGloballyInProgress}><ArrowRightLeft className="h-4 w-4" /></Button>
@@ -735,6 +799,15 @@ export default function KnowledgeBasePage() {
             <Label htmlFor="file-upload">File</Label>
             <Input id="file-upload" type="file" ref={fileInputRef} onChange={handleFileChange} suppressHydrationWarning />
           </div>
+           <div className="space-y-2">
+              <Label>Topic</Label>
+              <Select value={selectedTopicForUpload} onValueChange={setSelectedTopicForUpload}>
+                  <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
+                  <SelectContent>
+                      {availableTopics.map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)}
+                  </SelectContent>
+              </Select>
+            </div>
           <div className="space-y-2">
             <Label>Priority Level</Label>
             <RadioGroup value={selectedKBTargetForUpload} onValueChange={(v) => setSelectedKBTargetForUpload(v as KnowledgeBaseLevel)} className="flex space-x-4">
@@ -749,7 +822,7 @@ export default function KnowledgeBasePage() {
           </div>
         </CardContent>
         <CardFooter>
-          <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress}>
+          <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress || !selectedTopicForUpload}>
             {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
             Upload and Process
           </Button>
@@ -767,6 +840,15 @@ export default function KnowledgeBasePage() {
             <div className="space-y-2">
                 <Label htmlFor="pasted-text-source-name">Source Name</Label>
                 <Input id="pasted-text-source-name" value={pastedTextSourceName} onChange={(e) => setPastedTextSourceName(e.target.value)} placeholder="e.g., 'Company Mission Statement'" suppressHydrationWarning />
+            </div>
+             <div className="space-y-2">
+              <Label>Topic</Label>
+              <Select value={selectedTopicForPastedText} onValueChange={setSelectedTopicForPastedText}>
+                  <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
+                  <SelectContent>
+                      {availableTopics.map(topic => <SelectItem key={`pasted-${topic}`} value={topic}>{topic}</SelectItem>)}
+                  </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
                 <Label>Priority Level</Label>
@@ -786,9 +868,51 @@ export default function KnowledgeBasePage() {
             </div>
         </CardContent>
         <CardFooter>
-            <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || anyOperationGloballyInProgress}>
+            <Button onClick={handleIndexPastedText} disabled={!pastedText.trim() || !pastedTextSourceName.trim() || !selectedTopicForPastedText || anyOperationGloballyInProgress}>
               {isIndexingPastedText ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
               Save & Process Pasted Text
+            </Button>
+        </CardFooter>
+    </Card>
+    
+    <Card>
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2"><FileQuestion /> Ingest SME Transcript</CardTitle>
+            <CardDescription>
+                Paste an anonymized SME conversation. It will be automatically redacted for any remaining PII and then indexed.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="sme-source-name">Source Name</Label>
+                <Input id="sme-source-name" value={smeTranscriptSourceName} onChange={(e) => setSmeTranscriptSourceName(e.target.value)} placeholder="e.g., 'SME Chat on Loan Performance'" suppressHydrationWarning />
+            </div>
+             <div className="space-y-2">
+              <Label>Topic</Label>
+              <Select value={selectedTopicForSme} onValueChange={setSelectedTopicForSme}>
+                  <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
+                  <SelectContent>
+                      {availableTopics.map(topic => <SelectItem key={`sme-${topic}`} value={topic}>{topic}</SelectItem>)}
+                  </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+                <Label>Priority Level</Label>
+                <RadioGroup value={selectedKBTargetForSme} onValueChange={(v) => setSelectedKBTargetForSme(v as KnowledgeBaseLevel)} className="flex space-x-4">
+                    {KB_LEVELS.filter(l => l !== 'Archive').map(level => (
+                        <div key={`sme-${level}`} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`rs-${level}`} /><Label htmlFor={`rs-${level}`}>{level}</Label></div>
+                    ))}
+                </RadioGroup>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="sme-transcript-content">SME Transcript</Label>
+                <Textarea id="sme-transcript-content" value={smeTranscript} onChange={(e) => setSmeTranscript(e.target.value)} placeholder="Paste the full SME Q&A transcript here..." rows={10} suppressHydrationWarning />
+            </div>
+        </CardContent>
+        <CardFooter>
+            <Button onClick={handleProcessSmeTranscript} disabled={!smeTranscript.trim() || !smeTranscriptSourceName.trim() || !selectedTopicForSme || anyOperationGloballyInProgress}>
+              {isProcessingSme ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Brain className="mr-2 h-4 w-4" />}
+              Redact & Process Transcript
             </Button>
         </CardFooter>
     </Card>

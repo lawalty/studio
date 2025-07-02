@@ -49,8 +49,8 @@ export async function generateSmsResponse(
       outputSchema: GenerateSmsResponseOutputSchema,
     },
     async (flowInput) => {
-      // 1. Search the knowledge base for relevant context
-      const context = await searchKnowledgeBase(flowInput.userMessage);
+      // 1. Search the knowledge base for relevant context (general search, no filters)
+      const context = await searchKnowledgeBase(flowInput.userMessage, {});
 
       const prompt = ai.definePrompt({
           name: 'generateSmsResponsePrompt',

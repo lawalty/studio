@@ -1,10 +1,12 @@
 /**
- * @fileOverview Performs vector-based semantic search on the knowledge base.
+ * @fileOverview Performs filtered, vector-based semantic search on the knowledge base.
  *
- * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query.
+ * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query and filters.
  */
 import { getGenkitAi } from '@/ai/genkit';
 import * as admin from 'firebase-admin';
+import type { FieldPath, WhereFilterOp } from 'firebase-admin/firestore';
+
 
 // Initialize Firebase Admin SDK if not already done.
 if (admin.apps.length === 0) {
@@ -36,17 +38,25 @@ interface SearchResult {
   text: string;
   sourceName: string;
   level: string;
+  topic: string;
   downloadURL?: string;
   similarity: number;
 }
 
+interface SearchFilters {
+    level?: string[];
+    topic?: string;
+}
+
 /**
- * Searches the knowledge base for text chunks semantically similar to the query.
+ * Searches the knowledge base for text chunks semantically similar to the query,
+ * applying filters for tier and topic.
  * @param query The user's search query.
+ * @param filters An object with optional 'level' (array of strings) and 'topic' (string) to filter by.
  * @param topK The number of top results to return.
  * @returns A formatted string of the top K results, or a message if none are found.
  */
-export async function searchKnowledgeBase(query: string, topK: number = 5): Promise<string> {
+export async function searchKnowledgeBase(query: string, filters: SearchFilters, topK: number = 5): Promise<string> {
   const ai = await getGenkitAi();
   
   // 1. Generate an embedding for the user's query.
@@ -61,27 +71,44 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
       throw new Error("Failed to generate a valid embedding for the search query.");
   }
   
-  // 2. Fetch all chunks from the Firestore collection.
-  const chunksCollectionRef = db.collection('kb_chunks');
-  const querySnapshot = await chunksCollectionRef.get();
+  // 2. Build a filtered Firestore query.
+  let chunksQuery: admin.firestore.Query = db.collection('kb_chunks');
+  
+  // Apply level (tier) filter. 'Archive' is always excluded unless explicitly requested (which it isn't).
+  const levelsToSearch = filters.level && filters.level.length > 0 ? filters.level : ['High', 'Medium', 'Low'];
+  if (levelsToSearch.length > 0) {
+      chunksQuery = chunksQuery.where('level', 'in', levelsToSearch);
+  } else {
+      // If for some reason an empty array is passed, default to searching non-archived.
+      chunksQuery = chunksQuery.where('level', 'in', ['High', 'Medium', 'Low']);
+  }
+
+  // Apply topic filter if provided.
+  if (filters.topic) {
+      chunksQuery = chunksQuery.where('topic', '==', filters.topic);
+  }
+
+  const querySnapshot = await chunksQuery.get();
 
   if (querySnapshot.empty) {
-    return "No information found in the knowledge base. The database is empty.";
+    return "No information found in the knowledge base for the specified topic/tier. The database is empty or your filters are too narrow.";
   }
 
   const allChunks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
 
-  // 3. Calculate similarity for each chunk in memory.
+  // 3. Calculate similarity for each fetched chunk in memory.
   const rankedResults: SearchResult[] = [];
   for (const chunk of allChunks) {
     if (chunk.embedding && Array.isArray(chunk.embedding.values) && chunk.embedding.values.length > 0) {
       const similarity = cosineSimilarity(queryEmbeddingVector, chunk.embedding.values);
       
+      // Using a similarity threshold to ensure relevance
       if (similarity > 0.7) { 
         rankedResults.push({
           text: chunk.text,
           sourceName: chunk.sourceName,
           level: chunk.level,
+          topic: chunk.topic,
           downloadURL: chunk.downloadURL,
           similarity: similarity,
         });
@@ -102,7 +129,7 @@ export async function searchKnowledgeBase(query: string, topK: number = 5): Prom
   return `Here is some context I found that might be relevant to the user's question. Use this information to form your answer.
 ---
 ${topResults.map(r => 
-  `Context from document "${r.sourceName}" (Priority: ${r.level}):
+  `Context from document "${r.sourceName}" (Topic: ${r.topic}, Priority: ${r.level}):
 ${r.text}
 ${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL) ? `(Reference URL for this chunk's source PDF: ${r.downloadURL})` : ''}`
 ).join('\n---\n')}

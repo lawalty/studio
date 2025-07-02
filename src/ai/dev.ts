@@ -1,4 +1,4 @@
-import {start} from 'genkit/dev';
+import {start} from 'genkit';
 
 // Note: This is a dev-only file, used for running the Genkit Inspector.
 // In production, these flows are imported and used directly by the Next.js app.
@@ -12,5 +12,6 @@ import './flows/test-knowledge-base-flow';
 import './flows/test-embedding-flow';
 import './flows/test-text-generation-flow';
 import './flows/text-to-speech-flow';
-
+import './flows/ingest-sme-transcript-flow';
+import './tools/knowledge-base-tool';
 start();

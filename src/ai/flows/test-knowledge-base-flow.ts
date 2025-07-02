@@ -34,7 +34,8 @@ export async function testKnowledgeBase(
       outputSchema: TestKnowledgeBaseOutputSchema,
     },
     async ({ query }) => {
-      const context = await searchKnowledgeBase(query);
+      // Perform a general search with no filters for testing purposes
+      const context = await searchKnowledgeBase(query, {}); 
       return { retrievedContext: context };
     }
   );
