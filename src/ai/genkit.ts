@@ -1,18 +1,18 @@
-import { genkit, type Genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/googleai';
-import * as admin from 'firebase-admin';
-
+'use server';
 /**
  * @fileOverview Dynamic Genkit Configuration
  *
  * This file dynamically configures the Genkit AI instance for the application.
- * Instead of relying on a static GOOGLE_AI_API_KEY from .env.local,
- * this setup fetches the key from Firestore at runtime. This is crucial
+ * It fetches the Google AI API key from Firestore at runtime. This is crucial
  * for production environments where .env files are not deployed.
  *
  * The getGenkitAi function initializes Genkit with the fetched key
  * and caches the instance for subsequent calls to improve performance.
  */
+
+import { genkit, type Genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
+import * as admin from 'firebase-admin';
 
 // Initialize Firebase Admin SDK only if it hasn't been already.
 if (admin.apps.length === 0) {
@@ -26,6 +26,12 @@ const db = admin.firestore();
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 let aiInstance: Genkit | null = null;
+const ai = genkit({
+  plugins: [
+    googleAI(),
+  ],
+});
+export default ai;
 
 export async function getGenkitAi(): Promise<Genkit> {
   if (aiInstance) {
@@ -58,6 +64,7 @@ export async function getGenkitAi(): Promise<Genkit> {
 
   } catch (error) {
     console.error("[getGenkitAi] FATAL: Failed to initialize Genkit AI with key from Firestore:", error);
-    throw new Error(`Failed to configure Genkit: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Fallback to the default instance if Firestore fetch fails
+    return ai;
   }
 }

@@ -5,6 +5,7 @@
  * - SendSmsInput - The input type for the function.
  * - SendSmsOutput - The return type for the function.
  */
+'use server';
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as admin from 'firebase-admin';

@@ -8,6 +8,11 @@
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { indexDocument } from './index-document-flow';
+import * as admin from 'firebase-admin';
+
+if (admin.apps.length === 0) {
+    admin.initializeApp();
+}
 
 export const IngestSmeTranscriptInputSchema = z.object({
   transcript: z.string().describe('The full text content of the SME conversation.'),

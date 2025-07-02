@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow for testing the knowledge base retrieval.

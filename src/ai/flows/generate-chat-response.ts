@@ -7,7 +7,7 @@
  * - GenerateChatResponseOutput - The return type for the function.
  */
 
-import { getGenkitAi } from '@/ai/genkit';
+import ai, { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
 import { knowledgeBaseSearchTool } from '../tools/knowledge-base-tool';
 

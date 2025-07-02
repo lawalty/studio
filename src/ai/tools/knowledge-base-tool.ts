@@ -4,7 +4,7 @@
  * This allows the AI agent to decide when to search for information.
  */
 
-import { getGenkitAi } from '@/ai/genkit';
+import ai from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
