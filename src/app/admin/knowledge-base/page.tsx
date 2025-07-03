@@ -69,7 +69,10 @@ export default function KnowledgeBasePage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const topicsString = data.conversationalTopics || '';
-          const topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+          const topicsArray = topicsString
+            .split(/[\n,]+/) // Split by newlines or commas
+            .map((t: string) => t.replace(/^-/, '').trim()) // Remove leading hyphens and trim
+            .filter((t: string) => t); // Filter out empty strings
           setAvailableTopics(topicsArray);
         }
       } catch (error) {
@@ -78,7 +81,7 @@ export default function KnowledgeBasePage() {
       }
     };
     fetchTopics();
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
@@ -110,7 +113,7 @@ export default function KnowledgeBasePage() {
     });
 
     return () => unsubscribers.forEach(unsub => unsub());
-  }, []);
+  }, [toast]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {

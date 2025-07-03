@@ -22,7 +22,7 @@ const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
-const DEFAULT_CONVERSATIONAL_TOPICS = "- Pawn industry regulations\n- Customer service best practices\n- Product valuation (jewelry, electronics, etc.)\n- Store operations and security";
+const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
@@ -288,13 +288,13 @@ export default function PersonaPage() {
                   id="conversationalTopics"
                   value={conversationalTopics}
                   onChange={(e) => setConversationalTopics(e.target.value)}
-                  placeholder="List the topics the AI is an expert on, one per line..."
+                  placeholder="Enter topics separated by commas (e.g., Topic 1, Topic 2, Topic 3)"
                   rows={5}
                   className="mt-1"
                   suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  List the core topics AI Blair should focus on. This helps keep the conversation relevant and accurate.
+                  Enter a comma-separated list of topics AI Blair should focus on. This list will be used to categorize documents in the Knowledge Base.
                 </p>
               </div>
 
