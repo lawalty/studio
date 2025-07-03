@@ -9,7 +9,7 @@
 
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'genkit';
-import { knowledgeBaseSearchTool } from '../tools/knowledge-base-tool';
+import { searchKnowledgeBase } from '../retrieval/vector-search';
 
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'model']),
@@ -45,6 +45,33 @@ export async function generateChatResponse(
   input: GenerateChatResponseInput
 ): Promise<GenerateChatResponseOutput> {
   const ai = await getGenkitAi();
+
+  // The tool must be defined with the same dynamic 'ai' instance as the flow.
+  const knowledgeBaseSearchTool = ai.defineTool(
+    {
+      name: 'knowledgeBaseSearch',
+      description: 'Searches the knowledge base for information to answer a user\'s question. Use this whenever you need specific details, procedures, or data.',
+      inputSchema: z.object({
+        query: z.string().describe('The user\'s question or the specific information you are looking for.'),
+        topic: z.string().optional().describe('Filter the search to a specific topic category if relevant.'),
+        level: z.array(z.string()).optional().describe('Filter by one or more priority levels (High, Medium, Low). Defaults to all.'),
+      }),
+      outputSchema: z.string().describe('The retrieved context from the knowledge base.'),
+    },
+    async (toolInput) => {
+      console.log(`[knowledgeBaseSearchTool] Searching for query: "${toolInput.query}" with filters:`, toolInput);
+      try {
+        const context = await searchKnowledgeBase(toolInput.query, {
+          level: toolInput.level,
+          topic: toolInput.topic,
+        });
+        return context;
+      } catch (error: any) {
+          console.error('[knowledgeBaseSearchTool] Error:', error);
+          return `An error occurred while searching the knowledge base: ${error.message}`;
+      }
+    }
+  );
   
   const generateChatResponseFlow = ai.defineFlow(
     {
@@ -57,7 +84,7 @@ export async function generateChatResponse(
       const prompt = ai.definePrompt({
         name: 'generateChatResponseAgentPrompt',
         model: 'googleai/gemini-1.5-flash',
-        tools: [knowledgeBaseSearchTool],
+        tools: [knowledgeBaseSearchTool], // Use the locally defined tool
         output: {schema: GenerateChatResponseOutputSchema},
         system: `You are AI Blair, a conversational diagnostic expert. Your personality is: {{{personaTraits}}}
 Your main areas of expertise are:

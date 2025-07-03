@@ -1,883 +1,526 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { db, storage } from '@/lib/firebase';
+import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { UploadCloud, Trash2, FileText, FileAudio, FileImage, AlertCircle, FileType2, RefreshCw, Loader2, ArrowRightLeft, Edit3, Save, Brain, SearchCheck, Download, BrainCircuit, Beaker, MessageSquareText, ShieldAlert } from 'lucide-react';
-import { useToast } from "@/hooks/use-toast";
-import { storage, db } from '@/lib/firebase';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, getBlob } from "firebase/storage";
-import { doc, getDoc, setDoc, writeBatch, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { extractTextFromDocumentUrl } from '@/ai/flows/extract-text-from-document-url-flow';
-import { indexDocument } from '@/ai/flows/index-document-flow';
-import { testKnowledgeBase } from '@/ai/flows/test-knowledge-base-flow';
-import { testEmbedding } from '@/ai/flows/test-embedding-flow';
-import { testTextGeneration } from '@/ai/flows/test-text-generation-flow';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { toast } from "@/hooks/use-toast";
+import { v4 as uuidv4 } from 'uuid';
+import { extractTextFromDocumentUrl, type ExtractTextFromDocumentUrlInput } from '@/ai/flows/extract-text-from-document-url-flow';
+import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
+import { Loader2, UploadCloud, Trash2, ShieldAlert, FileText, CheckCircle, AlertTriangle, ChevronRight, ChevronsRight, ChevronsLeft, History, Archive } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { cn } from '@/lib/utils';
 
+type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
 
-export type KnowledgeSourceExtractionStatus = 'pending' | 'success' | 'failed' | 'not_applicable';
-export type KnowledgeSourceIndexingStatus = 'pending' | 'indexed' | 'failed' | 'not_applicable';
-
-export interface KnowledgeSource {
+interface KnowledgeSource {
   id: string;
-  name: string;
-  type: 'text' | 'pdf' | 'document' | 'audio' | 'image' | 'other';
-  size: string;
-  uploadedAt: string;
-  storagePath: string;
-  downloadURL: string | null;
-  description?: string;
-  topic?: string;
-  extractionStatus?: KnowledgeSourceExtractionStatus;
-  extractionError?: string;
-  indexingStatus?: KnowledgeSourceIndexingStatus; 
+  sourceName: string;
+  description: string;
+  topic: string;
+  level: KnowledgeBaseLevel;
+  createdAt: string;
+  indexingStatus: 'processing' | 'success' | 'failed';
   indexingError?: string;
+  downloadURL?: string;
+  chunksWritten?: number;
 }
 
-export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
-const KB_LEVELS: KnowledgeBaseLevel[] = ['High', 'Medium', 'Low', 'Archive'];
-
-const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const DEFAULT_CONVERSATIONAL_TOPICS = "";
-
-const KB_CONFIG: Record<KnowledgeBaseLevel, { firestorePath: string; storageFolder: string; title: string }> = {
-  High: {
-    firestorePath: "configurations/kb_high_meta_v1",
-    storageFolder: "knowledge_base_files_high_v1/",
-    title: "High Priority Knowledge Base"
-  },
-  Medium: {
-    firestorePath: "configurations/kb_medium_meta_v1",
-    storageFolder: "knowledge_base_files_medium_v1/",
-    title: "Medium Priority Knowledge Base"
-  },
-  Low: {
-    firestorePath: "configurations/kb_low_meta_v1",
-    storageFolder: "knowledge_base_files_low_v1/",
-    title: "Low Priority Knowledge Base"
-  },
-  Archive: {
-    firestorePath: "configurations/kb_archive_meta_v1",
-    storageFolder: "knowledge_base_files_archive_v1/",
-    title: "Archived Sources"
-  }
-};
-
-const getFileIcon = (type: KnowledgeSource['type']) => {
-  switch (type) {
-    case 'pdf': return <FileText className="h-5 w-5 text-red-500" />;
-    case 'text': return <FileText className="h-5 w-5 text-blue-500" />;
-    case 'document': return <FileType2 className="h-5 w-5 text-sky-600" />;
-    case 'audio': return <FileAudio className="h-5 w-5 text-purple-500" />;
-    case 'image': return <FileImage className="h-5 w-5 text-green-500" />;
-    default: return <FileText className="h-5 w-5 text-gray-500" />;
-  }
+const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
+  'High': { collectionName: 'kb_high_meta_v1', title: 'High Priority Knowledge Base', description: 'Manage high priority sources.' },
+  'Medium': { collectionName: 'kb_medium_meta_v1', title: 'Medium Priority Knowledge Base', description: 'Manage medium priority sources.' },
+  'Low': { collectionName: 'kb_low_meta_v1', title: 'Low Priority Knowledge Base', description: 'Manage low priority sources.' },
+  'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived Knowledge Base', description: 'Archived sources are not used by the AI.' },
 };
 
 export default function KnowledgeBasePage() {
-  const [sourcesHigh, setSourcesHigh] = useState<KnowledgeSource[]>([]);
-  const [sourcesMedium, setSourcesMedium] = useState<KnowledgeSource[]>([]);
-  const [sourcesLow, setSourcesLow] = useState<KnowledgeSource[]>([]);
-  const [sourcesArchive, setSourcesArchive] = useState<KnowledgeSource[]>([]);
-
-  const [isLoadingHigh, setIsLoadingHigh] = useState(true);
-  const [isLoadingMedium, setIsLoadingMedium] = useState(true);
-  const [isLoadingLow, setIsLoadingLow] = useState(true);
-  const [isLoadingArchive, setIsLoadingArchive] = useState(true);
-
-  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
-  const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
-
+  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Archive': [] });
+  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Archive': true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadDescription, setUploadDescription] = useState('');
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
-  const [selectedKBTargetForUpload, setSelectedKBTargetForUpload] = useState<KnowledgeBaseLevel>('Medium');
+  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high-priority');
+  const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
 
-  const [showMoveDialog, setShowMoveDialog] = useState(false);
-  const [sourceToMoveDetails, setSourceToMoveDetails] = useState<{ source: KnowledgeSource; currentLevel: KnowledgeBaseLevel } | null>(null);
-  const [selectedTargetMoveLevel, setSelectedTargetMoveLevel] = useState<KnowledgeBaseLevel | null>(null);
-  const [isMovingSource, setIsMovingSource] = useState(false);
+  const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
-  const [showDescriptionDialog, setShowDescriptionDialog] = useState(false);
-  const [editingSourceDetails, setEditingSourceDetails] = useState<{ source: KnowledgeSource; level: KnowledgeBaseLevel } | null>(null);
-  const [descriptionInput, setDescriptionInput] = useState('');
-  const [isSavingDescription, setIsSavingDescription] = useState(false);
-  const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
-  
-  const [testQuery, setTestQuery] = useState('');
-  const [testResult, setTestResult] = useState('');
-  const [isTesting, setIsTesting] = useState(false);
+  const setOperationStatus = (id: string, status: boolean) => {
+    setOperationInProgress(prev => ({ ...prev, [id]: status }));
+  };
 
-  const [isTestingEmbedding, setIsTestingEmbedding] = useState(false);
-  const [isTestingGeneration, setIsTestingGeneration] = useState(false);
-  
-  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
-  const [isDeletingAll, setIsDeletingAll] = useState(false);
-
-
-  const getSourcesSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<KnowledgeSource[]>> => {
-    if (level === 'High') return setSourcesHigh;
-    if (level === 'Medium') return setSourcesMedium;
-    if (level === 'Low') return setSourcesLow;
-    return setSourcesArchive;
-  }, []);
-
-  const getIsLoadingSetter = useCallback((level: KnowledgeBaseLevel): React.Dispatch<React.SetStateAction<boolean>> => {
-    if (level === 'High') return setIsLoadingHigh;
-    if (level === 'Medium') return setIsLoadingMedium;
-    if (level === 'Low') return setIsLoadingLow;
-    return setIsLoadingArchive;
-  }, []);
-  
-  const getSourcesState = useCallback((level: KnowledgeBaseLevel): KnowledgeSource[] => {
-    if (level === 'High') return sourcesHigh;
-    if (level === 'Medium') return sourcesMedium;
-    if (level === 'Low') return sourcesLow;
-    return sourcesArchive;
-  }, [sourcesHigh, sourcesMedium, sourcesLow, sourcesArchive]);
-
-
- const saveSourcesToFirestore = useCallback(async (updatedSourcesToSave: KnowledgeSource[], level: KnowledgeBaseLevel): Promise<boolean> => {
-    try {
-      const config = KB_CONFIG[level];
-      const sourcesForDb = updatedSourcesToSave.map(s => ({
-        id: s.id, name: s.name, type: s.type, size: s.size,
-        uploadedAt: s.uploadedAt, storagePath: s.storagePath, downloadURL: s.downloadURL,
-        description: s.description || '',
-        topic: s.topic || 'General',
-        extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
-        extractionError: s.extractionError || '',
-        indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
-        indexingError: s.indexingError || '',
-      }));
-
-      if (sourcesForDb.some(s => !s.id || s.downloadURL === undefined || !s.storagePath)) {
-        console.error(`[KBPage - saveSources - ${level}] Attempted to save sources with missing id, URL or Path. Aborting.`, sourcesForDb.filter(s=>!s.id || s.downloadURL === undefined || !s.storagePath));
-        toast({ title: "Internal Save Error", description: `Cannot save incomplete metadata for ${level} KB.`, variant: "destructive"});
-        return false;
+  useEffect(() => {
+    const fetchTopics = async () => {
+      const docRef = doc(db, 'configurations/site_display_assets');
+      try {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const topicsString = data.conversationalTopics || '';
+          const topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+          setAvailableTopics(topicsArray);
+          if (topicsArray.length > 0) {
+            setSelectedTopicForUpload(topicsArray[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching topics:", error);
+        toast({ title: "Error", description: "Could not fetch available topics.", variant: "destructive" });
       }
-      
-      const docRef = doc(db, config.firestorePath);
-      await setDoc(docRef, { sources: sourcesForDb });
-      return true;
+    };
+    fetchTopics();
+  }, [toast]);
+
+  useEffect(() => {
+    const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
+      const q = query(collection(db, config.collectionName));
+      return onSnapshot(q, (querySnapshot) => {
+        const levelSources: KnowledgeSource[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          levelSources.push({
+            id: doc.id,
+            sourceName: data.sourceName || 'Unknown Source',
+            description: data.description || '',
+            topic: data.topic || 'General',
+            level: level as KnowledgeBaseLevel,
+            createdAt: data.createdAt ? new Date(data.createdAt).toLocaleString() : 'Unknown date',
+            indexingStatus: data.indexingStatus || 'failed',
+            indexingError: data.indexingError || 'No status available.',
+            downloadURL: data.downloadURL,
+            chunksWritten: data.chunksWritten
+          });
+        });
+        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: levelSources.sort((a,b) => b.createdAt.localeCompare(a.createdAt)) }));
+        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
+      }, (error) => {
+        console.error(`Error fetching ${level} priority sources:`, error);
+        toast({ title: "Error", description: `Could not load ${level} priority sources.`, variant: "destructive" });
+        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
+      });
+    });
+
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, [toast]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedFile(event.target.files[0]);
+    }
+  };
+
+  const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, topic: string, description: string) => {
+    if (!fileToUpload) throw new Error("No file was provided to the upload handler.");
+
+    const sourceId = uuidv4();
+    setOperationStatus(sourceId, true);
+    setIsCurrentlyUploading(true);
+
+    const placeholderData: KnowledgeSource = {
+        id: sourceId,
+        sourceName: fileToUpload.name,
+        description,
+        topic,
+        level: targetLevel,
+        createdAt: new Date().toISOString(),
+        indexingStatus: 'processing',
+    };
+
+    try {
+        // Immediately create placeholder document
+        const placeholderDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
+        await setDoc(placeholderDocRef, placeholderData);
+        toast({ title: `Uploading: ${fileToUpload.name}`, description: "File is being uploaded and processed." });
+
+        const storageRef = ref(storage, `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`);
+        const uploadResult = await uploadBytes(storageRef, fileToUpload);
+        const downloadURL = await getDownloadURL(uploadResult.ref);
+
+        await updateDoc(placeholderDocRef, { downloadURL });
+        toast({ title: "Upload Successful", description: "Starting text extraction...", variant: "default" });
+
+        const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
+        const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+        toast({ title: "Text Extraction Successful", description: "Content has been extracted. Now indexing...", variant: "default" });
+        
+        const indexingInput: IndexDocumentInput = {
+            sourceId: sourceId,
+            sourceName: fileToUpload.name,
+            text: extractionResult.extractedText,
+            level: targetLevel,
+            topic: topic,
+            downloadURL: downloadURL,
+        };
+
+        const indexingResult = await indexDocument(indexingInput);
+
+        if (!indexingResult.success) {
+            throw new Error(indexingResult.error || "Indexing failed for an unknown reason.");
+        }
+
+        toast({ title: "Indexing Successful", description: `${fileToUpload.name} has been successfully added to the knowledge base.`, variant: "default" });
+
     } catch (error: any) {
-      console.error(`[KBPage - saveSources - ${level}] Error saving to Firestore:`, error);
-      toast({ title: "Firestore Save Error", description: `Failed to save ${level} KB: ${error.message || 'Unknown'}.`, variant: "destructive"});
-      return false;
+        console.error("Full upload process error:", error);
+        const errorMessage = error.message || "An unknown error occurred during the process.";
+        toast({ title: `Error Processing: ${fileToUpload.name}`, description: errorMessage, variant: "destructive", duration: 10000 });
+        
+        // Update the placeholder with the failure status
+        const placeholderDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
+        try {
+            await updateDoc(placeholderDocRef, {
+                indexingStatus: 'failed',
+                indexingError: errorMessage
+            });
+        } catch (updateError) {
+            console.error("Error updating document with failure status:", updateError);
+        }
+    } finally {
+        setOperationStatus(sourceId, false);
+        setIsCurrentlyUploading(false);
     }
   }, [toast]);
 
-
-  const fetchSourcesForLevel = useCallback(async (level: KnowledgeBaseLevel) => {
-    const setIsLoading = getIsLoadingSetter(level);
-    const setSources = getSourcesSetter(level);
-    const config = KB_CONFIG[level];
-
-    setIsLoading(true);
-    try {
-      const docRef = doc(db, config.firestorePath);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists() && docSnap.data()?.sources) {
-        const fetchedSources = (docSnap.data().sources as KnowledgeSource[]).map(s => ({
-          ...s,
-          description: s.description || '',
-          topic: s.topic || 'General',
-          extractionStatus: s.extractionStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
-          extractionError: s.extractionError || '',
-          indexingStatus: s.indexingStatus || (s.type === 'pdf' || s.type === 'text' || s.type === 'document' ? 'pending' as const : 'not_applicable' as const),
-          indexingError: s.indexingError || '',
-        }));
-        setSources(fetchedSources);
-      } else {
-        setSources([]);
-      }
-    } catch (e: any) {
-      console.error(`[KBPage - fetchSources - ${level}] Failed:`, e.message);
-      toast({ title: `Error Loading ${level} KB`, description: `Could not fetch sources: ${e.message}.`, variant: "destructive" });
-      setSources([]);
-    }
-    setIsLoading(false);
-  }, [toast, getIsLoadingSetter, getSourcesSetter]); 
-  
-  useEffect(() => {
-    const fetchConversationalTopics = async () => {
-        try {
-          const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists() && docSnap.data()?.conversationalTopics) {
-              const topicsString = docSnap.data()?.conversationalTopics;
-              setConversationalTopics(topicsString);
-              const topicsArray = topicsString.split('\n').map((t: string) => t.replace(/^-/, '').trim()).filter(Boolean);
-              setAvailableTopics(['General', ...topicsArray]);
-          }
-        } catch (error) {
-            console.warn("Could not fetch conversational topics for text extraction.", error);
-            setAvailableTopics(['General']);
-        }
-    };
-    fetchConversationalTopics();
-  }, []);
-
-  // Effect for fetching all KB levels
-  useEffect(() => {
-    KB_LEVELS.forEach(level => fetchSourcesForLevel(level));
-  }, [fetchSourcesForLevel]);
-
-  const updateSourceStatus = useCallback(async (
-    id: string,
-    level: KnowledgeBaseLevel,
-    updates: Partial<Pick<KnowledgeSource, 'extractionStatus' | 'extractionError' | 'indexingStatus' | 'indexingError'>>
-  ) => {
-    const sources = getSourcesState(level);
-    const setSources = getSourcesSetter(level);
-    
-    const updatedSources = sources.map(s => s.id === id ? { ...s, ...updates } : s);
-    setSources(updatedSources);
-    await saveSourcesToFirestore(updatedSources, level);
-  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore]);
-
-  const triggerProcessing = useCallback(async (sourceToProcess: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    if (!['pdf', 'text', 'document'].includes(sourceToProcess.type)) {
-      console.log(`[KBPage] Skipping processing for non-text file: ${sourceToProcess.name}`);
+  const handleFileUpload = () => {
+    if (!selectedFile || !selectedTopicForUpload) {
+      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    setIsProcessingId(sourceToProcess.id);
-    let extractedText = '';
-    
-    // Step 1: Extract Text
-    try {
-      if (!sourceToProcess.downloadURL) throw new Error("Source has no download URL to process.");
-      
-      toast({ title: `Processing: ${sourceToProcess.name}`, description: "Step 1: Starting text extraction..." });
-      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'pending', extractionError: '', indexingStatus: 'pending', indexingError: '' });
-      
-      const { extractedText: text } = await extractTextFromDocumentUrl({ documentUrl: sourceToProcess.downloadURL, conversationalTopics: conversationalTopics });
-      extractedText = text;
-
-      toast({ title: `Processing: ${sourceToProcess.name}`, description: "Step 1: Text extraction successful." });
-      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'success' });
-    } catch (e: any) {
-      console.error(`[KBPage - triggerProcessing - Extraction] Error for source ${sourceToProcess.name}:`, e);
-      const errorMessage = e.message || 'An unknown error occurred during text extraction.';
-      await updateSourceStatus(sourceToProcess.id, level, { extractionStatus: 'failed', extractionError: errorMessage });
-      toast({ title: "Text Extraction Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
-      setIsProcessingId(null);
-      return; // Stop if extraction fails
-    }
-
-    // Step 2: Index Text
-    try {
-      toast({ title: `Processing: ${sourceToProcess.name}`, description: "Step 2: Indexing content..." });
-      await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'pending' });
-
-      const { chunksWritten, success, error } = await indexDocument({
-        sourceId: sourceToProcess.id,
-        sourceName: sourceToProcess.name,
-        text: extractedText,
-        level: level,
-        topic: sourceToProcess.topic || 'General',
-        downloadURL: sourceToProcess.downloadURL,
-      });
-
-      if (success) {
-        await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'indexed' });
-        toast({ title: "Indexing Complete", description: `Wrote ${chunksWritten} chunks for ${sourceToProcess.name}. The embeddings will be generated in the background.` });
-      } else {
-        throw new Error(error || "An unknown indexing error occurred.");
-      }
-    } catch (e: any) {
-      console.error(`[KBPage - triggerProcessing - Indexing] Error for source ${sourceToProcess.name}:`, e);
-      const errorMessage = e.message || 'An unknown error occurred during indexing.';
-      await updateSourceStatus(sourceToProcess.id, level, { indexingStatus: 'failed', indexingError: errorMessage });
-      toast({ title: "Indexing Failed", description: `${sourceToProcess.name}: ${errorMessage}`, variant: "destructive", duration: 10000 });
-    } finally {
-      setIsProcessingId(null);
-    }
-  }, [toast, conversationalTopics, updateSourceStatus]);
-  
-  const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, topic: string, description: string) => {
-    if (!fileToUpload) {
-      throw new Error("No file was provided to the upload handler.");
-    }
-
-    const config = KB_CONFIG[targetLevel];
-    const setSources = getSourcesSetter(targetLevel);
-        
-    const permanentId = `fb-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const filePath = `${config.storageFolder}${permanentId}-${fileToUpload.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const fileRef = storageRef(storage, filePath);
-    
-    try {
-      toast({ title: "Upload Started", description: `Uploading ${fileToUpload.name}...` });
-      await uploadBytes(fileRef, fileToUpload);
-      const downloadURL = await getDownloadURL(fileRef);
-
-      let fileType: KnowledgeSource['type'] = 'other';
-      if (fileToUpload.type.startsWith('audio/')) fileType = 'audio';
-      else if (fileToUpload.type.startsWith('image/')) fileType = 'image';
-      else if (fileToUpload.type === 'application/pdf') fileType = 'pdf';
-      else if (fileToUpload.type.startsWith('text/')) fileType = 'text';
-      else if (fileToUpload.name.match(/\.(doc|docx|rtf|odt)$/i)) fileType = 'document';
-
-      const isProcessable = ['pdf', 'text', 'document'].includes(fileType);
-
-      const newSource: KnowledgeSource = {
-        id: permanentId, name: fileToUpload.name, type: fileType,
-        size: `${(fileToUpload.size / 1024 / 1024).toFixed(2)} MB`,
-        uploadedAt: new Date().toISOString(),
-        storagePath: filePath, downloadURL: downloadURL,
-        description: description || '',
-        topic: topic,
-        extractionStatus: isProcessable ? 'pending' as const : 'not_applicable' as const,
-        indexingStatus: isProcessable ? 'pending' as const : 'not_applicable' as const,
-      };
-      
-      setSources(prev => {
-        const updatedList = [newSource, ...prev];
-        saveSourcesToFirestore(updatedList, targetLevel)
-          .then(savedToDb => {
-            if (!savedToDb) {
-              console.error(`[KBPage - saveSources] Failed to save DB state for ${targetLevel}, but UI was updated.`);
-              toast({ title: "DB Save Failed", description: "UI updated, but backend save failed. Please refresh.", variant: "destructive" });
-            }
-          });
-        return updatedList;
-      });
-
-      toast({ title: "Upload Successful", description: `${fileToUpload.name} saved to ${targetLevel} KB.` });
-      
-      if (isProcessable) {
-        triggerProcessing(newSource, targetLevel);
-      }
-    } catch (error: any) {
-      console.error("[KBPage - handleUpload] Error:", error);
-      toast({ title: "Upload Failed", description: error.message, variant: "destructive"});
-      throw error;
-    }
-  }, [getSourcesSetter, saveSourcesToFirestore, triggerProcessing, toast]);
-
-  const handleFileUpload = async () => {
-    if (selectedFile && selectedTopicForUpload) {
-      setIsCurrentlyUploading(true);
-      try {
-        await handleUpload(selectedFile, selectedKBTargetForUpload, selectedTopicForUpload, uploadDescription);
-        setSelectedFile(null);
-        setUploadDescription('');
-        setSelectedTopicForUpload('');
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      } catch (error) {
-        // Error toast is already shown in handleUpload
-      } finally {
-        setIsCurrentlyUploading(false);
-      }
-    } else {
-      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
+    handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
+    setSelectedFile(null);
+    setUploadDescription('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
-
-  const handleDelete = useCallback(async (id: string, level: KnowledgeBaseLevel) => {
-    const setSources = getSourcesSetter(level);
-    const sources = getSourcesState(level);
-    const sourceToDelete = sources.find(s => s.id === id);
-    if (!sourceToDelete) return;
-
-    try {
-        // Step 1: Attempt to delete the file from Storage.
-        // We will catch 'object-not-found' errors and continue, as it means the file is already gone.
-        if (sourceToDelete.storagePath && sourceToDelete.downloadURL) {
-            try {
-                await deleteObject(storageRef(storage, sourceToDelete.storagePath));
-            } catch (storageError: any) {
-                if (storageError.code === 'storage/object-not-found') {
-                    console.warn(`[KBPage - handleDelete] Storage object already deleted for ${sourceToDelete.name}. Continuing to clean up metadata.`);
-                } else {
-                    // For any other storage error, re-throw it to fail the whole operation.
-                    throw storageError;
-                }
-            }
-        }
-
-        // Step 2: Delete all associated chunks from Firestore.
-        const chunksQuery = query(collection(db, "kb_chunks"), where("sourceId", "==", id));
-        const chunksSnapshot = await getDocs(chunksQuery);
-        if (!chunksSnapshot.empty) {
-            const batch = writeBatch(db);
-            chunksSnapshot.forEach(doc => batch.delete(doc.ref));
-            await batch.commit();
-            toast({ title: "Indexed Chunks Removed", description: `${chunksSnapshot.size} associated chunks deleted from database.` });
-        }
-
-        // Step 3: Remove the source metadata from the local state and Firestore.
-        const updatedSources = sources.filter(source => source.id !== id);
-        setSources(updatedSources); // Update UI immediately
-        const saveSuccess = await saveSourcesToFirestore(updatedSources, level);
-        
-        if (saveSuccess) {
-            toast({ title: "Source Removed", description: `${sourceToDelete.name} and its data have been removed.` });
-        } else {
-            // If saving fails, the UI might be out of sync. Prompting a refresh is the safest option.
-            toast({ title: "Finalization Error", description: `Could not save metadata changes for ${sourceToDelete.name}. Please refresh the page.`, variant: "destructive" });
-        }
-
-    } catch (error: any) {
-        console.error(`[KBPage - handleDelete] A critical error occurred while deleting ${sourceToDelete.name}:`, error);
-        toast({ title: "Deletion Error", description: `Failed to remove ${sourceToDelete.name}: ${error.message}`, variant: "destructive" });
-    }
-  }, [getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
-
-  const handleOpenMoveDialog = useCallback((source: KnowledgeSource, currentLevel: KnowledgeBaseLevel) => {
-    setSourceToMoveDetails({ source, currentLevel });
-    setSelectedTargetMoveLevel(null);
-    setShowMoveDialog(true);
-  }, []);
-
-  const handleConfirmMoveSource = useCallback(async () => {
-    if (!sourceToMoveDetails || !selectedTargetMoveLevel) return;
-
-    const { source, currentLevel } = sourceToMoveDetails;
-    const targetLevel = selectedTargetMoveLevel;
-    if (currentLevel === targetLevel) return;
-
-    setIsMovingSource(true);
-    toast({ title: "Move Started", description: `Moving ${source.name}...` });
-
-    try {
-        let movedSource: KnowledgeSource = { ...source };
-
-        if (source.downloadURL && source.storagePath) {
-            const blob = await getBlob(storageRef(storage, source.storagePath));
-            const newStoragePath = `${KB_CONFIG[targetLevel].storageFolder}${source.storagePath.split('/').pop()}`;
-            const newFileRef = storageRef(storage, newStoragePath);
-            await uploadBytes(newFileRef, blob, { contentType: blob.type });
-            const newDownloadURL = await getDownloadURL(newFileRef);
-            await deleteObject(storageRef(storage, source.storagePath));
-            movedSource = { ...source, storagePath: newStoragePath, downloadURL: newDownloadURL };
-        }
-        
-        const chunksQuery = query(collection(db, "kb_chunks"), where("sourceId", "==", source.id));
-        const chunksSnapshot = await getDocs(chunksQuery);
-        if (!chunksSnapshot.empty) {
-            const batch = writeBatch(db);
-            chunksSnapshot.forEach(doc => batch.update(doc.ref, { level: targetLevel }));
-            await batch.commit();
-            toast({ title: "Chunk Levels Updated", description: `${chunksSnapshot.size} chunks updated.` });
-        }
-        
-        getSourcesSetter(targetLevel)(prev => [movedSource, ...prev].sort((a,b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()));
-        getSourcesSetter(currentLevel)(prev => prev.filter(s => s.id !== source.id));
-        
-        await saveSourcesToFirestore([movedSource, ...getSourcesState(targetLevel)], targetLevel);
-        await saveSourcesToFirestore(getSourcesState(currentLevel).filter(s => s.id !== source.id), currentLevel);
-
-        toast({ title: "Move Successful", description: `${source.name} moved to ${targetLevel}.` });
-
-    } catch (error: any) { 
-      toast({ title: "Move Failed", description: `Could not move source: ${error.message}.`, variant: "destructive" });
-      fetchSourcesForLevel(currentLevel); 
-      fetchSourcesForLevel(targetLevel);
-    } finally {
-      setIsMovingSource(false);
-      setShowMoveDialog(false);
-    }
-  }, [sourceToMoveDetails, selectedTargetMoveLevel, toast, getSourcesSetter, saveSourcesToFirestore, fetchSourcesForLevel, getSourcesState]);
-
-  const handleOpenDescriptionDialog = useCallback((source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    setEditingSourceDetails({ source, level });
-    setDescriptionInput(source.description || '');
-    setShowDescriptionDialog(true);
-  }, []);
-
-  const handleSaveDescription = useCallback(async () => {
-    if (!editingSourceDetails) return;
-    setIsSavingDescription(true);
-    const { source, level } = editingSourceDetails;
-    const sources = getSourcesState(level);
-    const updatedSources = sources.map(s => s.id === source.id ? { ...s, description: descriptionInput } : s);
-    getSourcesSetter(level)(updatedSources);
-    await saveSourcesToFirestore(updatedSources, level);
-    toast({ title: "Description Saved" });
-    setIsSavingDescription(false);
-    setShowDescriptionDialog(false);
-  }, [editingSourceDetails, descriptionInput, getSourcesState, getSourcesSetter, saveSourcesToFirestore, toast]);
   
-  const handleTestKnowledgeBase = async () => {
-    if (!testQuery) {
-        toast({ title: "No Query", description: "Please enter a test question.", variant: "destructive" });
+  const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
+    setOperationStatus(source.id, true);
+    toast({ title: `Deleting ${source.sourceName}...` });
+    try {
+      const batch = writeBatch(db);
+      const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
+      const chunksSnapshot = await getDocs(chunksQuery);
+      chunksSnapshot.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      if (source.downloadURL) {
+        try {
+          const fileRef = ref(storage, source.downloadURL);
+          await deleteObject(fileRef);
+        } catch (storageError: any) {
+          if (storageError.code !== 'storage/object-not-found') {
+            throw storageError;
+          }
+        }
+      }
+
+      await deleteDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id));
+      toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
+    } catch (error: any) {
+      console.error("Error deleting source:", error);
+      toast({ title: "Deletion Failed", description: `Could not delete ${source.sourceName}. ${error.message}`, variant: "destructive" });
+    } finally {
+      setOperationStatus(source.id, false);
+    }
+  }, [toast]);
+
+  const handleDeleteAllByLevel = useCallback(async (level: KnowledgeBaseLevel) => {
+    setOperationStatus(`delete-all-${level}`, true);
+    const levelSources = sources[level];
+    if (levelSources.length === 0) {
+        toast({title: `No sources to delete in ${level}.`});
+        setOperationStatus(`delete-all-${level}`, false);
         return;
     }
-    setIsTesting(true);
-    setTestResult('');
-    try {
-        const { retrievedContext } = await testKnowledgeBase({ query: testQuery });
-        setTestResult(retrievedContext);
-    } catch (e: any) {
-        console.error("[KBPage - Test] Error:", e);
-        setTestResult(`An error occurred: ${e.message}`);
-        toast({ title: "Test Failed", description: e.message, variant: "destructive", duration: 10000 });
-    }
-    setIsTesting(false);
-  };
 
-  const handleTestEmbedding = async () => {
-    setIsTestingEmbedding(true);
+    toast({ title: `Deleting all ${level} sources...`, description: "This may take a moment." });
     try {
-      const { success, error, embeddingVectorLength } = await testEmbedding();
-      if (success) {
-        toast({ title: "Embedding Test Successful", description: `Successfully generated an embedding with ${embeddingVectorLength} dimensions.` });
-      } else {
-        toast({ title: "Embedding Test Failed", description: error, variant: "destructive", duration: 10000 });
-      }
-    } catch (e: any) {
-      toast({ title: "Embedding Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
-    }
-    setIsTestingEmbedding(false);
-  };
+        for (const source of levelSources) {
+            // Re-using handleDeleteSource logic but without individual toasts
+            setOperationStatus(source.id, true); // Visually disable the row
+            const batch = writeBatch(db);
+            const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
+            const chunksSnapshot = await getDocs(chunksQuery);
+            chunksSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
 
-  const handleTestGeneration = async () => {
-    setIsTestingGeneration(true);
-    try {
-      const { success, error, generatedText } = await testTextGeneration();
-      if (success) {
-        toast({ title: "Text Generation Test Successful", description: `AI response: "${generatedText}"` });
-      } else {
-        toast({ title: "Text Generation Test Failed", description: error, variant: "destructive", duration: 10000 });
-      }
-    } catch (e: any) {
-      toast({ title: "Generation Test Error", description: `An unexpected error occurred: ${e.message}`, variant: "destructive", duration: 10000 });
-    }
-    setIsTestingGeneration(false);
-  };
-  
-  const handleDeleteAllSources = useCallback(async () => {
-    setIsDeletingAll(true);
-    toast({ title: "Deleting All Sources...", description: "This may take a few moments. Please wait." });
-    try {
-      for (const level of KB_LEVELS) {
-        // We get a fresh copy of the sources list to ensure we're not working with stale data
-        const currentSources = getSourcesState(level); 
-        for (const source of currentSources) {
-          // Re-using the existing single-delete logic for safety and consistency
-          await handleDelete(source.id, level);
+            if (source.downloadURL) {
+                try {
+                    const fileRef = ref(storage, source.downloadURL);
+                    await deleteObject(fileRef);
+                } catch (storageError: any) {
+                    if (storageError.code !== 'storage/object-not-found') {
+                        console.warn(`Could not delete storage file for ${source.sourceName}: ${storageError.message}`);
+                    }
+                }
+            }
+            await deleteDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id));
         }
-      }
-      toast({ title: "All Sources Deleted", description: "The knowledge base is now empty." });
+        toast({ title: `All ${level} sources deleted.`, variant: "default" });
     } catch (error: any) {
-      console.error("Error during 'Delete All' operation:", error);
-      toast({ title: "Deletion Error", description: `An error occurred: ${error.message}`, variant: "destructive" });
+        console.error(`Error deleting all ${level} sources:`, error);
+        toast({ title: `Failed to delete all ${level} sources.`, description: error.message, variant: "destructive" });
     } finally {
-      setIsDeletingAll(false);
-      setShowDeleteAllDialog(false);
+        // Let the snapshot listener clear the UI naturally
+        setOperationStatus(`delete-all-${level}`, false);
     }
-  }, [getSourcesState, handleDelete, toast]);
+}, [sources, toast]);
 
-  const anyOperationGloballyInProgress = isCurrentlyUploading || isMovingSource || isSavingDescription || !!isProcessingId || isTesting || isTestingEmbedding || isTestingGeneration || isDeletingAll;
+const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
+    if (source.level === newLevel) return;
+    setOperationStatus(source.id, true);
+    toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
 
-  const renderProcessingStatus = (source: KnowledgeSource, level: KnowledgeBaseLevel) => {
-    const isThisSourceProcessing = isProcessingId === source.id;
-    const processable = ['pdf', 'text', 'document'].includes(source.type);
+    try {
+        // 1. Get the original document
+        const originalDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+        const docSnap = await getDoc(originalDocRef);
+        if (!docSnap.exists()) {
+            throw new Error("Original source document not found.");
+        }
+        const sourceData = docSnap.data();
 
-    if (isThisSourceProcessing) {
-      return <div className="flex items-center gap-2 text-blue-600"><Loader2 className="h-4 w-4 animate-spin" /><span>Processing...</span></div>;
+        // 2. Create the new document in the target collection
+        const newDocData = { ...sourceData, level: newLevel };
+        const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
+        
+        // 3. Update all associated chunks
+        const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
+        const chunksSnapshot = await getDocs(chunksQuery);
+
+        const writeBatchForMove = writeBatch(db);
+
+        // Set new doc
+        writeBatchForMove.set(newDocRef, newDocData);
+        // Delete old doc
+        writeBatchForMove.delete(originalDocRef);
+        // Update chunks
+        chunksSnapshot.forEach(chunkDoc => {
+            writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
+        });
+
+        await writeBatchForMove.commit();
+
+        toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
+
+    } catch (error: any) {
+        console.error("Error moving source:", error);
+        toast({ title: "Move Failed", description: `Could not move ${source.sourceName}. ${error.message}`, variant: "destructive" });
+    } finally {
+        // The snapshot listener will handle the UI update
+        setOperationStatus(source.id, false);
     }
-    if (!processable) {
-      return <span className="text-xs text-muted-foreground">Not Applicable</span>;
-    }
+}, [toast]);
 
-    const hasFailed = source.extractionStatus === 'failed' || source.indexingStatus === 'failed';
-    const isIndexed = source.indexingStatus === 'indexed';
+
+  const renderSourceCard = (source: KnowledgeSource) => {
+    const isOperationInProgress = operationInProgress[source.id] || false;
 
     return (
-      <div className="flex items-center gap-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => triggerProcessing(source, level)} disabled={anyOperationGloballyInProgress}>
-                    <RefreshCw className={`h-4 w-4 ${isIndexed ? 'text-green-600' : hasFailed ? 'text-destructive' : ''}`} />
-                </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{isIndexed ? "Successfully indexed. Click to re-process." : hasFailed ? "Processing failed. Click to retry." : "Ready to process."}</p>
-              {source.extractionError && <p className="text-destructive text-xs">Extraction: {source.extractionError}</p>}
-              {source.indexingError && <p className="text-destructive text-xs">Indexing: {source.indexingError}</p>}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-    );
-  };
-
-
-  const renderKnowledgeBaseSection = (level: KnowledgeBaseLevel) => {
-    const sources = getSourcesState(level);
-    const isLoadingSources = anyKbLoading;
-    const config = KB_CONFIG[level];
-
-    return (
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="font-headline">{config.title}</CardTitle>
-          <CardDescription>
-            {level === 'Archive' ? "Archived sources are not used by the AI." : `Manage ${level.toLowerCase()} priority sources.`}
-          </CardDescription>
+      <Card key={source.id} className={cn("mb-4 transition-all", isOperationInProgress && "opacity-50 cursor-not-allowed")}>
+        <CardHeader className="flex flex-row justify-between items-start">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText size={20} />
+              {source.sourceName}
+            </CardTitle>
+            <CardDescription>
+              Topic: {source.topic} | Added: {source.createdAt}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="icon" disabled={isOperationInProgress}><Trash2 size={16} /></Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the source and all its indexed data. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeleteSource(source)}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardHeader>
         <CardContent>
-          {isLoadingSources ? (
-             <div className="flex justify-center py-10"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>
-          ) : sources.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground"><AlertCircle className="mx-auto h-12 w-12 mb-4" /><p>No sources found.</p></div>
-          ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead></TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Topic</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Uploaded</TableHead>
-                <TableHead>Download</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sources.map((source) => (
-                <TableRow key={source.id}>
-                  <TableCell>{getFileIcon(source.type)}</TableCell>
-                  <TableCell className="font-medium truncate max-w-xs">{source.name}</TableCell>
-                  <TableCell className="font-medium capitalize">{source.topic || 'General'}</TableCell>
-                  <TableCell><Button variant="link" size="sm" onClick={() => handleOpenDescriptionDialog(source, level)}><Edit3 className="h-3 w-3 mr-1" /> View/Edit</Button></TableCell>
-                  <TableCell>{source.size}</TableCell>
-                  <TableCell>{new Date(source.uploadedAt).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    {source.downloadURL ? (
-                        <a href={source.downloadURL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline"><Download className="h-4 w-4" /></a>
-                    ) : (
-                        <span className="text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>{renderProcessingStatus(source, level)}</TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleOpenMoveDialog(source, level)} disabled={anyOperationGloballyInProgress}><ArrowRightLeft className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(source.id, level)} disabled={anyOperationGloballyInProgress}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
-
-  const anyKbLoading = isLoadingHigh || isLoadingMedium || isLoadingLow || isLoadingArchive;
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-       <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><Beaker /> Core Service Diagnostics</CardTitle>
-            <CardDescription>
-                Use these buttons to perform direct, isolated tests of the core Google AI services. This helps confirm your API key and project setup are correct, bypassing the RAG pipeline.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-4">
-              <Button onClick={handleTestGeneration} disabled={anyOperationGloballyInProgress}>
-                  {isTestingGeneration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquareText className="mr-2 h-4 w-4" />}
-                  Test Text Generation
-              </Button>
-              <Button onClick={handleTestEmbedding} disabled={anyOperationGloballyInProgress}>
-                  {isTestingEmbedding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Beaker className="mr-2 h-4 w-4" />}
-                  Test Embedding Service
-              </Button>
-          </CardContent>
-      </Card>
-      
-      <Card>
-          <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><BrainCircuit /> Test Knowledge Base Retrieval</CardTitle>
-              <CardDescription>
-                  Enter a question to see what context the AI would retrieve from the knowledge base. This tests the full RAG pipeline, including your indexed data in Firestore.
-              </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-              <div className="space-y-2">
-                  <Label htmlFor="test-query">Test Question</Label>
-                  <Input id="test-query" value={testQuery} onChange={(e) => setTestQuery(e.target.value)} placeholder="e.g., What are the regulations for jewelry?" suppressHydrationWarning disabled={anyOperationGloballyInProgress}/>
-              </div>
-              <Button onClick={handleTestKnowledgeBase} disabled={anyOperationGloballyInProgress || !testQuery}>
-                  {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchCheck className="mr-2 h-4 w-4" />}
-                  Test Retrieval
-              </Button>
-              {(isTesting || testResult) && (
-                  <div className="space-y-2 pt-4">
-                      <Label>Retrieved Context for AI</Label>
-                      <Textarea readOnly value={isTesting ? "Testing..." : testResult} className="h-64 font-mono text-xs bg-muted" suppressHydrationWarning />
-                  </div>
-              )}
-          </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Upload New Source</CardTitle>
-          <CardDescription>
-            Add content to the knowledge base. Processable files (PDF, TXT, DOCX) will be chunked and written to Firestore for the Vector Search extension to index.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="file-upload">File</Label>
-            <Input id="file-upload" type="file" ref={fileInputRef} onChange={handleFileChange} suppressHydrationWarning />
-          </div>
-           <div className="space-y-2">
-              <Label>Topic</Label>
-              <Select value={selectedTopicForUpload} onValueChange={setSelectedTopicForUpload}>
-                  <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
-                  <SelectContent>
-                      {availableTopics.map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)}
-                  </SelectContent>
-              </Select>
-            </div>
-          <div className="space-y-2">
-            <Label>Priority Level</Label>
-            <RadioGroup value={selectedKBTargetForUpload} onValueChange={(v) => setSelectedKBTargetForUpload(v as KnowledgeBaseLevel)} className="flex space-x-4">
-                {KB_LEVELS.filter(l => l !== 'Archive').map(level => (
-                  <div key={level} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`r-${level}`} /><Label htmlFor={`r-${level}`}>{level}</Label></div>
-                ))}
-            </RadioGroup>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="uploadDescription">Description (Optional)</Label>
-            <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." suppressHydrationWarning />
+          <p className="text-sm mb-4">{source.description || "No description provided."}</p>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground p-2 rounded-md bg-muted">
+             {source.indexingStatus === 'success' && <> <CheckCircle size={16} className="text-green-500" /> <span>Indexing complete. {source.chunksWritten ?? 0} chunks written.</span> </>}
+             {source.indexingStatus === 'processing' && <> <Loader2 size={16} className="animate-spin" /> <span>Processing...</span> </>}
+             {source.indexingStatus === 'failed' && <> <AlertTriangle size={16} className="text-destructive" /> <span>Indexing failed: {source.indexingError}</span> </>}
           </div>
         </CardContent>
-        <CardFooter>
-          <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress || !selectedTopicForUpload}>
-            {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-            Upload and Process
-          </Button>
+        <CardFooter className="flex justify-end gap-2">
+            {source.level !== 'Archive' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'Archive')} disabled={isOperationInProgress}><Archive className="mr-2 h-4 w-4" />Archive</Button>}
+            {source.level !== 'Low' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'Low')} disabled={isOperationInProgress}><ChevronsLeft className="mr-2 h-4 w-4" />To Low</Button>}
+            {source.level !== 'Medium' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'Medium')} disabled={isOperationInProgress}><ChevronRight className="mr-2 h-4 w-4" />To Medium</Button>}
+            {source.level !== 'High' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'High')} disabled={isOperationInProgress}><ChevronsRight className="mr-2 h-4 w-4" />To High</Button>}
         </CardFooter>
       </Card>
-      
-    <Card className="border-destructive">
-        <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2 text-destructive"><ShieldAlert /> Danger Zone</CardTitle>
-          <CardDescription>
-            This action will permanently delete all knowledge base sources and their indexed data from all tiers. This is irreversible.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={anyOperationGloballyInProgress}>
-                <Trash2 className="mr-2 h-4 w-4" /> Delete All Sources
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete all knowledge sources and their data from High, Medium, Low, and Archive tiers. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isDeletingAll}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteAllSources} disabled={isDeletingAll} className="bg-destructive hover:bg-destructive/90">
-                  {isDeletingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Yes, delete everything
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardContent>
-      </Card>
+    );
+  };
+  
+  const renderKnowledgeBaseLevel = (level: KnowledgeBaseLevel) => {
+    const config = LEVEL_CONFIG[level];
+    const levelSources = sources[level];
+    const levelIsLoading = isLoading[level];
 
-    <Accordion type="multiple" defaultValue={['high-kb', 'medium-kb']} className="w-full">
-      {KB_LEVELS.map(level => (
-          <AccordionItem value={`${level.toLowerCase()}-kb`} key={`${level.toLowerCase()}-kb`}>
-          <AccordionTrigger className="text-xl font-semibold hover:no-underline">{KB_CONFIG[level].title}</AccordionTrigger>
+    return (
+        <AccordionItem value={level.toLowerCase()} key={level}>
+          <AccordionTrigger className="text-xl font-headline">
+            {config.title} ({levelSources.length})
+          </AccordionTrigger>
           <AccordionContent>
-              {renderKnowledgeBaseSection(level)}
+             <CardDescription className="mb-4">{config.description}</CardDescription>
+             {levelIsLoading ? (
+                 <div className="flex justify-center items-center h-24">
+                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                 </div>
+             ) : levelSources.length === 0 ? (
+                 <div className="text-center py-8 text-muted-foreground">
+                   <History size={40} className="mx-auto mb-2" />
+                   <p>No sources found.</p>
+                 </div>
+             ) : (
+                levelSources.map(renderSourceCard)
+             )}
+             {levelSources.length > 0 && (
+                <div className="mt-6">
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" disabled={anyOperationGloballyInProgress}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete All Sources in {level}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete all {levelSources.length} sources and their indexed data from the {level} knowledge base. This action is irreversible.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteAllByLevel(level)}>Yes, delete all</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+            )}
           </AccordionContent>
-          </AccordionItem>
-      ))}
-    </Accordion>
+        </AccordionItem>
+    );
+  };
 
-    {sourceToMoveDetails && (
-      <AlertDialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Move Knowledge Source</AlertDialogTitle><AlertDialogDescription>Move &quot;{sourceToMoveDetails.source.name}&quot; from {sourceToMoveDetails.currentLevel} to:</AlertDialogDescription></AlertDialogHeader>
-          <RadioGroup value={selectedTargetMoveLevel ?? undefined} onValueChange={(v) => setSelectedTargetMoveLevel(v as KnowledgeBaseLevel)} className="my-4 space-y-2">
-            {KB_LEVELS.filter(l => l !== sourceToMoveDetails.currentLevel).map(level => (
-              <div key={`move-${level}`} className="flex items-center space-x-2"><RadioGroupItem value={level} id={`rm-${level}`} /><Label htmlFor={`rm-${level}`}>{level}</Label></div>
-            ))}
-          </RadioGroup>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isMovingSource}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmMoveSource} disabled={!selectedTargetMoveLevel || isMovingSource}>
-              {isMovingSource && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm Move
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    )}
 
-    {editingSourceDetails && (
-      <Dialog open={showDescriptionDialog} onOpenChange={setShowDescriptionDialog}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Edit Description</DialogTitle><DialogDescription>For: {editingSourceDetails.source.name}</DialogDescription></DialogHeader>
-          <Textarea value={descriptionInput} onChange={(e) => setDescriptionInput(e.target.value)} rows={5} disabled={isSavingDescription} suppressHydrationWarning />
-          <DialogFooter>
-            <DialogClose asChild><Button type="button" variant="outline" disabled={isSavingDescription}>Cancel</Button></DialogClose>
-            <Button onClick={handleSaveDescription} disabled={isSavingDescription}>
-              {isSavingDescription ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    )}
+  return (
+    <div className="container mx-auto p-4 md:p-6 space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold font-headline text-primary">Knowledge Base Management</h1>
+        <p className="text-muted-foreground">
+          Manage the documents and sources that form the AI's knowledge. Upload new content, move sources between priority levels, or remove them entirely.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-1 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline">Upload New Source</CardTitle>
+              <CardDescription>
+                Add content to the knowledge base. Processable files (PDF, TXT, DOCX) will be chunked and written to Firestore for the Vector Search extension to index.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="file-upload">File</Label>
+                <Input id="file-upload" type="file" ref={fileInputRef} onChange={handleFileChange} suppressHydrationWarning />
+              </div>
+               <div className="space-y-2">
+                  <Label>Topic</Label>
+                  <Select value={selectedTopicForUpload} onValueChange={setSelectedTopicForUpload}>
+                      <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
+                      <SelectContent>
+                        {availableTopics.length > 0 ? (
+                           availableTopics.map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)
+                        ) : (
+                           <SelectItem value="General" disabled>No topics configured</SelectItem>
+                        )}
+                      </SelectContent>
+                  </Select>
+               </div>
+               <div className="space-y-2">
+                  <Label>Priority Level</Label>
+                  <Select value={selectedLevelForUpload} onValueChange={(value) => setSelectedLevelForUpload(value as KnowledgeBaseLevel)}>
+                      <SelectTrigger><SelectValue placeholder="Select a priority level..." /></SelectTrigger>
+                      <SelectContent>
+                         <SelectItem value="High">High Priority</SelectItem>
+                         <SelectItem value="Medium">Medium Priority</SelectItem>
+                         <SelectItem value="Low">Low Priority</SelectItem>
+                      </SelectContent>
+                  </Select>
+               </div>
+              <div className="space-y-2">
+                <Label htmlFor="upload-description">Description</Label>
+                <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." suppressHydrationWarning />
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress || !selectedTopicForUpload}>
+                {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                Upload and Process
+              </Button>
+            </CardFooter>
+          </Card>
+          
+        <Card className="border-destructive">
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2 text-destructive"><ShieldAlert /> Danger Zone</CardTitle>
+              <CardDescription>
+                This action will permanently delete all knowledge base sources and their indexed data from all tiers. This is irreversible.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="destructive" disabled={anyOperationGloballyInProgress}>Delete All Sources</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                       <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This will delete all sources from every tier (High, Medium, Low, and Archive). This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                       <AlertDialogFooter>
+                           <AlertDialogCancel>Cancel</AlertDialogCancel>
+                           <AlertDialogAction onClick={() => {
+                                (Object.keys(LEVEL_CONFIG) as KnowledgeBaseLevel[]).forEach(handleDeleteAllByLevel);
+                           }}>Yes, delete everything</AlertDialogAction>
+                       </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </CardFooter>
+        </Card>
+
+        </div>
+        <div className="lg:col-span-2">
+          <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={setActiveAccordionItem}>
+            {renderKnowledgeBaseLevel('High')}
+            {renderKnowledgeBaseLevel('Medium')}
+            {renderKnowledgeBaseLevel('Low')}
+            {renderKnowledgeBaseLevel('Archive')}
+          </Accordion>
+        </div>
+      </div>
     </div>
   );
 }

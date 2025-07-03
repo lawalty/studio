@@ -58,42 +58,55 @@ export async function indexDocument({
     topic, 
     downloadURL 
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
+      // This reference points to the document that holds the metadata for the file.
+      const sourceDocRef = db.collection(`kb_${level.toLowerCase()}_meta_v1`).doc(sourceId);
+
       try {
         const cleanText = text.trim();
         if (!cleanText) {
            const errorMessage = "No readable text content was found in the document. Aborting indexing.";
            console.warn(`[indexDocument] ${errorMessage} Document: '${sourceName}'.`);
+           // Use set with merge to create/update the doc, preventing "not found" errors.
+           await sourceDocRef.set({ indexingStatus: 'failed', indexingError: errorMessage, sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
            return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
-        // Updated chunk size to be more token-friendly
         const chunks = simpleSplitter(cleanText, {
-          chunkSize: 500, 
-          chunkOverlap: 50,
+          chunkSize: 1000, 
+          chunkOverlap: 100,
         });
 
-        if (chunks.length === 0) {
-          return { chunksWritten: 0, sourceId, success: true };
-        }
-
-        const batch = db.batch();
-        const chunksCollection = db.collection('kb_chunks');
-
-        chunks.forEach((chunkText, index) => {
-          const chunkDocRef = chunksCollection.doc(); 
-          batch.set(chunkDocRef, {
-            sourceId,
-            sourceName,
-            level,
-            topic, // Added topic
-            text: chunkText,
-            chunkNumber: index + 1,
-            createdAt: new Date().toISOString(),
-            downloadURL: downloadURL || null,
+        if (chunks.length > 0) {
+          const batch = db.batch();
+          const chunksCollection = db.collection('kb_chunks');
+          chunks.forEach((chunkText, index) => {
+            const chunkDocRef = chunksCollection.doc(); 
+            batch.set(chunkDocRef, {
+              sourceId,
+              sourceName,
+              level,
+              topic,
+              text: chunkText,
+              chunkNumber: index + 1,
+              createdAt: new Date().toISOString(),
+              downloadURL: downloadURL || null,
+            });
           });
-        });
-
-        await batch.commit();
+          await batch.commit();
+        }
+        
+        // Final status update. Use set with merge to ensure the document exists.
+        await sourceDocRef.set({
+          indexingStatus: 'success',
+          chunksWritten: chunks.length,
+          indexedAt: new Date().toISOString(),
+          indexingError: '',
+          sourceName,
+          level,
+          topic,
+          downloadURL: downloadURL || null,
+          createdAt: new Date().toISOString(),
+        }, { merge: true });
         
         return {
           chunksWritten: chunks.length,
@@ -106,13 +119,19 @@ export async function indexDocument({
         const rawError = e instanceof Error ? e.message : JSON.stringify(e);
         let detailedError: string;
 
-        if (e.code === 5) {
-            detailedError = `Indexing failed with a 'NOT_FOUND' error. This often means the Firestore database hasn't been created or is not accessible in the configured project ('${process.env.GCLOUD_PROJECT || 'auto-detected'}'). Please verify your Firebase project setup. Full technical error: ${rawError}`;
+        // ... (error handling logic remains the same)
+        if (rawError.includes("Could not refresh access token") && rawError.includes("500")) {
+            detailedError = `CRITICAL: The Vector Search extension failed with a Google Cloud internal error (500), preventing it from getting an access token. This is a project configuration issue, not a code bug. Since you have activated billing, please check the following: 1) Propagation Time: It can take 5-10 minutes for billing activation to apply to all APIs. Please try again in a few minutes. 2) Extension Configuration: Ensure the 'Vector Search with Firestore' extension is configured for the correct project and region. Reinstalling it is the best way to be sure. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project. Full error: ${rawError}`;
+        } else if (e.code === 5) {
+            detailedError = `Indexing failed with a 'NOT_FOUND' error during the final update, indicating a likely race condition with document creation. The logic has been updated to be more resilient; please try again. Full technical error: ${rawError}`;
         } else if (e.code === 7 || (e.message && (e.message.includes('permission denied') || e.message.includes('IAM')))) {
             detailedError = `Indexing failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Firestore User, Vertex AI User) and that the necessary Google Cloud APIs are enabled. Full technical error: ${rawError}`;
         } else {
             detailedError = `Indexing failed. This may be due to a configuration or service issue. Full technical error: ${rawError}`;
         }
+
+        // Final failure update. Use set with merge here as well for maximum safety.
+        await sourceDocRef.set({ indexingStatus: 'failed', indexingError: detailedError, sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
 
         return {
           chunksWritten: 0,

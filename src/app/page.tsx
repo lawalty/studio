@@ -165,9 +165,9 @@ export default function StartPage() {
           </CardDescription>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/text-only">
-                <MessageSquareText className="h-8 w-8 text-primary" />
-                <span className="font-semibold">Text Only</span>
+              <Link href="/chat/audio-only">
+                <Mic className="h-8 w-8 text-primary" />
+                <span className="font-semibold">Audio Only</span>
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
@@ -177,9 +177,9 @@ export default function StartPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/audio-only">
-                <Mic className="h-8 w-8 text-primary" />
-                <span className="font-semibold">Audio Only</span>
+              <Link href="/chat/text-only">
+                <MessageSquareText className="h-8 w-8 text-primary" />
+                <span className="font-semibold">Text Only</span>
               </Link>
             </Button>
           </div>

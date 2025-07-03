@@ -12,6 +12,5 @@ import './flows/test-knowledge-base-flow';
 import './flows/test-embedding-flow';
 import './flows/test-text-generation-flow';
 import './flows/text-to-speech-flow';
-import './tools/knowledge-base-tool';
 
 start();
