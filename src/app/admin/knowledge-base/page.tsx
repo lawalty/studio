@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, getDocs, deleteDoc, updateDoc, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
