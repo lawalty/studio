@@ -2,22 +2,12 @@
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
- *
- * This flow is designed to be the central point for generating conversational
- * AI responses. It takes the user's message, persona traits for the AI,
- * conversational topics, and chat history as input.
- *
- * It uses a prompt that instructs the AI on how to behave, incorporating
- * the provided persona and topics. The chat history is also included to
- * give the AI context of the ongoing conversation.
- *
- * The flow returns the AI's generated response as a string and a boolean
- * flag indicating whether the conversation should end.
+ * It uses a retrieval-augmented generation (RAG) approach by first searching a
+ * knowledge base and then providing that context to the AI to formulate an answer.
  */
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'zod';
-import { type Message } from '@/components/chat/ChatInterface';
-import { vectorSearch } from '../retrieval/vector-search';
+import { searchKnowledgeBase } from '../retrieval/vector-search';
 
 // Zod schema for the input of the generateChatResponse flow.
 export const GenerateChatResponseInputSchema = z.object({
@@ -44,8 +34,12 @@ const GenerateChatResponseOutputSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
+// Schema for the prompt input, including the retrieved context.
+const ChatPromptInputSchema = GenerateChatResponseInputSchema.extend({
+  context: z.string().describe("Relevant information from the knowledge base."),
+});
 
-// This function now dynamically initializes Genkit on each call.
+
 export async function generateChatResponse(
   input: GenerateChatResponseInput
 ): Promise<GenerateChatResponseOutput> {
@@ -58,51 +52,46 @@ export async function generateChatResponse(
       outputSchema: GenerateChatResponseOutputSchema,
     },
     async ({ userMessage, personaTraits, conversationalTopics, chatHistory }) => {
-      // Step 1: Retrieve relevant context from the knowledge base
-      const searchResults = await vectorSearch({
-        query: userMessage,
-        limit: 5,
-      });
 
-      const knowledgeBaseContext = searchResults.map(r => r.text).join('\n---\n');
+      // Step 1: Search the knowledge base for relevant information.
+      // We pass an empty filter object to search all available topics and levels.
+      const context = await searchKnowledgeBase(userMessage, {});
 
       // Step 2: Define the prompt for the AI model, now including the retrieved knowledge.
-      const prompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
-        Your primary areas of expertise are: "${conversationalTopics}".
-        You are having a conversation with a user.
+      const chatPrompt = ai.definePrompt({
+        name: 'chatResponsePrompt',
+        input: { schema: ChatPromptInputSchema },
+        output: { schema: GenerateChatResponseOutputSchema },
+        prompt: `You are a conversational AI. Your persona is defined by these traits: "{{personaTraits}}".
+Your primary areas of expertise are: "{{conversationalTopics}}".
+You are having a conversation with a user.
 
-        IMPORTANT:
-        - If the user's question is directly related to the "Knowledge Base Context" provided below, you MUST use that information to formulate your answer.
-        - Base your response entirely on the provided context. Do not use external knowledge for questions related to the context.
-        - If the context does not contain the answer, state that the information is not available in your knowledge base.
-        - If the context is empty or irrelevant to the user's question, answer the question based on your general knowledge and persona.
-        - When you use the knowledge base, do not mention the phrase "knowledge base" or "context" in your response. Just answer the question directly.
+Here is some information retrieved from your knowledge base that might be relevant:
+---
+{{{context}}}
+---
 
-        <Knowledge Base Context>
-        ${knowledgeBaseContext || "No context provided."}
-        </Knowledge_Base_Context>
+CRITICAL INSTRUCTIONS:
+1. Analyze the user's message: "{{userMessage}}".
+2. Review the provided context.
+3. If the context is relevant and helps answer the question, use it to formulate your response.
+4. If the context is not relevant, or if no context is provided, respond conversationally based on your defined persona and general knowledge. Do NOT mention that you searched the knowledge base and found nothing.
+5. If you don't know the answer, just say so politely.
+6. Your response must be a JSON object with two fields: "aiResponse" (a string) and "shouldEndConversation" (a boolean).
+`,
+      });
 
-        Analyze the user's message and the conversation history. Based on all this information, generate a response that is helpful, relevant, and consistent with your persona.
-        Your response must be a JSON object with two fields: "aiResponse" (a string) and "shouldEndConversation" (a boolean).
-      `;
-
+      // Step 3: Call the LLM with all the necessary information.
       try {
-        // Step 3: Call the AI model with the enhanced prompt.
-        const response = await ai.generate({
-          model: 'googleai/gemini-1.5-flash',
-          prompt: prompt,
-          history: chatHistory,
-          tools: [],
-          output: {
-            format: 'json',
-            schema: GenerateChatResponseOutputSchema,
-          },
-          config: {
-            temperature: 0.7,
-          },
-        });
-
-        const output = response.output();
+        const output = await chatPrompt(
+          { userMessage, personaTraits, conversationalTopics, chatHistory, context },
+          {
+            history: chatHistory,
+            config: {
+              temperature: 0.2,
+            },
+          }
+        );
 
         if (!output || typeof output.aiResponse !== 'string') {
           console.error('[generateChatResponseFlow] Invalid or malformed output from prompt.', output);
@@ -111,22 +100,15 @@ export async function generateChatResponse(
             shouldEndConversation: false,
           };
         }
-        
-        // Add the PDF reference to the output if context was used
-        if (knowledgeBaseContext && searchResults.length > 0 && searchResults[0].sourceName && searchResults[0].downloadURL) {
-            output.pdfReference = {
-                fileName: searchResults[0].sourceName,
-                downloadURL: searchResults[0].downloadURL,
-            };
-        }
-        
+
+        // The logic for PDF references is simplified, as the context string contains the necessary info.
+        // For now, we return the text response. Future work could parse the context to extract specific URLs.
         return output;
 
       } catch (error: any) {
         console.error('[generateChatResponseFlow] Error calling AI model:', error);
         let userFriendlyMessage = "I'm having a bit of trouble connecting to my brain right now. Please try again in a moment.";
-        
-        // Add more specific error handling if you have identified common issues
+
         if (error.message && error.message.includes('API key not valid')) {
           userFriendlyMessage = "There seems to be an issue with my connection to Google. Please check the API key configuration.";
         } else if (error.message && error.message.includes('permission')) {
