@@ -5,9 +5,8 @@
  * It uses a tool-based, retrieval-augmented generation (RAG) approach. The AI can
  * decide when to search the knowledge base to answer a user's question.
  */
-import { getGenkitAi } from '@/ai/genkit';
+import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { type Message } from '@/components/chat/ChatInterface';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 import { defineTool } from '@genkit-ai/ai/tool';
 
@@ -36,95 +35,94 @@ const GenerateChatResponseOutputSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
+// Define the knowledge base search tool at the top level.
+const knowledgeBaseSearchTool = defineTool(
+  {
+    name: 'knowledgeBaseSearch',
+    description: 'Searches the knowledge base for information to answer user questions about specific topics.',
+    inputSchema: z.object({ query: z.string() }),
+    outputSchema: z.object({ results: z.array(z.any()) }), // Using z.any() for flexibility
+  },
+  async ({ query }) => {
+      // Use the correctly named 'searchKnowledgeBase' function.
+      return await searchKnowledgeBase({ query, limit: 5 });
+  }
+);
 
-export async function generateChatResponse(
-  input: GenerateChatResponseInput
-): Promise<GenerateChatResponseOutput> {
-  const ai = await getGenkitAi();
+// Define the flow at the top level.
+const generateChatResponseFlow = ai.defineFlow(
+  {
+    name: 'generateChatResponseFlow',
+    inputSchema: GenerateChatResponseInputSchema,
+    outputSchema: GenerateChatResponseOutputSchema,
+  },
+  async ({ userMessage, personaTraits, conversationalTopics, chatHistory }) => {
+    
+    const prompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
+      Your primary areas of expertise are: "${conversationalTopics}".
+      You are having a conversation with a user.
 
-  // Define the knowledge base search tool. This wraps our vector search function.
-  const knowledgeBaseSearchTool = defineTool(
-    {
-      name: 'knowledgeBaseSearch',
-      description: 'Searches the knowledge base for information to answer user questions about specific topics.',
-      inputSchema: z.object({ query: z.string() }),
-      outputSchema: z.object({ results: z.array(z.any()) }), // Using z.any() for flexibility
-    },
-    async ({ query }) => {
-        // Use the correctly named 'searchKnowledgeBase' function.
-        return await searchKnowledgeBase({ query, limit: 5 });
-    }
-  );
+      IMPORTANT:
+      - You have a tool named "knowledgeBaseSearch" to find specific information.
+      - Use this tool ONLY when the user asks a direct question that requires looking up data or procedures.
+      - For general conversation, greetings, or questions outside your expertise, DO NOT use the tool. Just respond naturally.
+      - If you use the tool and find relevant information, state the answer and mention the source document (e.g., "According to the document 'source.pdf', the answer is...").
+      - If the tool returns no relevant information, state that you couldn't find an answer in the knowledge base.
 
-  const generateChatResponseFlow = ai.defineFlow(
-    {
-      name: 'generateChatResponseFlow',
-      inputSchema: GenerateChatResponseInputSchema,
-      outputSchema: GenerateChatResponseOutputSchema,
-    },
-    async ({ userMessage, personaTraits, conversationalTopics, chatHistory }) => {
-      
-      const prompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
-        Your primary areas of expertise are: "${conversationalTopics}".
-        You are having a conversation with a user.
+      Your response must be a JSON object with two fields: "aiResponse" (a string) and "shouldEndConversation" (a boolean).
+    `;
 
-        IMPORTANT:
-        - You have a tool named "knowledgeBaseSearch" to find specific information.
-        - Use this tool ONLY when the user asks a direct question that requires looking up data or procedures.
-        - For general conversation, greetings, or questions outside your expertise, DO NOT use the tool. Just respond naturally.
-        - If you use the tool and find relevant information, state the answer and mention the source document (e.g., "According to the document 'source.pdf', the answer is...").
-        - If the tool returns no relevant information, state that you couldn't find an answer in the knowledge base.
+    try {
+      const response = await ai.generate({
+        model: 'googleai/gemini-1.5-flash',
+        prompt: prompt,
+        history: chatHistory,
+        tools: [knowledgeBaseSearchTool],
+        output: {
+          format: 'json',
+          schema: GenerateChatResponseOutputSchema,
+        },
+        config: {
+          temperature: 0.3, 
+        },
+      });
 
-        Your response must be a JSON object with two fields: "aiResponse" (a string) and "shouldEndConversation" (a boolean).
-      `;
+      const output = response.output();
 
-      try {
-        const response = await ai.generate({
-          model: 'googleai/gemini-1.5-flash',
-          prompt: prompt,
-          history: chatHistory,
-          tools: [knowledgeBaseSearchTool],
-          output: {
-            format: 'json',
-            schema: GenerateChatResponseOutputSchema,
-          },
-          config: {
-            temperature: 0.3, 
-          },
-        });
-
-        const output = response.output();
-
-        if (!output || typeof output.aiResponse !== 'string') {
-          console.error('[generateChatResponseFlow] Invalid or malformed output from prompt.', output);
-          return {
-            aiResponse: "I seem to have lost my train of thought! Could you please try sending your message again?",
-            shouldEndConversation: false,
-          };
-        }
-        
-        // This logic can be expanded later if we want to extract the PDF reference from the tool's output.
-        // For now, the AI will cite the source directly in its text response.
-        
-        return output;
-
-      } catch (error: any) {
-        console.error('[generateChatResponseFlow] Error calling AI model:', error);
-        let userFriendlyMessage = "Sorry, I encountered an error. Please try again.";
-        
-        if (error.message && (error.message.includes('tool_code') || error.message.includes('tool calling'))) {
-          userFriendlyMessage = "I'm having a little trouble using my knowledge base right now. Please try that again in a moment.";
-        } else if (error.message && error.message.includes('API key') || error.message.includes('permission')) {
-          userFriendlyMessage = "It looks like I don't have the right permissions to access some information. This is a configuration issue.";
-        }
-
+      if (!output || typeof output.aiResponse !== 'string') {
+        console.error('[generateChatResponseFlow] Invalid or malformed output from prompt.', output);
         return {
-          aiResponse: userFriendlyMessage,
+          aiResponse: "I seem to have lost my train of thought! Could you please try sending your message again?",
           shouldEndConversation: false,
         };
       }
-    }
-  );
+      
+      // This logic can be expanded later if we want to extract the PDF reference from the tool's output.
+      // For now, the AI will cite the source directly in its text response.
+      
+      return output;
 
+    } catch (error: any) {
+      console.error('[generateChatResponseFlow] Error calling AI model:', error);
+      let userFriendlyMessage = "Sorry, I encountered an error. Please try again.";
+      
+      if (error.message && (error.message.includes('tool_code') || error.message.includes('tool calling'))) {
+        userFriendlyMessage = "I'm having a little trouble using my knowledge base right now. Please try that again in a moment.";
+      } else if (error.message && error.message.includes('API key') || error.message.includes('permission')) {
+        userFriendlyMessage = "It looks like I don't have the right permissions to access some information. This is a configuration issue.";
+      }
+
+      return {
+        aiResponse: userFriendlyMessage,
+        shouldEndConversation: false,
+      };
+    }
+  }
+);
+
+// Export a wrapper function that calls the flow.
+export async function generateChatResponse(
+  input: GenerateChatResponseInput
+): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }

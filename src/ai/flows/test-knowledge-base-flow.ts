@@ -7,7 +7,7 @@
  * - TestKnowledgeBaseOutput - The return type for the function.
  */
 
-import { getGenkitAi } from '@/ai/genkit';
+import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -18,26 +18,36 @@ export type TestKnowledgeBaseInput = z.infer<typeof TestKnowledgeBaseInputSchema
 
 const TestKnowledgeBaseOutputSchema = z.object({
   retrievedContext: z.string().describe('The raw context string retrieved from the vector search, including source names and text chunks.'),
+  searchResult: z.any().describe('The raw search result object from the vector search.'),
 });
 export type TestKnowledgeBaseOutput = z.infer<typeof TestKnowledgeBaseOutputSchema>;
+
+
+const testKnowledgeBaseFlow = ai.defineFlow(
+  {
+    name: 'testKnowledgeBaseFlow',
+    inputSchema: TestKnowledgeBaseInputSchema,
+    outputSchema: TestKnowledgeBaseOutputSchema,
+  },
+  async ({ query }) => {
+    // Perform a general search with no filters for testing purposes
+    const searchResult = await searchKnowledgeBase({ query }); 
+    const contextString = `Here is some context I found that might be relevant to the user's question. Use this information to form your answer.
+---
+${searchResult.map(r =>
+    `Context from document "${r.sourceName}" (Topic: ${r.topic}, Priority: ${r.level}):
+${r.text}
+${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL) ? `(Reference URL for this chunk's source PDF: ${r.downloadURL})` : ''}`
+  ).join('\n---\n')}
+---
+Based on this context, please answer the user's question.
+`;
+    return { retrievedContext: contextString, searchResult };
+  }
+);
 
 export async function testKnowledgeBase(
   input: TestKnowledgeBaseInput
 ): Promise<TestKnowledgeBaseOutput> {
-  const ai = await getGenkitAi(); // AI instance not strictly needed here but good practice for consistency
-
-  const testKnowledgeBaseFlow = ai.defineFlow(
-    {
-      name: 'testKnowledgeBaseFlow',
-      inputSchema: TestKnowledgeBaseInputSchema,
-      outputSchema: TestKnowledgeBaseOutputSchema,
-    },
-    async ({ query }) => {
-      // Perform a general search with no filters for testing purposes
-      const context = await searchKnowledgeBase(query, {}); 
-      return { retrievedContext: context };
-    }
-  );
-
   return testKnowledgeBaseFlow(input);
 }

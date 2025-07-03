@@ -41,15 +41,11 @@ async function getGoogleApiKey(): Promise<string> {
   }
 }
 
-// This function now ensures that Genkit is configured with an explicit API key.
-export async function getGenkitAi() {
-  const apiKey = await getGoogleApiKey();
-
-  // Updated to use the correct Genkit v1.x syntax.
-  return genkit({
-    plugins: [
-      firebase(),
-      googleAI({ apiKey }), // Using explicit API key for robust authentication.
-    ],
-  });
-}
+// Define a single, top-level `ai` object for the entire application.
+// The Google AI plugin will asynchronously call `getGoogleApiKey` when it needs to make an API request.
+export const ai = genkit({
+  plugins: [
+    firebase(),
+    googleAI({ apiKey: getGoogleApiKey }),
+  ],
+});

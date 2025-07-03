@@ -3,7 +3,7 @@
  *
  * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query and filters.
  */
-import { getGenkitAi } from '@/ai/genkit';
+import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
 
 interface SearchResult {
@@ -15,22 +15,26 @@ interface SearchResult {
   distance: number;
 }
 
-interface SearchFilters {
+interface SearchParams {
+  query: string;
   level?: string[];
   topic?: string;
+  limit?: number;
 }
+
 
 /**
  * Searches the knowledge base for text chunks semantically similar to the query,
  * applying filters for tier and topic using the Firestore Vector Search extension.
- * @param query The user's search query.
- * @param filters An object with optional 'level' (array of strings) and 'topic' (string) to filter by.
- * @param topK The number of top results to return.
- * @returns A formatted string of the top K results, or a message if none are found.
+ * @param params An object with the query and optional filters.
+ * @returns An array of the top matching result objects.
  */
-export async function searchKnowledgeBase(query: string, filters: SearchFilters, topK: number = 5): Promise<string> {
-  const ai = await getGenkitAi();
-
+export async function searchKnowledgeBase({
+  query,
+  level,
+  topic,
+  limit = 5,
+}: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
@@ -47,24 +51,24 @@ export async function searchKnowledgeBase(query: string, filters: SearchFilters,
   const queryFilter: any = {};
 
   // Apply level (tier) filter. 'Archive' is always excluded.
-  const levelsToSearch = filters.level && filters.level.length > 0 ? filters.level : ['High', 'Medium', 'Low'];
+  const levelsToSearch = level && level.length > 0 ? level : ['High', 'Medium', 'Low'];
   queryFilter.level = { $in: levelsToSearch };
 
   // Apply topic filter if provided.
-  if (filters.topic) {
-    queryFilter.topic = { $eq: filters.topic };
+  if (topic) {
+    queryFilter.topic = { $eq: topic };
   }
 
   // 3. Perform the vector search using the Firestore extension.
   const searchResults = await db.collection('kb_chunks').findNearest('embedding', {
     vector: queryEmbedding,
-    limit: topK,
+    limit: limit,
     distanceMeasure: 'COSINE',
     filter: queryFilter,
   });
 
   if (searchResults.empty) {
-    return "No information found in the knowledge base for the specified topic/tier. The database is empty or your filters are too narrow.";
+    return [];
   }
 
   const topResults: SearchResult[] = searchResults.docs.map(doc => {
@@ -79,19 +83,5 @@ export async function searchKnowledgeBase(query: string, filters: SearchFilters,
     };
   });
 
-  if (topResults.length === 0) {
-    return "I found some information on related topics, but nothing that directly answers your question. Could you try rephrasing it?";
-  }
-
-  // 4. Format the results into a single string for the prompt context.
-  return `Here is some context I found that might be relevant to the user's question. Use this information to form your answer.
----
-${topResults.map(r =>
-    `Context from document "${r.sourceName}" (Topic: ${r.topic}, Priority: ${r.level}):
-${r.text}
-${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL) ? `(Reference URL for this chunk's source PDF: ${r.downloadURL})` : ''}`
-  ).join('\n---\n')}
----
-Based on this context, please answer the user's question.
-`;
+  return topResults;
 }
