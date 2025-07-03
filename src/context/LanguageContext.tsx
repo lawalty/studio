@@ -25,16 +25,20 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     if (language === 'English' || !text) {
       return text;
     }
-    if (translations[text]) {
-      return translations[text];
+    
+    // Create a language-specific key for the cache to handle language switching correctly.
+    const translationKey = `${language}:${text}`;
+    if (translations[translationKey]) {
+      return translations[translationKey];
     }
+
     try {
       const result = await translateText({ text, targetLanguage: language });
       const translated = result.translatedText;
       if (!translated || translated.trim() === '') {
         throw new Error("AI returned an empty translation.");
       }
-      setTranslations(prev => ({ ...prev, [text]: translated }));
+      setTranslations(prev => ({ ...prev, [translationKey]: translated }));
       return translated;
     } catch (error: any) {
       console.error('Translation failed for:', text, error);
