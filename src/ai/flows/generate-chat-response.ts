@@ -9,7 +9,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
-import { defineTool } from '@genkit-ai/ai/tool';
 import { translateText } from './translate-text-flow';
 
 // Zod schema for the input of the generateChatResponse flow.
@@ -38,7 +37,7 @@ const GenerateChatResponseOutputSchema = z.object({
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
 // Define the knowledge base search tool at the top level.
-const knowledgeBaseSearchTool = defineTool(
+const knowledgeBaseSearchTool = ai.defineTool(
   {
     name: 'knowledgeBaseSearch',
     description: 'Searches the knowledge base for information to answer user questions about specific topics.',
