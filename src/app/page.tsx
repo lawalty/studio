@@ -11,6 +11,7 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import LanguageSelector from '@/components/layout/LanguageSelector';
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
@@ -160,14 +161,17 @@ export default function StartPage() {
             }}
             data-ai-hint="technology abstract welcome"
           />
-          <CardDescription className="text-lg">
-            Choose your interaction mode to begin.
-          </CardDescription>
+          <div className="flex items-center justify-center gap-2">
+            <CardDescription className="text-lg m-0">
+              Choose your interaction mode to begin.
+            </CardDescription>
+            <LanguageSelector />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/audio-only">
-                <Mic className="h-8 w-8 text-primary" />
-                <span className="font-semibold">Audio Only</span>
+              <Link href="/chat/text-only">
+                <MessageSquareText className="h-8 w-8 text-primary" />
+                <span className="font-semibold">Text Only</span>
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
@@ -177,9 +181,9 @@ export default function StartPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/text-only">
-                <MessageSquareText className="h-8 w-8 text-primary" />
-                <span className="font-semibold">Text Only</span>
+              <Link href="/chat/audio-only">
+                <Mic className="h-8 w-8 text-primary" />
+                <span className="font-semibold">Audio Only</span>
               </Link>
             </Button>
           </div>

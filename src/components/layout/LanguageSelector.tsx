@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -20,10 +19,10 @@ export default function LanguageSelector() {
   };
 
   return (
-    <div className="flex items-center gap-2">
-       <Languages className="h-5 w-5 text-muted-foreground" />
+    <div className="flex items-center gap-1">
+       <Languages className="h-4 w-4 text-muted-foreground" />
       <Select onValueChange={handleValueChange} defaultValue={language}>
-        <SelectTrigger className="w-[120px] border-0 focus:ring-0">
+        <SelectTrigger className="w-auto h-auto px-2 py-1 text-xs border-0 focus:ring-0 bg-transparent shadow-none">
           <SelectValue placeholder="Language" />
         </SelectTrigger>
         <SelectContent>

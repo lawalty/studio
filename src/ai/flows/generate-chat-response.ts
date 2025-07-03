@@ -9,7 +9,7 @@ import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'zod';
 import { type Message } from '@/components/chat/ChatInterface';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
-import { defineTool } from 'genkit/tool';
+import { defineTool } from '@genkit-ai/ai/tool';
 
 // Zod schema for the input of the generateChatResponse flow.
 export const GenerateChatResponseInputSchema = z.object({

@@ -1,10 +1,8 @@
-
 'use client';
 
 import Link from 'next/link';
 import { Bot } from 'lucide-react';
 import React from 'react';
-import LanguageSelector from './LanguageSelector';
 
 export default function Header() {
 
@@ -15,7 +13,6 @@ export default function Header() {
           <Bot size={28} />
           <h1 className="text-2xl font-bold font-headline">AI Chat</h1>
         </Link>
-        <LanguageSelector />
       </div>
     </header>
   );

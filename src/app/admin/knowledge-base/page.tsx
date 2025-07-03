@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, getDocs, deleteDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,19 +69,18 @@ export default function KnowledgeBasePage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           const topicsString = data.conversationalTopics || '';
-          const topicsArray = topicsString
-            .split(/[\n,]+/) // Split by newlines or commas
-            .map((t: string) => t.replace(/^-/, '').trim()) // Remove leading hyphens and trim
-            .filter((t: string) => t); // Filter out empty strings
+          const topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
           setAvailableTopics(topicsArray);
+          if (topicsArray.length > 0) {
+            setSelectedTopicForUpload(topicsArray[0]);
+          }
         }
       } catch (error) {
         console.error("Error fetching topics:", error);
-        toast({ title: "Error", description: "Could not fetch available topics.", variant: "destructive" });
       }
     };
     fetchTopics();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
@@ -107,13 +106,12 @@ export default function KnowledgeBasePage() {
         setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       }, (error) => {
         console.error(`Error fetching ${level} priority sources:`, error);
-        toast({ title: "Error", description: `Could not load ${level} priority sources.`, variant: "destructive" });
         setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       });
     });
 
     return () => unsubscribers.forEach(unsub => unsub());
-  }, [toast]);
+  }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -137,28 +135,38 @@ export default function KnowledgeBasePage() {
         createdAt: new Date().toISOString(),
         indexingStatus: 'processing',
     };
+    
+    const placeholderDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
 
     try {
-        // Immediately create placeholder document
-        const placeholderDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
         await setDoc(placeholderDocRef, placeholderData);
-        toast({ title: `Uploading: ${fileToUpload.name}`, description: "File is being uploaded and processed." });
+        toast({ title: `Processing: ${fileToUpload.name}`, description: "File is being uploaded and processed." });
 
         const storageRef = ref(storage, `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`);
         const uploadResult = await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(uploadResult.ref);
-
         await updateDoc(placeholderDocRef, { downloadURL });
-        toast({ title: "Upload Successful", description: "Starting text extraction...", variant: "default" });
 
-        const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
-        const extractionResult = await extractTextFromDocumentUrl(extractionInput);
-        toast({ title: "Text Extraction Successful", description: "Content has been extracted. Now indexing...", variant: "default" });
+        let extractedText: string;
+
+        // Check if the file is a plain text file
+        if (fileToUpload.type === 'text/plain') {
+            toast({ title: "Reading Text File", description: "Directly reading text content...", variant: "default" });
+            extractedText = await fileToUpload.text();
+        } else {
+            // Use AI extraction for other file types like PDF
+            toast({ title: "Upload Successful", description: "Starting AI text extraction...", variant: "default" });
+            const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
+            const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+            extractedText = extractionResult.extractedText;
+        }
         
+        toast({ title: "Text Ready", description: "Content is ready. Now indexing...", variant: "default" });
+
         const indexingInput: IndexDocumentInput = {
             sourceId: sourceId,
             sourceName: fileToUpload.name,
-            text: extractionResult.extractedText,
+            text: extractedText,
             level: targetLevel,
             topic: topic,
             downloadURL: downloadURL,
@@ -177,16 +185,11 @@ export default function KnowledgeBasePage() {
         const errorMessage = error.message || "An unknown error occurred during the process.";
         toast({ title: `Error Processing: ${fileToUpload.name}`, description: errorMessage, variant: "destructive", duration: 10000 });
         
-        // Update the placeholder with the failure status
-        const placeholderDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
-        try {
-            await updateDoc(placeholderDocRef, {
-                indexingStatus: 'failed',
-                indexingError: errorMessage
-            });
-        } catch (updateError) {
-            console.error("Error updating document with failure status:", updateError);
-        }
+        await updateDoc(placeholderDocRef, {
+            indexingStatus: 'failed',
+            indexingError: errorMessage
+        }).catch(updateError => console.error("Error updating doc with failure status:", updateError));
+        
     } finally {
         setOperationStatus(sourceId, false);
         setIsCurrentlyUploading(false);
@@ -251,8 +254,7 @@ export default function KnowledgeBasePage() {
     toast({ title: `Deleting all ${level} sources...`, description: "This may take a moment." });
     try {
         for (const source of levelSources) {
-            // Re-using handleDeleteSource logic but without individual toasts
-            setOperationStatus(source.id, true); // Visually disable the row
+            setOperationStatus(source.id, true);
             const batch = writeBatch(db);
             const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
             const chunksSnapshot = await getDocs(chunksQuery);
@@ -278,7 +280,6 @@ export default function KnowledgeBasePage() {
         console.error(`Error deleting all ${level} sources:`, error);
         toast({ title: `Failed to delete all ${level} sources.`, description: error.message, variant: "destructive" });
     } finally {
-        // Let the snapshot listener clear the UI naturally
         setOperationStatus(`delete-all-${level}`, false);
     }
 }, [sources]);
@@ -289,7 +290,6 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
     toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
 
     try {
-        // 1. Get the original document
         const originalDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
         const docSnap = await getDoc(originalDocRef);
         if (!docSnap.exists()) {
@@ -297,42 +297,33 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
         }
         const sourceData = docSnap.data();
 
-        // 2. Create the new document in the target collection
         const newDocData = { ...sourceData, level: newLevel };
         const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
         
-        // 3. Update all associated chunks
         const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
         const chunksSnapshot = await getDocs(chunksQuery);
 
         const writeBatchForMove = writeBatch(db);
 
-        // Set new doc
         writeBatchForMove.set(newDocRef, newDocData);
-        // Delete old doc
         writeBatchForMove.delete(originalDocRef);
-        // Update chunks
         chunksSnapshot.forEach(chunkDoc => {
             writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
         });
 
         await writeBatchForMove.commit();
-
         toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
 
     } catch (error: any) {
         console.error("Error moving source:", error);
         toast({ title: "Move Failed", description: `Could not move ${source.sourceName}. ${error.message}`, variant: "destructive" });
     } finally {
-        // The snapshot listener will handle the UI update
         setOperationStatus(source.id, false);
     }
 }, []);
 
-
   const renderSourceCard = (source: KnowledgeSource) => {
     const isOperationInProgress = operationInProgress[source.id] || false;
-
     return (
       <Card key={source.id} className={cn("mb-4 transition-all", isOperationInProgress && "opacity-50 cursor-not-allowed")}>
         <CardHeader className="flex flex-row justify-between items-start">
@@ -382,7 +373,6 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
     const config = LEVEL_CONFIG[level];
     const levelSources = sources[level];
     const levelIsLoading = isLoading[level];
-
     return (
         <AccordionItem value={level.toLowerCase()} key={level}>
           <AccordionTrigger className="text-xl font-headline">
@@ -425,7 +415,6 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
     );
   };
 
-
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
       <div>
@@ -434,7 +423,6 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
           Manage the documents and sources that form the AI&apos;s knowledge. Upload new content, move sources between priority levels, or remove them entirely.
         </p>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">
           <Card>
@@ -485,7 +473,6 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
               </Button>
             </CardFooter>
           </Card>
-          
         <Card className="border-destructive">
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2 text-destructive"><ShieldAlert /> Danger Zone</CardTitle>
@@ -510,7 +497,6 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
                 </AlertDialog>
             </CardFooter>
         </Card>
-
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={setActiveAccordionItem}>
