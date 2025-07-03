@@ -12,12 +12,20 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LanguageSelector from '@/components/layout/LanguageSelector';
+import { useLanguage } from '@/context/LanguageContext';
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_TYPING_SPEED_MS = 50;
+
 const TARGET_ANIMATION_MESSAGE = "Let's have a conversation.";
+const TEXT_ELEMENTS_EN = {
+  chooseMode: "Choose your interaction mode to begin.",
+  audioOnly: "Audio Only",
+  audioText: "Audio & Text",
+  textOnly: "Text Only",
+};
 
 export default function StartPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -28,6 +36,13 @@ export default function StartPage() {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const router = useRouter();
+  const { language, translate } = useLanguage();
+
+  const [uiText, setUiText] = useState({
+    welcome: welcomeMessage,
+    typedAnim: TARGET_ANIMATION_MESSAGE,
+    ...TEXT_ELEMENTS_EN,
+  });
 
   // Keydown listener for admin access
   useEffect(() => {
@@ -58,7 +73,6 @@ export default function StartPage() {
           setIsMaintenanceMode(false);
         }
       } else {
-        // Default to non-maintenance mode if doc doesn't exist
         setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
         setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
         setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
@@ -67,7 +81,6 @@ export default function StartPage() {
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching site settings:", error);
-      // Fallback to defaults on error
       setIsLoading(false);
       setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
       setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
@@ -78,29 +91,73 @@ export default function StartPage() {
     return () => unsubscribe();
   }, []);
 
+  // Effect for handling translations
+  useEffect(() => {
+    const translateUi = async () => {
+      if (language === 'English') {
+        setUiText({
+          welcome: welcomeMessage,
+          typedAnim: TARGET_ANIMATION_MESSAGE,
+          ...TEXT_ELEMENTS_EN,
+        });
+        return;
+      }
+      
+      const [
+        translatedWelcome,
+        translatedTypedAnim,
+        translatedChooseMode,
+        translatedAudioOnly,
+        translatedAudioText,
+        translatedTextOnly,
+      ] = await Promise.all([
+        translate(welcomeMessage),
+        translate(TARGET_ANIMATION_MESSAGE),
+        translate(TEXT_ELEMENTS_EN.chooseMode),
+        translate(TEXT_ELEMENTS_EN.audioOnly),
+        translate(TEXT_ELEMENTS_EN.audioText),
+        translate(TEXT_ELEMENTS_EN.textOnly),
+      ]);
+      
+      setUiText({
+        welcome: translatedWelcome,
+        typedAnim: translatedTypedAnim,
+        chooseMode: translatedChooseMode,
+        audioOnly: translatedAudioOnly,
+        audioText: translatedAudioText,
+        textOnly: translatedTextOnly,
+      });
+    };
+    
+    if (!isLoading) {
+      translateUi();
+    }
+  }, [language, welcomeMessage, isLoading, translate]);
+
   // Typing animation effect
   useEffect(() => {
     if (isLoading || !isImageLoaded) return;
-    setTypedMessage(''); // Reset on re-render
+    setTypedMessage('');
     
     let i = 0;
+    const targetMessage = uiText.typedAnim;
     const timer = setInterval(() => {
-      setTypedMessage(TARGET_ANIMATION_MESSAGE.substring(0, i + 1));
+      setTypedMessage(targetMessage.substring(0, i + 1));
       i++;
-      if (i >= TARGET_ANIMATION_MESSAGE.length) {
+      if (i >= targetMessage.length) {
         clearInterval(timer);
       }
     }, typingSpeedMs);
 
     return () => clearInterval(timer);
-  }, [isLoading, isImageLoaded, typingSpeedMs]);
+  }, [isLoading, isImageLoaded, typingSpeedMs, uiText.typedAnim]);
   
   // Image loading effect
   useEffect(() => {
     if (splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || !splashImageSrc) {
       setIsImageLoaded(true);
     } else {
-      setIsImageLoaded(false); // Reset for new images
+      setIsImageLoaded(false);
     }
   }, [splashImageSrc]);
 
@@ -136,7 +193,7 @@ export default function StartPage() {
       <Card className="w-full max-w-2xl p-6 space-y-6 text-center shadow-2xl border">
         <CardHeader className="p-0">
           <CardTitle className="text-4xl font-headline text-primary">
-            {welcomeMessage}
+            {uiText.welcome}
           </CardTitle>
           <p className="text-lg text-muted-foreground h-7 animate-in fade-in delay-500">
             {typedMessage}
@@ -163,27 +220,27 @@ export default function StartPage() {
           />
           <div className="flex items-center justify-center gap-2">
             <CardDescription className="text-lg m-0">
-              Choose your interaction mode to begin.
+              {uiText.chooseMode}
             </CardDescription>
             <LanguageSelector />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/text-only">
-                <MessageSquareText className="h-8 w-8 text-primary" />
-                <span className="font-semibold">Text Only</span>
+              <Link href="/chat/audio-only">
+                <Mic className="h-8 w-8 text-primary" />
+                <span className="font-semibold">{uiText.audioOnly}</span>
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
               <Link href="/chat/audio-text">
                 <Bot className="h-8 w-8 text-primary" />
-                <span className="font-semibold">Audio & Text</span>
+                <span className="font-semibold">{uiText.audioText}</span>
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/audio-only">
-                <Mic className="h-8 w-8 text-primary" />
-                <span className="font-semibold">Audio Only</span>
+              <Link href="/chat/text-only">
+                <MessageSquareText className="h-8 w-8 text-primary" />
+                <span className="font-semibold">{uiText.textOnly}</span>
               </Link>
             </Button>
           </div>

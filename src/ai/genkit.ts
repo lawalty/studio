@@ -1,7 +1,7 @@
 
-import { configureGenkit } from 'genkit';
-import { googleAI } from 'genkit/googleai';
-import { firebase } from 'genkit/firebase';
+import { genkit } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
+import { firebase } from '@genkit-ai/firebase';
 import { dotprompt } from 'genkit/dotprompt';
 import { getFirestore } from 'firebase-admin/firestore';
 import { admin } from '@/lib/firebase-admin';
@@ -46,13 +46,12 @@ async function getGoogleApiKey(): Promise<string> {
 export async function getGenkitAi() {
   const apiKey = await getGoogleApiKey();
 
-  return configureGenkit({
+  // Updated to use the correct Genkit v1.x syntax.
+  return genkit({
     plugins: [
       dotprompt(),
       firebase(),
       googleAI({ apiKey }), // Using explicit API key for robust authentication.
     ],
-    logLevel: 'debug',
-    enableTracingAndMetrics: true,
   });
 }
