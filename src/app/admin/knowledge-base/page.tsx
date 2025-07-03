@@ -81,7 +81,7 @@ export default function KnowledgeBasePage() {
       }
     };
     fetchTopics();
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
@@ -113,7 +113,7 @@ export default function KnowledgeBasePage() {
     });
 
     return () => unsubscribers.forEach(unsub => unsub());
-  }, [toast]);
+  }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -191,7 +191,7 @@ export default function KnowledgeBasePage() {
         setOperationStatus(sourceId, false);
         setIsCurrentlyUploading(false);
     }
-  }, [toast]);
+  }, []);
 
   const handleFileUpload = () => {
     if (!selectedFile || !selectedTopicForUpload) {
@@ -237,7 +237,7 @@ export default function KnowledgeBasePage() {
     } finally {
       setOperationStatus(source.id, false);
     }
-  }, [toast]);
+  }, []);
 
   const handleDeleteAllByLevel = useCallback(async (level: KnowledgeBaseLevel) => {
     setOperationStatus(`delete-all-${level}`, true);
@@ -281,7 +281,7 @@ export default function KnowledgeBasePage() {
         // Let the snapshot listener clear the UI naturally
         setOperationStatus(`delete-all-${level}`, false);
     }
-}, [sources, toast]);
+}, [sources]);
 
 const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
     if (source.level === newLevel) return;
@@ -327,7 +327,7 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
         // The snapshot listener will handle the UI update
         setOperationStatus(source.id, false);
     }
-}, [toast]);
+}, []);
 
 
   const renderSourceCard = (source: KnowledgeSource) => {
@@ -431,7 +431,7 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
       <div>
         <h1 className="text-3xl font-bold font-headline text-primary">Knowledge Base Management</h1>
         <p className="text-muted-foreground">
-          Manage the documents and sources that form the AI's knowledge. Upload new content, move sources between priority levels, or remove them entirely.
+          Manage the documents and sources that form the AI&apos;s knowledge. Upload new content, move sources between priority levels, or remove them entirely.
         </p>
       </div>
 
