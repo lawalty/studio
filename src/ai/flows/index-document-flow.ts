@@ -68,8 +68,8 @@ export async function indexDocument({
         
         // Updated chunk size to be more token-friendly
         const chunks = simpleSplitter(cleanText, {
-          chunkSize: 1000, 
-          chunkOverlap: 100,
+          chunkSize: 500, 
+          chunkOverlap: 50,
         });
 
         if (chunks.length === 0) {
