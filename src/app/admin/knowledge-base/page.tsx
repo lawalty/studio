@@ -71,9 +71,6 @@ export default function KnowledgeBasePage() {
           const topicsString = data.conversationalTopics || '';
           const topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
           setAvailableTopics(topicsArray);
-          if (topicsArray.length > 0) {
-            setSelectedTopicForUpload(topicsArray[0]);
-          }
         }
       } catch (error) {
         console.error("Error fetching topics:", error);
