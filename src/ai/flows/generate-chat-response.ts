@@ -2,8 +2,8 @@
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
- * It uses a retrieval-augmented generation (RAG) approach by first searching a
- * knowledge base and then providing that context to the AI to formulate an answer.
+ * It uses a tool-based, retrieval-augmented generation (RAG) approach. The AI can
+ * ask clarifying questions before deciding to search the knowledge base.
  */
 import { getGenkitAi } from '@/ai/genkit';
 import { z } from 'zod';
@@ -34,11 +34,6 @@ const GenerateChatResponseOutputSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
-// Schema for the prompt input, including the retrieved context.
-const ChatPromptInputSchema = GenerateChatResponseInputSchema.extend({
-  context: z.string().describe("Relevant information from the knowledge base."),
-});
-
 
 export async function generateChatResponse(
   input: GenerateChatResponseInput
@@ -53,38 +48,59 @@ export async function generateChatResponse(
     },
     async ({ userMessage, personaTraits, conversationalTopics, chatHistory }) => {
 
-      // Step 1: Search the knowledge base for relevant information.
-      // We pass an empty filter object to search all available topics and levels.
-      const context = await searchKnowledgeBase(userMessage, {});
-
-      // Step 2: Define the prompt for the AI model, now including the retrieved knowledge.
+      // Define the tool INSIDE the flow to ensure it uses the same `ai` instance.
+      const knowledgeBaseSearch = ai.defineTool(
+        {
+          name: 'knowledgeBaseSearch',
+          description: 'Searches the knowledge base for specific, detailed user queries to find context for an answer. Do not use for vague questions.',
+          inputSchema: z.object({ query: z.string().describe('A specific and detailed question to search for in the knowledge base.') }),
+          outputSchema: z.string(), // The context string
+        },
+        async ({ query }) => {
+          // searchKnowledgeBase returns a formatted string, which is what we want.
+          return await searchKnowledgeBase(query, {}); 
+        }
+      );
+      
+      // Define the prompt for the AI model, making the tool available.
       const chatPrompt = ai.definePrompt({
         name: 'chatResponsePrompt',
-        input: { schema: ChatPromptInputSchema },
+        tools: [knowledgeBaseSearch],
+        input: { schema: GenerateChatResponseInputSchema },
         output: { schema: GenerateChatResponseOutputSchema },
         prompt: `You are a conversational AI. Your persona is defined by these traits: "{{personaTraits}}".
 Your primary areas of expertise are: "{{conversationalTopics}}".
-You are having a conversation with a user.
 
-Here is some information retrieved from your knowledge base that might be relevant:
----
-{{{context}}}
----
+You are having a conversation with a user. Here is their latest message: "{{userMessage}}"
 
-CRITICAL INSTRUCTIONS:
-1. Analyze the user's message: "{{userMessage}}".
-2. Review the provided context.
-3. If the context is relevant and helps answer the question, use it to formulate your response.
-4. If the context is not relevant, or if no context is provided, respond conversationally based on your defined persona and general knowledge. Do NOT mention that you searched the knowledge base and found nothing.
-5. If you don't know the answer, just say so politely.
-6. Your response must be a JSON object with two fields: "aiResponse" (a string) and "shouldEndConversation" (a boolean).
+**CRITICAL INSTRUCTIONS FOR YOUR RESPONSE:**
+
+1.  **Analyze the User's Intent:** First, determine if the user's message is a clear, specific question or if it is vague, ambiguous, or a general statement.
+
+2.  **Ask Clarifying Questions (If Needed):**
+    *   If the user's message is vague (e.g., "My PLO is down," "Tell me about compliance"), you MUST ask clarifying questions to understand their specific need before trying to answer.
+    *   Example Clarification: If the user says "My PLO is down", you should ask: "I can help with that. Are you asking about a decrease in transactions, the average loan size, or something else?"
+    *   Your goal is to get a specific, actionable query from the user. Do NOT use the knowledge base tool until you have this clarity.
+
+3.  **Search the Knowledge Base (When Ready):**
+    *   Once you have a specific query (either from the user's initial message or after your clarifying questions), use the \`knowledgeBaseSearch\` tool to find relevant information.
+    *   Provide a clear, concise query to the tool.
+
+4.  **Formulate Your Answer:**
+    *   Use the information returned by the tool to construct a comprehensive and helpful answer.
+    *   If the tool returns no relevant information, state that you couldn't find specific details on that topic but provide a helpful, general response based on your persona.
+    *   If the user is just making small talk or asking a question outside your expertise, respond conversationally without using the tool.
+
+5.  **Determine if the Conversation Should End:** Based on the interaction, set the \`shouldEndConversation\` flag to true if it feels like a natural conclusion.
+
+Your final response MUST be a single, valid JSON object that strictly matches the output schema.
 `,
       });
 
-      // Step 3: Call the LLM with all the necessary information.
+      // Call the LLM with all the necessary information. It will decide whether to ask a question or call the tool.
       try {
-        const output = await chatPrompt(
-          { userMessage, personaTraits, conversationalTopics, chatHistory, context },
+        const { output } = await chatPrompt(
+          { userMessage, personaTraits, conversationalTopics, chatHistory },
           {
             history: chatHistory,
             config: {
@@ -100,9 +116,7 @@ CRITICAL INSTRUCTIONS:
             shouldEndConversation: false,
           };
         }
-
-        // The logic for PDF references is simplified, as the context string contains the necessary info.
-        // For now, we return the text response. Future work could parse the context to extract specific URLs.
+        
         return output;
 
       } catch (error: any) {
@@ -113,7 +127,10 @@ CRITICAL INSTRUCTIONS:
           userFriendlyMessage = "There seems to be an issue with my connection to Google. Please check the API key configuration.";
         } else if (error.message && error.message.includes('permission')) {
           userFriendlyMessage = "It looks like I don't have the right permissions to access some information. This is a configuration issue.";
+        } else if (error.message && (error.message.includes('tool_code') || error.message.includes('tool calling'))) {
+          userFriendlyMessage = "I'm having a little trouble using my knowledge base right now. Let's try that again in a moment.";
         }
+
 
         return {
           aiResponse: userFriendlyMessage,
