@@ -63,8 +63,18 @@ export async function extractTextFromDocumentUrl(
         
       } catch (e: any) {
         console.error('[extractTextFromDocumentUrlFlow] A critical error occurred:', e);
-        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred during text extraction.';
-        throw new Error(`Text extraction failed. This might be due to an issue with permissions, networking, or the document itself. Please check that the GOOGLE_AI_API_KEY is set correctly. Full technical error: ${errorMessage}`);
+        const rawError = e instanceof Error ? e.message : JSON.stringify(e);
+        let detailedError: string;
+
+        if (rawError.includes("Could not refresh access token") && rawError.includes("500")) {
+            detailedError = `CRITICAL: Text extraction failed with a Google Cloud internal error (500), likely due to a project configuration issue, not a code bug. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Key: Ensure the Google AI API Key saved in the admin panel is correct and from the right project. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project. Full technical error: ${rawError}`;
+        } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
+            detailedError = `Text extraction failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled. Full technical error: ${rawError}`;
+        } else {
+            detailedError = `Text extraction failed. This might be due to a networking issue or an invalid document. Full technical error: ${rawError}`;
+        }
+        
+        throw new Error(detailedError);
       }
     }
   );
