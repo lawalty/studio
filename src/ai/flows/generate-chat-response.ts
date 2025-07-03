@@ -3,24 +3,26 @@
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
  * It uses a tool-based, retrieval-augmented generation (RAG) approach. The AI can
- * decide when to search the knowledge base to answer a user's question.
+ * decide when to search the knowledge base to answer a user's question. It supports
+ * multi-language conversations by translating user queries for RAG and responding in the user's language.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 import { defineTool } from '@genkit-ai/ai/tool';
+import { translateText } from './translate-text-flow';
 
 // Zod schema for the input of the generateChatResponse flow.
 export const GenerateChatResponseInputSchema = z.object({
-  userMessage: z.string().describe('The message sent by the user.'),
   personaTraits: z.string().describe("A summary of the AI's personality and character traits."),
   conversationalTopics: z.string().describe("A comma-separated list of topics the AI is an expert in."),
+  language: z.string().optional().default('English').describe('The language the user is speaking in and expects a response in.'),
   chatHistory: z.array(z.object({
     role: z.enum(['user', 'model']),
     parts: z.array(z.object({
       text: z.string(),
     })),
-  })).optional().describe('The history of the conversation so far.'),
+  })).optional().describe('The history of the conversation so far, including the latest user message.'),
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
@@ -56,13 +58,32 @@ const generateChatResponseFlow = ai.defineFlow(
     inputSchema: GenerateChatResponseInputSchema,
     outputSchema: GenerateChatResponseOutputSchema,
   },
-  async ({ userMessage, personaTraits, conversationalTopics, chatHistory }) => {
+  async ({ personaTraits, conversationalTopics, chatHistory, language }) => {
+    
+    // For RAG to work against an English knowledge base, we must search using an English query.
+    // We will translate the user's message to English for the search,
+    // but instruct the AI to respond in the user's original language.
+    const historyForRAG = chatHistory ? JSON.parse(JSON.stringify(chatHistory)) : []; // Deep copy to avoid mutation
+    const lastMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1] : null;
+
+    if (language && language !== 'English' && lastMessage && lastMessage.role === 'user') {
+      try {
+        const originalText = lastMessage.parts[0].text;
+        const { translatedText } = await translateText({ text: originalText, targetLanguage: 'English' });
+        // Modify the last message in our copied history to use the English translation for the RAG step.
+        lastMessage.parts[0].text = translatedText;
+      } catch (e) {
+        console.error("Failed to translate user message for RAG, proceeding with original text.", e);
+        // If translation fails, we still proceed, though RAG may be less effective.
+      }
+    }
     
     const prompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
       Your primary areas of expertise are: "${conversationalTopics}".
       You are having a conversation with a user.
 
-      IMPORTANT:
+      **IMPORTANT INSTRUCTIONS:**
+      - **Respond in ${language}.** This is critical.
       - You have a tool named "knowledgeBaseSearch" to find specific information.
       - Use this tool ONLY when the user asks a direct question that requires looking up data or procedures.
       - For general conversation, greetings, or questions outside your expertise, DO NOT use the tool. Just respond naturally.
@@ -76,7 +97,8 @@ const generateChatResponseFlow = ai.defineFlow(
       const response = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
         prompt: prompt,
-        history: chatHistory,
+        // The history sent to the LLM contains the (potentially translated) last user message.
+        history: historyForRAG,
         tools: [knowledgeBaseSearchTool],
         output: {
           format: 'json',
@@ -97,9 +119,6 @@ const generateChatResponseFlow = ai.defineFlow(
         };
       }
       
-      // This logic can be expanded later if we want to extract the PDF reference from the tool's output.
-      // For now, the AI will cite the source directly in its text response.
-      
       return output;
 
     } catch (error: any) {
@@ -108,8 +127,17 @@ const generateChatResponseFlow = ai.defineFlow(
       
       if (error.message && (error.message.includes('tool_code') || error.message.includes('tool calling'))) {
         userFriendlyMessage = "I'm having a little trouble using my knowledge base right now. Please try that again in a moment.";
-      } else if (error.message && error.message.includes('API key') || error.message.includes('permission')) {
+      } else if (error.message && (error.message.includes('API key') || error.message.includes('permission'))) {
         userFriendlyMessage = "It looks like I don't have the right permissions to access some information. This is a configuration issue.";
+      }
+      
+      // If the user's language is not English, translate the error message.
+      if (language && language !== 'English') {
+        try {
+          userFriendlyMessage = (await translateText({ text: userFriendlyMessage, targetLanguage: language })).translatedText;
+        } catch (e) {
+            // Ignore translation error for the error message itself.
+        }
       }
 
       return {

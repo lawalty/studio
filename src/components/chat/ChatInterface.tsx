@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -14,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Mic, Square as SquareIcon, Power, DatabaseZap, AlertTriangle, Info, Loader2, Save, RotateCcw } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { useLanguage } from '@/context/LanguageContext';
 
 
 export interface Message {
@@ -194,6 +196,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   
   const router = useRouter();
+  const { language } = useLanguage();
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any | null>(null);
@@ -530,16 +533,18 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     isAboutToSpeakForSilenceRef.current = false;
     mainResponsePendingAfterAckRef.current = false;
 
-    const historyForGenkit = messagesRef.current
-        .filter(msg => !(msg.text === text && msg.sender === 'user' && msg.id === messagesRef.current[messagesRef.current.length -1]?.id))
-        .map(msg => ({ role: msg.sender, parts: [{ text: msg.text }] }));
+    // The history now comes directly from the state which was just updated
+    const historyForGenkit = messagesRef.current.map(msg => ({ 
+      role: msg.sender, 
+      parts: [{ text: msg.text }] 
+    }));
 
     try {
       const flowInput: GenerateChatResponseInput = {
-        userMessage: text,
         personaTraits: personaTraits,
         conversationalTopics: conversationalTopics,
         chatHistory: historyForGenkit,
+        language: language,
       };
       
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
@@ -586,7 +591,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       mainResponsePendingAfterAckRef.current = false;
       isSpeakingAcknowledgementRef.current = false;
     }
-  }, [addMessage, updateMessageDuration, personaTraits, conversationalTopics, hasConversationEnded, isSendingMessage, setInputValue]);
+  }, [addMessage, updateMessageDuration, personaTraits, conversationalTopics, language, hasConversationEnded, isSendingMessage, setInputValue]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
