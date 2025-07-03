@@ -1,58 +1,58 @@
-/**
- * @fileOverview Dynamic Genkit Configuration
- *
- * This file dynamically configures the Genkit AI instance for the application.
- * It fetches the Google AI API key from Firestore at runtime. This is crucial
- * for production environments where .env files are not deployed.
- *
- * The getGenkitAi function initializes Genkit with the fetched key
- * and caches the instance for subsequent calls to improve performance.
- */
-import { genkit, type Genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/googleai';
-import { db } from '@/lib/firebase-admin';
 
-const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
-let aiInstance: Genkit | null = null;
-const ai = genkit({
-  plugins: [
-    googleAI(),
-  ],
-});
-export default ai;
+import { configureGenkit } from 'genkit';
+import { googleAI } from 'genkit/googleai';
+import { firebase } from 'genkit/firebase';
+import { dotprompt } from 'genkit/dotprompt';
+import { getFirestore } from 'firebase-admin/firestore';
+import { admin } from '@/lib/firebase-admin';
 
-export async function getGenkitAi(): Promise<Genkit> {
-  if (aiInstance) {
-    return aiInstance;
+// A cache for the API key so we don't hit Firestore on every single call.
+let cachedApiKey: string | null = null;
+
+async function getGoogleApiKey(): Promise<string> {
+  if (cachedApiKey) {
+    return cachedApiKey;
   }
 
+  // Fallback to environment variable if available, which is useful for local testing.
+  if (process.env.GOOGLE_AI_API_KEY) {
+    cachedApiKey = process.env.GOOGLE_AI_API_KEY;
+    return cachedApiKey;
+  }
+
+  // Otherwise, fetch from Firestore.
   try {
-    const docRef = db.doc(FIRESTORE_KEYS_PATH);
+    const db = getFirestore(admin.app());
+    const docRef = db.collection('configurations').doc('api_keys_config');
     const docSnap = await docRef.get();
 
-    if (!docSnap.exists) {
-      throw new Error("API keys configuration not found in Firestore. Please configure it in the admin panel.");
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const apiKey = data?.googleAiApiKey;
+      if (apiKey && typeof apiKey === 'string') {
+        cachedApiKey = apiKey;
+        return apiKey;
+      }
     }
-
-    const configData = docSnap.data();
-    const apiKey = configData?.googleAiApiKey;
-
-    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
-      throw new Error("Google AI API Key is missing or invalid in Firestore configuration. Please add it in the admin panel.");
-    }
-    
-    const newAiInstance = genkit({
-      plugins: [
-        googleAI({ apiKey: apiKey }),
-      ],
-    });
-
-    aiInstance = newAiInstance;
-    return aiInstance;
-
+    throw new Error('API key not found in Firestore or environment variables.');
   } catch (error) {
-    console.error("[getGenkitAi] FATAL: Failed to initialize Genkit with key from Firestore:", error);
-    // Fallback to the default instance if Firestore fetch fails
-    return ai;
+    console.error("CRITICAL: Failed to retrieve Google AI API key.", error);
+    // This will cause the flow to fail, but with a clear error in the logs.
+    throw new Error('Application is not configured with a Google AI API key.');
   }
+}
+
+// This function now ensures that Genkit is configured with an explicit API key.
+export async function getGenkitAi() {
+  const apiKey = await getGoogleApiKey();
+
+  return configureGenkit({
+    plugins: [
+      dotprompt(),
+      firebase(),
+      googleAI({ apiKey }), // Using explicit API key for robust authentication.
+    ],
+    logLevel: 'debug',
+    enableTracingAndMetrics: true,
+  });
 }
