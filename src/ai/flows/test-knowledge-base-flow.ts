@@ -8,7 +8,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
 const TestKnowledgeBaseInputSchema = z.object({

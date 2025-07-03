@@ -7,7 +7,7 @@
  * - TestTextGenerationOutput - The return type.
  */
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 
 
 const TestTextGenerationOutputSchema = z.object({

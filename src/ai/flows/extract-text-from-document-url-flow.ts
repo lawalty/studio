@@ -7,7 +7,7 @@
  * - ExtractTextFromDocumentUrlOutput - The return type.
  */
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 
 const ExtractTextFromDocumentUrlInputSchema = z.object({
   documentUrl: z.string().url().describe('The public URL of the document file to process.'),

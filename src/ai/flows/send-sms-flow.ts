@@ -7,7 +7,7 @@
  */
 'use server';
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
 import twilio from 'twilio';
 
