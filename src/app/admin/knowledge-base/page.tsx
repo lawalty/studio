@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
-import { extractTextFromDocumentUrl, type ExtractTextFromDocumentUrlInput } from '@/ai/flows/extract-text-from-document-url-flow';
+import { extractTextFromDocumentUrl, type ExtractTextFromDocumentUrlInput, type ExtractTextFromDocumentUrlOutput } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
 import { Loader2, UploadCloud, Trash2, ShieldAlert, FileText, CheckCircle, AlertTriangle, ChevronRight, ChevronsRight, ChevronsLeft, History, Archive, RotateCcw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -158,7 +158,7 @@ export default function KnowledgeBasePage() {
 
     let extractedText: string;
     try {
-        const isPlainText = fileToUpload.type === 'text/plain';
+        const isPlainText = fileToUpload.type === 'text/plain' || fileToUpload.name.toLowerCase().endsWith('.txt');
         const toastDescription = isPlainText ? "Reading text file directly..." : "Starting AI text extraction...";
         toast({ title: "Upload Successful", description: toastDescription, variant: "default" });
 
@@ -166,7 +166,7 @@ export default function KnowledgeBasePage() {
             extractedText = await fileToUpload.text();
         } else {
             const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
-            const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+            const extractionResult: ExtractTextFromDocumentUrlOutput = await extractTextFromDocumentUrl(extractionInput);
             
             if (!extractionResult) {
                 throw new Error('The text extraction process returned an empty response. This may indicate a network or API configuration issue.');
@@ -383,7 +383,11 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
                  extractedText = await response.text();
             } else {
                  const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: source.downloadURL, conversationalTopics: source.topic };
-                 const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+                 const extractionResult: ExtractTextFromDocumentUrlOutput = await extractTextFromDocumentUrl(extractionInput);
+                 
+                 if (!extractionResult) {
+                    throw new Error('The text extraction process returned an empty response. This may indicate a network or API configuration issue.');
+                 }
                  if (extractionResult.error || !extractionResult.extractedText) {
                     throw new Error(extractionResult.error || 'Text extraction failed to return any content during re-indexing.');
                  }
