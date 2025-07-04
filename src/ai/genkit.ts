@@ -1,7 +1,6 @@
 
 import { genkit, configureGenkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import { firebase } from '@genkit-ai/firebase';
 import { getFirestore } from 'firebase-admin/firestore';
 import { admin } from '@/lib/firebase-admin';
 
@@ -19,7 +18,6 @@ function initializeGenkit() {
 
     configureGenkit({
         plugins: [
-            firebase(),
             googleAI({
                 // The API key is provided as an async function. Genkit will call this
                 // function to resolve the key when it's needed for an API call.
