@@ -399,7 +399,7 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
 
   const renderSourceCard = (source: KnowledgeSource) => {
     const isOperationInProgress = operationInProgress[source.id] || false;
-    const isIndexingFailure = source.indexingStatus === 'failed' && !source.indexingError?.includes("extraction failed");
+    const isProcessingFailure = source.indexingStatus === 'failed';
 
     return (
       <Card key={source.id} className={cn("mb-4 transition-all", isOperationInProgress && "opacity-50 cursor-not-allowed")}>
@@ -414,7 +414,7 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            {isIndexingFailure && (
+            {isProcessingFailure && (
                  <Button variant="outline" size="icon" title="Re-process source" onClick={() => handleReindexSource(source)} disabled={isOperationInProgress}>
                     <RotateCcw size={16} />
                 </Button>
@@ -438,7 +438,7 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
           <div className="flex items-center gap-2 text-sm text-muted-foreground p-2 rounded-md bg-muted">
              {source.indexingStatus === 'success' && <> <CheckCircle size={16} className="text-green-500" /> <span>Indexing complete. {source.chunksWritten ?? 0} chunks written.</span> </>}
              {source.indexingStatus === 'processing' && <> <Loader2 size={16} className="animate-spin" /> <span>Processing...</span> </>}
-             {source.indexingStatus === 'failed' && <> <AlertTriangle size={16} className="text-destructive" /> <span>Indexing failed: {source.indexingError}</span> </>}
+             {source.indexingStatus === 'failed' && <> <AlertTriangle size={16} className="text-destructive" /> <span>Failure: {source.indexingError}</span> </>}
           </div>
         </CardContent>
         <CardFooter className="flex justify-end gap-2">
@@ -592,3 +592,5 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     </div>
   );
 }
+
+    
