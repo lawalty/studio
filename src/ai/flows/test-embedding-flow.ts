@@ -50,16 +50,16 @@ const testEmbeddingFlow = ai.defineFlow(
         const rawError = e instanceof Error ? e.message : JSON.stringify(e);
         let detailedError: string;
 
-        if (e.name === 'TypeError' && rawError.includes('Headers.append')) {
-            detailedError = `INTERNAL ERROR: The application's code is failing to correctly process the API key. This is a framework-level issue, not a problem with your API key or Google Cloud project configuration. Please report this issue.`;
+        if (rawError.includes("API key not valid")) {
+            detailedError = "The provided Google AI API Key is invalid. Please verify it in your .env.local file or hosting provider's secret manager.";
+        } else if (rawError.includes("API key is missing")) {
+            detailedError = "The GOOGLE_AI_API_KEY environment variable is not set. Please add it to your .env.local file or hosting provider's secret manager.";
+        } else if (rawError.includes("permission denied") || rawError.includes('IAM')) {
+            detailedError = `A permissions issue occurred. Please check that the 'Vertex AI API' is enabled in your Google Cloud project and that your account has the correct IAM permissions.`;
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
-            detailedError = `CRITICAL: The embedding feature failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
-        } else if (rawError.includes("Could not refresh access token")) {
-            detailedError = `CRITICAL: The embedding test failed with a Google Cloud internal error, likely due to a project configuration issue. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again. 2) API Key: Ensure the Google AI API Key is correct. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console.`;
-        } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
-            detailedError = `The embedding test failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled.`;
+            detailedError = `CRITICAL: The embedding feature failed because billing is not enabled for your Google Cloud project. Please link a billing account in the Google Cloud Console.`;
         } else {
-            detailedError = `The embedding test failed. This is most often caused by a missing or invalid Google AI API Key. Please go to the Admin Console -> API Keys & Services page to verify your key is correct and saved. Also ensure the 'Vertex AI API' is enabled in your Google Cloud project.`;
+            detailedError = `The embedding test failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled).`;
         }
         
         return { success: false, error: detailedError };

@@ -19,7 +19,6 @@ import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseO
 import { Textarea } from '@/components/ui/textarea';
 
 interface ApiKeys {
-  googleAiApiKey: string;
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
@@ -32,7 +31,6 @@ const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 
 export default function ApiKeysPage() {
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
-    googleAiApiKey: '',
     tts: '',
     voiceId: '',
     useTtsApi: true,
@@ -60,7 +58,6 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setApiKeys({
-            googleAiApiKey: data.googleAiApiKey || '',
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
@@ -94,7 +91,9 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      await setDoc(docRef, apiKeys, { merge: true }); 
+      // Note: We no longer save the googleAiApiKey here as it's managed by environment variables.
+      const { ...keysToSave } = apiKeys;
+      await setDoc(docRef, keysToSave, { merge: true }); 
       toast({ title: "Settings Saved", description: "Your service settings have been saved to Firestore." });
     } catch (error) {
       console.error("Error saving API keys to Firestore:", error);
@@ -152,15 +151,18 @@ export default function ApiKeysPage() {
           <>
             <Alert variant="default" className="bg-sky-50 border-sky-200">
               <Terminal className="h-4 w-4 text-sky-700" />
-              <AlertTitle className="text-sky-800 font-bold">Important: Central API Key Management</AlertTitle>
+              <AlertTitle className="text-sky-800 font-bold">Important: Google AI API Key Configuration</AlertTitle>
               <AlertDescription className="text-sky-700 space-y-3">
-                  <p className="font-semibold">
-                    This is the central place to manage your Google AI API Key. It is stored in Firestore and used by the server for all AI features.
+                  <p>
+                    To fix a persistent framework bug, the Google AI API Key is now managed exclusively via an environment variable.
                   </p>
-                  <div className="space-y-2 pt-2">
-                    <Label htmlFor="googleAiApiKey" className="font-medium text-sky-800">Google AI API Key</Label>
-                    <Input id="googleAiApiKey" name="googleAiApiKey" type="password" value={apiKeys.googleAiApiKey} onChange={handleChange} placeholder="Enter your Google AI API Key" />
-                  </div>
+                  <ul className="list-disc pl-5 text-xs space-y-1">
+                      <li>For local development, add <code className="font-mono bg-sky-100 p-1 rounded">GOOGLE_AI_API_KEY=your_key_here</code> to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
+                      <li>For production, set this as a secret in your hosting provider's dashboard (e.g., Firebase App Hosting Secrets).</li>
+                  </ul>
+                  <p className="text-xs">
+                    The input field for this key has been removed from the UI to avoid confusion.
+                  </p>
               </AlertDescription>
             </Alert>
 
@@ -230,7 +232,7 @@ export default function ApiKeysPage() {
             <h3 className="text-lg font-semibold">Service Diagnostics</h3>
         </div>
         <CardDescription>
-            Run these tests to diagnose issues with your API keys or Google Cloud project configuration.
+            Run these tests to diagnose issues with your Google AI API key or Google Cloud project configuration.
             Text extraction failures are often due to issues with the Text Generation or Embedding models.
         </CardDescription>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
