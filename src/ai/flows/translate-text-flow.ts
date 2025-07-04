@@ -50,11 +50,11 @@ const translateTextFlow = ai.defineFlow(
       let detailedError: string;
       
       if (rawError.includes("Could not refresh access token") || rawError.includes("500")) {
-          detailedError = `CRITICAL: Translation failed with a Google Cloud internal error, likely due to a project configuration issue. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Key: Ensure the Google AI API Key saved in the admin panel is correct. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project. Full error: ${rawError}`;
+          detailedError = `CRITICAL: Translation failed due to a Google Cloud configuration issue. Please check your API Key, ensure the Vertex AI API is enabled, and that billing is active for your project.`;
       } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
-          detailedError = `Translation failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User). Full error: ${rawError}`;
+          detailedError = `Translation failed due to a permissions issue. Please check the service account's IAM roles.`;
       } else {
-          detailedError = `Translation failed. Full technical error: ${rawError}`;
+          detailedError = `Translation failed. This may be due to a temporary network issue or an API configuration problem. Please check your Google AI API key and try again.`;
       }
       
       throw new Error(detailedError);

@@ -58,11 +58,11 @@ export async function extractTextFromDocumentUrl(
       let detailedError: string;
 
       if (rawError.includes("Could not refresh access token") && rawError.includes("500")) {
-          detailedError = `CRITICAL: Text extraction failed with a Google Cloud internal error (500), likely due to a project configuration issue, not a code bug. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Key: Ensure the Google AI API Key saved in the admin panel is correct and from the right project. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project. Full technical error: ${rawError}`;
+          detailedError = `CRITICAL: Text extraction failed with a Google Cloud internal error (500), likely due to a project configuration issue. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Key: Ensure the Google AI API Key saved in the admin panel is correct and from the right project. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project.`;
       } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
-          detailedError = `Text extraction failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled. Full technical error: ${rawError}`;
+          detailedError = `Text extraction failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled.`;
       } else {
-          detailedError = `Text extraction failed. This might be due to a networking issue or an invalid document. Full technical error: ${rawError}`;
+          detailedError = `Text extraction failed. This is most often caused by a missing or invalid Google AI API Key. Please go to the Admin Console -> API Keys & Services page to verify your key is correct and saved. Also ensure the 'Vertex AI API' is enabled in your Google Cloud project.`;
       }
       
       throw new Error(detailedError);
