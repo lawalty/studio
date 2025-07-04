@@ -120,8 +120,10 @@ export default function KnowledgeBasePage() {
   };
 
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, topic: string, description: string) => {
-    if (!fileToUpload) throw new Error("No file was provided to the upload handler.");
-
+    if (!fileToUpload) {
+        toast({ title: "Upload Error", description: "No file was provided to the upload handler.", variant: "destructive" });
+        return;
+    }
     const sourceId = uuidv4();
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
@@ -221,7 +223,7 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    handleUpload(selectedFile, selectedLevelForUpload, uploadDescription);
+    handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
     setSelectedFile(null);
     setUploadDescription('');
     if (fileInputRef.current) {
