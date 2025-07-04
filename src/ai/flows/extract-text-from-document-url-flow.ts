@@ -52,22 +52,22 @@ export async function extractTextFromDocumentUrl(
 
       const text = generationResult?.text;
 
-      // This robust check handles cases where the AI returns no text, which can be caused
-      // by timeouts, content safety blocks, or issues with the source file.
-      if (!text || typeof text !== 'string' || text.trim() === '') {
+      // A successful response *must* have a non-empty string as text.
+      if (text && typeof text === 'string' && text.trim().length > 0) {
+        // Clean up markdown code blocks if the model accidentally adds them.
+        let cleanedText = text.replace(/```[a-z]*/g, '').replace(/```/g, '');
+        cleanedText = cleanedText.trim();
+        return { extractedText: cleanedText };
+      } else {
+        // If we get here, the model did not return usable text.
         console.error('[extractTextFromDocumentUrl] AI did not return valid text. Response:', generationResult);
         const finishReason = generationResult?.finishReason || 'Unknown';
         const errorMessage = `The AI model failed to extract text (Reason: ${finishReason}). This could be due to a malformed file, a content safety block, or an API timeout. Please try a smaller or simpler document.`;
         return { error: errorMessage };
       }
       
-      let cleanedText = text.replace(/```[a-z]*/g, '').replace(/```/g, '');
-      cleanedText = cleanedText.trim();
-      
-      return { extractedText: cleanedText };
-      
     } catch (e: any) {
-      console.error('[extractTextFromDocumentUrl] A critical error occurred:', e);
+      console.error('[extractTextFromDocumentUrl] A critical error occurred during the AI call:', e);
       const rawError = e instanceof Error ? e.message : JSON.stringify(e);
       let detailedError: string;
 
