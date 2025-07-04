@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -399,10 +400,17 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
         const indexingResult = await indexDocument(indexingInput);
 
         if (!indexingResult.success) {
-            if (indexingResult.error?.includes("automatically removed")) {
+            const errorMessage = indexingResult.error || "An unknown indexing error occurred.";
+            // Explicitly update Firestore with failure status on the client side for robustness.
+            await updateDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id), {
+                indexingStatus: 'failed',
+                indexingError: errorMessage,
+            });
+
+            if (errorMessage.includes("automatically removed")) {
                  toast({ title: `Re-processing Aborted`, description: `Re-processing found no text in ${source.sourceName}, so it has been removed.`, variant: "destructive", duration: 10000 });
             } else {
-                 toast({ title: "Re-indexing Failed", description: indexingResult.error, variant: "destructive", duration: 10000 });
+                 toast({ title: "Re-indexing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
             }
         } else {
             toast({ title: "Re-indexing Successful", description: `${source.sourceName} has been re-indexed.`, variant: "default" });
@@ -617,3 +625,5 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     </div>
   );
 }
+
+    
