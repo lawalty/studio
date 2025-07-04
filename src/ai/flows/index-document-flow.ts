@@ -8,7 +8,7 @@
  * - IndexDocumentOutput - The return type for the function.
  */
 import { z } from 'zod';
-import { db } from '@/lib/firebase-admin';
+import { db, admin } from '@/lib/firebase-admin';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -64,11 +64,24 @@ export async function indexDocument({
       try {
         const cleanText = text.trim();
         if (!cleanText) {
-           const errorMessage = "No readable text content was found in the document. Aborting indexing.";
-           console.warn(`[indexDocument] ${errorMessage} Document: '${sourceName}'.`);
-           // Use set with merge to create/update the doc, preventing "not found" errors.
-           await sourceDocRef.set({ indexingStatus: 'failed', indexingError: errorMessage, sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
-           return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
+            const errorMessage = "No readable text content found. The source has been automatically removed.";
+            console.warn(`[indexDocument] ${errorMessage} Document: '${sourceName}'.`);
+
+            // Delete from Storage first
+            if (downloadURL) {
+                const filePath = `knowledge_base_files/${level}/${sourceId}-${sourceName}`;
+                try {
+                    await admin.storage().bucket().file(filePath).delete();
+                } catch (e: any) {
+                    if (e.code !== 'storage/object-not-found') {
+                        console.error(`[indexDocument] Failed to auto-delete storage file '${filePath}':`, e);
+                    }
+                }
+            }
+            // Then delete the metadata from Firestore
+            await sourceDocRef.delete();
+
+            return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
         const chunks = simpleSplitter(cleanText, {

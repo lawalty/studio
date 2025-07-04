@@ -15,7 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocumentUrl, type ExtractTextFromDocumentUrlInput } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
-import { Loader2, UploadCloud, Trash2, ShieldAlert, FileText, CheckCircle, AlertTriangle, ChevronRight, ChevronsRight, ChevronsLeft, History, Archive } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, ShieldAlert, FileText, CheckCircle, AlertTriangle, ChevronRight, ChevronsRight, ChevronsLeft, History, Archive, RotateCcw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -149,12 +149,10 @@ export default function KnowledgeBasePage() {
 
         let extractedText: string;
 
-        // Check if the file is a plain text file
         if (fileToUpload.type === 'text/plain') {
             toast({ title: "Reading Text File", description: "Directly reading text content...", variant: "default" });
             extractedText = await fileToUpload.text();
         } else {
-            // Use AI extraction for other file types like PDF
             toast({ title: "Upload Successful", description: "Starting AI text extraction...", variant: "default" });
             const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
             const extractionResult = await extractTextFromDocumentUrl(extractionInput);
@@ -175,6 +173,10 @@ export default function KnowledgeBasePage() {
         const indexingResult = await indexDocument(indexingInput);
 
         if (!indexingResult.success) {
+            if (indexingResult.error?.includes("automatically removed")) {
+                toast({ title: "Source Removed", description: `${fileToUpload.name} was removed as no text could be extracted.`, variant: "default", duration: 8000 });
+                return;
+            }
             throw new Error(indexingResult.error || "Indexing failed for an unknown reason.");
         }
 
@@ -322,8 +324,83 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
     }
 }, []);
 
+const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
+    setOperationStatus(source.id, true);
+    toast({ title: `Re-indexing ${source.sourceName}...` });
+
+    try {
+        await updateDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id), {
+            indexingStatus: 'processing',
+            indexingError: '',
+        });
+
+        if (!source.downloadURL) {
+            throw new Error("Source has no download URL, cannot re-index.");
+        }
+        
+        const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
+        const chunksSnapshot = await getDocs(chunksQuery);
+        if (!chunksSnapshot.empty) {
+            const batch = writeBatch(db);
+            chunksSnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+        }
+
+        let extractedText: string;
+        const isPlainText = source.sourceName.toLowerCase().endsWith('.txt');
+        if (isPlainText) {
+             toast({ title: "Reading Text File", description: "Directly reading text content...", variant: "default" });
+             const response = await fetch(source.downloadURL);
+             if (!response.ok) throw new Error("Failed to fetch text file content for re-indexing.");
+             extractedText = await response.text();
+        } else {
+             const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: source.downloadURL, conversationalTopics: source.topic };
+             const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+             extractedText = extractionResult.extractedText;
+        }
+
+        const indexingInput: IndexDocumentInput = {
+            sourceId: source.id,
+            sourceName: source.sourceName,
+            text: extractedText,
+            level: source.level,
+            topic: source.topic,
+            downloadURL: source.downloadURL,
+        };
+
+        const indexingResult = await indexDocument(indexingInput);
+
+        if (!indexingResult.success) {
+            if (indexingResult.error?.includes("automatically removed")) {
+                 toast({ title: `Re-indexing Aborted`, description: `Re-processing found no text in ${source.sourceName}, so it has been removed.`, variant: "destructive", duration: 10000 });
+                 return;
+            }
+            throw new Error(indexingResult.error || "Re-indexing failed for an unknown reason.");
+        }
+
+        toast({ title: "Re-indexing Successful", description: `${source.sourceName} has been re-indexed.`, variant: "default" });
+
+    } catch (error: any) {
+        console.error("Full re-indexing error:", error);
+        const errorMessage = error.message || "An unknown error occurred during re-indexing.";
+        toast({ title: `Error Re-indexing: ${source.sourceName}`, description: errorMessage, variant: "destructive", duration: 10000 });
+        
+        await updateDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id), {
+            indexingStatus: 'failed',
+            indexingError: errorMessage
+        }).catch(updateError => console.error("Error updating doc with failure status after re-indexing attempt:", updateError));
+    } finally {
+        setOperationStatus(source.id, false);
+    }
+}, [toast]);
+
+
   const renderSourceCard = (source: KnowledgeSource) => {
     const isOperationInProgress = operationInProgress[source.id] || false;
+    const isIndexingFailure = source.indexingStatus === 'failed' && !source.indexingError?.includes("extraction failed");
+
     return (
       <Card key={source.id} className={cn("mb-4 transition-all", isOperationInProgress && "opacity-50 cursor-not-allowed")}>
         <CardHeader className="flex flex-row justify-between items-start">
@@ -337,6 +414,11 @@ const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: K
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            {isIndexingFailure && (
+                 <Button variant="outline" size="icon" title="Re-process source" onClick={() => handleReindexSource(source)} disabled={isOperationInProgress}>
+                    <RotateCcw size={16} />
+                </Button>
+            )}
             <AlertDialog>
                 <AlertDialogTrigger asChild>
                     <Button variant="destructive" size="icon" disabled={isOperationInProgress}><Trash2 size={16} /></Button>
