@@ -41,7 +41,7 @@ export async function extractTextFromDocumentUrl(
       - Do not wrap the output in code blocks or JSON formatting.
       - Your final output should only be the clean, extracted text, ready for processing.`;
 
-      const { text } = await ai.generate({
+      const generationResult = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
         prompt: [{ text: prompt }, { media: { url: documentUrl } }],
         config: {
@@ -49,6 +49,13 @@ export async function extractTextFromDocumentUrl(
         },
       });
 
+      const text = generationResult.text;
+
+      if (typeof text !== 'string') {
+        console.error('[extractTextFromDocumentUrl] AI did not return valid text. Response:', generationResult);
+        throw new Error('The AI model failed to extract any text from the document. This could be due to a malformed file, a content safety block, or an API issue.');
+      }
+      
       let cleanedText = text.replace(/```[a-z]*\n/g, '').replace(/```/g, '');
       cleanedText = cleanedText.trim();
       
@@ -68,7 +75,7 @@ export async function extractTextFromDocumentUrl(
       } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
           detailedError = `CRITICAL: Text extraction failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
       } else {
-          detailedError = `Text extraction failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY environment variable or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled).`;
+          detailedError = `Text extraction failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY environment variable or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
       }
       
       throw new Error(detailedError);
