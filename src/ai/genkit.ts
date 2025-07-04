@@ -1,20 +1,57 @@
 
-import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/googleai';
+import { configureGenkit } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
+import { firebase } from '@genkit-ai/firebase';
+import { getFirestore } from 'firebase-admin/firestore';
+import { admin } from '@/lib/firebase-admin';
 
-// This is the single, globally configured `genkit` instance.
-// All other files will import and use this `ai` object.
-//
-// IMPORTANT: To resolve a framework-level issue with asynchronous API key loading,
-// the AI SDK is now configured to ONLY use the GOOGLE_AI_API_KEY from your
-// environment variables (e.g., in the .env.local file).
-//
-// The API key field in the Admin Console is no longer used by the backend.
-// You must set the environment variable for the AI features to work.
-export const ai = genkit({
-  plugins: [
-    googleAI({
-      apiKey: process.env.GOOGLE_AI_API_KEY,
-    }),
-  ],
-});
+// A cache for the API key so we don't hit Firestore on every single call.
+let cachedApiKey: string | null = null;
+
+async function getGoogleApiKey(): Promise<string> {
+  if (cachedApiKey) {
+    return cachedApiKey;
+  }
+
+  // Fallback to environment variable if available, which is useful for local testing.
+  if (process.env.GOOGLE_AI_API_KEY) {
+    cachedApiKey = process.env.GOOGLE_AI_API_KEY;
+    return cachedApiKey;
+  }
+
+  // Otherwise, fetch from Firestore.
+  try {
+    const db = getFirestore(admin.app());
+    const docRef = db.collection('configurations').doc('api_keys_config');
+    const docSnap = await docRef.get();
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const apiKey = data?.googleAiApiKey;
+      if (apiKey && typeof apiKey === 'string') {
+        cachedApiKey = apiKey;
+        return apiKey;
+      }
+    }
+    throw new Error('API key not found in Firestore or environment variables.');
+  } catch (error) {
+    console.error("CRITICAL: Failed to retrieve Google AI API key.", error);
+    // This will cause the flow to fail, but with a clear error in the logs.
+    throw new Error('Application is not configured with a Google AI API key.');
+  }
+}
+
+// This is the main exported function. It ensures that Genkit is fully configured
+// with the asynchronously fetched API key before it's used by any flow.
+export async function getGenkitAi() {
+  const apiKey = await getGoogleApiKey();
+
+  return configureGenkit({
+    plugins: [
+      firebase(),
+      googleAI({ apiKey }), // Use the actual, resolved API key string.
+    ],
+    logLevel: 'debug',
+    enableTracingAndMetrics: true,
+  });
+}
