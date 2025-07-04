@@ -42,12 +42,21 @@ const testTextGenerationFlow = ai.defineFlow(
         };
       }
     } catch (e: any) {
-      console.error('[testTextGenerationFlow] Full exception object caught:', JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
-      const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-      return {
-          success: false,
-          error: `The test failed. This often points to an issue with your GOOGLE_AI_API_KEY or project configuration. Full technical error: ${errorMessage}`,
-      };
+        console.error('[testTextGenerationFlow] Exception caught:', e);
+        const rawError = e instanceof Error ? e.message : JSON.stringify(e);
+        let detailedError: string;
+
+        if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
+            detailedError = `CRITICAL: The text generation feature failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
+        } else if (rawError.includes("Could not refresh access token") || (e.name === 'TypeError' && rawError.includes('Headers.append'))) {
+            detailedError = `CRITICAL: The text generation test failed with a Google Cloud internal error, likely due to a project configuration issue. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Key: Ensure the Google AI API Key saved in the admin panel is correct and from the right project. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project.`;
+        } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
+            detailedError = `The text generation test failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled.`;
+        } else {
+            detailedError = `The text generation test failed. This is most often caused by a missing or invalid Google AI API Key. Please go to the Admin Console -> API Keys & Services page to verify your key is correct and saved. Also ensure the 'Vertex AI API' is enabled in your Google Cloud project.`;
+        }
+        
+        return { success: false, error: detailedError };
     }
   }
 );
