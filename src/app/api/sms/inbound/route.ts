@@ -2,13 +2,7 @@
 import { NextRequest } from 'next/server';
 import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
 import { sendSms } from '@/ai/flows/send-sms-flow';
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin SDK if not already done.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-const db = admin.firestore();
+import { db } from '@/lib/firebase-admin';
 
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
