@@ -53,7 +53,9 @@ Confirmation:`,
     });
 
     try {
-      const {output} = await prompt(flowInput);
+      const response = await prompt(flowInput, { model: 'googleai/gemini-1.5-flash' });
+      const output = response.output;
+
       if (!output || typeof output.updatedPersonaDescription !== 'string') {
         console.error('[adjustAiPersonaAndPersonalityFlow] Invalid or malformed output from prompt. Expected { updatedPersonaDescription: string }, received:', output);
         throw new Error('AI model returned an unexpected data-structure for persona confirmation.');
