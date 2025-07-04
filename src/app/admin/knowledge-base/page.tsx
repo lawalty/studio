@@ -167,6 +167,9 @@ export default function KnowledgeBasePage() {
         } else {
             const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
             const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+            if (extractionResult.error || !extractionResult.extractedText) {
+                throw new Error(extractionResult.error || 'Text extraction failed to return any content.');
+            }
             extractedText = extractionResult.extractedText;
         }
     } catch (extractionError: any) {
@@ -377,6 +380,9 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
             } else {
                  const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: source.downloadURL, conversationalTopics: source.topic };
                  const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+                 if (extractionResult.error || !extractionResult.extractedText) {
+                    throw new Error(extractionResult.error || 'Text extraction failed to return any content during re-indexing.');
+                 }
                  extractedText = extractionResult.extractedText;
             }
         } catch (extractionError: any) {

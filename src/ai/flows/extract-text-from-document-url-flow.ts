@@ -17,7 +17,8 @@ const ExtractTextFromDocumentUrlInputSchema = z.object({
 export type ExtractTextFromDocumentUrlInput = z.infer<typeof ExtractTextFromDocumentUrlInputSchema>;
 
 const ExtractTextFromDocumentUrlOutputSchema = z.object({
-  extractedText: z.string().describe('The clean, extracted text content from the document.'),
+  extractedText: z.string().optional().describe('The clean, extracted text content from the document.'),
+  error: z.string().optional().describe('An error message if the operation failed.'),
 });
 export type ExtractTextFromDocumentUrlOutput = z.infer<typeof ExtractTextFromDocumentUrlOutputSchema>;
 
@@ -53,10 +54,11 @@ export async function extractTextFromDocumentUrl(
 
       if (typeof text !== 'string' || text.trim() === '') {
         console.error('[extractTextFromDocumentUrl] AI did not return valid text. Response:', generationResult);
-        throw new Error('The AI model failed to extract any text from the document. This could be due to a malformed file, a content safety block, or an API issue.');
+        const errorMessage = 'The AI model failed to extract any text from the document. This could be due to a malformed file, a content safety block, or an API issue.';
+        return { error: errorMessage };
       }
       
-      let cleanedText = text.replace(/```[a-z]*\n/g, '').replace(/```/g, '');
+      let cleanedText = text.replace(/```[a-z]*/g, '').replace(/```/g, '');
       cleanedText = cleanedText.trim();
       
       return { extractedText: cleanedText };
@@ -75,9 +77,9 @@ export async function extractTextFromDocumentUrl(
       } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
           detailedError = `CRITICAL: Text extraction failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
       } else {
-          detailedError = `Text extraction failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY environment variable or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
+          detailedError = `Text extraction failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
       }
       
-      throw new Error(detailedError);
+      return { error: detailedError };
     }
 }
