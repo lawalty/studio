@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -177,10 +176,11 @@ export default function KnowledgeBasePage() {
             extractedText = extractionResult.extractedText;
         }
     } catch (extractionError: any) {
+        const errorMessage = extractionError.message || 'An unknown error occurred during text extraction.';
         console.error("Text extraction failed:", extractionError);
         toast({
             title: "Text Extraction Failed",
-            description: `Could not read content from ${fileToUpload.name}. The uploaded file will be automatically removed. Error: ${extractionError.message}`,
+            description: `Could not read content from ${fileToUpload.name}. The uploaded file will be automatically removed. Error: ${errorMessage}`,
             variant: "destructive",
             duration: 10000
         });
@@ -191,36 +191,28 @@ export default function KnowledgeBasePage() {
         return;
     }
 
-    try {
-        toast({ title: "Text Ready", description: "Content is ready. Now indexing for RAG pipeline...", variant: "default" });
+    toast({ title: "Text Ready", description: "Content is ready. Now indexing for RAG pipeline...", variant: "default" });
 
-        const indexingInput: IndexDocumentInput = {
-            sourceId: sourceId,
-            sourceName: fileToUpload.name,
-            text: extractedText,
-            level: targetLevel,
-            topic: topic,
-            downloadURL: downloadURL,
-        };
+    const indexingInput: IndexDocumentInput = {
+        sourceId: sourceId,
+        sourceName: fileToUpload.name,
+        text: extractedText,
+        level: targetLevel,
+        topic: topic,
+        downloadURL: downloadURL,
+    };
 
-        const indexingResult = await indexDocument(indexingInput);
+    const indexingResult = await indexDocument(indexingInput);
 
-        if (!indexingResult.success) {
-             toast({ title: "Indexing Failed", description: `Indexing for ${fileToUpload.name} failed. You can re-process it.`, variant: "destructive", duration: 8000 });
-        } else {
-             toast({ title: "Indexing Successful", description: `${fileToUpload.name} has been added to the knowledge base.`, variant: "default" });
-        }
-    } catch (indexingError: any) {
-        console.error("Indexing process error:", indexingError);
-        await updateDoc(placeholderDocRef, {
-            indexingStatus: 'failed',
-            indexingError: indexingError.message || "An unexpected error occurred during indexing."
-        }).catch(updateError => console.error("Error updating doc with failure status:", updateError));
-        toast({ title: `Error during indexing: ${fileToUpload.name}`, description: indexingError.message, variant: "destructive", duration: 10000 });
-    } finally {
-        setOperationStatus(sourceId, false);
-        setIsCurrentlyUploading(false);
+    if (!indexingResult.success) {
+         toast({ title: "Indexing Failed", description: indexingResult.error, variant: "destructive", duration: 10000 });
+    } else {
+         toast({ title: "Indexing Successful", description: `${fileToUpload.name} has been added to the knowledge base.`, variant: "default" });
     }
+    
+    setOperationStatus(sourceId, false);
+    setIsCurrentlyUploading(false);
+
   }, [toast]);
 
   const handleFileUpload = () => {
@@ -228,7 +220,7 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
+    handleUpload(selectedFile, selectedLevelForUpload, uploadDescription);
     setSelectedFile(null);
     setUploadDescription('');
     if (fileInputRef.current) {
@@ -307,6 +299,7 @@ export default function KnowledgeBasePage() {
         console.error(`Error deleting all ${level} sources:`, error);
         toast({ title: `Failed to delete all ${level} sources.`, description: error.message, variant: "destructive" });
     } finally {
+        levelSources.forEach(source => setOperationStatus(source.id, false));
         setOperationStatus(`delete-all-${level}`, false);
     }
 }, [sources]);
@@ -372,43 +365,28 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
         }
 
         let extractedText: string;
-        try {
-            const isPlainText = source.sourceName.toLowerCase().endsWith('.txt');
-            const toastDescription = isPlainText ? "Reading text file directly..." : "Starting AI text extraction...";
-            toast({ title: "Starting Text Extraction...", description: toastDescription });
-            
-            if (isPlainText) {
-                 const response = await fetch(source.downloadURL);
-                 if (!response.ok) throw new Error("Failed to fetch text file content for re-indexing.");
-                 extractedText = await response.text();
-            } else {
-                 const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: source.downloadURL, conversationalTopics: source.topic };
-                 const extractionResult: ExtractTextFromDocumentUrlOutput = await extractTextFromDocumentUrl(extractionInput);
-                 
-                 if (!extractionResult) {
-                    throw new Error('The text extraction process returned an empty response. This may indicate a network or API configuration issue.');
-                 }
-                 if (extractionResult.error || !extractionResult.extractedText) {
-                    throw new Error(extractionResult.error || 'Text extraction failed to return any content during re-indexing.');
-                 }
-                 extractedText = extractionResult.extractedText;
-            }
-        } catch (extractionError: any) {
-            console.error("Text extraction failed during re-process:", extractionError);
-            toast({
-                title: "Extraction Failed During Re-Process",
-                description: `Could not read ${source.sourceName}. Please delete it manually. Error: ${extractionError.message}`,
-                variant: "destructive",
-                duration: 10000
-            });
-            await updateDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id), {
-                indexingStatus: 'failed',
-                indexingError: `Re-processing failed at text extraction: ${extractionError.message}`
-            });
-            setOperationStatus(source.id, false);
-            return;
+        
+        const isPlainText = source.sourceName.toLowerCase().endsWith('.txt');
+        const toastDescription = isPlainText ? "Reading text file directly..." : "Starting AI text extraction...";
+        toast({ title: "Starting Text Extraction...", description: toastDescription });
+        
+        if (isPlainText) {
+              const response = await fetch(source.downloadURL);
+              if (!response.ok) throw new Error("Failed to fetch text file content for re-indexing.");
+              extractedText = await response.text();
+        } else {
+              const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: source.downloadURL, conversationalTopics: source.topic };
+              const extractionResult: ExtractTextFromDocumentUrlOutput = await extractTextFromDocumentUrl(extractionInput);
+              
+              if (!extractionResult) {
+                throw new Error('The text extraction process returned an empty response. This may indicate a network or API configuration issue.');
+              }
+              if (extractionResult.error || !extractionResult.extractedText) {
+                throw new Error(extractionResult.error || 'Text extraction failed to return any content during re-indexing.');
+              }
+              extractedText = extractionResult.extractedText;
         }
-
+        
         const indexingInput: IndexDocumentInput = {
             sourceId: source.id,
             sourceName: source.sourceName,
@@ -423,15 +401,14 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
         if (!indexingResult.success) {
             if (indexingResult.error?.includes("automatically removed")) {
                  toast({ title: `Re-processing Aborted`, description: `Re-processing found no text in ${source.sourceName}, so it has been removed.`, variant: "destructive", duration: 10000 });
-                 return;
+            } else {
+                 toast({ title: "Re-indexing Failed", description: indexingResult.error, variant: "destructive", duration: 10000 });
             }
-            throw new Error(indexingResult.error || "Re-indexing failed for an unknown reason.");
+        } else {
+            toast({ title: "Re-indexing Successful", description: `${source.sourceName} has been re-indexed.`, variant: "default" });
         }
 
-        toast({ title: "Re-indexing Successful", description: `${source.sourceName} has been re-indexed.`, variant: "default" });
-
     } catch (error: any) {
-        console.error("Full re-indexing error:", error);
         const errorMessage = error.message || "An unknown error occurred during re-indexing.";
         toast({ title: `Error Re-indexing: ${source.sourceName}`, description: errorMessage, variant: "destructive", duration: 10000 });
         

@@ -129,21 +129,25 @@ export async function indexDocument({
 
       } catch (e: any) {
         console.error(`[indexDocument] Raw error for source '${sourceName}':`, e);
-        const rawError = e instanceof Error ? e.message : JSON.stringify(e);
+        const rawError = e instanceof Error ? e.message : (e.message || JSON.stringify(e));
         let detailedError: string;
 
         if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. The Vector Search extension requires billing to embed text. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
         } else if (rawError.includes("Could not refresh access token") || rawError.includes("500")) {
-            detailedError = `CRITICAL: The Vector Search extension failed with a Google Cloud internal error (500), which usually points to a configuration issue. Please check: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project.`;
-        } else if (e.code === 7 || (e.message && (e.message.includes('permission denied') || e.message.includes('IAM')))) {
+            detailedError = `CRITICAL: The Vector Search extension failed with a Google Cloud internal error (500). This usually points to a configuration issue. Please check: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project.`;
+        } else if (e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM')))) {
             detailedError = `Indexing failed due to a permissions issue. Please check that the service account for your app has the required IAM roles (e.g., 'Firebase Admin', 'Vertex AI User') and that the necessary Google Cloud APIs are enabled. Full technical error: ${rawError}`;
         } else {
             detailedError = `Indexing failed for an unexpected reason. This is often a temporary issue or a problem with the Vector Search extension setup. Full technical error: ${rawError}`;
         }
 
-        // Final failure update. Use set with merge here as well for maximum safety.
-        await sourceDocRef.set({ indexingStatus: 'failed', indexingError: detailedError, sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
+        // This update MUST NOT crash the function if it also fails.
+        try {
+          await sourceDocRef.set({ indexingStatus: 'failed', indexingError: detailedError, sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
+        } catch (updateError) {
+          console.error(`[indexDocument] CRITICAL: Failed to write failure status back to Firestore for source '${sourceName}'. The UI may not reflect the error.`, updateError);
+        }
 
         return {
           chunksWritten: 0,
