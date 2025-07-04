@@ -130,7 +130,6 @@ export default function KnowledgeBasePage() {
     const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
     const storageRef = ref(storage, storagePath);
     
-    // Create a placeholder so the user sees immediate feedback
     const placeholderData: KnowledgeSource = {
         id: sourceId,
         sourceName: fileToUpload.name,
@@ -159,9 +158,11 @@ export default function KnowledgeBasePage() {
 
     let extractedText: string;
     try {
-        toast({ title: "Upload Successful", description: "Starting AI text extraction...", variant: "default" });
+        const isPlainText = fileToUpload.type === 'text/plain';
+        const toastDescription = isPlainText ? "Reading text file directly..." : "Starting AI text extraction...";
+        toast({ title: "Upload Successful", description: toastDescription, variant: "default" });
 
-        if (fileToUpload.type === 'text/plain') {
+        if (isPlainText) {
             extractedText = await fileToUpload.text();
         } else {
             const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
@@ -172,7 +173,7 @@ export default function KnowledgeBasePage() {
         console.error("Text extraction failed:", extractionError);
         toast({
             title: "Text Extraction Failed",
-            description: `Could not read content from ${fileToUpload.name}. The uploaded file will be automatically removed.`,
+            description: `Could not read content from ${fileToUpload.name}. The uploaded file will be automatically removed. Error: ${extractionError.message}`,
             variant: "destructive",
             duration: 10000
         });
@@ -365,8 +366,10 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
 
         let extractedText: string;
         try {
-            toast({ title: "Starting Text Extraction...", description: `Re-reading content from ${source.sourceName}`});
             const isPlainText = source.sourceName.toLowerCase().endsWith('.txt');
+            const toastDescription = isPlainText ? "Reading text file directly..." : "Starting AI text extraction...";
+            toast({ title: "Starting Text Extraction...", description: toastDescription });
+            
             if (isPlainText) {
                  const response = await fetch(source.downloadURL);
                  if (!response.ok) throw new Error("Failed to fetch text file content for re-indexing.");
@@ -379,12 +382,15 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
         } catch (extractionError: any) {
             console.error("Text extraction failed during re-process:", extractionError);
             toast({
-                title: "Extraction Failed Again",
-                description: `Could not read ${source.sourceName}. The source has been permanently removed.`,
+                title: "Extraction Failed During Re-Process",
+                description: `Could not read ${source.sourceName}. Please delete it manually. Error: ${extractionError.message}`,
                 variant: "destructive",
                 duration: 10000
             });
-            await handleDeleteSource(source);
+            await updateDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id), {
+                indexingStatus: 'failed',
+                indexingError: `Re-processing failed at text extraction: ${extractionError.message}`
+            });
             setOperationStatus(source.id, false);
             return;
         }
@@ -422,7 +428,7 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     } finally {
         setOperationStatus(source.id, false);
     }
-}, [toast, handleDeleteSource]);
+}, [toast]);
 
 
   const renderSourceCard = (source: KnowledgeSource) => {
@@ -443,7 +449,7 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
           </div>
           <div className="flex items-center gap-2">
             {isProcessingFailure && (
-                 <Button variant="outline" size="icon" title="Re-process source" onClick={() => handleReindexSource(source)} disabled={isOperationInProgress}>
+                 <Button variant="outline" size="icon" title="Re-process source" onClick={() => handleReindexSource(source)} disabled={isOperationInProgress} className="text-primary hover:bg-primary/10">
                     <RotateCcw size={16} />
                 </Button>
             )}
@@ -620,5 +626,3 @@ const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     </div>
   );
 }
-
-    
