@@ -51,7 +51,7 @@ export async function extractTextFromDocumentUrl(
 
       const text = generationResult.text;
 
-      if (typeof text !== 'string') {
+      if (typeof text !== 'string' || text.trim() === '') {
         console.error('[extractTextFromDocumentUrl] AI did not return valid text. Response:', generationResult);
         throw new Error('The AI model failed to extract any text from the document. This could be due to a malformed file, a content safety block, or an API issue.');
       }
