@@ -167,6 +167,10 @@ export default function KnowledgeBasePage() {
         } else {
             const extractionInput: ExtractTextFromDocumentUrlInput = { documentUrl: downloadURL, conversationalTopics: topic };
             const extractionResult = await extractTextFromDocumentUrl(extractionInput);
+            
+            if (!extractionResult) {
+                throw new Error('The text extraction process returned an empty response. This may indicate a network or API configuration issue.');
+            }
             if (extractionResult.error || !extractionResult.extractedText) {
                 throw new Error(extractionResult.error || 'Text extraction failed to return any content.');
             }
