@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to test the core text generation functionality.
@@ -46,14 +47,17 @@ const testTextGenerationFlow = ai.defineFlow(
         const rawError = e instanceof Error ? e.message : JSON.stringify(e);
         let detailedError: string;
 
-        if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
+        // This is the key change. Check for the specific internal error first.
+        if (e.name === 'TypeError' && rawError.includes('Headers.append')) {
+            detailedError = `INTERNAL ERROR: The application's code is failing to correctly process the API key. This is a framework-level issue, not a problem with your API key or Google Cloud project configuration. Please report this issue.`;
+        } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: The text generation feature failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
-        } else if (rawError.includes("Could not refresh access token") || (e.name === 'TypeError' && rawError.includes('Headers.append'))) {
-            detailedError = `CRITICAL: The text generation test failed with a Google Cloud internal error, likely due to a project configuration issue. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again in a few minutes. 2) API Key: Ensure the Google AI API Key saved in the admin panel is correct and from the right project. 3) API Status: Double-check that the 'Vertex AI API' is enabled in the Google Cloud Console for this project.`;
+        } else if (rawError.includes("Could not refresh access token")) {
+            detailedError = `CRITICAL: The text generation test failed with a Google Cloud internal error. This usually points to a configuration issue. Please check the following: 1) Propagation Time: If you just enabled billing or APIs, it can take 5-10 minutes to activate. Please try again. 2) API Key: Ensure the Google AI API Key is correct. 3) API Status: Double-check that the 'Vertex AI API' is enabled in your Google Cloud Console.`;
         } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
-            detailedError = `The text generation test failed due to a permissions issue. Please check that the App Hosting service account has the required IAM roles (e.g., Vertex AI User) and that the necessary Google Cloud APIs are enabled.`;
+            detailedError = `The text generation test failed due to a permissions issue. Please check that the service account for your app has the required IAM roles (e.g., 'Vertex AI User') and that the necessary Google Cloud APIs are enabled.`;
         } else {
-            detailedError = `The text generation test failed. This is most often caused by a missing or invalid Google AI API Key. Please go to the Admin Console -> API Keys & Services page to verify your key is correct and saved. Also ensure the 'Vertex AI API' is enabled in your Google Cloud project.`;
+            detailedError = `The text generation test failed. This is most often caused by a missing or invalid Google AI API Key. Please verify your key in the Admin Console and ensure the 'Vertex AI API' is enabled in your Google Cloud project.`;
         }
         
         return { success: false, error: detailedError };
