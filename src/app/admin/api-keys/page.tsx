@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -8,10 +9,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, MessageSquare, KeyRound, Terminal } from 'lucide-react';
+import { Save, Speech, MessageSquare, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Search, Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
+import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
+import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
+import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
+import { Textarea } from '@/components/ui/textarea';
 
 interface ApiKeys {
   googleAiApiKey: string;
@@ -37,6 +42,14 @@ export default function ApiKeysPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  // State for diagnostics
+  const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
+  const [textGenResult, setTextGenResult] = useState<TestTextGenerationOutput | null>(null);
+  const [embeddingResult, setEmbeddingResult] = useState<TestEmbeddingOutput | null>(null);
+  const [kbTestResult, setKbTestResult] = useState<TestKnowledgeBaseOutput | null>(null);
+  const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
+  const [kbTestError, setKbTestError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -92,6 +105,36 @@ export default function ApiKeysPage() {
       });
     }
     setIsLoading(false);
+  };
+
+  const handleRunTextGenTest = async () => {
+    setIsTesting(prev => ({ ...prev, textGen: true }));
+    setTextGenResult(null);
+    const result = await testTextGeneration();
+    setTextGenResult(result);
+    setIsTesting(prev => ({ ...prev, textGen: false }));
+  };
+
+  const handleRunEmbeddingTest = async () => {
+    setIsTesting(prev => ({ ...prev, embedding: true }));
+    setEmbeddingResult(null);
+    const result = await testEmbedding();
+    setEmbeddingResult(result);
+    setIsTesting(prev => ({ ...prev, embedding: false }));
+  };
+
+  const handleRunKbTest = async () => {
+    setIsTesting(prev => ({ ...prev, kb: true }));
+    setKbTestResult(null);
+    setKbTestError(null);
+    try {
+      const input: TestKnowledgeBaseInput = { query: kbTestQuery };
+      const result = await testKnowledgeBase(input);
+      setKbTestResult(result);
+    } catch (e: any) {
+      setKbTestError(e.message || 'An unknown error occurred while testing the knowledge base.');
+    }
+    setIsTesting(prev => ({ ...prev, kb: false }));
   };
 
   return (
@@ -178,6 +221,111 @@ export default function ApiKeysPage() {
           <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save Service Settings'}
         </Button>
       </CardFooter>
+
+      <Separator className="my-8" />
+      
+      <div className="px-6 pb-6 space-y-6">
+        <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Service Diagnostics</h3>
+        </div>
+        <CardDescription>
+            Run these tests to diagnose issues with your API keys or Google Cloud project configuration.
+            Text extraction failures are often due to issues with the Text Generation or Embedding models.
+        </CardDescription>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Terminal className="h-4 w-4" />
+                        Text Generation Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Tests basic connectivity to the Gemini model using your API key.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleRunTextGenTest} disabled={isTesting.textGen}>
+                        {isTesting.textGen && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Run Test
+                    </Button>
+                    {textGenResult && (
+                        <Alert className="mt-4" variant={textGenResult.success ? "default" : "destructive"}>
+                            {textGenResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            <AlertTitle>{textGenResult.success ? "Success" : "Failed"}</AlertTitle>
+                            <AlertDescription className="text-xs break-words">
+                                {textGenResult.success ? `Model responded: "${textGenResult.generatedText}"` : textGenResult.error}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <DatabaseZap className="h-4 w-4" />
+                        Embedding Model Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Tests connectivity to the text embedding model required for RAG.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleRunEmbeddingTest} disabled={isTesting.embedding}>
+                        {isTesting.embedding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Run Test
+                    </Button>
+                    {embeddingResult && (
+                        <Alert className="mt-4" variant={embeddingResult.success ? "default" : "destructive"}>
+                            {embeddingResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            <AlertTitle>{embeddingResult.success ? "Success" : "Failed"}</AlertTitle>
+                            <AlertDescription className="text-xs break-words">
+                                {embeddingResult.success ? `Successfully generated an embedding with ${embeddingResult.embeddingVectorLength} dimensions.` : embeddingResult.error}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+        
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Search className="h-4 w-4" />
+                    Knowledge Base Retrieval Test
+                </CardTitle>
+                <CardDescription className="text-xs">
+                    Tests the full RAG retrieval pipeline by embedding your query and searching the vector database.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-2">
+                    <Label htmlFor="kbTestQuery">Test Query</Label>
+                    <Input id="kbTestQuery" value={kbTestQuery} onChange={(e) => setKbTestQuery(e.target.value)} />
+                </div>
+                <Button onClick={handleRunKbTest} disabled={isTesting.kb} className="mt-2">
+                    {isTesting.kb && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Run Search Test
+                </Button>
+                {(kbTestResult || kbTestError) && (
+                    <Alert className="mt-4" variant={kbTestResult ? "default" : "destructive"}>
+                        {kbTestResult ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                        <AlertTitle>{kbTestResult ? "Success" : "Failed"}</AlertTitle>
+                        <AlertDescription className="text-xs break-words">
+                            {kbTestError ? kbTestError : (kbTestResult?.searchResult?.length > 0 ? `Successfully retrieved ${kbTestResult.searchResult.length} chunk(s) from the knowledge base.` : "Search was successful, but no relevant chunks were found for this query.")}
+                        </AlertDescription>
+                    </Alert>
+                )}
+                {kbTestResult?.retrievedContext && (
+                    <div className="mt-4">
+                        <Label className="text-xs font-bold">Retrieved Context for LLM</Label>
+                        <Textarea readOnly value={kbTestResult.retrievedContext} className="mt-1 h-48 text-xs bg-muted" />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+      </div>
     </Card>
   );
 }
