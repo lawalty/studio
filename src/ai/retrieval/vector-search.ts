@@ -63,7 +63,7 @@ export async function searchKnowledgeBase({
     allow: allowList,
   });
 
-  const restricts: protos.google.cloud.aiplatform.v1.FindNeighborsRequest.Query.IRestrict[] = [];
+  const restricts: protos.google.cloud.aiplatform.v1.FindNeighborsRequest.IRestrict[] = [];
   if (level && level.length > 0) {
     restricts.push(buildRestriction('level', level));
   }
@@ -98,7 +98,7 @@ export async function searchKnowledgeBase({
 
     // 7. Fetch the original document data from Firestore using the IDs from the search results.
     const neighborDocs = await Promise.all(
-      neighbors.map(async (neighbor) => {
+      neighbors.map(async (neighbor: any) => {
         if (!neighbor.datapoint?.datapointId) return null;
 
         const docRef = db.collection('kb_chunks').doc(neighbor.datapoint.datapointId);
