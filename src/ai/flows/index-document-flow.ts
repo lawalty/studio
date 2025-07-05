@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text and writing
@@ -59,7 +60,7 @@ export async function indexDocument({
     downloadURL 
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
       // This reference points to the document that holds the metadata for the file.
-      const sourceDocRef = doc(db, `kb_${level.toLowerCase()}_meta_v1`).doc(sourceId);
+      const sourceDocRef = db.collection(`kb_${level.toLowerCase()}_meta_v1`).doc(sourceId);
 
       try {
         const cleanText = text.trim();
