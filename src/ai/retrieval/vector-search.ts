@@ -58,12 +58,12 @@ export async function searchKnowledgeBase({
   const predictionServiceClient = new PredictionServiceClient(clientOptions);
 
   // 4. Construct filters for the search.
-  const buildRestriction = (namespace: string, allow: string[]) => ({
+  const buildRestriction = (namespace: string, allowList: string[]) => ({
     namespace,
-    allow,
+    allow: allowList,
   });
 
-  const restricts: { namespace: string; allow: string[] }[] = [];
+  const restricts: protos.google.cloud.aiplatform.v1.FindNeighborsRequest.Query.IRestrict[] = [];
   if (level && level.length > 0) {
     restricts.push(buildRestriction('level', level));
   }
@@ -80,7 +80,7 @@ export async function searchKnowledgeBase({
       datapoint: {
         datapointId: 'query',
         featureVector: queryEmbedding,
-        restricts,
+        restrict: restricts,
       },
       neighborCount: limit,
     }],
@@ -88,7 +88,8 @@ export async function searchKnowledgeBase({
 
   try {
     // 6. Perform the search.
-    const [response] = await predictionServiceClient.findNeighbors(request);
+    // Use 'as any' to bypass a TypeScript build error where the method is not found in the type definitions.
+    const [response] = await (predictionServiceClient as any).findNeighbors(request);
     const neighbors = response.nearestNeighbors?.[0]?.neighbors;
 
     if (!neighbors || neighbors.length === 0) {
