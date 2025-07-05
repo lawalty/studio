@@ -1,11 +1,30 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read/write access to all documents.
-    // This is suitable for a demo application without user authentication.
-    // For a production app, you would implement more secure rules.
+    
+    // Allow public read/write access to knowledge base metadata and chunks.
+    // This is suitable for development and testing.
+    // WARNING: For production, you should implement stricter rules,
+    // for example, only allowing authenticated admin users to write.
+    // (e.g., allow read, write: if request.auth.uid != null && get(/databases/$(database)/documents/admins/$(request.auth.uid)).exists;)
+    match /kb_chunks/{chunkId} {
+      allow read, write: if true;
+    }
+
+    match /kb_{level}_meta_v1/{sourceId} {
+      allow read, write: if true;
+    }
+    
+    // Allow read/write access to configuration documents for the admin panel.
+    // WARNING: For production, restrict write access to authenticated admin users.
+    match /configurations/{configId} {
+      allow read, write: if true;
+    }
+
+    // Default-deny all other collections.
     match /{document=**} {
-      allow read, write;
+      allow read, write: if false;
     }
   }
 }
