@@ -82,7 +82,7 @@ export async function searchKnowledgeBase({
         featureVector: queryEmbedding,
       },
       neighborCount: limit,
-      restricts,
+      restrict: restricts,
     }],
   };
 
