@@ -80,9 +80,9 @@ export async function searchKnowledgeBase({
       datapoint: {
         datapointId: 'query',
         featureVector: queryEmbedding,
+        restricts,
       },
       neighborCount: limit,
-      restrict: restricts,
     }],
   };
 
