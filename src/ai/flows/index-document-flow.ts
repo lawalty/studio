@@ -133,7 +133,8 @@ export async function indexDocument({
         const rawError = e instanceof Error ? e.message : (e.message || JSON.stringify(e));
         let detailedError: string;
 
-        const isPermissionsError = e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM') || rawError.includes("Could not refresh access token") || rawError.includes("500")));
+        const isPermissionsError = e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM')));
+        const isServerError = rawError && (rawError.includes("Could not refresh access token") || rawError.includes("500") || rawError.includes("UNAVAILABLE"));
 
         if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
@@ -145,8 +146,10 @@ export async function indexDocument({
 2.  Find the service account for your application. If you are using Firebase App Hosting, it will look like **your-project-id@serverless-robot-prod.iam.gserviceaccount.com**.
 3.  Ensure this service account has the **"Firebase Admin"** or **"Cloud Datastore User"** role. This role is required for the server to write to the database.
 4.  If the roles are correct, check the application's runtime logs in your hosting provider for more details.`;
+        } else if (isServerError) {
+          detailedError = `Indexing failed due to a temporary server-side issue (e.g., a timeout or token refresh failure). This is often transient. Please wait a moment and try the operation again. Full technical error: ${rawError}`;
         } else {
-            detailedError = `Indexing failed for an unexpected reason. This could be a transient issue. Full technical error: ${rawError}`;
+            detailedError = `Indexing failed for an unexpected reason. Full technical error: ${rawError}`;
         }
 
         // This update MUST NOT crash the function if it also fails.
