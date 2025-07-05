@@ -33,8 +33,10 @@ export async function extractTextFromDocumentUrl(
       To improve the indexing for a conversational AI, use the following topics as a guide to identify the most relevant information and structure. Pay special attention to content related to these topics, but do not omit other relevant information.
       Conversational Topics:
       ${conversationalTopics}` : ''}
-      - Identify and extract the main body of text.
-      - Ignore headers, footers, page numbers, and irrelevant metadata unless they are part of the main content.
+      - Focus exclusively on textual content.
+      - **Crucially, ignore and do not attempt to transcribe any text that is part of an image, chart, or complex graphic.**
+      - Identify and extract the main body of text, including paragraphs, lists, and tables.
+      - Ignore page headers, footers, page numbers, and irrelevant metadata unless they are part of the main content.
       - Preserve paragraph breaks and essential formatting.
       - Correct common character encoding errors (e.g., replace sequences like 'â€™' with a standard apostrophe ').
       - Remove all other non-readable characters, control characters, and gibberish.
