@@ -58,12 +58,12 @@ export async function searchKnowledgeBase({
   const predictionServiceClient = new PredictionServiceClient(clientOptions);
 
   // 4. Construct filters for the search.
-  const buildRestriction = (namespace: string, allowList: string[]) => ({
+  const buildRestriction = (namespace: string, allow: string[]): protos.google.cloud.aiplatform.v1.IRestrict => ({
     namespace,
-    allow: allowList,
+    allow,
   });
 
-  const restricts: protos.google.cloud.aiplatform.v1.FindNeighborsRequest.IRestrict[] = [];
+  const restricts: protos.google.cloud.aiplatform.v1.IRestrict[] = [];
   if (level && level.length > 0) {
     restricts.push(buildRestriction('level', level));
   }
