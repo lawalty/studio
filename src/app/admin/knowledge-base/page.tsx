@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -53,7 +52,7 @@ export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Archive': [] });
   const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Archive': true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(isCurrentlyUploading);
+  const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
@@ -611,5 +610,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
