@@ -15,11 +15,16 @@ import { toast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocumentUrl, type ExtractTextFromDocumentUrlInput } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
-import { Loader2, UploadCloud, Trash2, ShieldAlert, FileText, CheckCircle, AlertTriangle, ChevronRight, ChevronsRight, ChevronsLeft, History, Archive, RotateCcw, Wrench } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 import KnowledgeBaseDiagnostics from '@/components/admin/KnowledgeBaseDiagnostics';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+
 
 // Exporting this type for use in the diagnostics component
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
@@ -38,23 +43,23 @@ interface KnowledgeSource {
 }
 
 const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
-  'High': { collectionName: 'kb_high_meta_v1', title: 'High Priority Knowledge Base', description: 'Manage high priority sources.' },
-  'Medium': { collectionName: 'kb_medium_meta_v1', title: 'Medium Priority Knowledge Base', description: 'Manage medium priority sources.' },
-  'Low': { collectionName: 'kb_low_meta_v1', title: 'Low Priority Knowledge Base', description: 'Manage low priority sources.' },
-  'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived Knowledge Base', description: 'Archived sources are not used by the AI.' },
+  'High': { collectionName: 'kb_high_meta_v1', title: 'High Priority', description: 'Manage high priority sources.' },
+  'Medium': { collectionName: 'kb_medium_meta_v1', title: 'Medium Priority', description: 'Manage medium priority sources.' },
+  'Low': { collectionName: 'kb_low_meta_v1', title: 'Low Priority', description: 'Manage low priority sources.' },
+  'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived', description: 'Archived sources are not used by the AI.' },
 };
 
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Archive': [] });
   const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Archive': true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
+  const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(isCurrentlyUploading);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high-priority');
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
@@ -108,7 +113,7 @@ export default function KnowledgeBasePage() {
             chunksWritten: data.chunksWritten
           });
         });
-        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: levelSources.sort((a,b) => b.createdAt.localeCompare(a.createdAt)) }));
+        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: levelSources.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) }));
         setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       }, (error) => {
         console.error(`Error fetching ${level} priority sources:`, error);
@@ -207,16 +212,13 @@ export default function KnowledgeBasePage() {
     }
   }, [toast]);
 
-
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    // The handleUpload function now internally handles all UI updates like toasts and status.
     await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
     
-    // Reset form fields after the attempt.
     setSelectedFile(null);
     setUploadDescription('');
     if (fileInputRef.current) {
@@ -357,70 +359,20 @@ export default function KnowledgeBasePage() {
           setOperationStatus(source.id, false);
       }
   }, [toast]);
-  
 
-  const renderSourceCard = (source: KnowledgeSource) => {
-    const isOperationInProgress = operationInProgress[source.id] || false;
-    const isProcessingFailure = source.indexingStatus === 'failed';
-
-    return (
-      <Card key={source.id} className={cn("mb-4 transition-all", isOperationInProgress && "opacity-50 cursor-not-allowed")}>
-        <CardHeader className="flex flex-row justify-between items-start">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <FileText size={20} />
-              {source.sourceName}
-            </CardTitle>
-            <CardDescription>
-              Topic: {source.topic} | Added: {source.createdAt}
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            {isProcessingFailure && (
-                 <Button variant="outline" size="icon" title="Re-process source" onClick={() => handleReindexSource(source)} disabled={isOperationInProgress || anyOperationGloballyInProgress} className="text-primary hover:bg-primary/10">
-                    <RotateCcw size={16} />
-                </Button>
-            )}
-            <AlertDialog>
-                <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="icon" disabled={isOperationInProgress || anyOperationGloballyInProgress}><Trash2 size={16} /></Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                    <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the source and all its indexed data. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteSource(source)}>Delete</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm mb-4">{source.description || "No description provided."}</p>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground p-2 rounded-md bg-muted">
-             {source.indexingStatus === 'success' && <> <CheckCircle size={16} className="text-green-500" /> <span>Indexing complete. {source.chunksWritten ?? 0} chunks written.</span> </>}
-             {source.indexingStatus === 'processing' && <> <Loader2 size={16} className="animate-spin" /> <span>Processing...</span> </>}
-             {source.indexingStatus === 'failed' && <> <AlertTriangle size={16} className="text-destructive" /> <span>Failure: {source.indexingError}</span> </>}
-          </div>
-        </CardContent>
-        <CardFooter className="flex justify-end gap-2">
-            {source.level !== 'Archive' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'Archive')} disabled={isOperationInProgress || anyOperationGloballyInProgress}><Archive className="mr-2 h-4 w-4" />Archive</Button>}
-            {source.level !== 'Low' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'Low')} disabled={isOperationInProgress || anyOperationGloballyInProgress}><ChevronsLeft className="mr-2 h-4 w-4" />To Low</Button>}
-            {source.level !== 'Medium' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'Medium')} disabled={isOperationInProgress || anyOperationGloballyInProgress}><ChevronRight className="mr-2 h-4 w-4" />To Medium</Button>}
-            {source.level !== 'High' && <Button size="sm" variant="outline" onClick={() => handleMoveSource(source, 'High')} disabled={isOperationInProgress || anyOperationGloballyInProgress}><ChevronsRight className="mr-2 h-4 w-4" />To High</Button>}
-        </CardFooter>
-      </Card>
-    );
+  const getFileExtension = (filename: string) => {
+    return filename.split('.').pop()?.toUpperCase() || 'FILE';
   };
   
   const renderKnowledgeBaseLevel = (level: KnowledgeBaseLevel) => {
     const config = LEVEL_CONFIG[level];
     const levelSources = sources[level];
     const levelIsLoading = isLoading[level];
+    
     return (
         <AccordionItem value={level.toLowerCase()} key={level}>
           <AccordionTrigger className="text-xl font-headline">
-            {config.title} ({levelSources.length})
+            {config.title} Knowledge Base ({levelSources.length})
           </AccordionTrigger>
           <AccordionContent>
              <CardDescription className="mb-4">{config.description}</CardDescription>
@@ -429,17 +381,150 @@ export default function KnowledgeBasePage() {
                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                  </div>
              ) : levelSources.length === 0 ? (
-                 <div className="text-center py-8 text-muted-foreground">
+                 <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                    <History size={40} className="mx-auto mb-2" />
-                   <p>No sources found.</p>
+                   <p>No sources found in this knowledge base.</p>
                  </div>
              ) : (
-                levelSources.map(renderSourceCard)
+                <ScrollArea className="h-[450px] w-full rounded-md border">
+                    <Table>
+                        <TableHeader className="sticky top-0 bg-muted/95 backdrop-blur-sm">
+                            <TableRow>
+                                <TableHead className="w-[40%]">Name</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Topic</TableHead>
+                                <TableHead>Added</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {levelSources.map(source => {
+                                const isOpInProgress = operationInProgress[source.id] || false;
+                                return (
+                                    <TableRow key={source.id} className={cn(isOpInProgress && "opacity-50 pointer-events-none")}>
+                                        <TableCell className="font-medium">
+                                          <div className="flex items-center gap-2">
+                                            <FileText size={16} className="text-muted-foreground" />
+                                            <div className="flex flex-col">
+                                                <span className="truncate" title={source.sourceName}>{source.sourceName}</span>
+                                                <span className="text-xs text-muted-foreground">{getFileExtension(source.sourceName)}</span>
+                                            </div>
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <TooltipProvider>
+                                                <Tooltip delayDuration={300}>
+                                                    <TooltipTrigger>
+                                                        <div className="flex items-center gap-2">
+                                                            {source.indexingStatus === 'success' && <CheckCircle size={16} className="text-green-500" />}
+                                                            {source.indexingStatus === 'processing' && <Loader2 size={16} className="animate-spin" />}
+                                                            {source.indexingStatus === 'failed' && <AlertTriangle size={16} className="text-destructive" />}
+                                                            <span className="capitalize">{source.indexingStatus === 'success' ? 'Indexed' : source.indexingStatus}</span>
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        {source.indexingStatus === 'success' && <p>{source.chunksWritten ?? 0} chunks written.</p>}
+                                                        {source.indexingStatus === 'failed' && <p>Error: {source.indexingError}</p>}
+                                                        {source.indexingStatus === 'processing' && <p>File is currently being processed.</p>}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </TableCell>
+                                        <TableCell>{source.topic}</TableCell>
+                                        <TableCell>{source.createdAt}</TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <TooltipProvider>
+                                                    <AlertDialog>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" disabled={!source.description || anyOperationGloballyInProgress}>
+                                                                        <HelpCircle size={16} className={!source.description ? "text-muted-foreground/50" : ""} />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent><p>View Description</p></TooltipContent>
+                                                        </Tooltip>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>{source.sourceName}</AlertDialogTitle>
+                                                                <AlertDialogDescription className="max-h-[400px] overflow-y-auto">
+                                                                    {source.description || "No description was provided for this source."}
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter><AlertDialogAction>Close</AlertDialogAction></AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                    
+                                                    <DropdownMenu>
+                                                      <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button variant="ghost" size="icon" disabled={anyOperationGloballyInProgress}>
+                                                                    <ArrowLeftRight size={16} />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>Move To...</p></TooltipContent>
+                                                      </Tooltip>
+                                                      <DropdownMenuContent>
+                                                          {Object.keys(LEVEL_CONFIG).filter(lvl => lvl !== source.level).map(lvl => (
+                                                              <DropdownMenuItem key={lvl} onSelect={() => handleMoveSource(source, lvl as KnowledgeBaseLevel)}>
+                                                                  {LEVEL_CONFIG[lvl as KnowledgeBaseLevel].title}
+                                                              </DropdownMenuItem>
+                                                          ))}
+                                                      </DropdownMenuContent>
+                                                    </DropdownMenu>
+
+                                                    {source.indexingStatus === 'failed' && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleReindexSource(source)} disabled={anyOperationGloballyInProgress}>
+                                                                    <RotateCcw size={16} className="text-primary" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent><p>Re-process Source</p></TooltipContent>
+                                                        </Tooltip>
+                                                    )}
+                                                    
+                                                    <AlertDialog>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" disabled={anyOperationGloballyInProgress} className="text-destructive hover:text-destructive">
+                                                                        <Trash2 size={16} />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent><p>Delete Source</p></TooltipContent>
+                                                        </Tooltip>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                                <AlertDialogDescription>This will permanently delete the source and all its indexed data. This action cannot be undone.</AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDeleteSource(source)}>Delete</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </TooltipProvider>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </ScrollArea>
              )}
           </AccordionContent>
         </AccordionItem>
     );
   };
+
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
@@ -515,7 +600,7 @@ export default function KnowledgeBasePage() {
           </Accordion>
         </div>
         <div className="lg:col-span-2">
-          <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={setActiveAccordionItem}>
+          <Accordion type="single" collapsible className="w-full" value={`${activeAccordionItem}-priority`} onValueChange={(value) => setActiveAccordionItem(value.replace('-priority',''))}>
             {renderKnowledgeBaseLevel('High')}
             {renderKnowledgeBaseLevel('Medium')}
             {renderKnowledgeBaseLevel('Low')}
@@ -526,3 +611,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
