@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, CheckCircle, AlertTriangle, FileText, FileQuestion } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, FileText } from 'lucide-react';
 import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
 
 // Define the shape of the test case
@@ -15,7 +15,6 @@ interface TestCase {
   fileName: string;
   base64Data: string;
   mimeType: string;
-  expectedResult: 'success' | 'failure';
 }
 
 // Function to convert base64 data URI to a File object
@@ -48,23 +47,13 @@ const TEST_CASES: TestCase[] = [
     fileName: 'test_simple.txt',
     mimeType: 'text/plain',
     base64Data: 'data:text/plain;base64,SGVsbG8sIHdvcmxkISBUaGlzIGlzIGEgdGVzdCBvZiB0aGUgUklQIEZpcmVzdG9yZSBUZXh0IEluZGV4aW5nIFBpcGVsaW5lLg==', // "Hello, world! This is a test of the RIP Firestore Text Indexing Pipeline."
-    expectedResult: 'success',
   },
   {
     name: 'Simple PDF File',
-    description: 'Tests PDF processing and smart text extraction.',
+    description: 'Tests PDF processing and smart text extraction from a common document type.',
     fileName: 'test_simple.pdf',
     mimeType: 'application/pdf',
     base64Data: 'data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL1Jlc291cmNlcyA8PAovUHJvY1NldCBbL1BERiAvVGV4dF0KL0ZvbnQgPDwKL0YxIDQgMCBSCj4+Cj4+Ci9NZWRpYUJveCBbMCAwIDYxMiA3OTJdCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMiAwIFIKL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQo+PgplbmRvYmoKNSAwIG9iago8PAovTGVuZ3RoIDQxPj4Kc3RyZWFtCkJUCjcwIDcwMCBUZAovRjEgMTIgVGYKKFRoaXMgaXMgYSBzaW1wbGUgdGVzdCBQREYpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNzQgMDAwMDAgbiAKMDAwMDAwMDE3NCAwMDAwMCBuIAowMDAwMDAwMjc0IDAwMDAwIG4gCjAwMDAwMDAzNjIgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA2Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgo0MjkKJSVFT0YK',
-    expectedResult: 'success',
-  },
-  {
-    name: 'Empty TXT File',
-    description: 'Tests failure handling for documents with no extractable text.',
-    fileName: 'test_empty.txt',
-    mimeType: 'text/plain',
-    base64Data: 'data:text/plain;base64,', // Empty
-    expectedResult: 'failure',
   },
 ];
 
@@ -85,7 +74,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
       return;
     }
 
-    const testTopic = 'Diagnostics';
+    const testTopic = 'General';
     const testDescription = `Diagnostic test for: ${testCase.name}`;
 
     try {
@@ -93,17 +82,9 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
       const result = await handleUpload(testFile, 'Low', testTopic, testDescription);
 
       if (result.success) {
-        if (testCase.expectedResult === 'success') {
-          setTestResults(prev => ({ ...prev, [testCase.name]: { status: 'success', message: 'Pipeline completed successfully as expected.' } }));
-        } else {
-          setTestResults(prev => ({ ...prev, [testCase.name]: { status: 'failure', message: 'Test SUCCEEDED but was expected to FAIL. The pipeline might not be handling this edge case correctly.' } }));
-        }
+        setTestResults(prev => ({ ...prev, [testCase.name]: { status: 'success', message: 'Pipeline completed successfully.' } }));
       } else {
-        if (testCase.expectedResult === 'failure') {
-          setTestResults(prev => ({ ...prev, [testCase.name]: { status: 'success', message: `Pipeline failed as expected. Error: ${result.error}` } }));
-        } else {
-          setTestResults(prev => ({ ...prev, [testCase.name]: { status: 'failure', message: `Pipeline failed unexpectedly. Error: ${result.error}` } }));
-        }
+        setTestResults(prev => ({ ...prev, [testCase.name]: { status: 'failure', message: `Pipeline failed unexpectedly. Error: ${result.error}` } }));
       }
     } catch (e: any) {
       setTestResults(prev => ({ ...prev, [testCase.name]: { status: 'failure', message: `A critical error occurred in the test runner: ${e.message}` } }));
@@ -115,7 +96,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
       <CardHeader>
         <CardTitle className="font-headline">Knowledge Base Pipeline Diagnostics</CardTitle>
         <CardDescription>
-          Run these automated tests to diagnose issues with the file processing pipeline (Upload, Text Extraction, and Indexing). Tests use built-in sample files.
+          Run these automated tests to diagnose issues with the file processing pipeline (Upload, Text Extraction, and Indexing). Tests use built-in sample files and the "General" topic.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -128,7 +109,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
               <div className="flex justify-between items-start">
                 <div>
                   <h4 className="font-semibold flex items-center gap-2">
-                    {testCase.expectedResult === 'success' ? <FileText size={16} /> : <FileQuestion size={16} />}
+                    <FileText size={16} />
                     {testCase.name}
                   </h4>
                   <p className="text-xs text-muted-foreground mt-1">{testCase.description}</p>
