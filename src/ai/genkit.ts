@@ -1,8 +1,10 @@
 
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-// This import syntax is required to resolve a CJS/ESM module compatibility issue with the firebase plugin in Next.js.
-import firebase = require('@genkit-ai/firebase');
+// The Firebase Genkit plugin is causing a persistent module resolution error in this environment.
+// We will temporarily disable it to unblock testing of the core indexing pipeline.
+// We will re-enable it later to provide server-side auth for other flows.
+// import firebase = require('@genkit-ai/firebase');
 
 // This is the main exported object for Genkit.
 // It is configured to use the Google AI plugin, which automatically
@@ -10,7 +12,7 @@ import firebase = require('@genkit-ai/firebase');
 export const ai = genkit({
   plugins: [
     googleAI(),
-    firebase(), // The Firebase plugin is essential for proper server-side auth.
+    // firebase(), // Temporarily disabled to debug indexing.
   ],
   // In Genkit 1.x, logLevel and tracing are configured differently,
   // and tracing is typically enabled by default.
