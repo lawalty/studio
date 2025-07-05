@@ -58,12 +58,12 @@ export async function searchKnowledgeBase({
   const predictionServiceClient = new PredictionServiceClient(clientOptions);
 
   // 4. Construct filters for the search.
-  const buildRestriction = (namespace: string, allowList: string[]) => ({
+  const buildRestriction = (namespace: string, allow: string[]) => ({
     namespace,
-    allowList,
+    allow,
   });
 
-  const restricts: { namespace: string; allowList: string[] }[] = [];
+  const restricts: { namespace: string; allow: string[] }[] = [];
   if (level && level.length > 0) {
     restricts.push(buildRestriction('level', level));
   }
