@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
@@ -98,7 +99,7 @@ const generateChatResponseFlow = ai.defineFlow(
         model: 'googleai/gemini-1.5-flash',
         system: systemPrompt,
         // The history sent to the LLM contains the (potentially translated) last user message.
-        history: historyForRAG,
+        prompt: historyForRAG,
         tools: [knowledgeBaseSearchTool],
         output: {
           format: 'json',
