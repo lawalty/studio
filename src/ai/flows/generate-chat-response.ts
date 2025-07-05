@@ -45,8 +45,9 @@ const knowledgeBaseSearchTool = ai.defineTool(
     outputSchema: z.object({ results: z.array(z.any()) }), // Using z.any() for flexibility
   },
   async ({ query }) => {
-      // Use the correctly named 'searchKnowledgeBase' function.
-      return await searchKnowledgeBase({ query, limit: 5 });
+    // Use the correctly named 'searchKnowledgeBase' function and wrap the result.
+    const searchResults = await searchKnowledgeBase({ query, limit: 5 });
+    return { results: searchResults };
   }
 );
 
