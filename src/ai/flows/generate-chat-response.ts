@@ -110,7 +110,7 @@ const generateChatResponseFlow = ai.defineFlow(
         },
       });
 
-      const output = response.output();
+      const output = response.output;
 
       if (!output || typeof output.aiResponse !== 'string') {
         console.error('[generateChatResponseFlow] Invalid or malformed output from prompt.', output);
