@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -599,7 +600,7 @@ export default function KnowledgeBasePage() {
           </Accordion>
         </div>
         <div className="lg:col-span-2">
-          <Accordion type="single" collapsible className="w-full" value={`${activeAccordionItem}-priority`} onValueChange={(value) => setActiveAccordionItem(value.replace('-priority',''))}>
+          <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
             {renderKnowledgeBaseLevel('High')}
             {renderKnowledgeBaseLevel('Medium')}
             {renderKnowledgeBaseLevel('Low')}
@@ -610,3 +611,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
