@@ -70,4 +70,4 @@ For the Retrieval-Augmented Generation (RAG) knowledge base to function, you nee
 
 ### 5. Restart the App
 
-After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect
+After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect.
