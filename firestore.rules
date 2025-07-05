@@ -2,42 +2,44 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Deny all client-side reads/writes by default.
-    // Server-side operations using the Admin SDK (like our Genkit flows)
-    // bypass these rules entirely.
-    match /{document=**} {
-      allow read, write: if false;
+    
+    // Allow public read access to site configuration for the splash screen and chat interface.
+    // Writes should only be done from the admin console or a secure backend.
+    match /configurations/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null; // Basic protection: only signed-in users (admins) can write.
     }
 
-    // Allow the client-side admin panel to read/write knowledge base metadata and API keys.
-    // This assumes some form of authentication will be added to the admin panel.
-    // For now, we check if a user is signed in.
-    match /configurations/site_display_assets {
-      allow read: if true; // Publicly readable for splash screen, etc.
-      allow write: if request.auth != null;
+    // Allow the admin panel to read all knowledge base metadata and chunks.
+    // Writes are handled by server-side Genkit flows which bypass these rules.
+    match /kb_chunks/{chunkId} {
+      allow read: if true;
+      allow write: if false; // Chunks are written by the backend only.
     }
     
-    match /configurations/api_keys_config {
-      allow read, write: if request.auth != null;
-    }
-
-    match /kb_chunks/{chunkId} {
-      // No client-side access needed for raw chunks.
-      allow read, write: if false;
-    }
-
     match /kb_high_meta_v1/{sourceId} {
-        allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if false; // Metadata is written by the backend only.
     }
+    
     match /kb_medium_meta_v1/{sourceId} {
-        allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if false; // Metadata is written by the backend only.
     }
+    
     match /kb_low_meta_v1/{sourceId} {
-        allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if false; // Metadata is written by the backend only.
     }
+    
     match /kb_archive_meta_v1/{sourceId} {
-        allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if false; // Metadata is written by the backend only.
+    }
+
+    // Default deny all other collections.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
