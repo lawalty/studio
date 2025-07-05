@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,7 +13,7 @@ export default function Footer() {
     <footer className="bg-card border-t border-border mt-auto">
       <div className="container mx-auto px-4 py-4 text-center text-muted-foreground">
         <p className="text-sm">
-          © {year || ''} AI Chat. All rights reserved.
+          © {year || ''} AI Chat EZCORP. All rights reserved.
         </p>
       </div>
     </footer>
