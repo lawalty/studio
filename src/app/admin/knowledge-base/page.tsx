@@ -257,50 +257,6 @@ export default function KnowledgeBasePage() {
     }
   }, []);
 
-  const handleDeleteAllByLevel = useCallback(async (level: KnowledgeBaseLevel) => {
-    setOperationStatus(`delete-all-${level}`, true);
-    const levelSources = sources[level];
-    if (levelSources.length === 0) {
-        toast({title: `No sources to delete in ${level}.`});
-        setOperationStatus(`delete-all-${level}`, false);
-        return;
-    }
-
-    toast({ title: `Deleting all ${level} sources...`, description: "This may take a moment." });
-    try {
-        for (const source of levelSources) {
-            // We don't want the individual items to look disabled, just the main buttons.
-            // setOperationStatus(source.id, true);
-            const batch = writeBatch(db);
-            const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
-            const chunksSnapshot = await getDocs(chunksQuery);
-            chunksSnapshot.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            await batch.commit();
-
-            if (source.downloadURL) {
-                try {
-                    const fileRef = ref(storage, source.downloadURL);
-                    await deleteObject(fileRef);
-                } catch (storageError: any) {
-                    if (storageError.code !== 'storage/object-not-found') {
-                        console.warn(`Could not delete storage file for ${source.sourceName}: ${storageError.message}`);
-                    }
-                }
-            }
-            await deleteDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id));
-        }
-        toast({ title: `All ${level} sources deleted.`, variant: "default" });
-    } catch (error: any) {
-        console.error(`Error deleting all ${level} sources:`, error);
-        toast({ title: `Failed to delete all ${level} sources.`, description: error.message, variant: "destructive" });
-    } finally {
-        levelSources.forEach(source => setOperationStatus(source.id, false));
-        setOperationStatus(`delete-all-${level}`, false);
-    }
-  }, [sources]);
-
   const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
       if (source.level === newLevel) return;
       setOperationStatus(source.id, true);
@@ -480,24 +436,6 @@ export default function KnowledgeBasePage() {
              ) : (
                 levelSources.map(renderSourceCard)
              )}
-             {levelSources.length > 0 && (
-                <div className="mt-6">
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" disabled={anyOperationGloballyInProgress}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete All Sources in {level}
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete all {levelSources.length} sources and their indexed data from the {level} knowledge base. This action is irreversible.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteAllByLevel(level)}>Yes, delete all</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                </div>
-            )}
           </AccordionContent>
         </AccordionItem>
     );
