@@ -86,10 +86,11 @@ const generateChatResponseFlow = ai.defineFlow(
       - You have a tool named "knowledgeBaseSearch" to find specific information.
       - Use this tool ONLY when the user asks a direct question that requires looking up data or procedures.
       - For general conversation, greetings, or questions outside your expertise, DO NOT use the tool. Just respond naturally.
-      - If you use the tool and find relevant information, state the answer and mention the source document (e.g., "According to the document 'source.pdf', the answer is...").
+      - If you use the tool and find relevant information from a source, state the answer and mention the source document.
       - If the tool returns no relevant information, state that you couldn't find an answer in the knowledge base.
 
-      Your response must be a JSON object with two fields: "aiResponse" (a string) and "shouldEndConversation" (a boolean).
+      Your response must be a JSON object with three fields: "aiResponse" (a string), "shouldEndConversation" (a boolean), and an optional "pdfReference".
+      - **If and only if** your response is based on a PDF document from the knowledge base, you MUST populate the "pdfReference" object with the "fileName" and "downloadURL" provided in the tool's search result for that document. Otherwise, leave "pdfReference" undefined.
     `;
 
     try {
