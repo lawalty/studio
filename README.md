@@ -10,7 +10,7 @@ This project requires environment variables to connect to Google AI and Firebase
 
 ### 1. Create `.env.local`
 
-Create a new file named `.env.local` in the root directory of this project. This file is for your local secrets and will not be checked into version control.
+Create a new file named `.env.local` in the root directory of this project. This file is for your local secrets and will not be checked into version control. You can copy the template from the `.env` file.
 
 ### 2. Add Google AI API Key (Required)
 
@@ -70,4 +70,4 @@ For the Retrieval-Augmented Generation (RAG) knowledge base to function, you nee
 
 ### 5. Restart the App
 
-After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect.
+After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect
