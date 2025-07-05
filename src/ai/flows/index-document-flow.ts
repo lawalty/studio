@@ -59,7 +59,7 @@ export async function indexDocument({
     downloadURL 
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
       // This reference points to the document that holds the metadata for the file.
-      const sourceDocRef = db.collection(`kb_${level.toLowerCase()}_meta_v1`).doc(sourceId);
+      const sourceDocRef = doc(db, `kb_${level.toLowerCase()}_meta_v1`).doc(sourceId);
 
       try {
         const cleanText = text.trim();
@@ -135,19 +135,17 @@ export async function indexDocument({
         const isPermissionsError = e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM') || rawError.includes("Could not refresh access token") || rawError.includes("500")));
 
         if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
-            detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. The Vector Search extension requires billing to embed text. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
+            detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
         } else if (isPermissionsError) {
-            detailedError = `CRITICAL: Indexing failed due to a Google Cloud permissions error, most likely with the Vector Search extension.
+            detailedError = `CRITICAL: The application's server failed to write to Firestore due to a permissions error. This is NOT an issue with the Vector Search extension.
 
 **Action Required:**
-1.  Go to the Firebase Console -> Build -> Extensions.
-2.  Find the 'Firestore Vector Search' extension and click **Manage**.
-3.  Under **APIs enabled and resources created...**, find the service account ID (e.g., \`ext-firestore-vector-search@...\`).
-4.  Go to the Google Cloud Console -> IAM & Admin.
-5.  Find that specific service account and ensure it has the **"Vertex AI User"** role. This is the most common cause for this error.
-6.  If the role is correct, check the extension's logs in the Firebase Console for more specific details.`;
+1.  Go to the Google Cloud Console -> **IAM & Admin**.
+2.  Find the service account for your application. If you are using Firebase App Hosting, it will look like **your-project-id@serverless-robot-prod.iam.gserviceaccount.com**.
+3.  Ensure this service account has the **"Firebase Admin"** or **"Cloud Datastore User"** role. This role is required for the server to write to the database.
+4.  If the roles are correct, check the application's runtime logs in your hosting provider for more details.`;
         } else {
-            detailedError = `Indexing failed for an unexpected reason. This is often a temporary issue or a problem with the Vector Search extension setup. Full technical error: ${rawError}`;
+            detailedError = `Indexing failed for an unexpected reason. This could be a transient issue. Full technical error: ${rawError}`;
         }
 
         // This update MUST NOT crash the function if it also fails.
