@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -574,31 +575,6 @@ export default function KnowledgeBasePage() {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-
-          <Card className="border-destructive">
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2 text-destructive"><ShieldAlert /> Danger Zone</CardTitle>
-              <CardDescription>
-                This action will permanently delete all knowledge base sources and their indexed data from all tiers. This is irreversible.
-              </CardDescription>
-            </CardHeader>
-            <CardFooter>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                       <Button variant="destructive" disabled={anyOperationGloballyInProgress}>Delete All Sources</Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                       <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This will delete all sources from every tier (High, Medium, Low, and Archive). This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                       <AlertDialogFooter>
-                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                           <AlertDialogAction onClick={() => {
-                                (Object.keys(LEVEL_CONFIG) as KnowledgeBaseLevel[]).forEach(handleDeleteAllByLevel);
-                           }}>Yes, delete everything</AlertDialogAction>
-                       </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </CardFooter>
-          </Card>
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={setActiveAccordionItem}>
