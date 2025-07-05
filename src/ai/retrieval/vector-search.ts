@@ -1,10 +1,12 @@
 /**
- * @fileOverview Performs filtered, vector-based semantic search on the knowledge base using the Firestore Vector Search extension.
+ * @fileOverview Performs filtered, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
  *
- * - searchKnowledgeBase - Finds relevant text chunks from Firestore based on a query and filters.
+ * - searchKnowledgeBase - Finds relevant text chunks from a Vertex AI index based on a query and filters.
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
+import { PredictionServiceClient } from '@google-cloud/aiplatform';
+import { IFindNeighborsRequest } from '@google-cloud/aiplatform/build/src/v1/prediction_service_client';
 
 interface SearchResult {
   text: string;
@@ -22,66 +24,112 @@ interface SearchParams {
   limit?: number;
 }
 
+const {
+  GCLOUD_PROJECT,
+  VERTEX_AI_INDEX_ID,
+  VERTEX_AI_INDEX_ENDPOINT_ID,
+  LOCATION,
+} = process.env;
 
-/**
- * Searches the knowledge base for text chunks semantically similar to the query,
- * applying filters for tier and topic using the Firestore Vector Search extension.
- * @param params An object with the query and optional filters.
- * @returns An array of the top matching result objects.
- */
 export async function searchKnowledgeBase({
   query,
   level,
   topic,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
-  // 1. Generate an embedding for the user's query.
+  // 1. Validate environment configuration.
+  if (!GCLOUD_PROJECT || !VERTEX_AI_INDEX_ID || !VERTEX_AI_INDEX_ENDPOINT_ID || !LOCATION) {
+    throw new Error(
+      "Missing required environment variables for Vertex AI Search. Please set GCLOUD_PROJECT, VERTEX_AI_INDEX_ID, VERTEX_AI_INDEX_ENDPOINT_ID, and LOCATION."
+    );
+  }
+
+  // 2. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
-
   const queryEmbedding = embeddingResponse[0]?.embedding;
-
   if (!queryEmbedding) {
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
 
-  // 2. Build the filter for the vector search.
-  const queryFilter: any = {};
+  // 3. Set up the Vertex AI client.
+  const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
+  const predictionServiceClient = new PredictionServiceClient(clientOptions);
 
-  // Apply level (tier) filter. 'Archive' is always excluded.
-  const levelsToSearch = level && level.length > 0 ? level : ['High', 'Medium', 'Low'];
-  queryFilter.level = { $in: levelsToSearch };
+  // 4. Construct filters for the search.
+  const buildRestriction = (namespace: string, allowList: string[]) => ({
+    namespace,
+    allowList,
+  });
 
-  // Apply topic filter if provided.
+  const restricts: { namespace: string; allowList: string[] }[] = [];
+  if (level && level.length > 0) {
+    restricts.push(buildRestriction('level', level));
+  }
   if (topic) {
-    queryFilter.topic = { $eq: topic };
+    restricts.push(buildRestriction('topic', [topic]));
   }
 
-  // 3. Perform the vector search using the Firestore extension.
-  const searchResults = await db.collection('kb_chunks').findNearest('embedding', {
-    vector: queryEmbedding,
-    limit: limit,
-    distanceMeasure: 'COSINE',
-    filter: queryFilter,
-  });
+  // 5. Construct the request to find nearest neighbors.
+  const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
+  const request: IFindNeighborsRequest = {
+    indexEndpoint: endpoint,
+    deployedIndexId: VERTEX_AI_INDEX_ID,
+    queries: [{
+      datapoint: {
+        datapointId: 'query',
+        featureVector: queryEmbedding,
+      },
+      neighborCount: limit,
+      restricts,
+    }],
+  };
 
-  if (searchResults.empty) {
-    return [];
+  try {
+    // 6. Perform the search.
+    const [response] = await predictionServiceClient.findNeighbors(request);
+    const neighbors = response.nearestNeighbors?.[0]?.neighbors;
+
+    if (!neighbors || neighbors.length === 0) {
+      return [];
+    }
+
+    // 7. Fetch the original document data from Firestore using the IDs from the search results.
+    const neighborDocs = await Promise.all(
+      neighbors.map(async (neighbor) => {
+        if (!neighbor.datapoint?.datapointId) return null;
+
+        const docRef = db.collection('kb_chunks').doc(neighbor.datapoint.datapointId);
+        const docSnap = await docRef.get();
+        
+        if (!docSnap.exists) return null;
+
+        return {
+          ...docSnap.data(),
+          distance: neighbor.distance || 0,
+        };
+      })
+    );
+
+    // 8. Format the results.
+    return neighborDocs
+      .filter((doc): doc is SearchResult => doc !== null)
+      .map((doc) => ({
+        text: doc.text,
+        sourceName: doc.sourceName,
+        level: doc.level,
+        topic: doc.topic,
+        downloadURL: doc.downloadURL,
+        distance: doc.distance,
+      }));
+
+  } catch (error: any) {
+    console.error("Error during Vertex AI Vector Search:", error);
+    if (error.message && error.message.includes('PermissionDenied')) {
+        throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
+    }
+    throw new Error(`An unexpected error occurred while searching the knowledge base: ${error.message}`);
   }
-
-  const topResults: SearchResult[] = searchResults.docs.map(doc => {
-    const data = doc.data();
-    return {
-      text: data.text,
-      sourceName: data.sourceName,
-      level: data.level,
-      topic: data.topic,
-      downloadURL: data.downloadURL,
-      distance: doc.distance,
-    };
-  });
-
-  return topResults;
 }

@@ -47,6 +47,27 @@ For client-side features to connect to your Firebase project, you need to provid
     *   Select your web app.
     *   You will find the configuration values (`apiKey`, `authDomain`, etc.) there.
 
-### 4. Restart the App
+### 4. Add Vertex AI Vector Search Config (Required for RAG)
+
+For the Retrieval-Augmented Generation (RAG) knowledge base to function, you need to provide details about your Vertex AI Vector Search setup.
+
+*   **Prerequisite:** You must first create a Vector Search Index and a public Index Endpoint in the Google Cloud Console under "Vertex AI" -> "Vector Search".
+*   Add the following lines to your `.env.local` file:
+
+    ```
+    # The ID of your Google Cloud project (same as your Firebase project ID).
+    GCLOUD_PROJECT=your_project_id
+
+    # The region where you created your Vertex AI index (e.g., us-central1).
+    LOCATION=your-gcp-region
+
+    # The numeric ID of the Vector Search index itself.
+    VERTEX_AI_INDEX_ID=your-index-id
+
+    # The numeric ID of the public endpoint for your index.
+    VERTEX_AI_INDEX_ENDPOINT_ID=your-index-endpoint-id
+    ```
+
+### 5. Restart the App
 
 After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect.
