@@ -294,7 +294,7 @@ export default function PersonaPage() {
                   suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Enter a comma-separated list of topics AI Blair should focus on. This list will be used to categorize documents in the Knowledge Base.
+                  Enter a comma-separated list (e.g., Topic 1, Topic 2). The space after the comma is optional but recommended for readability. This list will be used to categorize documents in the Knowledge Base.
                 </p>
               </div>
 
