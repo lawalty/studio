@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Performs filtered, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
  *
@@ -58,12 +59,12 @@ export async function searchKnowledgeBase({
   const predictionServiceClient = new PredictionServiceClient(clientOptions);
 
   // 4. Construct filters for the search.
-  const buildRestriction = (namespace: string, allow: string[]): protos.google.cloud.aiplatform.v1.IRestrict => ({
+  const buildRestriction = (namespace: string, allow: string[]) => ({
     namespace,
     allow,
   });
 
-  const restricts: protos.google.cloud.aiplatform.v1.IRestrict[] = [];
+  const restricts = [];
   if (level && level.length > 0) {
     restricts.push(buildRestriction('level', level));
   }
