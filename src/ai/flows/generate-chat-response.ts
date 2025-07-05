@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
@@ -78,7 +77,7 @@ const generateChatResponseFlow = ai.defineFlow(
       }
     }
     
-    const prompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
+    const systemPrompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
       Your primary areas of expertise are: "${conversationalTopics}".
       You are having a conversation with a user.
 
@@ -97,7 +96,7 @@ const generateChatResponseFlow = ai.defineFlow(
     try {
       const response = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
-        prompt: prompt,
+        system: systemPrompt,
         // The history sent to the LLM contains the (potentially translated) last user message.
         history: historyForRAG,
         tools: [knowledgeBaseSearchTool],
