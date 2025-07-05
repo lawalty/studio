@@ -5,8 +5,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
-import { PredictionServiceClient } from '@google-cloud/aiplatform';
-import { IFindNeighborsRequest } from '@google-cloud/aiplatform/build/src/v1/prediction_service_client';
+import { PredictionServiceClient, protos } from '@google-cloud/aiplatform';
 
 interface SearchResult {
   text: string;
@@ -74,7 +73,7 @@ export async function searchKnowledgeBase({
 
   // 5. Construct the request to find nearest neighbors.
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
-  const request: IFindNeighborsRequest = {
+  const request: protos.google.cloud.aiplatform.v1.IFindNeighborsRequest = {
     indexEndpoint: endpoint,
     deployedIndexId: VERTEX_AI_INDEX_ID,
     queries: [{
