@@ -158,7 +158,7 @@ export default function ApiKeysPage() {
                   </p>
                   <ul className="list-disc pl-5 text-xs space-y-1">
                       <li>For local development, add <code className="font-mono bg-sky-100 p-1 rounded">GOOGLE_AI_API_KEY=your_key_here</code> to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
-                      <li>For production, set this as a secret in your hosting provider's dashboard (e.g., Firebase App Hosting Secrets).</li>
+                      <li>For production, set this as a secret in your hosting provider&apos;s dashboard (e.g., Firebase App Hosting Secrets).</li>
                   </ul>
                   <p className="text-xs">
                     The input field for this key has been removed from the UI to avoid confusion.
