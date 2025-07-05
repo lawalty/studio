@@ -64,7 +64,7 @@ export async function searchKnowledgeBase({
     allow,
   });
 
-  const restricts = [];
+  const restricts: protos.google.cloud.aiplatform.v1.FindNeighborsRequest.Query.NumericRestriction[] = [];
   if (level && level.length > 0) {
     restricts.push(buildRestriction('level', level));
   }
@@ -81,7 +81,7 @@ export async function searchKnowledgeBase({
       datapoint: {
         datapointId: 'query',
         featureVector: queryEmbedding,
-        restrict: restricts,
+        restricts: restricts,
       },
       neighborCount: limit,
     }],
