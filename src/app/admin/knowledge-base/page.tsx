@@ -210,14 +210,14 @@ export default function KnowledgeBasePage() {
         setOperationStatus(sourceId, false);
         setIsCurrentlyUploading(false);
     }
-  }, [toast]);
+  }, []);
 
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
+    await handleUpload(selectedFile, selectedLevelForUpload, uploadDescription);
     
     setSelectedFile(null);
     setUploadDescription('');
@@ -358,7 +358,7 @@ export default function KnowledgeBasePage() {
       } finally {
           setOperationStatus(source.id, false);
       }
-  }, [toast]);
+  }, []);
 
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';

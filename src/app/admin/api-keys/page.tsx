@@ -139,7 +139,7 @@ export default function ApiKeysPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline">API Key & Services Management</CardTitle>
+        <CardTitle className="font-headline">API Key &amp; Services Management</CardTitle>
         <CardDescription>
           Manage keys for all AI services and third-party integrations like Twilio.
         </CardDescription>

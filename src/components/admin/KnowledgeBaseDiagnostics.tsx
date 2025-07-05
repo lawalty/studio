@@ -96,7 +96,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
       <CardHeader>
         <CardTitle className="font-headline">Knowledge Base Pipeline Diagnostics</CardTitle>
         <CardDescription>
-          Run these automated tests to diagnose issues with the file processing pipeline (Upload, Text Extraction, and Indexing). Tests use built-in sample files and the "General" topic.
+          Run these automated tests to diagnose issues with the file processing pipeline (Upload, Text Extraction, and Indexing). Tests use built-in sample files and the &quot;General&quot; topic.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
