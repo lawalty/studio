@@ -89,8 +89,7 @@ export async function searchKnowledgeBase({
 
   try {
     // 6. Perform the search.
-    // Use 'as any' to bypass a TypeScript build error where the method is not found in the type definitions.
-    const [response] = await (predictionServiceClient as any).findNeighbors(request);
+    const [response] = await predictionServiceClient.findNeighbors(request);
     const neighbors = response.nearestNeighbors?.[0]?.neighbors;
 
     if (!neighbors || neighbors.length === 0) {
