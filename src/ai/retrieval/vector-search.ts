@@ -6,7 +6,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
-import { PredictionServiceClient, protos } from '@google-cloud/aiplatform';
+import { v1, protos } from '@google-cloud/aiplatform';
 
 interface SearchResult {
   text: string;
@@ -56,7 +56,7 @@ export async function searchKnowledgeBase({
 
   // 3. Set up the Vertex AI client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const predictionServiceClient = new PredictionServiceClient(clientOptions);
+  const predictionServiceClient = new v1.PredictionServiceClient(clientOptions);
 
   // 4. Construct filters for the search.
   const buildRestriction = (namespace: string, allow: string[]) => ({
