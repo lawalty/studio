@@ -47,7 +47,19 @@ For client-side features to connect to your Firebase project, you need to provid
     *   Select your web app.
     *   You will find the configuration values (`apiKey`, `authDomain`, etc.) there.
 
-### 4. Add Vertex AI Vector Search Config (Required for RAG)
+### 4. Add Server-Side Authentication (Local Development)
+
+For server-side features like file indexing into the Knowledge Base to work on your local machine, the Firebase Admin SDK needs to authenticate to your Google Cloud project.
+
+*   **Prerequisite**: You must have the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed.
+*   **Action**: Run the following command in your terminal and follow the prompts to log in with your Google account:
+    ```bash
+    gcloud auth application-default login
+    ```
+*   This command saves credentials on your local machine that the Admin SDK will automatically find when you run `npm run dev`. **You only need to do this once.**
+*   **IMPORTANT**: This is not required for the deployed application, which authenticates automatically in the Google Cloud environment.
+
+### 5. Add Vertex AI Vector Search Config (Required for RAG)
 
 For the Retrieval-Augmented Generation (RAG) knowledge base to function, you need to provide details about your Vertex AI Vector Search setup.
 
@@ -68,6 +80,6 @@ For the Retrieval-Augmented Generation (RAG) knowledge base to function, you nee
     VERTEX_AI_INDEX_ENDPOINT_ID=your-index-endpoint-id
     ```
 
-### 5. Restart the App
+### 6. Restart the App
 
 After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect.

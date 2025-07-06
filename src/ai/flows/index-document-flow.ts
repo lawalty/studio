@@ -134,9 +134,12 @@ export async function indexDocument({
         let detailedError: string;
 
         const isPermissionsError = e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM')));
-        const isServerError = rawError && (rawError.includes("Could not refresh access token") || rawError.includes("500") || rawError.includes("UNAVAILABLE"));
 
-        if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
+        if (rawError.includes("Could not refresh access token")) {
+            detailedError = `Indexing failed due to a local authentication error. The server running on your local machine could not authenticate with Google Cloud services. 
+            
+**Action Required:** Please see the 'Server-Side Authentication' section in the README.md file for instructions on how to set up your local development credentials using the gcloud CLI. This is a one-time setup step.`;
+        } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
         } else if (isPermissionsError) {
             detailedError = `CRITICAL: The application's server failed to write to Firestore due to a permissions error. This is NOT an issue with the Vector Search extension.
@@ -144,10 +147,10 @@ export async function indexDocument({
 **Action Required:**
 1.  Go to the Google Cloud Console -> **IAM & Admin**.
 2.  Find the service account for your application. If you are using Firebase App Hosting, it will look like **your-project-id@serverless-robot-prod.iam.gserviceaccount.com**.
-3.  Ensure this service account has the **"Firebase Admin"** or **"Cloud Datastore User"** role. This role is required for the server to write to the database.
+3.  Ensure this service account has the **"Firebase Admin"** or **"Cloud Datastore User"** role. This is required for the server to write to the database.
 4.  If the roles are correct, check the application's runtime logs in your hosting provider for more details.`;
-        } else if (isServerError) {
-          detailedError = `Indexing failed due to a temporary server-side issue (e.g., a timeout or token refresh failure). This is often transient. Please wait a moment and try the operation again. Full technical error: ${rawError}`;
+        } else if (rawError.includes("500") || rawError.includes("UNAVAILABLE")) {
+          detailedError = `Indexing failed due to a temporary server-side issue (e.g., a timeout or server error). This is often transient. Please wait a moment and try the operation again. Full technical error: ${rawError}`;
         } else {
             detailedError = `Indexing failed for an unexpected reason. Full technical error: ${rawError}`;
         }
