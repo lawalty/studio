@@ -57,6 +57,7 @@ For server-side features like file indexing into the Knowledge Base to work on y
     gcloud auth application-default login
     ```
 *   This command saves credentials on your local machine that the Admin SDK will automatically find when you run `npm run dev`. **You only need to do this once.**
+*   **NOTE:** These local credentials can expire after a certain period. If you start seeing authentication errors in your local development environment after it was previously working, re-running this command will refresh your credentials and should fix the issue.
 *   **IMPORTANT**: This is not required for the deployed application, which authenticates automatically in the Google Cloud environment.
 
 ### 5. Add Vertex AI Vector Search Config (Required for RAG)

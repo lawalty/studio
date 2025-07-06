@@ -136,9 +136,9 @@ export async function indexDocument({
         const isPermissionsError = e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM')));
 
         if (rawError.includes("Could not refresh access token")) {
-            detailedError = `Indexing failed due to a local authentication error. The server running on your local machine could not authenticate with Google Cloud services. 
+            detailedError = `Indexing failed due to a local authentication error. The server running on your local machine could not authenticate with Google Cloud services. This can happen if your local credentials have expired.
             
-**Action Required:** Please see the 'Server-Side Authentication' section in the README.md file for instructions on how to set up your local development credentials using the gcloud CLI. This is a one-time setup step.`;
+**Action Required:** Please see the 'Server-Side Authentication' section in the README.md file for instructions on how to set up or refresh your local development credentials using the gcloud CLI. This is a one-time setup step.`;
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
         } else if (isPermissionsError) {
