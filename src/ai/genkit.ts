@@ -6,7 +6,7 @@ import { firebase as firebaseAuth } from '@genkit-ai/firebase';
 // This is the main exported object for Genkit.
 // It is configured to use the Google AI plugin, which automatically
 // uses the GOOGLE_AI_API_KEY environment variable.
-// The firebase() plugin is now re-enabled to handle server-side authentication
+// The firebaseAuth() plugin is now re-enabled to handle server-side authentication
 // in the Firebase App Hosting environment.
 export const ai = genkit({
   plugins: [
