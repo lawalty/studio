@@ -1,7 +1,7 @@
 
 import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import { firebase } from '@genkit-ai/firebase';
+import { firebase as firebaseAuth } from '@genkit-ai/firebase';
 
 // This is the main exported object for Genkit.
 // It is configured to use the Google AI plugin, which automatically
@@ -11,7 +11,7 @@ import { firebase } from '@genkit-ai/firebase';
 export const ai = genkit({
   plugins: [
     googleAI(),
-    firebase(),
+    firebaseAuth(),
   ],
   // In Genkit 1.x, logLevel and tracing are configured differently,
   // and tracing is typically enabled by default.
