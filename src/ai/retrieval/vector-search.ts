@@ -8,9 +8,6 @@ import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
 import { v1, protos } from '@google-cloud/aiplatform';
 
-// By explicitly destructuring the client, we help the build system correctly identify it.
-const { PredictionServiceClient } = v1;
-
 interface SearchResult {
   text: string;
   sourceName: string;
@@ -59,7 +56,8 @@ export async function searchKnowledgeBase({
 
   // 3. Set up the Vertex AI client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const predictionServiceClient = new PredictionServiceClient(clientOptions);
+  // FIX: Instantiate the client directly from the v1 object to avoid build-time issues.
+  const predictionServiceClient = new v1.PredictionServiceClient(clientOptions);
 
   // 4. Construct filters for the search.
   const buildRestriction = (namespace: string, allow: string[]) => ({
