@@ -315,7 +315,11 @@ export default function ApiKeysPage() {
                         {kbTestResult ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                         <AlertTitle>{kbTestResult ? "Success" : "Failed"}</AlertTitle>
                         <AlertDescription className="text-xs break-words">
-                            {kbTestError ? kbTestError : (kbTestResult?.searchResult?.length > 0 ? `Successfully retrieved ${kbTestResult.searchResult.length} chunk(s) from the knowledge base.` : "Search was successful, but no relevant chunks were found for this query.")}
+                            {kbTestError
+                                ? kbTestError
+                                : kbTestResult && kbTestResult.searchResult?.length > 0
+                                ? `Successfully retrieved ${kbTestResult.searchResult.length} chunk(s) from the knowledge base.`
+                                : "Search was successful, but no relevant chunks were found for this query."}
                         </AlertDescription>
                     </Alert>
                 )}
