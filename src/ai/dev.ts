@@ -11,6 +11,7 @@ import './flows/generate-sms-response';
 import './flows/test-knowledge-base-flow';
 import './flows/test-embedding-flow';
 import './flows/test-text-generation-flow';
+import './flows/test-firestore-write-flow';
 import './flows/text-to-speech-flow';
 import './flows/translate-text-flow';
 

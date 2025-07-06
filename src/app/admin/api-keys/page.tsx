@@ -16,6 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
+import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
 import { Textarea } from '@/components/ui/textarea';
 
 interface ApiKeys {
@@ -46,6 +47,7 @@ export default function ApiKeysPage() {
   const [textGenResult, setTextGenResult] = useState<TestTextGenerationOutput | null>(null);
   const [embeddingResult, setEmbeddingResult] = useState<TestEmbeddingOutput | null>(null);
   const [kbTestResult, setKbTestResult] = useState<TestKnowledgeBaseOutput | null>(null);
+  const [firestoreResult, setFirestoreResult] = useState<TestFirestoreWriteOutput | null>(null);
   const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
   const [kbTestError, setKbTestError] = useState<string | null>(null);
 
@@ -134,6 +136,14 @@ export default function ApiKeysPage() {
       setKbTestError(e.message || 'An unknown error occurred while testing the knowledge base.');
     }
     setIsTesting(prev => ({ ...prev, kb: false }));
+  };
+
+  const handleRunFirestoreTest = async () => {
+    setIsTesting(prev => ({ ...prev, firestore: true }));
+    setFirestoreResult(null);
+    const result = await testFirestoreWrite();
+    setFirestoreResult(result);
+    setIsTesting(prev => ({ ...prev, firestore: false }));
   };
 
   return (
@@ -235,7 +245,7 @@ export default function ApiKeysPage() {
             Run these tests to diagnose issues with your Google AI API key or Google Cloud project configuration.
             Text extraction failures are often due to issues with the Text Generation or Embedding models.
         </CardDescription>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
@@ -289,6 +299,33 @@ export default function ApiKeysPage() {
                     )}
                 </CardContent>
             </Card>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <KeyRound className="h-4 w-4" />
+                        Server Authentication Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Tests if the server can write to Firestore using local credentials (from 'gcloud auth'). This confirms the fix for the RAG pipeline error.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleRunFirestoreTest} disabled={isTesting.firestore}>
+                        {isTesting.firestore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Run Auth Test
+                    </Button>
+                    {firestoreResult && (
+                        <Alert className="mt-4" variant={firestoreResult.success ? "default" : "destructive"}>
+                            {firestoreResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            <AlertTitle>{firestoreResult.success ? "Success" : "Failed"}</AlertTitle>
+                            <AlertDescription className="text-xs break-words whitespace-pre-wrap">
+                                {firestoreResult.success ? `Successfully authenticated and wrote to Firestore.` : firestoreResult.error}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
         </div>
         
         <Card>
@@ -298,7 +335,7 @@ export default function ApiKeysPage() {
                     Knowledge Base Retrieval Test
                 </CardTitle>
                 <CardDescription className="text-xs">
-                    Tests the full RAG retrieval pipeline by embedding your query and searching the vector database.
+                    Tests the full RAG retrieval pipeline by embedding your query and searching the vector database. Requires Vertex AI config in .env.local.
                 </CardDescription>
             </CardHeader>
             <CardContent>
