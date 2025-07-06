@@ -9,7 +9,6 @@ import { Loader2, CheckCircle, AlertTriangle, FileText, Search } from 'lucide-re
 import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Checkbox } from '../ui/checkbox';
 import { Textarea } from '../ui/textarea';
 import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
 
@@ -75,7 +74,6 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
   const [isTestingKb, setIsTestingKb] = useState(false);
   const [kbTestResult, setKbTestResult] = useState<TestKnowledgeBaseOutput | null>(null);
   const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
-  const [kbTestLevels, setKbTestLevels] = useState<string[]>(['High', 'Medium', 'Low']);
   const [kbTestError, setKbTestError] = useState<string | null>(null);
 
 
@@ -105,25 +103,13 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
     }
   };
 
-  const handleLevelChange = (level: string, checked: boolean) => {
-    setKbTestLevels(prev => {
-        if (checked) {
-            return [...prev, level];
-        } else {
-            return prev.filter(l => l !== level);
-        }
-    });
-  };
-
   const handleRunKbTest = async () => {
     setIsTestingKb(true);
     setKbTestResult(null);
     setKbTestError(null);
     try {
-      const levelsToTest = kbTestLevels.length > 0 ? kbTestLevels : undefined;
       const input: TestKnowledgeBaseInput = { 
         query: kbTestQuery,
-        level: levelsToTest,
       };
       const result = await testKnowledgeBase(input);
       setKbTestResult(result);
@@ -192,30 +178,13 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
                 Retrieval Pipeline Test
             </CardTitle>
             <CardDescription>
-                Manually test the RAG retrieval by embedding a query and searching the vector database.
+                Manually test the RAG retrieval pipeline. This test mimics the real world by searching High, then Medium, then Low priority KBs.
             </CardDescription>
         </CardHeader>
         <CardContent>
             <div className="space-y-2">
                 <Label htmlFor="kbTestQuery">Test Query</Label>
                 <Input id="kbTestQuery" value={kbTestQuery} onChange={(e) => setKbTestQuery(e.target.value)} disabled={isTestingKb || isAnyOperationInProgress} />
-            </div>
-             <div className="mt-4 space-y-2">
-                <Label>Priority Levels</Label>
-                <div className="flex items-center space-x-4">
-                    {['High', 'Medium', 'Low'].map(level => (
-                         <div key={level} className="flex items-center space-x-2">
-                            <Checkbox
-                                id={`level-${level}`}
-                                checked={kbTestLevels.includes(level)}
-                                onCheckedChange={(checked) => handleLevelChange(level, !!checked)}
-                                disabled={isTestingKb || isAnyOperationInProgress}
-                            />
-                            <Label htmlFor={`level-${level}`} className="font-normal">{level}</Label>
-                        </div>
-                    ))}
-                </div>
-                <p className="text-xs text-muted-foreground">Select levels to include in the search. Uncheck all to search everything.</p>
             </div>
             <Button onClick={handleRunKbTest} disabled={isTestingKb || isAnyOperationInProgress} className="mt-4">
                 {isTestingKb && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -230,7 +199,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
                             ? kbTestError
                             : kbTestResult && kbTestResult.searchResult?.length > 0
                             ? `Successfully retrieved ${kbTestResult.searchResult.length} chunk(s) from the knowledge base.`
-                            : "Search was successful, but no relevant chunks were found for this query."}
+                            : "Search was successful, but no relevant chunks were found for this query in any priority level."}
                     </AlertDescription>
                 </Alert>
             )}

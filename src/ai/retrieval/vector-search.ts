@@ -1,8 +1,9 @@
 
 /**
- * @fileOverview Performs filtered, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
+ * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
  *
- * - searchKnowledgeBase - Finds relevant text chunks from a Vertex AI index based on a query and filters.
+ * - searchKnowledgeBase - Finds relevant text chunks from a Vertex AI index. It searches 'High' priority documents first,
+ *   then 'Medium', then 'Low', returning the first set of relevant results it finds.
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
@@ -19,7 +20,6 @@ interface SearchResult {
 
 interface SearchParams {
   query: string;
-  level?: string[];
   topic?: string;
   limit?: number;
 }
@@ -31,9 +31,35 @@ const {
   LOCATION,
 } = process.env;
 
+// Helper function to process the neighbors returned from Vertex AI search
+async function processNeighbors(neighbors: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor[]): Promise<SearchResult[]> {
+  if (!neighbors || neighbors.length === 0) {
+    return [];
+  }
+
+  const neighborDocs = await Promise.all(
+    neighbors.map(async (neighbor) => {
+      if (!neighbor.datapoint?.datapointId) return null;
+
+      const docRef = db.collection('kb_chunks').doc(neighbor.datapoint.datapointId);
+      const docSnap = await docRef.get();
+      
+      if (!docSnap.exists) return null;
+
+      return {
+        ...(docSnap.data() as Omit<SearchResult, 'distance'>),
+        distance: neighbor.distance || 0,
+      };
+    })
+  );
+
+  return neighborDocs
+    .filter((doc): doc is SearchResult => doc !== null);
+}
+
+
 export async function searchKnowledgeBase({
   query,
-  level,
   topic,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
@@ -56,81 +82,51 @@ export async function searchKnowledgeBase({
 
   // 3. Set up the Vertex AI client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  // FIX: Instantiate the client directly from the v1 object to avoid build-time issues.
   const predictionServiceClient = new v1.PredictionServiceClient(clientOptions);
-
-  // 4. Construct filters for the search.
-  const buildRestriction = (namespace: string, allow: string[]) => ({
-    namespace,
-    allow,
-  });
-
-  const restricts = [];
-  if (level && level.length > 0) {
-    restricts.push(buildRestriction('level', level));
-  }
-  if (topic) {
-    restricts.push(buildRestriction('topic', [topic]));
-  }
-
-  // 5. Construct the request to find nearest neighbors.
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
-  const request: protos.google.cloud.aiplatform.v1.IFindNeighborsRequest = {
-    indexEndpoint: endpoint,
-    deployedIndexId: VERTEX_AI_INDEX_ID,
-    queries: [{
-      datapoint: {
-        datapointId: 'query',
-        featureVector: queryEmbedding,
-        restricts: restricts,
-      },
-      neighborCount: limit,
-    }],
-  };
 
-  try {
-    // 6. Perform the search.
-    const [response] = await predictionServiceClient.findNeighbors(request);
-    const neighbors = response.nearestNeighbors?.[0]?.neighbors;
+  // 4. Perform sequential search through priority levels.
+  const searchLevels: string[] = ['High', 'Medium', 'Low'];
 
-    if (!neighbors || neighbors.length === 0) {
-      return [];
-    }
+  for (const level of searchLevels) {
+    try {
+      const restricts = [{ namespace: 'level', allow: [level] }];
+      if (topic) {
+        restricts.push({ namespace: 'topic', allow: [topic] });
+      }
 
-    // 7. Fetch the original document data from Firestore using the IDs from the search results.
-    const neighborDocs = await Promise.all(
-      neighbors.map(async (neighbor: any) => {
-        if (!neighbor.datapoint?.datapointId) return null;
+      const request: protos.google.cloud.aiplatform.v1.IFindNeighborsRequest = {
+        indexEndpoint: endpoint,
+        deployedIndexId: VERTEX_AI_INDEX_ID,
+        queries: [{
+          datapoint: {
+            datapointId: 'query',
+            featureVector: queryEmbedding,
+            restricts: restricts,
+          },
+          neighborCount: limit,
+        }],
+      };
+      
+      const [response] = await predictionServiceClient.findNeighbors(request);
+      const neighbors = response.nearestNeighbors?.[0]?.neighbors;
 
-        const docRef = db.collection('kb_chunks').doc(neighbor.datapoint.datapointId);
-        const docSnap = await docRef.get();
-        
-        if (!docSnap.exists) return null;
-
-        return {
-          ...docSnap.data(),
-          distance: neighbor.distance || 0,
-        };
-      })
-    );
-
-    // 8. Format the results.
-    return neighborDocs
-      .filter((doc): doc is SearchResult => doc !== null)
-      .map((doc) => ({
-        text: doc.text,
-        sourceName: doc.sourceName,
-        level: doc.level,
-        topic: doc.topic,
-        downloadURL: doc.downloadURL,
-        distance: doc.distance,
-      }));
-
-  } catch (error: any) {
-    console.error("Error during Vertex AI Vector Search:", error);
-    if (error.message && error.message.includes('PermissionDenied')) {
+      if (neighbors && neighbors.length > 0) {
+        const results = await processNeighbors(neighbors);
+        if (results.length > 0) {
+          // Found results, return them immediately.
+          return results;
+        }
+      }
+    } catch (error: any) {
+      console.error(`Error searching level '${level}' in knowledge base:`, error);
+      if (error.message && error.message.includes('PermissionDenied')) {
         throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
+      }
+      // If it's another error, we log it and continue to the next level.
     }
-    throw new Error(`An unexpected error occurred while searching the knowledge base: ${error.message}`);
   }
+
+  // If the loop completes without returning, no results were found.
+  return [];
 }

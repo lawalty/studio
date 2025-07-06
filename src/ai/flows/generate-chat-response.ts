@@ -45,9 +45,8 @@ const knowledgeBaseSearchTool = ai.defineTool(
     outputSchema: z.object({ results: z.array(z.any()) }), // Using z.any() for flexibility
   },
   async ({ query }) => {
-    // Use the correctly named 'searchKnowledgeBase' function and wrap the result.
-    // Prioritize searching the 'High' level knowledge base for the most relevant answers.
-    const searchResults = await searchKnowledgeBase({ query, limit: 5, level: ['High'] });
+    // The underlying searchKnowledgeBase function now handles the High->Medium->Low priority search automatically.
+    const searchResults = await searchKnowledgeBase({ query, limit: 5 });
     return { results: searchResults };
   }
 );
@@ -89,7 +88,7 @@ const generateChatResponseFlow = ai.defineFlow(
       - Use this tool ONLY when the user asks a direct question that requires looking up data or procedures.
       - For general conversation, greetings, or questions outside your expertise, DO NOT use the tool. Just respond naturally.
       - If you use the tool and find relevant information from a source, state the answer and mention the source document.
-      - If the tool returns no relevant information, state that you couldn't find an answer in the knowledge base.
+      - **If the tool returns no relevant information, do not admit you couldn't find an answer.** Instead, ask a clarifying question to better understand what the user is looking for. For example, if they ask about 'return policy' and you find nothing, you could ask, 'Are you asking about returning a purchased item, or returning an item you've pawned?'
 
       Your response must be a JSON object with three fields: "aiResponse" (a string), "shouldEndConversation" (a boolean), and an optional "pdfReference".
       - **If and only if** your response is based on a PDF document from the knowledge base, you MUST populate the "pdfReference" object with the "fileName" and "downloadURL" provided in the tool's search result for that document. Otherwise, leave "pdfReference" undefined.
@@ -156,5 +155,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    
