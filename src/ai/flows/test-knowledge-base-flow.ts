@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow for testing the knowledge base retrieval.
@@ -13,6 +14,7 @@ import { searchKnowledgeBase } from '../retrieval/vector-search';
 
 const TestKnowledgeBaseInputSchema = z.object({
   query: z.string().describe('The test query to search for in the knowledge base.'),
+  level: z.array(z.string()).optional().describe('The priority levels to filter the search by (e.g., ["High", "Medium"]).'),
 });
 export type TestKnowledgeBaseInput = z.infer<typeof TestKnowledgeBaseInputSchema>;
 
@@ -29,9 +31,9 @@ const testKnowledgeBaseFlow = ai.defineFlow(
     inputSchema: TestKnowledgeBaseInputSchema,
     outputSchema: TestKnowledgeBaseOutputSchema,
   },
-  async ({ query }) => {
-    // Perform a general search with no filters for testing purposes
-    const searchResult = await searchKnowledgeBase({ query }); 
+  async ({ query, level }) => {
+    // Perform a search with optional filters for testing purposes
+    const searchResult = await searchKnowledgeBase({ query, level }); 
     const contextString = `Here is some context I found that might be relevant to the user's question. Use this information to form your answer.
 ---
 ${searchResult.map(r =>

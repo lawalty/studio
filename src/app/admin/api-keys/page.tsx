@@ -18,6 +18,7 @@ import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embeddi
 import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface ApiKeys {
   tts: string;
@@ -49,6 +50,7 @@ export default function ApiKeysPage() {
   const [kbTestResult, setKbTestResult] = useState<TestKnowledgeBaseOutput | null>(null);
   const [firestoreResult, setFirestoreResult] = useState<TestFirestoreWriteOutput | null>(null);
   const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
+  const [kbTestLevels, setKbTestLevels] = useState<string[]>(['High', 'Medium', 'Low']);
   const [kbTestError, setKbTestError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -124,16 +126,30 @@ export default function ApiKeysPage() {
     setIsTesting(prev => ({ ...prev, embedding: false }));
   };
 
+  const handleLevelChange = (level: string, checked: boolean) => {
+    setKbTestLevels(prev => {
+        if (checked) {
+            return [...prev, level];
+        } else {
+            return prev.filter(l => l !== level);
+        }
+    });
+  };
+
   const handleRunKbTest = async () => {
     setIsTesting(prev => ({ ...prev, kb: true }));
     setKbTestResult(null);
     setKbTestError(null);
     try {
-      const input: TestKnowledgeBaseInput = { query: kbTestQuery };
+      const levelsToTest = kbTestLevels.length > 0 ? kbTestLevels : undefined;
+      const input: TestKnowledgeBaseInput = { 
+        query: kbTestQuery,
+        level: levelsToTest,
+      };
       const result = await testKnowledgeBase(input);
       setKbTestResult(result);
     } catch (e: any) {
-      setKbTestError(e.message || 'An unknown error occurred while testing the knowledge base.');
+      setKbTestError(e.message || 'An unexpected error occurred while testing the knowledge base.');
     }
     setIsTesting(prev => ({ ...prev, kb: false }));
   };
@@ -343,7 +359,23 @@ export default function ApiKeysPage() {
                     <Label htmlFor="kbTestQuery">Test Query</Label>
                     <Input id="kbTestQuery" value={kbTestQuery} onChange={(e) => setKbTestQuery(e.target.value)} />
                 </div>
-                <Button onClick={handleRunKbTest} disabled={isTesting.kb} className="mt-2">
+                 <div className="mt-4 space-y-2">
+                    <Label>Priority Levels</Label>
+                    <div className="flex items-center space-x-4">
+                        {['High', 'Medium', 'Low'].map(level => (
+                             <div key={level} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`level-${level}`}
+                                    checked={kbTestLevels.includes(level)}
+                                    onCheckedChange={(checked) => handleLevelChange(level, !!checked)}
+                                />
+                                <Label htmlFor={`level-${level}`} className="font-normal">{level}</Label>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Select levels to include in the search. Uncheck all to search everything.</p>
+                </div>
+                <Button onClick={handleRunKbTest} disabled={isTesting.kb} className="mt-4">
                     {isTesting.kb && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Run Search Test
                 </Button>
