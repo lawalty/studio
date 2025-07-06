@@ -83,7 +83,7 @@ export default function KnowledgeBasePage() {
           }
           setAvailableTopics(topicsArray);
           if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
-            setSelectedTopicForUpload(topicsArray.find(t => t !== 'Diagnostics') || topicsArray[0]);
+            setSelectedTopicForUpload(topicsArray.find((t: string) => t !== 'Diagnostics') || topicsArray[0]);
           }
         }
       } catch (error) {
@@ -217,7 +217,7 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    await handleUpload(selectedFile, selectedLevelForUpload, uploadDescription);
+    await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
     
     setSelectedFile(null);
     setUploadDescription('');
@@ -554,7 +554,7 @@ export default function KnowledgeBasePage() {
                       <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
                       <SelectContent>
                         {availableTopics.filter(t => t !== 'Diagnostics').length > 0 ? (
-                           availableTopics.filter(t => t !== 'Diagnostics').map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)
+                           availableTopics.filter((t: string) => t !== 'Diagnostics').map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)
                         ) : (
                            <SelectItem value="General" disabled>No topics configured</SelectItem>
                         )}
@@ -611,5 +611,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
