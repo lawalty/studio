@@ -9,16 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, MessageSquare, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Search, Loader2 } from 'lucide-react';
+import { Save, Speech, MessageSquare, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
-import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 
 interface ApiKeys {
   tts: string;
@@ -47,11 +44,7 @@ export default function ApiKeysPage() {
   const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
   const [textGenResult, setTextGenResult] = useState<TestTextGenerationOutput | null>(null);
   const [embeddingResult, setEmbeddingResult] = useState<TestEmbeddingOutput | null>(null);
-  const [kbTestResult, setKbTestResult] = useState<TestKnowledgeBaseOutput | null>(null);
   const [firestoreResult, setFirestoreResult] = useState<TestFirestoreWriteOutput | null>(null);
-  const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
-  const [kbTestLevels, setKbTestLevels] = useState<string[]>(['High', 'Medium', 'Low']);
-  const [kbTestError, setKbTestError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -124,34 +117,6 @@ export default function ApiKeysPage() {
     const result = await testEmbedding();
     setEmbeddingResult(result);
     setIsTesting(prev => ({ ...prev, embedding: false }));
-  };
-
-  const handleLevelChange = (level: string, checked: boolean) => {
-    setKbTestLevels(prev => {
-        if (checked) {
-            return [...prev, level];
-        } else {
-            return prev.filter(l => l !== level);
-        }
-    });
-  };
-
-  const handleRunKbTest = async () => {
-    setIsTesting(prev => ({ ...prev, kb: true }));
-    setKbTestResult(null);
-    setKbTestError(null);
-    try {
-      const levelsToTest = kbTestLevels.length > 0 ? kbTestLevels : undefined;
-      const input: TestKnowledgeBaseInput = { 
-        query: kbTestQuery,
-        level: levelsToTest,
-      };
-      const result = await testKnowledgeBase(input);
-      setKbTestResult(result);
-    } catch (e: any) {
-      setKbTestError(e.message || 'An unexpected error occurred while testing the knowledge base.');
-    }
-    setIsTesting(prev => ({ ...prev, kb: false }));
   };
 
   const handleRunFirestoreTest = async () => {
@@ -255,7 +220,7 @@ export default function ApiKeysPage() {
       <div className="px-6 pb-6 space-y-6">
         <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Service Diagnostics</h3>
+            <h3 className="text-lg font-semibold">Core Service Diagnostics</h3>
         </div>
         <CardDescription>
             Run these tests to diagnose issues with your Google AI API key or Google Cloud project configuration.
@@ -343,66 +308,7 @@ export default function ApiKeysPage() {
                 </CardContent>
             </Card>
         </div>
-        
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                    <Search className="h-4 w-4" />
-                    Knowledge Base Retrieval Test
-                </CardTitle>
-                <CardDescription className="text-xs">
-                    Tests the full RAG retrieval pipeline by embedding your query and searching the vector database. Requires Vertex AI config in .env.local.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-2">
-                    <Label htmlFor="kbTestQuery">Test Query</Label>
-                    <Input id="kbTestQuery" value={kbTestQuery} onChange={(e) => setKbTestQuery(e.target.value)} />
-                </div>
-                 <div className="mt-4 space-y-2">
-                    <Label>Priority Levels</Label>
-                    <div className="flex items-center space-x-4">
-                        {['High', 'Medium', 'Low'].map(level => (
-                             <div key={level} className="flex items-center space-x-2">
-                                <Checkbox
-                                    id={`level-${level}`}
-                                    checked={kbTestLevels.includes(level)}
-                                    onCheckedChange={(checked) => handleLevelChange(level, !!checked)}
-                                />
-                                <Label htmlFor={`level-${level}`} className="font-normal">{level}</Label>
-                            </div>
-                        ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Select levels to include in the search. Uncheck all to search everything.</p>
-                </div>
-                <Button onClick={handleRunKbTest} disabled={isTesting.kb} className="mt-4">
-                    {isTesting.kb && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Run Search Test
-                </Button>
-                {(kbTestResult || kbTestError) && (
-                    <Alert className="mt-4" variant={kbTestResult ? "default" : "destructive"}>
-                        {kbTestResult ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                        <AlertTitle>{kbTestResult ? "Success" : "Failed"}</AlertTitle>
-                        <AlertDescription className="text-xs break-words">
-                            {kbTestError
-                                ? kbTestError
-                                : kbTestResult && kbTestResult.searchResult?.length > 0
-                                ? `Successfully retrieved ${kbTestResult.searchResult.length} chunk(s) from the knowledge base.`
-                                : "Search was successful, but no relevant chunks were found for this query."}
-                        </AlertDescription>
-                    </Alert>
-                )}
-                {kbTestResult?.retrievedContext && (
-                    <div className="mt-4">
-                        <Label className="text-xs font-bold">Retrieved Context for LLM</Label>
-                        <Textarea readOnly value={kbTestResult.retrievedContext} className="mt-1 h-48 text-xs bg-muted" />
-                    </div>
-                )}
-            </CardContent>
-        </Card>
       </div>
     </Card>
   );
 }
-
-    
