@@ -46,7 +46,8 @@ const knowledgeBaseSearchTool = ai.defineTool(
   },
   async ({ query }) => {
     // Use the correctly named 'searchKnowledgeBase' function and wrap the result.
-    const searchResults = await searchKnowledgeBase({ query, limit: 5 });
+    // Prioritize searching the 'High' level knowledge base for the most relevant answers.
+    const searchResults = await searchKnowledgeBase({ query, limit: 5, level: ['High'] });
     return { results: searchResults };
   }
 );
