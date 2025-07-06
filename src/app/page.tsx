@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -35,6 +36,7 @@ export default function StartPage() {
   const [typedMessage, setTypedMessage] = useState('');
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
+  const [showLanguageSelector, setShowLanguageSelector] = useState(true);
   const router = useRouter();
   const { language, translate } = useLanguage();
 
@@ -70,12 +72,14 @@ export default function StartPage() {
           setWelcomeMessage(data.splashWelcomeMessage || DEFAULT_WELCOME_MESSAGE);
           setSplashImageSrc(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setTypingSpeedMs(data.typingSpeedMs === undefined ? DEFAULT_TYPING_SPEED_MS : data.typingSpeedMs);
+          setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
           setIsMaintenanceMode(false);
         }
       } else {
         setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
         setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
         setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
+        setShowLanguageSelector(true);
         setIsMaintenanceMode(false);
       }
       setIsLoading(false);
@@ -85,6 +89,7 @@ export default function StartPage() {
       setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
       setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
       setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
+      setShowLanguageSelector(true);
       setIsMaintenanceMode(false);
     });
 
@@ -222,7 +227,7 @@ export default function StartPage() {
             <CardDescription className="text-lg m-0">
               {uiText.chooseMode}
             </CardDescription>
-            <LanguageSelector />
+            {showLanguageSelector && <LanguageSelector />}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">

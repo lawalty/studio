@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -30,6 +30,7 @@ export default function SiteSettingsPage() {
   const [typingSpeedMs, setTypingSpeedMs] = useState<string>(String(DEFAULT_TYPING_SPEED_MS));
   const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
+  const [showLanguageSelector, setShowLanguageSelector] = useState(true);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -49,6 +50,7 @@ export default function SiteSettingsPage() {
           setTypingSpeedMs(data.typingSpeedMs === undefined ? String(DEFAULT_TYPING_SPEED_MS) : String(data.typingSpeedMs));
           setMaintenanceModeEnabled(data.maintenanceModeEnabled === undefined ? false : data.maintenanceModeEnabled);
           setMaintenanceModeMessage(data.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE);
+          setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
         } else {
           // If the document doesn't exist, we can create it with defaults.
           const defaultSettings = {
@@ -57,6 +59,7 @@ export default function SiteSettingsPage() {
             typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
             maintenanceModeEnabled: false,
             maintenanceModeMessage: DEFAULT_MAINTENANCE_MESSAGE,
+            showLanguageSelector: true,
           };
           await setDoc(docRef, defaultSettings, { merge: true });
           setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
@@ -64,6 +67,7 @@ export default function SiteSettingsPage() {
           setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
           setMaintenanceModeEnabled(false);
           setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
+          setShowLanguageSelector(true);
           toast({ title: "Initial Settings Created", description: "Default site settings have been saved." });
         }
       } catch (error) {
@@ -73,6 +77,7 @@ export default function SiteSettingsPage() {
         setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
         setMaintenanceModeEnabled(false);
         setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
+        setShowLanguageSelector(true);
         toast({
           title: "Error Loading Settings",
           description: "Could not fetch site settings. Defaults shown. Please check console.",
@@ -168,6 +173,11 @@ export default function SiteSettingsPage() {
           dataToUpdate.maintenanceModeMessage = maintenanceModeMessage;
           changesMade = true;
       }
+      
+      if (showLanguageSelector !== (currentData.showLanguageSelector === undefined ? true : currentData.showLanguageSelector)) {
+        dataToUpdate.showLanguageSelector = showLanguageSelector;
+        changesMade = true;
+      }
 
       if (changesMade) {
         await updateDoc(siteAssetsDocRef, dataToUpdate);
@@ -211,6 +221,11 @@ export default function SiteSettingsPage() {
     setMaintenanceModeEnabled(false);
     setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
     toast({ title: "Maintenance Mode Reset", description: "Settings reset to default. Click 'Save Site Settings' to make it permanent." });
+  };
+
+  const handleResetLanguageSelector = () => {
+    setShowLanguageSelector(true);
+    toast({ title: "Language Selector Reset", description: "Visibility reset to default. Click 'Save Site Settings' to make it permanent." });
   };
 
   return (
@@ -349,7 +364,44 @@ export default function SiteSettingsPage() {
             <RotateCcw className="mr-2 h-4 w-4" /> Reset Maintenance Settings
             </Button>
         </CardFooter>
-    </Card>
+      </Card>
+
+      <Card>
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2"><Globe /> Language Selector</CardTitle>
+            <CardDescription>
+              Control the visibility of the language selector on the start page.
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            {isLoadingData ? (
+            <p>Loading language settings...</p>
+            ) : (
+                <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
+                    <div className="flex-1 space-y-1">
+                        <Label htmlFor="showLanguageSelector" className="font-medium">
+                            Show Language Selector
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            If ON, the English/Spanish toggle will be visible on the start page.
+                        </p>
+                    </div>
+                    <Switch
+                        id="showLanguageSelector"
+                        checked={showLanguageSelector}
+                        onCheckedChange={setShowLanguageSelector}
+                        disabled={isLoadingData}
+                        aria-label="Toggle language selector visibility"
+                    />
+                </div>
+            )}
+        </CardContent>
+        <CardFooter>
+            <Button variant="outline" onClick={handleResetLanguageSelector} disabled={isLoadingData}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset Language Selector
+            </Button>
+        </CardFooter>
+      </Card>
 
       <Card>
         <CardHeader>
