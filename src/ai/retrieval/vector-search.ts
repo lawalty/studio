@@ -64,7 +64,7 @@ export async function searchKnowledgeBase({
     allow,
   });
 
-  const restricts: protos.google.cloud.aiplatform.v1.FindNeighborsRequest.Query.NumericRestriction[] = [];
+  const restricts = [];
   if (level && level.length > 0) {
     restricts.push(buildRestriction('level', level));
   }
