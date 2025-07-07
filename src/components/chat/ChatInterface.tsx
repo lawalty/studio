@@ -196,7 +196,40 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   
   const router = useRouter();
-  const { language } = useLanguage();
+  const { language, translate } = useLanguage();
+
+  const [uiText, setUiText] = useState({
+    loadingConfig: "Loading Chat Configuration",
+    pleaseWait: "Please wait a moment...",
+    preparingGreeting: "Preparing greeting...",
+    listening: "Listening...",
+    isPreparing: "AI Blair is preparing...",
+    isTyping: "AI Blair is typing...",
+    conversationEnded: "Conversation Ended",
+    saveAsPdf: "Save as PDF",
+    startNewChat: "Start New Chat",
+    endChat: "End Chat",
+    micNotReadyTitle: "Mic Not Ready",
+    micNotReadyDesc: "Speech recognition not available. Try refreshing.",
+    aiSpeakingTitle: "AI Speaking",
+    aiSpeakingDesc: "Please wait for AI Blair to finish speaking.",
+    processingTitle: "Processing",
+    processingDesc: "Please wait for the current message to process.",
+    micErrorTitle: "Microphone Error",
+    micErrorDesc: "Mic error: {error}. Please check permissions.",
+    micIssueTitle: "Microphone Issue",
+    micIssueDesc: "No audio detected. Check mic & permissions.",
+    goodQuestion: "Okay, good question. Let me gather that information for you.",
+    preparingResponse: "Just a moment, I'm preparing your detailed response.",
+    interestingPoint: "That's an interesting point! This might take me a few seconds to look into.",
+    letMeCheck: "Let me check on that for you.",
+    oneMoment: "One moment while I find the best answer.",
+    endSessionMessage: "It looks like you might have stepped away. Let's end this chat.",
+    areYouThereUser: "{userName}, are you still there?",
+    areYouThereGuest: "Hello? Is someone there?",
+    errorEncountered: "Sorry, I encountered an error. Please try again.",
+    chatLogTitle: "Chat with AI Blair"
+  });
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any | null>(null);
@@ -227,6 +260,36 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
   const accumulatedTranscriptRef = useRef<string>('');
   const sendTranscriptTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const translateUi = async () => {
+        const englishStrings = {
+            loadingConfig: "Loading Chat Configuration", pleaseWait: "Please wait a moment...", preparingGreeting: "Preparing greeting...", listening: "Listening...",
+            isPreparing: "AI Blair is preparing...", isTyping: "AI Blair is typing...", conversationEnded: "Conversation Ended", saveAsPdf: "Save as PDF",
+            startNewChat: "Start New Chat", endChat: "End Chat", micNotReadyTitle: "Mic Not Ready", micNotReadyDesc: "Speech recognition not available. Try refreshing.",
+            aiSpeakingTitle: "AI Speaking", aiSpeakingDesc: "Please wait for AI Blair to finish speaking.", processingTitle: "Processing", processingDesc: "Please wait for the current message to process.",
+            micErrorTitle: "Microphone Error", micErrorDesc: "Mic error: {error}. Please check permissions.", micIssueTitle: "Microphone Issue",
+            micIssueDesc: "No audio detected. Check mic & permissions.", goodQuestion: "Okay, good question. Let me gather that information for you.",
+            preparingResponse: "Just a moment, I'm preparing your detailed response.", interestingPoint: "That's an interesting point! This might take me a few seconds to look into.",
+            letMeCheck: "Let me check on that for you.", oneMoment: "One moment while I find the best answer.", endSessionMessage: "It looks like you might have stepped away. Let's end this chat.",
+            areYouThereUser: "{userName}, are you still there?", areYouThereGuest: "Hello? Is someone there?", errorEncountered: "Sorry, I encountered an error. Please try again.",
+            chatLogTitle: "Chat with AI Blair"
+        };
+
+        if (language === 'English') {
+            setUiText(englishStrings);
+            return;
+        }
+
+        const translatedEntries = await Promise.all(
+            Object.entries(englishStrings).map(async ([key, value]) => [key, await translate(value)])
+        );
+        
+        setUiText(Object.fromEntries(translatedEntries));
+    };
+
+    translateUi();
+}, [language, translate]);
 
   const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference'], audioDurationMs?: number): string => {
     const newMessageId = Date.now().toString() + Math.random();
@@ -289,7 +352,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
  const toggleListening = useCallback((forceState?: boolean) => {
     if (!recognitionRef.current && (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text')) {
-      toast({ title: "Mic Not Ready", description: "Speech recognition not available. Try refreshing.", variant: "destructive" });
+      toast({ title: uiText.micNotReadyTitle, description: uiText.micNotReadyDesc, variant: "destructive" });
       return;
     }
     const targetIsListeningState = typeof forceState === 'boolean' ? forceState : !isListeningRef.current;
@@ -299,11 +362,11 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       if (communicationModeRef.current === 'text-only') { setIsListening(false); return; }
       if (typeof forceState === 'undefined') {
          if (isSpeakingRef.current) {
-            toast({ title: "AI Speaking", description: "Please wait for AI Blair to finish speaking.", variant: "default"});
+            toast({ title: uiText.aiSpeakingTitle, description: uiText.aiSpeakingDesc, variant: "default"});
             setIsListening(false); return;
          }
          if (isSendingMessage) {
-            toast({ title: "Processing", description: "Please wait for the current message to process.", variant: "default"});
+            toast({ title: uiText.processingTitle, description: uiText.processingDesc, variant: "default"});
             setIsListening(false); return;
          }
       }
@@ -318,7 +381,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         setIsListening(true);
       } catch (startError: any) {
         if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
-          toast({ variant: 'destructive', title: 'Microphone Start Error', description: `${startError.name}: ${startError.message || 'Could not start microphone.'}` });
+          toast({ variant: 'destructive', title: uiText.micErrorTitle, description: uiText.micErrorDesc.replace('{error}', `${startError.name}: ${startError.message || 'Could not start microphone.'}`) });
         }
         setIsListening(false);
       }
@@ -341,7 +404,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         }
       }
     }
-  }, [toast, hasConversationEnded, isSendingMessage]);
+  }, [toast, hasConversationEnded, isSendingMessage, uiText]);
 
   const toggleListeningRef = useRef(toggleListening);
   useEffect(() => { toggleListeningRef.current = toggleListening; }, [toggleListening]);
@@ -533,7 +596,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     isAboutToSpeakForSilenceRef.current = false;
     mainResponsePendingAfterAckRef.current = false;
 
-    // The history now comes directly from the state which was just updated
     const historyForGenkit = messagesRef.current.map(msg => ({ 
       role: msg.sender, 
       parts: [{ text: msg.text }] 
@@ -547,11 +609,15 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         language: language,
       };
       
+      const translatedAckPhrases = [
+        uiText.goodQuestion, uiText.preparingResponse, uiText.interestingPoint, uiText.letMeCheck, uiText.oneMoment
+      ];
+
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       
       if (communicationModeRef.current !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
         mainResponsePendingAfterAckRef.current = true;
-        const randomAckPhrase = ACKNOWLEDGEMENT_PHRASES[Math.floor(Math.random() * ACKNOWLEDGEMENT_PHRASES.length)];
+        const randomAckPhrase = translatedAckPhrases[Math.floor(Math.random() * translatedAckPhrases.length)];
         await speakTextRef.current(randomAckPhrase, null, undefined, true);
       }
 
@@ -576,7 +642,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       mainResponsePendingAfterAckRef.current = false;
     } catch (error) {
       console.error("Error in generateChatResponse or speakText:", error);
-      const errorMessage = "Sorry, I encountered an error. Please try again.";
+      const errorMessage = uiText.errorEncountered;
       let errorAiMessageId: string | null = null;
       if (!isEndingSessionRef.current) {
         errorAiMessageId = addMessage(errorMessage, 'model');
@@ -591,7 +657,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       mainResponsePendingAfterAckRef.current = false;
       isSpeakingAcknowledgementRef.current = false;
     }
-  }, [addMessage, updateMessageDuration, personaTraits, conversationalTopics, language, hasConversationEnded, isSendingMessage, setInputValue]);
+  }, [addMessage, updateMessageDuration, personaTraits, conversationalTopics, language, hasConversationEnded, isSendingMessage, setInputValue, uiText]);
 
   const handleSendMessageRef = useRef(handleSendMessage);
   useEffect(() => { handleSendMessageRef.current = handleSendMessage; }, [handleSendMessage]);
@@ -603,7 +669,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognitionAPI) {
             if (communicationModeRef.current === 'audio-only' || communicationModeRef.current === 'audio-text') {
-              toast({ title: "Mic Not Supported", description: "Speech recognition is not available in your browser.", variant: "destructive" });
+              toast({ title: uiText.micNotReadyTitle, description: uiText.micNotReadyDesc, variant: "destructive" });
             }
             return;
         }
@@ -612,7 +678,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         
         recognition.continuous = communicationModeRef.current === 'audio-text';
         recognition.interimResults = true;
-        recognition.lang = 'en-US';
+        recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
         recognition.onresult = (event: any) => {
           if (isSpeakingRef.current || isSendingMessage) {
@@ -660,9 +726,9 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           if (['aborted', 'interrupted', 'canceled'].includes(event.error)) return;
           if (event.error === 'no-speech') return; // Handled by onend for audio-only
           if (event.error === 'audio-capture') {
-            toast({ title: "Microphone Issue", description: "No audio detected. Check mic &amp; permissions.", variant: "destructive" });
+            toast({ title: uiText.micIssueTitle, description: uiText.micIssueDesc, variant: "destructive" });
           } else if (event.error !== 'network') {
-            toast({ title: "Microphone Error", description: `Mic error: ${event.error}. Please check permissions.`, variant: "destructive" });
+            toast({ title: uiText.micErrorTitle, description: uiText.micErrorDesc.replace('{error}', event.error), variant: "destructive" });
           }
         };
 
@@ -690,7 +756,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
               const newPromptCount = currentPrompts + 1;
               if (newPromptCount >= MAX_SILENCE_PROMPTS_AUDIO_ONLY) {
                 isEndingSessionRef.current = true;
-                const endMsg = "It looks like you might have stepped away. Let's end this chat.";
+                const endMsg = uiText.endSessionMessage;
                 let endMsgId: string | null = null;
                 const onEndSpeechStart = () => {
                     setTimeout(() => {
@@ -703,7 +769,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                 speakTextRef.current(endMsg, null, onEndSpeechStart, false);
               } else {
                 const userName = getUserNameFromHistory(messagesRef.current);
-                const promptMessage = userName ? `${userName}, are you still there?` : "Hello? Is someone there?";
+                const promptMessage = userName ? uiText.areYouThereUser.replace('{userName}', userName) : uiText.areYouThereGuest;
                 let promptMsgId: string | null = null;
                 const onPromptSpeechStart = () => {
                     setTimeout(() => {
@@ -740,7 +806,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         sendTranscriptTimerRef.current = null;
       }
     };
-  }, [responsePauseTimeMs, toast, addMessage, isSendingMessage, hasConversationEnded]);
+  }, [responsePauseTimeMs, toast, addMessage, isSendingMessage, hasConversationEnded, language, uiText]);
 
 
   const handleEndChatManually = () => {
@@ -784,7 +850,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     tempContainer.style.top = '-9999px';
     tempContainer.style.fontFamily = 'Inter, sans-serif';
 
-    const chatLogHtml = generateChatLogHtml(messages, avatarSrc, splashScreenWelcomeMessage);
+    const chatLogHtml = generateChatLogHtml(messages, avatarSrc, uiText.chatLogTitle);
     tempContainer.innerHTML = chatLogHtml;
     document.body.appendChild(tempContainer);
 
@@ -857,9 +923,13 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       
       const initConversation = async () => {
         setShowPreparingGreeting(true);
-        const greetingToUse = customGreeting && customGreeting.trim() !== "" 
+        let greetingToUse = customGreeting && customGreeting.trim() !== "" 
           ? customGreeting.trim()
           : "Hello! How can I help you today?";
+
+        if (language !== 'English') {
+          greetingToUse = await translate(greetingToUse);
+        }
 
         let greetingMessageId: string | null = null;
         const onGreetingSpeechActuallyStarting = () => {
@@ -880,7 +950,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       
       initConversation();
     }
-  }, [aiHasInitiatedConversation, customGreeting, messages.length, addMessage, isSendingMessage, isLoadingConfig, hasConversationEnded, personaTraits]);
+  }, [aiHasInitiatedConversation, customGreeting, messages.length, addMessage, isSendingMessage, isLoadingConfig, hasConversationEnded, personaTraits, language, translate]);
 
   useEffect(() => {
     const fetchAllData = async () => {
@@ -989,12 +1059,12 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const showAiTypingIndicator = isSendingMessage && aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting;
   const audioOnlyLiveIndicator = () => {
     if (hasConversationEnded) return null;
-    if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> Preparing greeting... </div>;
+    if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> {uiText.preparingGreeting} </div>;
     if (isListening && !isSpeaking && !sendTranscriptTimerRef.current && !isSendingMessage) {
-      return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> Listening... </div>;
+      return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>;
     }
      if (showAiTypingIndicator && !isSpeaking && !isListening) {
-      return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> AI Blair is preparing... </div>;
+      return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> {uiText.isPreparing} </div>;
     }
     return null;
   };
@@ -1005,7 +1075,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
   const mainContent = () => {
     if (isLoadingConfig && !aiHasInitiatedConversation) {
-        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">Loading Chat Configuration</h2> <p className="mt-2 text-muted-foreground">Please wait a moment...</p> </div> );
+        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2> <p className="mt-2 text-muted-foreground">{uiText.pleaseWait}</p> </div> );
     }
     if (communicationMode === 'audio-only') {
       return (
@@ -1017,7 +1087,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           </div>
           {hasConversationEnded && (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
-                 <h3 className="text-xl font-semibold mb-2 text-center">Conversation Ended</h3>
+                 <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
                  <ConversationLog
                     messages={messages}
                     avatarSrc={avatarSrc}
@@ -1029,14 +1099,14 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                     forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
                   />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
-                    <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
-                    <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+                    <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
+                    <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
                  </div>
             </div>
           )}
           {aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting && !isSpeaking && !isSendingMessage && (
             <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8">
-                <Power className="mr-2 h-5 w-5" /> End Chat
+                <Power className="mr-2 h-5 w-5" /> {uiText.endChat}
             </Button>
           )}
         </div>
@@ -1052,12 +1122,12 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
               <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}</h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
                 <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">
-                  Preparing greeting...
+                  {uiText.preparingGreeting}
                 </p>
               )}
               {showAiTypingIndicator && !isSpeaking && (
                  <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">
-                  AI Blair is typing...
+                  {uiText.isTyping}
                 </p>
               )}
             </CardContent>
@@ -1087,8 +1157,8 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           />
           {hasConversationEnded ? (
              <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
-                <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> Save as PDF </Button>
-                <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> Start New Chat </Button>
+                <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
+                <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
              </div>
           ) : aiHasInitiatedConversation && (
              <div className="mt-3 flex justify-end">
@@ -1098,7 +1168,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                   size="sm"
                   disabled={showPreparingGreeting || (isSendingMessage && aiHasInitiatedConversation) || isSpeaking }
                 >
-                  <Power className="mr-2 h-4 w-4" /> End Chat
+                  <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
                 </Button>
              </div>
           )}

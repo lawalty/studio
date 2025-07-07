@@ -1,7 +1,8 @@
 import type { Message, CommunicationMode } from '@/components/chat/ChatInterface';
 import { ScrollArea, ScrollBar, ScrollAreaPrimitive } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 
 interface ConversationLogProps {
   messages: Message[]; 
@@ -25,6 +26,12 @@ export default function ConversationLog({
   forceFinishAnimationForMessageId 
 }: ConversationLogProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const { translate } = useLanguage();
+  const [emptyMessage, setEmptyMessage] = useState('Start the conversation by typing or using the microphone.');
+
+  useEffect(() => {
+    translate('Start the conversation by typing or using the microphone.').then(setEmptyMessage);
+  }, [translate]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -64,7 +71,7 @@ export default function ConversationLog({
         ))}
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">Start the conversation by typing or using the microphone.</p>
+            <p className="text-muted-foreground">{emptyMessage}</p>
           </div>
         )}
       </ScrollAreaPrimitive.Viewport>
