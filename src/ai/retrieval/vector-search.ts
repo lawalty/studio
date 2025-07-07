@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
  *
@@ -7,7 +6,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
-import { v1, protos } from '@google-cloud/aiplatform';
+import { v1beta1, protos } from '@google-cloud/aiplatform';
 
 interface SearchResult {
   text: string;
@@ -32,7 +31,7 @@ const {
 } = process.env;
 
 // Helper function to process the neighbors returned from Vertex AI search
-async function processNeighbors(neighbors: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor[]): Promise<SearchResult[]> {
+async function processNeighbors(neighbors: protos.google.cloud.aiplatform.v1beta1.FindNeighborsResponse.INeighbor[]): Promise<SearchResult[]> {
   if (!neighbors || neighbors.length === 0) {
     return [];
   }
@@ -80,9 +79,9 @@ export async function searchKnowledgeBase({
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
 
-  // 3. Set up the Vertex AI client.
+  // 3. Set up the Vertex AI client using v1beta1.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const indexEndpointServiceClient = new v1.IndexEndpointServiceClient(clientOptions);
+  const indexEndpointServiceClient = new v1beta1.IndexEndpointServiceClient(clientOptions);
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
@@ -95,7 +94,7 @@ export async function searchKnowledgeBase({
         restricts.push({ namespace: 'topic', allow: [topic] });
       }
 
-      const request: protos.google.cloud.aiplatform.v1.IFindNeighborsRequest = {
+      const request: protos.google.cloud.aiplatform.v1beta1.IFindNeighborsRequest = {
         indexEndpoint: endpoint,
         deployedIndexId: VERTEX_AI_INDEX_ID,
         queries: [{
