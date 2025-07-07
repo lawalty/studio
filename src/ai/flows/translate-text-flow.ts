@@ -49,12 +49,16 @@ const translateTextFlow = ai.defineFlow(
       const rawError = e instanceof Error ? e.message : JSON.stringify(e);
       let detailedError: string;
       
-      if (rawError.includes("Could not refresh access token") || rawError.includes("500")) {
-          detailedError = `CRITICAL: Translation failed due to a Google Cloud configuration issue. Please check your API Key, ensure the Vertex AI API is enabled, and that billing is active for your project.`;
+      if (rawError.includes("Could not refresh access token")) {
+          detailedError = `Translation failed due to a local authentication error. The server running on your machine could not authenticate with Google Cloud services. Please run 'gcloud auth application-default login' in your terminal and restart the dev server. See README.md for details.`;
+      } else if (rawError.includes("API key not valid")) {
+          detailedError = "Translation failed: The provided Google AI API Key is invalid. Please verify it in your .env.local file or hosting provider's secret manager.";
       } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
-          detailedError = `Translation failed due to a permissions issue. Please check the service account's IAM roles.`;
+          detailedError = `Translation failed due to a permissions issue. Ensure the 'Vertex AI API' is enabled in your Google Cloud project and your account has the correct permissions.`;
+      } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
+          detailedError = `Translation failed because billing is not enabled for your Google Cloud project. Please enable it in the Google Cloud Console.`;
       } else {
-          detailedError = `Translation failed. This may be due to a temporary network issue or an API configuration problem. Please check your Google AI API key and try again.`;
+          detailedError = `Translation failed for an unexpected reason. This is often caused by a configuration issue. Full error: ${rawError}`;
       }
       
       throw new Error(detailedError);
