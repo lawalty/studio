@@ -2,9 +2,9 @@
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
- * It uses a tool-based, retrieval-augmented generation (RAG) approach. The AI can
- * decide when to search the knowledge base to answer a user's question. It supports
- * multi-language conversations by translating user queries for RAG and responding in the user's language.
+ * It uses a manually-orchestrated, retrieval-augmented generation (RAG) pipeline.
+ * The AI uses recent conversational history to form a search query, searches a prioritized
+ * knowledge base, and synthesizes an answer based *only* on the retrieved context.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
@@ -36,21 +36,6 @@ const GenerateChatResponseOutputSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
-// Define the knowledge base search tool at the top level.
-const knowledgeBaseSearchTool = ai.defineTool(
-  {
-    name: 'knowledgeBaseSearch',
-    description: 'Searches the knowledge base for information to answer user questions about specific topics.',
-    inputSchema: z.object({ query: z.string() }),
-    outputSchema: z.object({ results: z.array(z.any()) }), // Using z.any() for flexibility
-  },
-  async ({ query }) => {
-    // The underlying searchKnowledgeBase function now handles the High->Medium->Low priority search automatically.
-    const searchResults = await searchKnowledgeBase({ query, limit: 5 });
-    return { results: searchResults };
-  }
-);
-
 // Define the flow at the top level.
 const generateChatResponseFlow = ai.defineFlow(
   {
@@ -60,53 +45,77 @@ const generateChatResponseFlow = ai.defineFlow(
   },
   async ({ personaTraits, conversationalTopics, chatHistory, language }) => {
     
-    // For RAG to work against an English knowledge base, we must search using an English query.
-    // We will translate the user's message to English for the search,
-    // but instruct the AI to respond in the user's original language.
-    const historyForRAG = chatHistory ? JSON.parse(JSON.stringify(chatHistory)) : []; // Deep copy to avoid mutation
-    const lastMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1] : null;
+    const historyForRAG = chatHistory ? JSON.parse(JSON.stringify(chatHistory)) : [];
 
-    if (language && language !== 'English' && lastMessage && lastMessage.role === 'user') {
+    // 1. Create a contextual query from the last 4 messages (~2 turns).
+    const contextualQuery = historyForRAG
+      .slice(-4)
+      .map((msg: any) => `${msg.role}: ${msg.parts[0].text}`)
+      .join('\n');
+    
+    // 2. Translate the contextual query if needed for the search.
+    let searchQuery = contextualQuery;
+    if (language && language !== 'English' && searchQuery) {
       try {
-        const originalText = lastMessage.parts[0].text;
-        const { translatedText } = await translateText({ text: originalText, targetLanguage: 'English' });
-        // Modify the last message in our copied history to use the English translation for the RAG step.
-        lastMessage.parts[0].text = translatedText;
+        const { translatedText } = await translateText({ text: searchQuery, targetLanguage: 'English' });
+        searchQuery = translatedText;
       } catch (e) {
-        console.error("Failed to translate user message for RAG, proceeding with original text.", e);
-        // If translation fails, we still proceed, though RAG may be less effective.
+        console.error("Failed to translate user query for RAG, proceeding with original text.", e);
       }
     }
+
+    // 3. Search the knowledge base.
+    const searchResults = await searchKnowledgeBase({ query: searchQuery, limit: 5 });
     
+    // 4. Prepare context for the prompt.
+    const retrievedContext = searchResults
+      .map(r =>
+        `Context from document "${r.sourceName}" (Topic: ${r.topic}, Priority: ${r.level}):
+${r.text}
+${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL) ? `(Reference URL for this chunk's source PDF: ${r.downloadURL}) (File Name: ${r.sourceName})` : ''}`
+      )
+      .join('\n---\n');
+
+    // 5. Define the new system prompt based on RAG v2 requirements.
     const systemPrompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
       Your primary areas of expertise are: "${conversationalTopics}".
-      You are having a conversation with a user.
+      Your tone should be helpful and inquisitive.
 
-      **IMPORTANT INSTRUCTIONS:**
-      - **Respond in ${language}.** This is critical.
-      - You have a tool named "knowledgeBaseSearch" to find specific information.
-      - Use this tool ONLY when the user asks a direct question that requires looking up data or procedures.
-      - For general conversation, greetings, or questions outside your expertise, DO NOT use the tool. Just respond naturally.
-      - If you use the tool and find relevant information from a source, state the answer and mention the source document.
-      - **If the tool returns no relevant information, do not admit you couldn't find an answer.** Instead, ask a clarifying question to better understand what the user is looking for. For example, if they ask about 'return policy' and you find nothing, you could ask, 'Are you asking about returning a purchased item, or returning an item you've pawned?'
+      **CRITICAL INSTRUCTIONS:**
+      1.  **Respond in ${language}.** This is an absolute requirement.
+      2.  **Strictly base your answers on the provided context.** Do not use your general knowledge.
+      3.  **If the provided context is empty or irrelevant**, you MUST state that you cannot find the information and ask the user to rephrase their question. Do not invent an answer.
+      4.  Keep your answers **concise and directly related** to the user's question.
+      5.  When your answer is based on information from a PDF, you MUST offer a download link.
 
-      Your response must be a JSON object with three fields: "aiResponse" (a string), "shouldEndConversation" (a boolean), and an optional "pdfReference".
-      - **If and only if** your response is based on a PDF document from the knowledge base, you MUST populate the "pdfReference" object with the "fileName" and "downloadURL" provided in the tool's search result for that document. Otherwise, leave "pdfReference" undefined.
+      Your response must be a JSON object with three fields: "aiResponse" (string), "shouldEndConversation" (boolean), and an optional "pdfReference".
+      - **If and only if** your response is based on a PDF document from the knowledge base, you MUST populate the "pdfReference" object with the "fileName" and "downloadURL" from the retrieved context. Otherwise, leave "pdfReference" undefined.
     `;
+    
+    // 6. Construct the final prompt for the LLM.
+    const finalPrompt = `
+      Here is the recent conversation history:
+      ${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
 
+      ---
+      Here is the retrieved context from the knowledge base. Use this and only this to answer the user's most recent query.
+      <retrieved_context>
+      ${retrievedContext || 'No relevant information was found in the knowledge base.'}
+      </retrieved_context>
+      ---
+    `;
+    
     try {
       const response = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
         system: systemPrompt,
-        // The history sent to the LLM contains the (potentially translated) last user message.
-        prompt: historyForRAG,
-        tools: [knowledgeBaseSearchTool],
+        prompt: finalPrompt,
         output: {
           format: 'json',
           schema: GenerateChatResponseOutputSchema,
         },
         config: {
-          temperature: 0.3, 
+          temperature: 0.3,
         },
       });
 

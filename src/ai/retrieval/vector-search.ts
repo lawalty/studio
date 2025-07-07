@@ -2,7 +2,7 @@
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
  *
  * - searchKnowledgeBase - Finds relevant text chunks from a Vertex AI index. It searches 'High' priority documents first,
- *   then 'Medium', then 'Low', returning the first set of relevant results it finds.
+ *   then 'Medium', then 'Low', returning the first set of relevant results it finds that meet a confidence threshold.
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
@@ -14,6 +14,11 @@ import { protos } from '@google-cloud/aiplatform';
 // eslint-disable-next-line
 const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1beta1;
 
+// The maximum distance for a search result to be considered relevant.
+// Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
+// value indicates higher similarity. A distance of 0.3 is roughly equivalent to a
+// cosine similarity of 0.7, providing a good baseline for relevance.
+const MAX_DISTANCE_THRESHOLD = 0.3;
 
 interface SearchResult {
   text: string;
@@ -118,10 +123,18 @@ export async function searchKnowledgeBase({
       const neighbors = response.nearestNeighbors?.[0]?.neighbors;
 
       if (neighbors && neighbors.length > 0) {
-        const results = await processNeighbors(neighbors);
-        if (results.length > 0) {
-          // Found results, return them immediately.
-          return results;
+        // Filter the results by the distance threshold.
+        const relevantNeighbors = neighbors.filter(
+          (neighbor) => neighbor.distance && neighbor.distance < MAX_DISTANCE_THRESHOLD
+        );
+
+        if (relevantNeighbors.length > 0) {
+          const results = await processNeighbors(relevantNeighbors);
+          if (results.length > 0) {
+            // Found relevant results, return them immediately.
+            console.log(`[searchKnowledgeBase] Found ${results.length} relevant results in '${level}' priority KB.`);
+            return results;
+          }
         }
       }
     } catch (error: any) {
@@ -133,6 +146,7 @@ export async function searchKnowledgeBase({
     }
   }
 
-  // If the loop completes without returning, no results were found.
+  // If the loop completes without returning, no results met the threshold.
+  console.log('[searchKnowledgeBase] No relevant results found in any priority KB meeting the threshold.');
   return [];
 }
