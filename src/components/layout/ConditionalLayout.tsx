@@ -8,7 +8,7 @@ import Footer from '@/components/layout/Footer';
 
 export default function ConditionalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isImmersive = pathname.startsWith('/chat') || pathname === '/';
+  const isImmersive = pathname.startsWith('/chat') || pathname === '/' || pathname === '/updates-coming';
 
   if (isImmersive) {
     // For immersive pages, we provide a simple flex container that will grow to fill the parent body.
