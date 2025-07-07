@@ -24,30 +24,25 @@ export type ExtractTextFromDocumentUrlOutput = z.infer<typeof ExtractTextFromDoc
 
 
 export async function extractTextFromDocumentUrl(
-  { documentUrl, conversationalTopics }: ExtractTextFromDocumentUrlInput
+  { documentUrl }: ExtractTextFromDocumentUrlInput // conversationalTopics is no longer used in the prompt for robustness.
 ): Promise<ExtractTextFromDocumentUrlOutput> {
     try {
-      const prompt = `You are an expert text extraction and cleaning tool. Your primary task is to extract all human-readable textual content from the entire document provided, from the first page to the last.
-      ${conversationalTopics ? `
-      To improve the indexing for a conversational AI, use the following topics as a guide to identify the most relevant information and structure. Pay special attention to content related to these topics, but do not omit other relevant information.
-      Conversational Topics:
-      ${conversationalTopics}` : ''}
-      - Focus exclusively on textual content.
-      - **Crucially, ignore and do not attempt to transcribe any text that is part of an image, chart, or complex graphic.**
-      - Identify and extract the main body of text, including paragraphs, lists, and tables.
-      - Ignore page headers, footers, page numbers, and irrelevant metadata unless they are part of the main content.
-      - Preserve paragraph breaks and essential formatting.
-      - Correct common character encoding errors (e.g., replace sequences like 'â€™' with a standard apostrophe ').
-      - Remove all other non-readable characters, control characters, and gibberish.
-      - Do not add any commentary, preamble, explanation, or summary.
-      - Do not wrap the output in code blocks or JSON formatting.
-      - Your final output should only be the clean, extracted text, ready for processing.`;
+      // This new prompt is simpler and more direct to improve reliability.
+      const prompt = `Your task is to extract all human-readable text from the provided document, from the first page to the last.
+
+CRITICAL INSTRUCTIONS:
+1.  Focus exclusively on textual content. Ignore text that is part of an image or complex graphic.
+2.  Preserve paragraph breaks and essential formatting like lists.
+3.  Ignore page headers, footers, page numbers, and irrelevant metadata.
+4.  Do NOT add any commentary, preamble, explanation, or summary.
+5.  Do NOT wrap the output in code blocks or any other formatting.
+6.  Your final output must ONLY be the clean, extracted text from the document.`;
 
       const generationResult = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
         prompt: [{ text: prompt }, { media: { url: documentUrl } }],
         config: {
-          temperature: 0.0,
+          temperature: 0.1, // A small amount of temperature can help with reliability.
         },
       });
 
@@ -63,7 +58,7 @@ export async function extractTextFromDocumentUrl(
         // If we get here, the model did not return usable text.
         console.error('[extractTextFromDocumentUrl] AI did not return valid text. Response:', generationResult);
         const finishReason = generationResult?.finishReason || 'Unknown';
-        const errorMessage = `The AI model failed to extract text (Reason: ${finishReason}). This could be due to a malformed file, a content safety block, or an API timeout. Please try a smaller or simpler document.`;
+        const errorMessage = `Text extraction failed to produce content. This may be due to a malformed or empty file, a content safety block, or a temporary API issue. Please try a different document. (Reason: ${finishReason})`;
         return { error: errorMessage };
       }
       
