@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
@@ -21,8 +21,16 @@ export default function UpdatesComingPage() {
   const [message, setMessage] = useState<string>(DEFAULT_MESSAGE);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isPreviewMode = searchParams.get('preview') === 'true';
 
   useEffect(() => {
+    // If in preview mode, redirect immediately and stop processing this page.
+    if (isPreviewMode) {
+      router.replace('/');
+      return;
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a') {
         event.preventDefault();
@@ -32,12 +40,6 @@ export default function UpdatesComingPage() {
 
     document.addEventListener('keydown', handleKeyDown);
 
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [router]);
-
-  useEffect(() => {
     const fetchSettings = async () => {
       setIsLoading(true);
       try {
@@ -57,7 +59,11 @@ export default function UpdatesComingPage() {
     };
 
     fetchSettings();
-  }, []);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [router, isPreviewMode]);
   
   useEffect(() => {
     if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) {
@@ -66,6 +72,11 @@ export default function UpdatesComingPage() {
       setIsImageLoaded(true);
     }
   }, [splashImageSrc]);
+
+  // If we are in preview mode, render nothing to avoid a flash of content during redirect.
+  if (isPreviewMode) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col items-center justify-center flex-grow p-4">
