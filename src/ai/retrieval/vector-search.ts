@@ -6,7 +6,14 @@
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
-import { v1beta1, protos } from '@google-cloud/aiplatform';
+import { protos } from '@google-cloud/aiplatform';
+
+// Use 'require' for the client to ensure compatibility with the Next.js production build environment,
+// which can have issues with the module resolution of this specific gRPC-based library.
+// We still import `protos` separately to maintain strong type-safety for request/response objects.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1beta1;
+
 
 interface SearchResult {
   text: string;
@@ -79,9 +86,9 @@ export async function searchKnowledgeBase({
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
 
-  // 3. Set up the Vertex AI client using v1beta1.
+  // 3. Set up the Vertex AI client using the required client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const indexEndpointServiceClient = new v1beta1.IndexEndpointServiceClient(clientOptions);
+  const indexEndpointServiceClient = new IndexEndpointServiceClient(clientOptions);
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
