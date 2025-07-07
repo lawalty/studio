@@ -11,7 +11,7 @@ import { protos } from '@google-cloud/aiplatform';
 // Use 'require' for the client to ensure compatibility with the Next.js production build environment,
 // which can have issues with the module resolution of this specific gRPC-based library.
 // We still import `protos` separately to maintain strong type-safety for request/response objects.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line
 const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1beta1;
 
 
