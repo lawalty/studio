@@ -1,14 +1,14 @@
 
 import { genkit, type GenkitPlugin } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
-import { firebase as firebaseAuth } from '@genkit-ai/firebase';
+import * as genkitFirebase from '@genkit-ai/firebase';
 
 const plugins: GenkitPlugin[] = [googleAI()];
 
 // The firebase() plugin is required for authentication in the App Hosting
 // production environment. It is not needed for local development.
 if (process.env.NODE_ENV === 'production') {
-  plugins.push(firebaseAuth());
+  plugins.push(genkitFirebase.firebase());
 }
 
 // This is the main exported object for Genkit.

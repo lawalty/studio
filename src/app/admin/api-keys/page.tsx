@@ -9,13 +9,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, MessageSquare, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2 } from 'lucide-react';
+import { Save, Speech, MessageSquare, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
+import { Checkbox } from '@/components/ui/checkbox';
+import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
+
 
 interface ApiKeys {
   tts: string;
@@ -288,7 +291,7 @@ export default function ApiKeysPage() {
                         Server Authentication Test
                     </CardTitle>
                     <CardDescription className="text-xs">
-                        Tests if the server can write to Firestore using local credentials (from 'gcloud auth'). This confirms the fix for the RAG pipeline error.
+                        Tests if the server can write to Firestore using local credentials (from &apos;gcloud auth&apos;). This confirms the fix for the RAG pipeline error.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
