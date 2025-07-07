@@ -276,7 +276,7 @@ export default function StartPageContent() {
         />
       )}
       {renderContent()}
-      <p className="mt-4 rounded-md bg-card/60 p-2 text-center text-xs text-destructive-foreground shadow-lg backdrop-blur-sm">
+      <p className="mt-4 rounded-md bg-white/80 p-2 text-center text-xs text-foreground shadow-lg backdrop-blur-sm dark:bg-black/60 dark:text-white">
         Press Ctrl + Shift + A to access the admin panel.
       </p>
     </div>
