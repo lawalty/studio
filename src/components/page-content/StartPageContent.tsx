@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Mic, Bot, MessageSquareText } from 'lucide-react';
@@ -40,7 +40,6 @@ export default function StartPageContent() {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { language, translate } = useLanguage();
 
   const [uiText, setUiText] = useState({
@@ -174,11 +173,15 @@ export default function StartPageContent() {
 
   // Maintenance mode redirect effect
   useEffect(() => {
-    const isPreview = searchParams.get('preview') === 'true';
+    // We get the search params from the component that wraps this one in a suspense boundary
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPreview = urlParams.get('preview') === 'true';
+
     if (isMaintenanceMode === true && !isPreview) {
       router.replace('/updates-coming');
     }
-  }, [isMaintenanceMode, router, searchParams]);
+  }, [isMaintenanceMode, router]);
+
 
   const renderContent = () => {
     if (isLoading || isMaintenanceMode === null) {
@@ -274,7 +277,7 @@ export default function StartPageContent() {
         />
       )}
       {renderContent()}
-      <p className="mt-4 text-center text-xs text-muted-foreground bg-black/20 p-1 rounded">
+      <p className="mt-4 rounded-md bg-card/60 p-2 text-center text-xs text-muted-foreground shadow-lg backdrop-blur-sm">
         Press Ctrl + Shift + A to access the admin panel.
       </p>
     </div>
