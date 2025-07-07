@@ -27,7 +27,7 @@ export async function extractTextFromDocumentUrl(
   { documentUrl, conversationalTopics }: ExtractTextFromDocumentUrlInput
 ): Promise<ExtractTextFromDocumentUrlOutput> {
     try {
-      const prompt = `You are an expert text extraction and cleaning tool. Your task is to extract all human-readable textual content from the document provided.
+      const prompt = `You are an expert text extraction and cleaning tool. Your primary task is to extract all human-readable textual content from the entire document provided, from the first page to the last.
       ${conversationalTopics ? `
       To improve the indexing for a conversational AI, use the following topics as a guide to identify the most relevant information and structure. Pay special attention to content related to these topics, but do not omit other relevant information.
       Conversational Topics:
