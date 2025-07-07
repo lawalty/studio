@@ -1,34 +1,33 @@
 
 'use server';
 /**
- * @fileOverview Extracts clean, readable text from any document URL using Genkit and Vertex AI.
+ * @fileOverview Extracts clean, readable text from a document's raw data using Genkit and Vertex AI.
+ * This flow accepts a data URI directly, making it more robust than relying on public URLs.
  *
- * - extractTextFromDocumentUrl - A function that extracts text from a document given its URL.
- * - ExtractTextFromDocumentUrlInput - The input type.
- * - ExtractTextFromDocumentUrlOutput - The return type.
+ * - extractTextFromDocument - A function that extracts text from a document given its data URI.
+ * - ExtractTextFromDocumentInput - The input type.
+ * - ExtractTextFromDocumentOutput - The return type.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
-const ExtractTextFromDocumentUrlInputSchema = z.object({
-  documentUrl: z.string().url().describe('The public URL of the document file to process.'),
-  conversationalTopics: z.string().optional().describe('A list of topics the AI should consider its area of expertise to guide extraction.'),
+const ExtractTextFromDocumentInputSchema = z.object({
+  documentDataUri: z.string().describe("A document file encoded as a data URI, which must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
 });
-export type ExtractTextFromDocumentUrlInput = z.infer<typeof ExtractTextFromDocumentUrlInputSchema>;
+export type ExtractTextFromDocumentInput = z.infer<typeof ExtractTextFromDocumentInputSchema>;
 
-const ExtractTextFromDocumentUrlOutputSchema = z.object({
+const ExtractTextFromDocumentOutputSchema = z.object({
   extractedText: z.string().optional().describe('The clean, extracted text content from the document.'),
   error: z.string().optional().describe('An error message if the operation failed.'),
 });
-export type ExtractTextFromDocumentUrlOutput = z.infer<typeof ExtractTextFromDocumentUrlOutputSchema>;
+export type ExtractTextFromDocumentOutput = z.infer<typeof ExtractTextFromDocumentOutputSchema>;
 
 
-export async function extractTextFromDocumentUrl(
-  { documentUrl }: ExtractTextFromDocumentUrlInput // conversationalTopics is no longer used in the prompt for robustness.
-): Promise<ExtractTextFromDocumentUrlOutput> {
+export async function extractTextFromDocument(
+  { documentDataUri }: ExtractTextFromDocumentInput
+): Promise<ExtractTextFromDocumentOutput> {
     try {
-      // This new prompt is simpler and more direct to improve reliability.
-      const prompt = `Your task is to extract all human-readable text from the provided document, from the first page to the last.
+      const prompt = `Your task is to extract all human-readable text from the provided document.
 
 CRITICAL INSTRUCTIONS:
 1.  Focus exclusively on textual content. Ignore text that is part of an image or complex graphic.
@@ -40,30 +39,26 @@ CRITICAL INSTRUCTIONS:
 
       const generationResult = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
-        prompt: [{ text: prompt }, { media: { url: documentUrl } }],
+        prompt: [{ text: prompt }, { media: { url: documentDataUri } }],
         config: {
-          temperature: 0.1, // A small amount of temperature can help with reliability.
+          temperature: 0.1,
         },
       });
 
       const text = generationResult?.text;
 
-      // A successful response *must* have a non-empty string as text.
       if (text && typeof text === 'string' && text.trim().length > 0) {
-        // Clean up markdown code blocks if the model accidentally adds them.
         let cleanedText = text.replace(/```[a-z]*/g, '').replace(/```/g, '');
         cleanedText = cleanedText.trim();
         return { extractedText: cleanedText };
       } else {
-        // If we get here, the model did not return usable text.
-        console.error('[extractTextFromDocumentUrl] AI did not return valid text. Response:', generationResult);
         const finishReason = generationResult?.finishReason || 'Unknown';
-        const errorMessage = `Text extraction failed to produce content. This may be due to a malformed or empty file, a content safety block, or a temporary API issue. Please try a different document. (Reason: ${finishReason})`;
+        const errorMessage = `Text extraction failed to produce content. This may be due to a malformed or empty file, a content safety block (Reason: ${finishReason}), or a temporary API issue. Please try a different document.`;
         return { error: errorMessage };
       }
       
     } catch (e: any) {
-      console.error('[extractTextFromDocumentUrl] A critical error occurred during the AI call:', e);
+      console.error('[extractTextFromDocument] A critical error occurred during the AI call:', e);
       const rawError = e instanceof Error ? e.message : JSON.stringify(e);
       let detailedError: string;
 
