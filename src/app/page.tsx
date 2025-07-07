@@ -16,6 +16,7 @@ import LanguageSelector from '@/components/layout/LanguageSelector';
 import { useLanguage } from '@/context/LanguageContext';
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const DEFAULT_BACKGROUND_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_TYPING_SPEED_MS = 50;
@@ -31,6 +32,7 @@ const TEXT_ELEMENTS_EN = {
 export default function StartPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
+  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [welcomeMessage, setWelcomeMessage] = useState<string>(DEFAULT_WELCOME_MESSAGE);
   const [typingSpeedMs, setTypingSpeedMs] = useState(DEFAULT_TYPING_SPEED_MS);
   const [typedMessage, setTypedMessage] = useState('');
@@ -72,6 +74,7 @@ export default function StartPage() {
         } else {
           setWelcomeMessage(data.splashWelcomeMessage || DEFAULT_WELCOME_MESSAGE);
           setSplashImageSrc(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
+          setBackgroundUrl(data.backgroundUrl || null);
           setTypingSpeedMs(data.typingSpeedMs === undefined ? DEFAULT_TYPING_SPEED_MS : data.typingSpeedMs);
           setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
           setIsMaintenanceMode(false);
@@ -79,6 +82,7 @@ export default function StartPage() {
       } else {
         setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
         setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+        setBackgroundUrl(null);
         setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
         setShowLanguageSelector(true);
         setIsMaintenanceMode(false);
@@ -89,6 +93,7 @@ export default function StartPage() {
       setIsLoading(false);
       setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
       setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+      setBackgroundUrl(null);
       setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
       setShowLanguageSelector(true);
       setIsMaintenanceMode(false);
@@ -178,7 +183,7 @@ export default function StartPage() {
   const renderContent = () => {
     if (isLoading || isMaintenanceMode === null) {
       return (
-        <Card className="w-full max-w-2xl p-6 text-center shadow-2xl border">
+        <Card className="w-full max-w-2xl p-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
           <CardHeader>
             <Skeleton className="h-8 w-3/4 mx-auto" />
             <Skeleton className="h-6 w-1/2 mx-auto mt-2" />
@@ -197,7 +202,7 @@ export default function StartPage() {
     }
 
     return (
-      <Card className="w-full max-w-2xl p-6 space-y-6 text-center shadow-2xl border">
+      <Card className="w-full max-w-2xl p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
         <CardHeader className="p-0">
           <CardTitle className="text-4xl font-headline text-primary">
             {uiText.welcome}
@@ -257,11 +262,23 @@ export default function StartPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center flex-grow p-4">
+    <div className="relative flex flex-col items-center justify-center flex-grow p-4">
+       {backgroundUrl && backgroundUrl !== DEFAULT_BACKGROUND_IMAGE_SRC && (
+        <Image
+          src={backgroundUrl}
+          alt="Background"
+          fill
+          className="object-cover z-[-1] filter blur-sm brightness-75"
+          priority
+          data-ai-hint="office building exterior"
+        />
+      )}
       {renderContent()}
-      <p className="mt-4 text-center text-xs text-muted-foreground">
+      <p className="mt-4 text-center text-xs text-muted-foreground bg-black/20 p-1 rounded">
         Press Ctrl + Shift + A to access the admin panel.
       </p>
     </div>
   );
 }
+
+    

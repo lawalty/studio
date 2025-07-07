@@ -12,12 +12,14 @@ import { Cog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const DEFAULT_BACKGROUND_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_MESSAGE = "Exciting updates are on the way! We'll be back online shortly.";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 export default function UpdatesComingPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [splashImageSrc, setSplashImageSrc] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
+  const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<string>(DEFAULT_MESSAGE);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const router = useRouter();
@@ -48,6 +50,7 @@ export default function UpdatesComingPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setSplashImageSrc(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
+          setBackgroundUrl(data.backgroundUrl || null);
           setMessage(data.maintenanceModeMessage || DEFAULT_MESSAGE);
         }
       } catch (e) {
@@ -79,8 +82,18 @@ export default function UpdatesComingPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center flex-grow p-4">
-      <Card className="w-full max-w-lg p-6 space-y-6 text-center shadow-2xl border">
+    <div className="relative flex flex-col items-center justify-center flex-grow p-4">
+      {backgroundUrl && backgroundUrl !== DEFAULT_BACKGROUND_IMAGE_SRC && (
+        <Image
+          src={backgroundUrl}
+          alt="Background"
+          fill
+          className="object-cover z-[-1] filter blur-sm brightness-75"
+          priority
+          data-ai-hint="office building exterior"
+        />
+      )}
+      <Card className="w-full max-w-lg p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
         <CardHeader className="p-0">
           <div className="flex justify-center items-center gap-3">
              <Cog className="h-8 w-8 text-primary animate-spin-slow" />
@@ -131,9 +144,11 @@ export default function UpdatesComingPage() {
           )}
         </CardContent>
       </Card>
-      <p className="invisible mt-4 text-center text-xs text-muted-foreground">
+      <p className="mt-4 text-center text-xs text-muted-foreground bg-black/20 p-1 rounded">
         Press Ctrl + Shift + A to access the admin panel.
       </p>
     </div>
   );
 }
+
+    
