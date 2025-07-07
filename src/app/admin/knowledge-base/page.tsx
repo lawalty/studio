@@ -134,11 +134,11 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
 
-    const placeholderDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
+    const sourceDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
     let storageRef = null;
 
     try {
-        await setDoc(placeholderDocRef, {
+        await setDoc(sourceDocRef, {
             id: sourceId,
             sourceName: fileToUpload.name,
             description,
@@ -154,7 +154,7 @@ export default function KnowledgeBasePage() {
         const uploadResult = await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(uploadResult.ref);
         
-        await updateDoc(placeholderDocRef, { downloadURL });
+        await updateDoc(sourceDocRef, { downloadURL });
 
         toast({ title: "Extracting Text", description: "AI is now reading the document...", variant: "default" });
 
@@ -188,16 +188,12 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to process ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        try {
-            await deleteDoc(placeholderDocRef);
-             if (storageRef) {
-                await deleteObject(storageRef).catch(delErr => console.warn("Failed to clean up storage file on error", delErr));
-            }
-            toast({ description: "The failed source has been automatically removed.", variant: "default" });
-        } catch (cleanupError) {
-             console.error(`[handleUpload] CRITICAL: Failed to delete placeholder Firestore doc for failed source ${sourceId}`, cleanupError);
-             toast({ title: "Cleanup Failed", description: "Could not fully remove the failed item.", variant: "destructive" });
-        }
+        // Don't auto-delete, instead mark as failed to allow re-processing.
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'failed',
+            indexingError: errorMessage,
+        }).catch(updateError => console.error(`[handleUpload] Failed to update doc as 'failed':`, updateError));
+
         return { success: false, error: errorMessage };
     } finally {
         setOperationStatus(sourceId, false);

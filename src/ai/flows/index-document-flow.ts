@@ -65,23 +65,18 @@ export async function indexDocument({
       try {
         const cleanText = text.trim();
         if (!cleanText) {
-            const errorMessage = "No readable text content found. The source has been automatically removed.";
+            // Do not auto-delete. Just mark as failed.
+            const errorMessage = "No readable text content found after extraction. The file may be empty or incompatible. Please try re-processing or use a different file.";
             console.warn(`[indexDocument] ${errorMessage} Document: '${sourceName}'.`);
-
-            // Delete from Storage first
-            if (downloadURL) {
-                const filePath = `knowledge_base_files/${level}/${sourceId}-${sourceName}`;
-                try {
-                    await admin.storage().bucket().file(filePath).delete();
-                } catch (e: any) {
-                    if (e.code !== 'storage/object-not-found') {
-                        console.error(`[indexDocument] Failed to auto-delete storage file '${filePath}':`, e);
-                    }
-                }
-            }
-            // Then delete the metadata from Firestore
-            await sourceDocRef.delete();
-
+            await sourceDocRef.set({
+              indexingStatus: 'failed',
+              indexingError: errorMessage,
+              sourceName,
+              level,
+              topic,
+              downloadURL: downloadURL || null,
+              createdAt: new Date().toISOString(),
+          }, { merge: true });
             return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
