@@ -1,8 +1,8 @@
 
-import { genkit, type Plugin } from 'genkit';
+import { genkit } from 'genkit';
 import { googleAI } from '@genkit-ai/googleai';
 
-const plugins: Plugin<[]>[] = [googleAI()];
+const plugins = [googleAI()];
 
 // This is the main exported object for Genkit.
 // It is configured to use the Google AI plugin, which automatically
