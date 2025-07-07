@@ -144,11 +144,6 @@ export default function UpdatesComingPage() {
           )}
         </CardContent>
       </Card>
-      <p className="mt-4 text-center text-xs text-muted-foreground bg-black/20 p-1 rounded">
-        Press Ctrl + Shift + A to access the admin panel.
-      </p>
     </div>
   );
 }
-
-    
