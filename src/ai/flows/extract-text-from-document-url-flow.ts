@@ -28,7 +28,6 @@ export async function extractTextFromDocumentUrl(
 ): Promise<ExtractTextFromDocumentUrlOutput> {
     try {
       const prompt = `You are an expert text extraction and cleaning tool. Your task is to extract all human-readable textual content from the document provided.
-      **IMPORTANT: For PDF documents, you must only process the first 15 pages.**
       ${conversationalTopics ? `
       To improve the indexing for a conversational AI, use the following topics as a guide to identify the most relevant information and structure. Pay special attention to content related to these topics, but do not omit other relevant information.
       Conversational Topics:
