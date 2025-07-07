@@ -1,10 +1,9 @@
 
 'use server';
 /**
- * @fileOverview Extracts clean, readable text from a document's raw data using Genkit and Vertex AI.
- * This flow accepts a data URI directly, making it more robust than relying on public URLs.
+ * @fileOverview Extracts clean, readable text from a document's public URL using Genkit and Vertex AI.
  *
- * - extractTextFromDocument - A function that extracts text from a document given its data URI.
+ * - extractTextFromDocument - A function that extracts text from a document given its public URL.
  * - ExtractTextFromDocumentInput - The input type.
  * - ExtractTextFromDocumentOutput - The return type.
  */
@@ -12,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
 const ExtractTextFromDocumentInputSchema = z.object({
-  documentDataUri: z.string().describe("A document file encoded as a data URI, which must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
+  documentUrl: z.string().url().describe("The public URL of the document to process."),
 });
 export type ExtractTextFromDocumentInput = z.infer<typeof ExtractTextFromDocumentInputSchema>;
 
@@ -22,9 +21,8 @@ const ExtractTextFromDocumentOutputSchema = z.object({
 });
 export type ExtractTextFromDocumentOutput = z.infer<typeof ExtractTextFromDocumentOutputSchema>;
 
-
 export async function extractTextFromDocument(
-  { documentDataUri }: ExtractTextFromDocumentInput
+  { documentUrl }: ExtractTextFromDocumentInput
 ): Promise<ExtractTextFromDocumentOutput> {
     try {
       const prompt = `Your task is to extract all human-readable text from the provided document.
@@ -39,7 +37,7 @@ CRITICAL INSTRUCTIONS:
 
       const generationResult = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
-        prompt: [{ text: prompt }, { media: { url: documentDataUri } }],
+        prompt: [{ text: prompt }, { media: { url: documentUrl } }],
         config: {
           temperature: 0.1,
         },
@@ -62,7 +60,9 @@ CRITICAL INSTRUCTIONS:
       const rawError = e instanceof Error ? e.message : JSON.stringify(e);
       let detailedError: string;
 
-      if (rawError.includes("API key not valid")) {
+      if (rawError.includes("503") || rawError.includes("Service Unavailable")) {
+          detailedError = `Text extraction failed due to a temporary issue with the Google AI service (503 Service Unavailable). The service may be overloaded. Please wait a few moments and try uploading the file again.`;
+      } else if (rawError.includes("API key not valid")) {
           detailedError = "Text extraction failed: The provided Google AI API Key is invalid. Please verify it in your .env.local file or hosting provider's secret manager.";
       } else if (rawError.includes("API key is missing")) {
           detailedError = "Text extraction failed: The GOOGLE_AI_API_KEY environment variable is not set. Please add it to your .env.local file or hosting provider's secret manager.";

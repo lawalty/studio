@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { toast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
-import { extractTextFromDocument, type ExtractTextFromDocumentInput } from '@/ai/flows/extract-text-from-document-url-flow';
+import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -48,16 +48,6 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Low': { collectionName: 'kb_low_meta_v1', title: 'Low Priority', description: 'Manage low priority sources.' },
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived', description: 'Archived sources are not used by the AI.' },
 };
-
-// Helper to read a file as a data URI
-function fileToDataUri(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = error => reject(error);
-        reader.readAsDataURL(file);
-    });
-}
 
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Archive': [] });
@@ -157,23 +147,25 @@ export default function KnowledgeBasePage() {
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
         });
-        toast({ title: `Processing: ${fileToUpload.name}`, description: "Extracting text..." });
-
-        const documentDataUri = await fileToDataUri(fileToUpload);
-        const extractionInput: ExtractTextFromDocumentInput = { documentDataUri };
-        const extractionResult = await extractTextFromDocument(extractionInput);
+        toast({ title: `Uploading: ${fileToUpload.name}`, description: "Uploading file to storage..." });
         
-        if (!extractionResult || extractionResult.error || !extractionResult.extractedText) {
-            throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
-        }
-
-        toast({ title: "Text Ready", description: "Uploading file and indexing...", variant: "default" });
-
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         storageRef = ref(storage, storagePath);
         const uploadResult = await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(uploadResult.ref);
         
+        await updateDoc(placeholderDocRef, { downloadURL });
+
+        toast({ title: "Extracting Text", description: "AI is now reading the document...", variant: "default" });
+
+        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+        
+        if (!extractionResult || extractionResult.error || !extractionResult.extractedText) {
+            throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
+        }
+
+        toast({ title: "Text Ready", description: "Indexing content chunks...", variant: "default" });
+
         const indexingInput: IndexDocumentInput = {
             sourceId,
             sourceName: fileToUpload.name,
@@ -197,8 +189,10 @@ export default function KnowledgeBasePage() {
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
         try {
-            // Because the file is only uploaded after success, we only need to clean up Firestore on failure.
             await deleteDoc(placeholderDocRef);
+             if (storageRef) {
+                await deleteObject(storageRef).catch(delErr => console.warn("Failed to clean up storage file on error", delErr));
+            }
             toast({ description: "The failed source has been automatically removed.", variant: "default" });
         } catch (cleanupError) {
              console.error(`[handleUpload] CRITICAL: Failed to delete placeholder Firestore doc for failed source ${sourceId}`, cleanupError);
@@ -303,10 +297,6 @@ export default function KnowledgeBasePage() {
       try {
           if (!source.downloadURL) throw new Error("Source has no download URL, cannot re-process.");
           
-          const fileRef = ref(storage, source.downloadURL);
-          const fileBlob = await getDownloadURL(fileRef).then(url => fetch(url)).then(res => res.blob());
-          const originalFile = new File([fileBlob], source.sourceName, { type: fileBlob.type });
-
           await updateDoc(sourceDocRef, {
               indexingStatus: 'processing',
               indexingError: '',
@@ -325,9 +315,8 @@ export default function KnowledgeBasePage() {
           }
           
           toast({ description: "Re-extracting text..." });
-          const documentDataUri = await fileToDataUri(originalFile);
-          const extractionInput: ExtractTextFromDocumentInput = { documentDataUri };
-          const extractionResult = await extractTextFromDocument(extractionInput);
+          
+          const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
           
           if (!extractionResult || extractionResult.error || !extractionResult.extractedText) {
               throw new Error(extractionResult?.error || 'Text re-extraction failed to produce content.');
