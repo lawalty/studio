@@ -82,7 +82,7 @@ export async function searchKnowledgeBase({
 
   // 3. Set up the Vertex AI client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const predictionServiceClient = new v1.PredictionServiceClient(clientOptions);
+  const indexEndpointServiceClient = new v1.IndexEndpointServiceClient(clientOptions);
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
@@ -108,7 +108,7 @@ export async function searchKnowledgeBase({
         }],
       };
       
-      const [response] = await predictionServiceClient.findNeighbors(request);
+      const [response] = await indexEndpointServiceClient.findNeighbors(request);
       const neighbors = response.nearestNeighbors?.[0]?.neighbors;
 
       if (neighbors && neighbors.length > 0) {
