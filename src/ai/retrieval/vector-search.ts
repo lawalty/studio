@@ -125,7 +125,7 @@ export async function searchKnowledgeBase({
       if (neighbors && neighbors.length > 0) {
         // Filter the results by the distance threshold.
         const relevantNeighbors = neighbors.filter(
-          (neighbor) => neighbor.distance && neighbor.distance < MAX_DISTANCE_THRESHOLD
+          (neighbor: protos.google.cloud.aiplatform.v1beta1.FindNeighborsResponse.INeighbor) => neighbor.distance && neighbor.distance < MAX_DISTANCE_THRESHOLD
         );
 
         if (relevantNeighbors.length > 0) {
