@@ -79,6 +79,11 @@ For the Retrieval-Augmented Generation (RAG) knowledge base to function, you nee
 
     # The numeric ID of the public endpoint for your index.
     VERTEX_AI_INDEX_ENDPOINT_ID=your-index-endpoint-id
+
+    # The ID of your index deployment on the public endpoint.
+    # This is often a string like 'deployed-my-index-v1'. You can find this on the
+    # Index Endpoints page in the "Deployed indexes" column.
+    VERTEX_AI_DEPLOYED_INDEX_ID=your-deployed-index-id
     ```
 
 ### 6. Restart the App

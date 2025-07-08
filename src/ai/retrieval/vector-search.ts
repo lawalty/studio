@@ -32,7 +32,7 @@ interface SearchParams {
 
 const {
   GCLOUD_PROJECT,
-  VERTEX_AI_INDEX_ID,
+  VERTEX_AI_DEPLOYED_INDEX_ID,
   VERTEX_AI_INDEX_ENDPOINT_ID,
   LOCATION,
 } = process.env;
@@ -78,9 +78,9 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Validate environment configuration.
-  if (!GCLOUD_PROJECT || !VERTEX_AI_INDEX_ID || !VERTEX_AI_INDEX_ENDPOINT_ID || !LOCATION) {
+  if (!GCLOUD_PROJECT || !VERTEX_AI_DEPLOYED_INDEX_ID || !VERTEX_AI_INDEX_ENDPOINT_ID || !LOCATION) {
     throw new Error(
-      "Missing required environment variables for Vertex AI Search. Please set GCLOUD_PROJECT, VERTEX_AI_INDEX_ID, VERTEX_AI_INDEX_ENDPOINT_ID, and LOCATION."
+      "Missing required environment variables for Vertex AI Search. Please set GCLOUD_PROJECT, VERTEX_AI_DEPLOYED_INDEX_ID, VERTEX_AI_INDEX_ENDPOINT_ID, and LOCATION."
     );
   }
 
@@ -114,7 +114,7 @@ export async function searchKnowledgeBase({
       const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
 
       const requestBody = {
-        deployedIndexId: VERTEX_AI_INDEX_ID,
+        deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID,
         queries: [{
           datapoint: {
             datapointId: 'query',
@@ -136,15 +136,6 @@ export async function searchKnowledgeBase({
 
       if (!response.ok) {
         const errorBody = await response.json();
-        if (response.status === 501) {
-            throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured to serve requests.
-            
-Action Required:
-1. Go to the Vertex AI -> Vector Search -> Index Endpoints section in your Google Cloud Console.
-2. Verify that the endpoint with ID '${VERTEX_AI_INDEX_ENDPOINT_ID}' exists and has a green checkmark indicating it is active.
-3. Ensure your index is correctly deployed to this endpoint.
-4. Confirm that the endpoint is a Public Endpoint, as private endpoints require different configurations.`);
-        }
         throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
       }
         
@@ -176,7 +167,7 @@ Action Required:
        throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
     }
     if (combinedErrors.includes('not found') || combinedErrors.includes('404')) {
-       throw new Error(`Vertex AI Search failed because an endpoint or index was not found. Please verify your VERTEX_AI_INDEX_ID and VERTEX_AI_INDEX_ENDPOINT_ID environment variables.`);
+       throw new Error(`Vertex AI Search failed because an endpoint or index was not found. Please verify your VERTEX_AI_INDEX_ENDPOINT_ID and VERTEX_AI_DEPLOYED_INDEX_ID environment variables.`);
     }
     throw new Error(`Knowledge base search failed. Errors encountered: ${combinedErrors}`);
   }
