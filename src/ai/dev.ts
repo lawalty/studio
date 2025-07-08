@@ -1,3 +1,4 @@
+
 import {start} from 'genkit';
 
 // Note: This is a dev-only file, used for running the Genkit Inspector.
@@ -14,5 +15,6 @@ import './flows/test-text-generation-flow';
 import './flows/test-firestore-write-flow';
 import './flows/text-to-speech-flow';
 import './flows/translate-text-flow';
+import './flows/delete-source-flow';
 
 start();

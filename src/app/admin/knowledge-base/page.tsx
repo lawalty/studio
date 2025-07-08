@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import { toast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
+import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -219,29 +220,16 @@ export default function KnowledgeBasePage() {
     setOperationStatus(source.id, true);
     toast({ title: `Deleting ${source.sourceName}...` });
     try {
-      const batch = writeBatch(db);
-      const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
-      const chunksSnapshot = await getDocs(chunksQuery);
-      chunksSnapshot.forEach(doc => {
-        batch.delete(doc.ref);
+      const result = await deleteSource({
+        id: source.id,
+        level: source.level,
+        sourceName: source.sourceName,
       });
-      await batch.commit();
 
-      if (source.downloadURL) {
-        try {
-          const storagePath = `knowledge_base_files/${source.level}/${source.id}-${source.sourceName}`;
-          const fileRef = ref(storage, storagePath);
-          await deleteObject(fileRef);
-        } catch (storageError: any) {
-          if (storageError.code === 'storage/object-not-found') {
-            console.warn(`File not found in Storage at path for source ${source.id}, but proceeding with Firestore deletion.`);
-          } else {
-            throw storageError;
-          }
-        }
+      if (!result.success) {
+        throw new Error(result.error || 'The deletion flow failed on the server.');
       }
 
-      await deleteDoc(doc(db, LEVEL_CONFIG[source.level].collectionName, source.id));
       toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
     } catch (error: any) {
       console.error("Error deleting source:", error);
