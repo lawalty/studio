@@ -52,7 +52,7 @@ async function processNeighbors(neighbors: RestApiNeighbor[]): Promise<SearchRes
   }
 
   const neighborDocs = await Promise.all(
-    neighbors.map(async (neighbor) => {
+    neighbors.map(async (neighbor: RestApiNeighbor) => {
       if (!neighbor.datapoint?.datapointId) return null;
 
       const docRef = db.collection('kb_chunks').doc(neighbor.datapoint.datapointId);
@@ -80,7 +80,7 @@ export async function searchKnowledgeBase({
   // 1. Validate environment configuration.
   if (!GCLOUD_PROJECT || !VERTEX_AI_DEPLOYED_INDEX_ID || !VERTEX_AI_INDEX_ENDPOINT_ID || !LOCATION) {
     throw new Error(
-      "Missing required environment variables for Vertex AI Search. Please set GCLOUD_PROJECT, VERTEX_AI_DEPLOYED_INDEX_ID, VERTEX_AI_INDEX_ENDPOINT_ID, and LOCATION."
+      "Missing required environment variables for Vertex AI Search. Please set GCLOUD_PROJECT, VERTEX_AI_DEPLOYED_INDEX_ID, VERTEX_AI_INDEX_ENDPOINT_ID, and LOCATION in your .env.local file."
     );
   }
 
@@ -100,78 +100,84 @@ export async function searchKnowledgeBase({
   });
   const authToken = await auth.getAccessToken();
 
-  // 4. Perform sequential search through priority levels using the REST API.
-  const searchLevels: string[] = ['High', 'Medium', 'Low'];
-  const searchErrors: string[] = [];
+  // 4. Perform a single, unfiltered search across the entire index as a debugging step.
+  try {
+    const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
 
-  for (const level of searchLevels) {
-    try {
-      const restricts = [{ namespace: 'level', allowList: [level] }];
-      if (topic) {
-        restricts.push({ namespace: 'topic', allowList: [topic] });
-      }
-      
-      const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
-
-      const requestBody = {
-        deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID,
-        queries: [{
-          datapoint: {
-            datapointId: 'query',
-            featureVector: queryEmbedding,
-            restricts: restricts,
-          },
-          neighborCount: limit,
-        }],
-      };
-      
-      const response = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
+    // As a debugging step, we are temporarily removing the `restricts` parameter 
+    // to make the simplest possible call to the endpoint.
+    const requestBody: {
+        deployedIndexId: string;
+        queries: {
+            datapoint: {
+                datapointId: string;
+                featureVector: number[];
+                restricts?: any[];
+            },
+            neighborCount: number;
+        }[];
+    } = {
+      deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID,
+      queries: [{
+        datapoint: {
+          datapointId: 'query',
+          featureVector: queryEmbedding,
         },
-        body: JSON.stringify(requestBody),
-      });
+        neighborCount: limit,
+      }],
+    };
+    
+    // Add topic restriction if provided. This is a common use case that we can keep.
+    if (topic) {
+        requestBody.queries[0].datapoint.restricts = [{ namespace: 'topic', allowList: [topic] }];
+    }
+      
+    const response = await fetch(endpointUrl, {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
 
-      if (!response.ok) {
+    if (!response.ok) {
         const errorBody = await response.json();
+        // Check for 501 error specifically to provide better user feedback.
+        if (response.status === 501) {
+            const endpointId = process.env.VERTEX_AI_INDEX_ENDPOINT_ID;
+            throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured to serve requests. Action Required: 1. Go to the Vertex AI -> Vector Search -> Index Endpoints section in your Google Cloud Console. 2. Verify that the endpoint with ID '${endpointId}' exists and has a green checkmark indicating it is active. 3. Ensure your index is correctly deployed to this endpoint. 4. Confirm that the endpoint is a Public Endpoint, as private endpoints require different configurations.`);
+        }
         throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
-      }
+    }
         
-      const responseData = await response.json();
-      const neighbors: RestApiNeighbor[] | undefined = responseData.nearestNeighbors?.[0]?.neighbors;
+    const responseData = await response.json();
+    const neighbors: RestApiNeighbor[] | undefined = responseData.nearestNeighbors?.[0]?.neighbors;
 
-      if (neighbors && neighbors.length > 0) {
-        const relevantNeighbors = neighbors.filter(
-          (neighbor: RestApiNeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
-        );
+    if (neighbors && neighbors.length > 0) {
+      const relevantNeighbors = neighbors.filter(
+        (neighbor: RestApiNeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
+      );
 
-        if (relevantNeighbors.length > 0) {
-          const results = await processNeighbors(relevantNeighbors);
-          if (results.length > 0) {
-            console.log(`[searchKnowledgeBase] Found ${results.length} relevant results in '${level}' priority KB.`);
-            return results;
-          }
+      if (relevantNeighbors.length > 0) {
+        const results = await processNeighbors(relevantNeighbors);
+        if (results.length > 0) {
+          console.log(`[searchKnowledgeBase] Found ${results.length} relevant results in the knowledge base.`);
+          return results;
         }
       }
-    } catch (error: any) {
-      console.error(`Error searching level '${level}' in knowledge base:`, error);
-      searchErrors.push(`Level '${level}': ${error.message || 'Unknown error'}`);
     }
-  }
-
-  if (searchErrors.length > 0) {
-    const combinedErrors = searchErrors.join('; ');
-    if (combinedErrors.includes('PermissionDenied') || combinedErrors.includes('IAM') || combinedErrors.includes('403')) {
+  } catch (error: any) {
+    console.error(`Error searching knowledge base:`, error);
+    if (error.message.includes('PermissionDenied') || error.message.includes('IAM') || error.message.includes('403')) {
        throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
     }
-    if (combinedErrors.includes('not found') || combinedErrors.includes('404')) {
+    if (error.message.includes('not found') || error.message.includes('404')) {
        throw new Error(`Vertex AI Search failed because an endpoint or index was not found. Please verify your VERTEX_AI_INDEX_ENDPOINT_ID and VERTEX_AI_DEPLOYED_INDEX_ID environment variables.`);
     }
-    throw new Error(`Knowledge base search failed. Errors encountered: ${combinedErrors}`);
+    throw new Error(`Knowledge base search failed. Error encountered: ${error.message || 'Unknown error'}`);
   }
 
-  console.log('[searchKnowledgeBase] No relevant results found in any priority KB meeting the threshold.');
+  console.log('[searchKnowledgeBase] No relevant results found in the knowledge base meeting the threshold.');
   return [];
 }
