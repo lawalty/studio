@@ -7,9 +7,10 @@
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
 import { protos } from '@google-cloud/aiplatform';
-// Using a require statement for the client constructor, which can be more robust
+// Using a two-step require for the client constructor, which can be more robust
 // in a Next.js server environment for certain gRPC-based libraries.
-const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1;
+const aiplatform = require('@google-cloud/aiplatform');
+const IndexEndpointServiceClient = aiplatform.v1.IndexEndpointServiceClient;
 
 
 // The maximum distance for a search result to be considered relevant.
@@ -92,7 +93,6 @@ export async function searchKnowledgeBase({
   // 3. Set up the Vertex AI client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
   const indexEndpointServiceClient = new IndexEndpointServiceClient(clientOptions);
-  const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
   const searchLevels: string[] = ['High', 'Medium', 'Low'];
@@ -118,6 +118,8 @@ export async function searchKnowledgeBase({
         }],
       };
       
+      const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
+      
       // Explicit check to provide a clearer error message.
       if (typeof indexEndpointServiceClient.findNeighbors !== 'function') {
         throw new Error(`Critical Error: indexEndpointServiceClient.findNeighbors is NOT a function. The AI Platform client library may not have been imported correctly by the build system.`);
@@ -129,7 +131,7 @@ export async function searchKnowledgeBase({
       if (neighbors && neighbors.length > 0) {
         // Filter the results by the distance threshold.
         const relevantNeighbors = neighbors.filter(
-          (neighbor: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor) => neighbor.distance && neighbor.distance < MAX_DISTANCE_THRESHOLD
+          (neighbor: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
         );
 
         if (relevantNeighbors.length > 0) {
