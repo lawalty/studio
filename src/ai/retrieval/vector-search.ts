@@ -136,6 +136,15 @@ export async function searchKnowledgeBase({
 
       if (!response.ok) {
         const errorBody = await response.json();
+        if (response.status === 501) {
+            throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured to serve requests.
+            
+Action Required:
+1. Go to the Vertex AI -> Vector Search -> Index Endpoints section in your Google Cloud Console.
+2. Verify that the endpoint with ID '${VERTEX_AI_INDEX_ENDPOINT_ID}' exists and has a green checkmark indicating it is active.
+3. Ensure your index is correctly deployed to this endpoint.
+4. Confirm that the endpoint is a Public Endpoint, as private endpoints require different configurations.`);
+        }
         throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
       }
         
