@@ -106,9 +106,9 @@ export async function searchKnowledgeBase({
 
   for (const level of searchLevels) {
     try {
-      const restricts = [{ namespace: 'level', allow: [level] }];
+      const restricts = [{ namespace: 'level', allowList: [level] }];
       if (topic) {
-        restricts.push({ namespace: 'topic', allow: [topic] });
+        restricts.push({ namespace: 'topic', allowList: [topic] });
       }
       
       const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
