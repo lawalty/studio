@@ -95,8 +95,7 @@ export async function searchKnowledgeBase({
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
-  // SIMPLIFIED FOR DEBUGGING: Only searching 'High' priority as requested.
-  const searchLevels: string[] = ['High'];
+  const searchLevels: string[] = ['High', 'Medium', 'Low'];
   const searchErrors: string[] = [];
 
   for (const level of searchLevels) {
