@@ -16,9 +16,9 @@ const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1bet
 
 // The maximum distance for a search result to be considered relevant.
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
-// value indicates higher similarity. A distance of 0.5 is a moderately lenient
-// threshold, allowing for good semantic matches even with typos or different phrasing.
-const MAX_DISTANCE_THRESHOLD = 0.5;
+// value indicates higher similarity. A distance of 0.7 is a lenient threshold,
+// allowing for good semantic matches even with typos or different phrasing.
+const MAX_DISTANCE_THRESHOLD = 0.7;
 
 interface SearchResult {
   text: string;
@@ -98,6 +98,7 @@ export async function searchKnowledgeBase({
 
   // 4. Perform sequential search through priority levels.
   const searchLevels: string[] = ['High', 'Medium', 'Low'];
+  const searchErrors: string[] = [];
 
   for (const level of searchLevels) {
     try {
@@ -139,14 +140,26 @@ export async function searchKnowledgeBase({
       }
     } catch (error: any) {
       console.error(`Error searching level '${level}' in knowledge base:`, error);
-      if (error.message && error.message.includes('PermissionDenied')) {
-        throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
-      }
-      // If it's another error, we log it and continue to the next level.
+      // Collect errors instead of just logging. This helps diagnose config issues.
+      searchErrors.push(`Level '${level}': ${error.message || 'Unknown error'}`);
     }
   }
 
-  // If the loop completes without returning, no results met the threshold.
+  // If we get here, it means no results were found in any level.
+  // If there were errors during the search, we should throw them now so the user is aware.
+  if (searchErrors.length > 0) {
+    const combinedErrors = searchErrors.join('; ');
+    if (combinedErrors.includes('PermissionDenied') || combinedErrors.includes('IAM')) {
+       throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
+    }
+    if (combinedErrors.includes('not found')) {
+       throw new Error(`Vertex AI Search failed because an endpoint or index was not found. Please verify your VERTEX_AI_INDEX_ID and VERTEX_AI_INDEX_ENDPOINT_ID environment variables.`);
+    }
+    // Generic error for other cases.
+    throw new Error(`Knowledge base search failed. Errors encountered: ${combinedErrors}`);
+  }
+
+  // If the loop completes with no results and no errors, it's a genuine empty result.
   console.log('[searchKnowledgeBase] No relevant results found in any priority KB meeting the threshold.');
   return [];
 }
