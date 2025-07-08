@@ -29,7 +29,7 @@ export default function UpdatesComingContent() {
   useEffect(() => {
     // If in preview mode, redirect immediately and stop processing this page.
     if (isPreviewMode) {
-      router.replace('/');
+      router.replace('/?preview=true');
       return;
     }
 
@@ -148,5 +148,3 @@ export default function UpdatesComingContent() {
     </div>
   );
 }
-
-    
