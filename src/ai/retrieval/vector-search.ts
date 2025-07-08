@@ -99,8 +99,11 @@ export async function searchKnowledgeBase({
   });
   const authToken = await auth.getAccessToken();
   
+  // Clean up the domain name to prevent common user errors like extra spaces or including https://
+  const cleanedDomain = VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN.trim().replace(/^https?:\/\//, '');
+
   // Construct the correct URL for a public endpoint.
-  const endpointUrl = `https://${VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN}/v1/projects/${GCLOUD_PROJECT}:findNeighbors`;
+  const endpointUrl = `https://${cleanedDomain}/v1/projects/${GCLOUD_PROJECT}:findNeighbors`;
   const allErrors: string[] = [];
 
   // 4. Perform prioritized, sequential search.
@@ -134,8 +137,8 @@ export async function searchKnowledgeBase({
 
       if (!response.ok) {
           const errorBody = await response.json();
+          // Keep the specific 501 error check as it's very helpful if it occurs.
           if (response.status === 501) {
-              const endpointDomain = process.env.VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN;
               throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured or the public domain name is incorrect. Action Required: 1. Verify that the VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN in your .env.local file matches the 'Public domain name' in your Google Cloud Console. 2. Verify that the endpoint is active and the index is correctly deployed. 3. Confirm that the endpoint is a Public Endpoint.`);
           }
           throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
@@ -158,8 +161,14 @@ export async function searchKnowledgeBase({
         }
       }
     } catch (error: any) {
-        // Collect errors from each level to provide a full report if all levels fail.
-        allErrors.push(`Level '${level}': ${error.message}`);
+        // This enhanced error logging helps diagnose low-level network issues.
+        let detailedErrorMessage = error.message;
+        // The 'cause' property in Node.js fetch often contains the underlying network error code.
+        if (error.cause) {
+            const cause = error.cause as { code?: string; message?: string };
+            detailedErrorMessage = `A low-level network error occurred: ${cause.code || cause.message || 'Unknown Cause'}. This often means the Public Endpoint Domain Name in your .env.local file is incorrect or unreachable. Please double-check it for typos.`;
+        }
+        allErrors.push(`Level '${level}': ${detailedErrorMessage}`);
     }
   }
 
