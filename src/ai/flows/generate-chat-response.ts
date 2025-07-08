@@ -46,6 +46,7 @@ const generateChatResponseFlow = ai.defineFlow(
   async ({ personaTraits, conversationalTopics, chatHistory, language }) => {
     
     const historyForRAG = chatHistory ? JSON.parse(JSON.stringify(chatHistory)) : [];
+    const isGreeting = !historyForRAG || historyForRAG.length === 0;
 
     // 1. Create a contextual query from the last 4 messages (~2 turns).
     const contextualQuery = historyForRAG
@@ -83,10 +84,11 @@ ${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL)
 
       **CRITICAL INSTRUCTIONS:**
       1.  **Respond in ${language}.** This is an absolute requirement.
-      2.  **Strictly base your answers on the provided context.** Do not use your general knowledge.
-      3.  **If the provided context is empty or irrelevant**, you MUST state that you cannot find the information and ask the user to rephrase their question. Do not invent an answer.
-      4.  Keep your answers **concise and directly related** to the user's question.
-      5.  When your answer is based on information from a PDF, you MUST offer a download link.
+      2.  **If the conversation history is empty,** your task is to provide a warm, welcoming greeting. You may reference one of your areas of expertise. Do not use the knowledge base for this initial greeting.
+      3.  **If the conversation history is NOT empty,** strictly base your answers on the provided context. Do not use your general knowledge.
+      4.  **If the provided context is empty or irrelevant (and it's not the start of the conversation),** you MUST state that you cannot find the information and ask the user to rephrase their question. Do not invent an answer.
+      5.  Keep your answers **concise and directly related** to the user's question.
+      6.  When your answer is based on information from a PDF, you MUST offer a download link.
 
       Your response must be a JSON object with three fields: "aiResponse" (string), "shouldEndConversation" (boolean), and an optional "pdfReference".
       - **If and only if** your response is based on a PDF document from the knowledge base, you MUST populate the "pdfReference" object with the "fileName" and "downloadURL" from the retrieved context. Otherwise, leave "pdfReference" undefined.
@@ -100,7 +102,7 @@ ${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL)
       ---
       Here is the retrieved context from the knowledge base. Use this and only this to answer the user's most recent query.
       <retrieved_context>
-      ${retrievedContext || 'No relevant information was found in the knowledge base.'}
+      ${isGreeting ? 'N/A - This is the start of the conversation.' : (retrievedContext || 'No relevant information was found in the knowledge base.')}
       </retrieved_context>
       ---
     `;

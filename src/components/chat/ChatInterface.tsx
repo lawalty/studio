@@ -922,15 +922,34 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       
       const initConversation = async () => {
         setShowPreparingGreeting(true);
-        let greetingToUse = customGreeting && customGreeting.trim() !== "" 
-          ? customGreeting.trim()
-          : "Hello! How can I help you today?";
-
-        if (language !== 'English') {
-          greetingToUse = await translate(greetingToUse);
-        }
-
+        
+        let greetingToUse = "";
         let greetingMessageId: string | null = null;
+        
+        // Path 1: A custom, scripted greeting is provided. This is the fastest path.
+        if (customGreeting && customGreeting.trim() !== "") {
+          greetingToUse = customGreeting.trim();
+          if (language !== 'English') {
+            greetingToUse = await translate(greetingToUse);
+          }
+        } 
+        // Path 2: No custom greeting. Ask the AI to generate one.
+        else {
+            try {
+                const flowInput: GenerateChatResponseInput = {
+                    personaTraits: personaTraits,
+                    conversationalTopics: conversationalTopics,
+                    chatHistory: [], // Empty history triggers a greeting
+                    language: language,
+                };
+                const result = await generateChatResponse(flowInput);
+                greetingToUse = result.aiResponse;
+            } catch (error) {
+                console.error("Error generating initial greeting:", error);
+                greetingToUse = language === 'Spanish' ? "Hola! ¿Como puedo ayudarte hoy?" : "Hello! How can I help you today?";
+            }
+        }
+        
         const onGreetingSpeechActuallyStarting = () => {
           setTimeout(() => {
             if (!isEndingSessionRef.current) {
@@ -940,7 +959,11 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           }, 50);
         };
 
-        await speakTextRef.current(greetingToUse, greetingMessageId, onGreetingSpeechActuallyStarting, false);
+        const audioDuration = await speakTextRef.current(greetingToUse, greetingMessageId, onGreetingSpeechActuallyStarting, false);
+        
+        if (greetingMessageId && audioDuration > 0) {
+            updateMessageDuration(greetingMessageId, audioDuration);
+        }
 
         if(communicationModeRef.current === 'text-only') {
           setShowPreparingGreeting(false);
@@ -949,7 +972,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       
       initConversation();
     }
-  }, [aiHasInitiatedConversation, customGreeting, messages.length, addMessage, isSendingMessage, isLoadingConfig, hasConversationEnded, personaTraits, language, translate]);
+  }, [aiHasInitiatedConversation, customGreeting, messages.length, addMessage, isSendingMessage, isLoadingConfig, hasConversationEnded, personaTraits, conversationalTopics, language, translate, updateMessageDuration]);
 
   useEffect(() => {
     const fetchAllData = async () => {
