@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
  *
@@ -10,7 +11,7 @@ import { protos } from '@google-cloud/aiplatform';
 // Using a two-step require for the client constructor, which can be more robust
 // in a Next.js server environment for certain gRPC-based libraries.
 const aiplatform = require('@google-cloud/aiplatform');
-const IndexEndpointServiceClient = aiplatform.v1.IndexEndpointServiceClient;
+const { IndexEndpointServiceClient } = aiplatform.v1;
 
 
 // The maximum distance for a search result to be considered relevant.
@@ -104,6 +105,8 @@ export async function searchKnowledgeBase({
       if (topic) {
         restricts.push({ namespace: 'topic', allow: [topic] });
       }
+      
+      const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
       const request: protos.google.cloud.aiplatform.v1.IFindNeighborsRequest = {
         indexEndpoint: endpoint,
@@ -117,8 +120,6 @@ export async function searchKnowledgeBase({
           neighborCount: limit,
         }],
       };
-      
-      const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
       
       // Explicit check to provide a clearer error message.
       if (typeof indexEndpointServiceClient.findNeighbors !== 'function') {
