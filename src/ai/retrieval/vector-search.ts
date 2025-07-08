@@ -12,7 +12,7 @@ import { protos } from '@google-cloud/aiplatform';
 // which can have issues with the module resolution of this specific gRPC-based library.
 // We still import `protos` separately to maintain strong type-safety for request/response objects.
 // eslint-disable-next-line
-const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1beta1;
+const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1;
 
 // The maximum distance for a search result to be considered relevant.
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
@@ -43,7 +43,7 @@ const {
 } = process.env;
 
 // Helper function to process the neighbors returned from Vertex AI search
-async function processNeighbors(neighbors: protos.google.cloud.aiplatform.v1beta1.FindNeighborsResponse.INeighbor[]): Promise<SearchResult[]> {
+async function processNeighbors(neighbors: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor[]): Promise<SearchResult[]> {
   if (!neighbors || neighbors.length === 0) {
     return [];
   }
@@ -107,7 +107,7 @@ export async function searchKnowledgeBase({
         restricts.push({ namespace: 'topic', allow: [topic] });
       }
 
-      const request: protos.google.cloud.aiplatform.v1beta1.IFindNeighborsRequest = {
+      const request: protos.google.cloud.aiplatform.v1.IFindNeighborsRequest = {
         indexEndpoint: endpoint,
         deployedIndexId: VERTEX_AI_INDEX_ID,
         queries: [{
@@ -126,7 +126,7 @@ export async function searchKnowledgeBase({
       if (neighbors && neighbors.length > 0) {
         // Filter the results by the distance threshold.
         const relevantNeighbors = neighbors.filter(
-          (neighbor: protos.google.cloud.aiplatform.v1beta1.FindNeighborsResponse.INeighbor) => neighbor.distance && neighbor.distance < MAX_DISTANCE_THRESHOLD
+          (neighbor: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor) => neighbor.distance && neighbor.distance < MAX_DISTANCE_THRESHOLD
         );
 
         if (relevantNeighbors.length > 0) {
