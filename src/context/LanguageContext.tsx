@@ -17,9 +17,21 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [language, setLanguage] = useState<Language>('English');
+  const [language, setLanguageState] = useState<Language>('English');
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const { toast } = useToast();
+
+  const setLanguage = (newLanguage: Language) => {
+    // Only show toast if switching TO Spanish FROM another language
+    if (newLanguage === 'Spanish' && language !== 'Spanish') {
+      toast({
+        title: "Translating to Spanish...",
+        description: "Please wait for about 30 seconds for the interface to update.",
+        duration: 8000, // Show for 8 seconds
+      });
+    }
+    setLanguageState(newLanguage);
+  };
 
   const translate = useCallback(async (text: string): Promise<string> => {
     if (language === 'English' || !text) {
