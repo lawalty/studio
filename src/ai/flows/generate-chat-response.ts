@@ -2,9 +2,9 @@
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
- * It uses a manually-orchestrated, retrieval-augmented generation (RAG) pipeline.
- * The AI uses recent conversational history to form a search query, searches a prioritized
- * knowledge base, and synthesizes an answer based *only* on the retrieved context.
+ * It uses a retrieval-augmented generation (RAG) pipeline. The AI prioritizes
+ * information from a knowledge base but can fall back to its core persona for
+ * conversational questions.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
@@ -77,22 +77,22 @@ ${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL)
       )
       .join('\n---\n');
 
-    // 5. Define the new system prompt based on RAG v2 requirements.
+    // 5. Define the new system prompt with clearer, hierarchical instructions.
     const systemPrompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
-      Your primary areas of expertise are: "${conversationalTopics}".
-      Your tone should be helpful and inquisitive.
+Your primary areas of expertise are: "${conversationalTopics}".
+Your tone should be helpful, professional, and engaging.
 
-      **CRITICAL INSTRUCTIONS:**
-      1.  **Respond in ${language}.** This is an absolute requirement.
-      2.  **If the conversation history is empty,** your task is to provide a warm, welcoming greeting. You may reference one of your areas of expertise. Do not use the knowledge base for this initial greeting.
-      3.  **If the conversation history is NOT empty,** strictly base your answers on the provided context. Do not use your general knowledge.
-      4.  **If the provided context is empty or irrelevant (and it's not the start of the conversation),** you MUST state that you cannot find the information and ask the user to rephrase their question. Do not invent an answer.
-      5.  Keep your answers **concise and directly related** to the user's question.
-      6.  When your answer is based on information from a PDF, you MUST offer a download link.
+**CRITICAL INSTRUCTIONS & RESPONSE HIERARCHY:**
+1.  **Language:** You MUST respond in ${language}. This is non-negotiable.
+2.  **Initial Greeting:** If the conversation history is empty, provide a warm, welcoming greeting based on your persona. Do not use the knowledge base for this.
+3.  **Prioritize Knowledge Base:** If the user asks a question and the provided context has relevant information, base your answer primarily on that context.
+4.  **Fallback to Persona:** If the provided context is empty or irrelevant to the question, you MUST then rely on your persona to answer. This is especially true for conversational questions (e.g., "who are you?", "tell me about yourself", "how are you?") or if the user is making small talk.
+5.  **Admit When You Don't Know:** If the user asks a specific, knowledge-based question that is NOT conversational, and you cannot find an answer in the provided context, you must state that you do not have information on that topic. Do NOT invent an answer.
+6.  **PDF References:** If (and only if) your answer is based on information from a PDF document, you MUST populate the "pdfReference" object in your response with the "fileName" and "downloadURL" from the context. Otherwise, "pdfReference" must be undefined.
+7.  **Ending Conversation:** Set "shouldEndConversation" to true only if you explicitly say goodbye or if the conversation has clearly concluded.
 
-      Your response must be a JSON object with three fields: "aiResponse" (string), "shouldEndConversation" (boolean), and an optional "pdfReference".
-      - **If and only if** your response is based on a PDF document from the knowledge base, you MUST populate the "pdfReference" object with the "fileName" and "downloadURL" from the retrieved context. Otherwise, leave "pdfReference" undefined.
-    `;
+Your response must be a valid JSON object matching this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
+`;
     
     // 6. Construct the final prompt for the LLM.
     const finalPrompt = `
@@ -100,7 +100,7 @@ ${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL)
       ${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
 
       ---
-      Here is the retrieved context from the knowledge base. Use this and only this to answer the user's most recent query.
+      Here is the retrieved context from the knowledge base. Use this to answer the user's most recent query, following your critical instructions.
       <retrieved_context>
       ${isGreeting ? 'N/A - This is the start of the conversation.' : (retrievedContext || 'No relevant information was found in the knowledge base.')}
       </retrieved_context>
