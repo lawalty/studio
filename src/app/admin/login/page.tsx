@@ -43,8 +43,11 @@ export default function AdminLoginPage() {
     } catch (error: any) {
       toast({
         title: 'Login Failed',
-        description: error.message,
+        description: (
+          <p className="whitespace-pre-wrap">{error.message}</p>
+        ),
         variant: 'destructive',
+        duration: 20000, // Show longer for the detailed message
       });
       setIsLoading(false);
     }
