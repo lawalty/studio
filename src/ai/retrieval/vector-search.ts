@@ -7,12 +7,9 @@
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
 import { protos } from '@google-cloud/aiplatform';
-
-// Use 'require' with direct destructuring for the client to ensure compatibility with the Next.js production build environment,
-// which can have issues with the module resolution of this specific gRPC-based library.
-// We still import `protos` separately to maintain strong type-safety for request/response objects.
-// eslint-disable-next-line
-const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1;
+// The import below uses a direct path to the client constructor, which is a more robust
+// way to import it in a Next.js environment and avoids build-time resolution issues.
+import { IndexEndpointServiceClient } from '@google-cloud/aiplatform/build/src/v1';
 
 
 // The maximum distance for a search result to be considered relevant.
