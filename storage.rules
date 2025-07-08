@@ -1,12 +1,15 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      // Allows anyone to read files (for public downloads and chatbot display).
-      allow read;
-
-      // Only allows authenticated entities to write files (for updating your RAG knowledge base).
-      allow write: if request.auth != null;
+    // WARNING: This rule allows public read and write access to the
+    // knowledge base directory to facilitate admin panel uploads without
+    // a user login system. This is insecure for production.
+    // For a production app, you MUST implement user authentication
+    // and restrict write access to specific admin UIDs, for example:
+    // allow write: if request.auth != null && request.auth.uid == "your_admin_uid";
+    match /knowledge_base_files/{allPaths=**} {
+      allow read, write;
     }
   }
 }
