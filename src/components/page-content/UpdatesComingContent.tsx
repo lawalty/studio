@@ -11,8 +11,9 @@ import { doc, getDoc } from 'firebase/firestore';
 import { Cog } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const DEFAULT_SPLASH_IMAGE_SRC = "https://placehold.co/400x267.png";
-const DEFAULT_BACKGROUND_IMAGE_SRC = "https://placehold.co/1280x720.png";
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
+const DEFAULT_BACKGROUND_IMAGE_SRC = TRANSPARENT_PIXEL;
 const DEFAULT_MESSAGE = "Exciting updates are on the way! We'll be back online shortly.";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
@@ -90,8 +91,8 @@ export default function UpdatesComingContent() {
           fill
           className="object-cover z-[-1] filter blur-sm brightness-75"
           priority
-          data-ai-hint="office building exterior"
-          unoptimized={backgroundUrl.includes('placehold.co')}
+          data-ai-hint={backgroundUrl === DEFAULT_BACKGROUND_IMAGE_SRC ? undefined : "office building exterior"}
+          unoptimized={backgroundUrl.startsWith('data:image/')}
         />
       )}
       <Card className="w-full max-w-lg p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
@@ -116,7 +117,7 @@ export default function UpdatesComingContent() {
                 (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC && !isImageLoaded) ? "opacity-0" : "opacity-100"
               )}
               priority
-              unoptimized={splashImageSrc.startsWith('data:image/') || splashImageSrc.includes('placehold.co')}
+              unoptimized={splashImageSrc.startsWith('data:image/')}
               onLoad={() => {
                 if (splashImageSrc !== DEFAULT_SPLASH_IMAGE_SRC) setIsImageLoaded(true);
               }}
@@ -124,7 +125,7 @@ export default function UpdatesComingContent() {
                 setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
                 setIsImageLoaded(true);
               }}
-              data-ai-hint="construction gear"
+              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "construction gear"}
             />
           )}
 
@@ -148,3 +149,5 @@ export default function UpdatesComingContent() {
     </div>
   );
 }
+
+    

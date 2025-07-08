@@ -15,8 +15,9 @@ import Link from 'next/link';
 import LanguageSelector from '@/components/layout/LanguageSelector';
 import { useLanguage } from '@/context/LanguageContext';
 
-const DEFAULT_SPLASH_IMAGE_SRC = "https://placehold.co/400x267.png";
-const DEFAULT_BACKGROUND_IMAGE_SRC = "https://placehold.co/1280x720.png";
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
+const DEFAULT_BACKGROUND_IMAGE_SRC = TRANSPARENT_PIXEL;
 const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_TYPING_SPEED_MS = 50;
@@ -240,13 +241,13 @@ export default function StartPageContent() {
               isImageLoaded ? "opacity-100" : "opacity-0"
             )}
             priority
-            unoptimized={splashImageSrc.startsWith('data:image/') || splashImageSrc.includes('placehold.co')}
+            unoptimized={splashImageSrc.startsWith('data:image/')}
             onLoad={() => setIsImageLoaded(true)}
             onError={() => {
               setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
               setIsImageLoaded(true);
             }}
-            data-ai-hint="technology abstract welcome"
+            data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
           />
           <div className="flex items-center justify-center gap-2">
             <CardDescription className="text-lg m-0">
@@ -288,8 +289,8 @@ export default function StartPageContent() {
           fill
           className="object-cover z-[-1] filter blur-sm brightness-75"
           priority
-          data-ai-hint="office building exterior"
-          unoptimized={backgroundUrl.includes('placehold.co')}
+          data-ai-hint={backgroundUrl === DEFAULT_BACKGROUND_IMAGE_SRC ? undefined : "office building exterior"}
+          unoptimized={backgroundUrl.startsWith('data:image/')}
         />
       )}
       {renderContent()}
@@ -299,5 +300,7 @@ export default function StartPageContent() {
     </div>
   );
 }
+
+    
 
     
