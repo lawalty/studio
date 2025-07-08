@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
  *
@@ -14,6 +13,8 @@ import { GoogleAuth } from 'google-auth-library';
 // value indicates higher similarity. A distance of 0.7 is a lenient threshold,
 // allowing for good semantic matches even with typos or different phrasing.
 const MAX_DISTANCE_THRESHOLD = 0.7;
+
+const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low')[]> = ['High', 'Medium', 'Low'];
 
 interface SearchResult {
   text: string;
@@ -71,7 +72,6 @@ async function processNeighbors(neighbors: RestApiNeighbor[]): Promise<SearchRes
     .filter((doc): doc is SearchResult => doc !== null);
 }
 
-
 export async function searchKnowledgeBase({
   query,
   topic,
@@ -99,85 +99,74 @@ export async function searchKnowledgeBase({
     scopes: 'https://www.googleapis.com/auth/cloud-platform',
   });
   const authToken = await auth.getAccessToken();
+  const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
+  const allErrors: string[] = [];
 
-  // 4. Perform a single, unfiltered search across the entire index as a debugging step.
-  try {
-    const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
+  // 4. Perform prioritized, sequential search.
+  for (const level of PRIORITY_LEVELS) {
+    try {
+      const restricts: any[] = [{ namespace: 'level', allowList: [level] }];
+      if (topic) {
+        restricts.push({ namespace: 'topic', allowList: [topic] });
+      }
 
-    // As a debugging step, we are temporarily removing the `restricts` parameter 
-    // to make the simplest possible call to the endpoint.
-    const requestBody: {
-        deployedIndexId: string;
-        queries: {
-            datapoint: {
-                datapointId: string;
-                featureVector: number[];
-                restricts?: any[];
-            },
-            neighborCount: number;
-        }[];
-    } = {
-      deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID,
-      queries: [{
-        datapoint: {
-          datapointId: 'query',
-          featureVector: queryEmbedding,
-        },
-        neighborCount: limit,
-      }],
-    };
-    
-    // Add topic restriction if provided. This is a common use case that we can keep.
-    if (topic) {
-        requestBody.queries[0].datapoint.restricts = [{ namespace: 'topic', allowList: [topic] }];
-    }
+      const requestBody = {
+        deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID,
+        queries: [{
+          datapoint: {
+            datapointId: `query-${level}`,
+            featureVector: queryEmbedding,
+            restricts: restricts,
+          },
+          neighborCount: limit,
+        }],
+      };
       
-    const response = await fetch(endpointUrl, {
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+      const response = await fetch(endpointUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    if (!response.ok) {
-        const errorBody = await response.json();
-        // Check for 501 error specifically to provide better user feedback.
-        if (response.status === 501) {
-            const endpointId = process.env.VERTEX_AI_INDEX_ENDPOINT_ID;
-            throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured to serve requests. Action Required: 1. Go to the Vertex AI -> Vector Search -> Index Endpoints section in your Google Cloud Console. 2. Verify that the endpoint with ID '${endpointId}' exists and has a green checkmark indicating it is active. 3. Ensure your index is correctly deployed to this endpoint. 4. Confirm that the endpoint is a Public Endpoint, as private endpoints require different configurations.`);
-        }
-        throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
-    }
-        
-    const responseData = await response.json();
-    const neighbors: RestApiNeighbor[] | undefined = responseData.nearestNeighbors?.[0]?.neighbors;
+      if (!response.ok) {
+          const errorBody = await response.json();
+          if (response.status === 501) {
+              const endpointId = process.env.VERTEX_AI_INDEX_ENDPOINT_ID;
+              throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured to serve requests. Action Required: 1. Go to the Vertex AI -> Vector Search -> Index Endpoints section in your Google Cloud Console. 2. Verify that the endpoint with ID '${endpointId}' exists and has a green checkmark indicating it is active. 3. Ensure your index is correctly deployed to this endpoint. 4. Confirm that the endpoint is a Public Endpoint, as private endpoints require different configurations.`);
+          }
+          throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
+      }
+          
+      const responseData = await response.json();
+      const neighbors: RestApiNeighbor[] | undefined = responseData.nearestNeighbors?.[0]?.neighbors;
 
-    if (neighbors && neighbors.length > 0) {
-      const relevantNeighbors = neighbors.filter(
-        (neighbor: RestApiNeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
-      );
+      if (neighbors && neighbors.length > 0) {
+        const relevantNeighbors = neighbors.filter(
+          (neighbor: RestApiNeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
+        );
 
-      if (relevantNeighbors.length > 0) {
-        const results = await processNeighbors(relevantNeighbors);
-        if (results.length > 0) {
-          console.log(`[searchKnowledgeBase] Found ${results.length} relevant results in the knowledge base.`);
-          return results;
+        if (relevantNeighbors.length > 0) {
+          const results = await processNeighbors(relevantNeighbors);
+          if (results.length > 0) {
+            console.log(`[searchKnowledgeBase] Found ${results.length} relevant results in '${level}' priority knowledge base.`);
+            return results; // Found results, so return immediately.
+          }
         }
       }
+    } catch (error: any) {
+        // Collect errors from each level to provide a full report if all levels fail.
+        allErrors.push(`Level '${level}': ${error.message}`);
     }
-  } catch (error: any) {
-    console.error(`Error searching knowledge base:`, error);
-    if (error.message.includes('PermissionDenied') || error.message.includes('IAM') || error.message.includes('403')) {
-       throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
-    }
-    if (error.message.includes('not found') || error.message.includes('404')) {
-       throw new Error(`Vertex AI Search failed because an endpoint or index was not found. Please verify your VERTEX_AI_INDEX_ENDPOINT_ID and VERTEX_AI_DEPLOYED_INDEX_ID environment variables.`);
-    }
-    throw new Error(`Knowledge base search failed. Error encountered: ${error.message || 'Unknown error'}`);
   }
 
-  console.log('[searchKnowledgeBase] No relevant results found in the knowledge base meeting the threshold.');
+  // If we get here, no relevant results were found in any priority level.
+  if (allErrors.length > 0) {
+    throw new Error(`Knowledge base search failed. Errors encountered: ${allErrors.join('; ')}`);
+  }
+
+  console.log('[searchKnowledgeBase] No relevant results found in any knowledge base meeting the threshold.');
   return [];
 }
