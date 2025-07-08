@@ -104,6 +104,8 @@ export async function searchKnowledgeBase({
 
   // Construct the correct URL for a public endpoint.
   const endpointUrl = `https://${cleanedDomain}/v1/projects/${GCLOUD_PROJECT}:findNeighbors`;
+  console.log(`[searchKnowledgeBase] Attempting to query Vertex AI at: ${endpointUrl}`);
+  
   const allErrors: string[] = [];
 
   // 4. Perform prioritized, sequential search.
@@ -166,7 +168,8 @@ export async function searchKnowledgeBase({
         // The 'cause' property in Node.js fetch often contains the underlying network error code.
         if (error.cause) {
             const cause = error.cause as { code?: string; message?: string };
-            detailedErrorMessage = `A low-level network error occurred: ${cause.code || cause.message || 'Unknown Cause'}. This often means the Public Endpoint Domain Name in your .env.local file is incorrect or unreachable. Please double-check it for typos.`;
+            const errorCode = cause.code || 'Unknown Cause';
+            detailedErrorMessage = `A low-level network error occurred: ${errorCode}. This often means the Public Endpoint Domain Name in your .env.local file is incorrect or unreachable. Action Required: Please double-check it for typos. You can test it by running 'ping ${cleanedDomain}' in your terminal.`;
         }
         allErrors.push(`Level '${level}': ${detailedErrorMessage}`);
     }
