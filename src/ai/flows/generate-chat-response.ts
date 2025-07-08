@@ -61,21 +61,30 @@ const generateChatResponseFlow = ai.defineFlow(
         const { translatedText } = await translateText({ text: searchQuery, targetLanguage: 'English' });
         searchQuery = translatedText;
       } catch (e) {
-        console.error("Failed to translate user query for RAG, proceeding with original text.", e);
+        console.error("[generateChatResponseFlow] Failed to translate user query for RAG, proceeding with original text.", e);
       }
     }
 
-    // 3. Search the knowledge base.
-    const searchResults = await searchKnowledgeBase({ query: searchQuery, limit: 5 });
-    
-    // 4. Prepare context for the prompt.
-    const retrievedContext = searchResults
-      .map(r =>
-        `Context from document "${r.sourceName}" (Topic: ${r.topic}, Priority: ${r.level}):
+    // 3. Search the knowledge base, gracefully handling errors.
+    let retrievedContext = '';
+    try {
+      if (searchQuery) { // Only search if there's something to search for.
+        const searchResults = await searchKnowledgeBase({ query: searchQuery, limit: 5 });
+        
+        retrievedContext = searchResults.length > 0
+          ? searchResults
+            .map(r =>
+              `Context from document "${r.sourceName}" (Topic: ${r.topic}, Priority: ${r.level}):
 ${r.text}
 ${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL) ? `(Reference URL for this chunk's source PDF: ${r.downloadURL}) (File Name: ${r.sourceName})` : ''}`
-      )
-      .join('\n---\n');
+            )
+            .join('\n---\n')
+          : 'No relevant information was found in the knowledge base.';
+      }
+    } catch (e) {
+      console.error('[generateChatResponseFlow] Knowledge base search failed. The flow will proceed without RAG context. This is expected if the Vector Search endpoint is not configured. Error:', e);
+      retrievedContext = 'Knowledge base search is currently unavailable. You must answer using only your persona knowledge.';
+    }
 
     // 5. Define the new system prompt with clearer, hierarchical instructions.
     const systemPrompt = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
@@ -86,9 +95,9 @@ You must ALWAYS respond in character, using a helpful, professional, and engagin
 
 2.  **Information Source Priority:**
     a. **Initial Greeting:** If the conversation history is empty, provide a warm, welcoming greeting. Use only your persona.
-    b. **Conversational Questions:** For questions about yourself (e.g., "who are you?", "tell me about yourself") or small talk ("how are you?"), answer using ONLY your persona. Do NOT use the knowledge base.
+    b. **Conversational Questions:** For questions about yourself (e.g., "who are you?", "tell me about yourself") or small talk ("how are you?"), answer using ONLY your persona. Do NOT use the knowledge base, even if it has information.
     c. **Specific, Knowledge-Based Questions:** If the user asks a specific question, you MUST base your answer primarily on the provided context from the knowledge base.
-    d. **If Context is Irrelevant:** If the provided context does not answer the user's specific question, you MUST state that you do not have information on that topic. Do not invent an answer.
+    d. **If Context is Irrelevant or Fails:** If the provided context does not answer the user's specific question, or if the context indicates the knowledge base search has failed, you MUST state that you do not have information on that topic. Do not invent an answer.
 
 3.  **Response Format:**
     a. **PDF References:** If (and only if) your answer is based on information from a PDF document, you MUST populate the "pdfReference" object with the "fileName" and "downloadURL" from the context. Otherwise, "pdfReference" must be undefined.
