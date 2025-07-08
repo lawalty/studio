@@ -912,7 +912,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   };
 
   const handleStartNewChat = () => {
-    resetConversation();
     router.push('/');
   };
 
