@@ -15,8 +15,8 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
 
-const DEFAULT_SPLASH_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"; // Transparent 1x1 GIF
-const DEFAULT_BACKGROUND_IMAGE_SRC = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const DEFAULT_SPLASH_IMAGE_SRC = "https://placehold.co/400x267.png";
+const DEFAULT_BACKGROUND_IMAGE_SRC = "https://placehold.co/1280x720.png";
 const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const BACKGROUND_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/background_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
@@ -293,7 +293,7 @@ export default function SiteSettingsPage() {
                 width={400}
                 height={267}
                 className="rounded-lg border-2 border-primary shadow-md object-cover"
-                unoptimized={backgroundImagePreview.startsWith('data:image/') || backgroundImagePreview.startsWith('blob:')}
+                unoptimized={backgroundImagePreview.startsWith('data:image/') || backgroundImagePreview.startsWith('blob:') || backgroundImagePreview.includes('placehold.co')}
                 onError={() => setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC)}
                 data-ai-hint="office building exterior"
               />
@@ -340,8 +340,8 @@ export default function SiteSettingsPage() {
                 width={400}
                 height={267}
                 className="rounded-lg border-2 border-primary shadow-md object-cover"
-                data-ai-hint={(splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC || splashImagePreview.includes("placehold.co")) ? "technology abstract welcome" : undefined}
-                unoptimized={splashImagePreview.startsWith('data:image/') || splashImagePreview.startsWith('blob:')}
+                data-ai-hint="technology abstract welcome"
+                unoptimized={splashImagePreview.startsWith('data:image/') || splashImagePreview.startsWith('blob:') || splashImagePreview.includes('placehold.co')}
                 onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)}
               />
               <Input
@@ -538,5 +538,7 @@ export default function SiteSettingsPage() {
     </div>
   );
 }
+
+    
 
     
