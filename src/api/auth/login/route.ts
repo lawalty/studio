@@ -18,29 +18,11 @@ export async function POST(request: NextRequest) {
     } catch (error: any) {
       console.error("Error creating custom token:", error);
       
-      const errorMessage = error.message || '';
-      let detailedError = 'Failed to create session token. Please check the server logs for more details.';
+      const errorCode = error.code ? ` (Code: ${error.code})` : '';
+      const errorMessage = error.message ? ` Message: ${error.message}` : ' An unknown error occurred.';
 
-      if (errorMessage.includes('iam.serviceAccounts.signBlob') || errorMessage.includes('Service Account Token Creator')) {
-          detailedError = `The server has an authentication permission issue. The account used for local development is missing a required Google Cloud role.
-
-**ACTION REQUIRED:**
-1.  Go to the Google Cloud Console -> **IAM & Admin**.
-2.  Find the user account you logged in with when you ran \`gcloud auth application-default login\`.
-3.  Click the pencil icon to edit its roles.
-4.  Add the **"Service Account Token Creator"** role. This is required for the server to create login sessions.
-5.  Save the changes and **restart your app's development server**.`;
-
-      } else if (error.code === 'auth/invalid-credential' || errorMessage.includes('Could not refresh access token')) {
-          detailedError = `The server failed to authenticate with Google. This is often due to missing or expired local credentials.
-          
-**ACTION REQUIRED:**
-1.  Run \`gcloud auth application-default login\` in your terminal.
-2.  Follow the prompts to log in with your Google account.
-3.  **Important:** Restart the Next.js development server after the command succeeds.
-
-See README.md for more details on server authentication.`;
-      }
+      // This detailed error will now be shown in the toast on the login page.
+      const detailedError = `This is a server configuration issue. Please see the details below and check your server logs for the full error object.\n---\nDetails from Server${errorCode}${errorMessage}`;
 
       return NextResponse.json({ error: detailedError }, { status: 500 });
     }
