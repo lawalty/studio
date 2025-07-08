@@ -17,7 +17,7 @@ import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-u
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 import KnowledgeBaseDiagnostics from '@/components/admin/KnowledgeBaseDiagnostics';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -229,7 +229,6 @@ export default function KnowledgeBasePage() {
 
       if (source.downloadURL) {
         try {
-          // Construct the storage path from source metadata, do not use the downloadURL.
           const storagePath = `knowledge_base_files/${source.level}/${source.id}-${source.sourceName}`;
           const fileRef = ref(storage, storagePath);
           await deleteObject(fileRef);
@@ -237,7 +236,6 @@ export default function KnowledgeBasePage() {
           if (storageError.code === 'storage/object-not-found') {
             console.warn(`File not found in Storage at path for source ${source.id}, but proceeding with Firestore deletion.`);
           } else {
-            // Re-throw other storage errors to be caught by the outer catch block.
             throw storageError;
           }
         }
