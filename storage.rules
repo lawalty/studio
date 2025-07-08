@@ -1,12 +1,14 @@
-rules_version = '2';
 
+rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read and write access to all files.
-    // This is suitable for a demo application without user authentication.
-    // For a production app, you would implement more secure rules.
-    match /{allPaths=**} {
-      allow read, write;
+    match /knowledge_base_files/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /site_assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
     }
   }
 }
