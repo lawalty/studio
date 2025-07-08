@@ -12,8 +12,8 @@ import { GoogleAuth } from 'google-auth-library';
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
 // value indicates higher similarity. A distance of 0 means a perfect match.
 // A value of 1.0 is a reasonable starting point. Values up to ~1.4 can still be relevant.
-// We are setting this to 1.2 to be more inclusive.
-const MAX_DISTANCE_THRESHOLD = 1.2;
+// We are setting this to 1.4 to be more inclusive.
+const MAX_DISTANCE_THRESHOLD = 1.4;
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low')[]> = ['High', 'Medium', 'Low'];
 
