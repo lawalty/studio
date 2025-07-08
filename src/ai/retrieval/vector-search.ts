@@ -106,7 +106,6 @@ export async function searchKnowledgeBase({
 
   // Construct the correct URL for a public endpoint.
   const endpointUrl = `https://${cleanedDomain}/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
-  console.log(`[searchKnowledgeBase] Attempting to query Vertex AI at: ${endpointUrl}`);
   
   const allErrors: string[] = [];
 
@@ -145,7 +144,17 @@ export async function searchKnowledgeBase({
           // A 404 error here is critical and likely means a configuration issue.
           if (response.status === 404) {
               if (errorMessage.includes("is not found")) { // The error contains 'Index ... is not found'
-                  throw new Error(`The Vertex AI service returned a '404 Not Found' error because it could not find your deployed index. Please verify that your 'VERTEX_AI_DEPLOYED_INDEX_ID' in .env.local exactly matches the Deployed Index ID on your public endpoint in the Google Cloud Console. Raw error: ${errorMessage}`);
+                  throw new Error(`CRITICAL: The Vertex AI service found your endpoint but could not find the Deployed Index on it. This means your 'VERTEX_AI_DEPLOYED_INDEX_ID' in .env.local is incorrect.
+
+**ACTION REQUIRED:**
+1.  Go to the Google Cloud Console -> Vertex AI -> Vector Search.
+2.  Click on the 'INDEX ENDPOINTS' tab.
+3.  Click on your public endpoint (ID: ${VERTEX_AI_INDEX_ENDPOINT_ID}).
+4.  In the 'Deployed indexes' table, find the exact ID (e.g., 'deployed-my-index-v1').
+5.  Copy this ID and paste it as the value for 'VERTEX_AI_DEPLOYED_INDEX_ID' in your .env.local file.
+6.  Restart your server.
+
+Raw error from Google: ${errorMessage}`);
               }
               throw new Error(`The Vertex AI service returned a '404 Not Found' error. This can indicate a misconfiguration in the URL path. Please verify that your GCLOUD_PROJECT, LOCATION, and VERTEX_AI_INDEX_ENDPOINT_ID in .env.local are all correct. The service could not find the specified endpoint. Raw error: ${errorMessage}`);
           }
