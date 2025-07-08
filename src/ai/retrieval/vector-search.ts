@@ -142,9 +142,12 @@ export async function searchKnowledgeBase({
       if (!response.ok) {
           const errorBody = await response.json();
           const errorMessage = errorBody.error?.message || JSON.stringify(errorBody);
-          // A 404 error here is critical and means the URL is wrong.
+          // A 404 error here is critical and likely means a configuration issue.
           if (response.status === 404) {
-              throw new Error(`The Vertex AI service returned a '404 Not Found' error. This indicates a misconfiguration in the URL path. Please verify that your GCLOUD_PROJECT, LOCATION, and VERTEX_AI_INDEX_ENDPOINT_ID in .env.local are all correct. The service could not find the specified endpoint. Raw error: ${errorMessage}`);
+              if (errorMessage.includes("is not found")) { // The error contains 'Index ... is not found'
+                  throw new Error(`The Vertex AI service returned a '404 Not Found' error because it could not find your deployed index. Please verify that your 'VERTEX_AI_DEPLOYED_INDEX_ID' in .env.local exactly matches the Deployed Index ID on your public endpoint in the Google Cloud Console. Raw error: ${errorMessage}`);
+              }
+              throw new Error(`The Vertex AI service returned a '404 Not Found' error. This can indicate a misconfiguration in the URL path. Please verify that your GCLOUD_PROJECT, LOCATION, and VERTEX_AI_INDEX_ENDPOINT_ID in .env.local are all correct. The service could not find the specified endpoint. Raw error: ${errorMessage}`);
           }
           throw new Error(`API call failed with status ${response.status}: ${errorMessage}`);
       }
