@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { admin } from '@/lib/firebase-admin';
 
@@ -17,10 +18,21 @@ export async function POST(request: NextRequest) {
     } catch (error: any) {
       console.error("Error creating custom token:", error);
       
-      const isAuthError = error.code === 'auth/invalid-credential' || (error.message && error.message.includes('Could not refresh access token'));
-      
-      if (isAuthError || (error.message && (error.message.includes("permission") || error.message.includes("credential")))) {
-          const detailedError = `The server failed to authenticate with Google. This is often due to missing or expired local credentials.
+      const errorMessage = error.message || '';
+      let detailedError = 'Failed to create session token. Please check the server logs for more details.';
+
+      if (errorMessage.includes('iam.serviceAccounts.signBlob') || errorMessage.includes('Service Account Token Creator')) {
+          detailedError = `The server has an authentication permission issue. The account used for local development is missing a required Google Cloud role.
+
+**ACTION REQUIRED:**
+1.  Go to the Google Cloud Console -> **IAM & Admin**.
+2.  Find the user account you logged in with when you ran \`gcloud auth application-default login\`.
+3.  Click the pencil icon to edit its roles.
+4.  Add the **"Service Account Token Creator"** role. This is required for the server to create login sessions.
+5.  Save the changes and **restart your app's development server**.`;
+
+      } else if (error.code === 'auth/invalid-credential' || errorMessage.includes('Could not refresh access token')) {
+          detailedError = `The server failed to authenticate with Google. This is often due to missing or expired local credentials.
           
 **ACTION REQUIRED:**
 1.  Run \`gcloud auth application-default login\` in your terminal.
@@ -28,10 +40,9 @@ export async function POST(request: NextRequest) {
 3.  **Important:** Restart the Next.js development server after the command succeeds.
 
 See README.md for more details on server authentication.`;
-          return NextResponse.json({ error: detailedError }, { status: 500 });
       }
 
-      return NextResponse.json({ error: 'Failed to create session token. Please check the server logs for more details.' }, { status: 500 });
+      return NextResponse.json({ error: detailedError }, { status: 500 });
     }
   } else {
     return NextResponse.json({ error: 'Invalid password.' }, { status: 401 });
