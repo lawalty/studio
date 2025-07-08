@@ -200,12 +200,12 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
                 <Alert className="mt-4" variant={kbTestResult ? "default" : "destructive"}>
                     {kbTestResult ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                     <AlertTitle>{kbTestResult ? "Success" : "Failed"}</AlertTitle>
-                    <AlertDescription className="text-xs break-words">
+                    <AlertDescription className="text-xs break-words whitespace-pre-wrap">
                         {kbTestError
                             ? kbTestError
                             : kbTestResult && kbTestResult.searchResult?.length > 0
                             ? `Successfully retrieved ${kbTestResult.searchResult.length} chunk(s) from the knowledge base.`
-                            : "Search was successful, but no relevant chunks were found for this query in any priority level."}
+                            : "Search was successful, but no relevant chunks were found for this query in any priority level. This might mean the 'relevance threshold' is too strict or the document doesn't contain a close match."}
                     </AlertDescription>
                 </Alert>
             )}
@@ -213,6 +213,17 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
                 <div className="mt-4">
                     <Label className="text-xs font-bold">Retrieved Context for LLM</Label>
                     <Textarea readOnly value={kbTestResult.retrievedContext} className="mt-1 h-48 text-xs bg-muted" />
+                </div>
+            )}
+             {kbTestResult?.searchResult && (
+                <div className="mt-4">
+                    <Label className="text-xs font-bold">Raw Search Result (for debugging)</Label>
+                    <Textarea
+                        readOnly
+                        value={JSON.stringify(kbTestResult.searchResult, null, 2)}
+                        className="mt-1 h-48 text-xs bg-muted font-mono"
+                        placeholder="Raw JSON output from the vector search will appear here..."
+                    />
                 </div>
             )}
         </CardContent>

@@ -10,9 +10,10 @@ import { GoogleAuth } from 'google-auth-library';
 
 // The maximum distance for a search result to be considered relevant.
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
-// value indicates higher similarity. A distance of 0.7 is a lenient threshold,
-// allowing for good semantic matches even with typos or different phrasing.
-const MAX_DISTANCE_THRESHOLD = 0.7;
+// value indicates higher similarity. A distance of 0 means a perfect match.
+// A value of 1.0 is a reasonable starting point. Values up to ~1.4 can still be relevant.
+// We are setting this to 1.2 to be more inclusive.
+const MAX_DISTANCE_THRESHOLD = 1.2;
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low')[]> = ['High', 'Medium', 'Low'];
 
@@ -166,7 +167,7 @@ Raw error from Google: ${errorMessage}`);
 
       if (neighbors && neighbors.length > 0) {
         const relevantNeighbors = neighbors.filter(
-          (neighbor: RestApiNeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
+          (neighbor: RestApiNeighbor) => (neighbor.distance ?? 2) < MAX_DISTANCE_THRESHOLD
         );
 
         if (relevantNeighbors.length > 0) {
