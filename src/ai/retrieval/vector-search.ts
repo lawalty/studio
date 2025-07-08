@@ -8,11 +8,12 @@ import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
 import { protos } from '@google-cloud/aiplatform';
 
-// Use 'require' for the client to ensure compatibility with the Next.js production build environment,
+// Use 'require' with direct destructuring for the client to ensure compatibility with the Next.js production build environment,
 // which can have issues with the module resolution of this specific gRPC-based library.
 // We still import `protos` separately to maintain strong type-safety for request/response objects.
 // eslint-disable-next-line
-const aiplatform = require('@google-cloud/aiplatform');
+const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1;
+
 
 // The maximum distance for a search result to be considered relevant.
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
@@ -91,9 +92,9 @@ export async function searchKnowledgeBase({
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
 
-  // 3. Set up the Vertex AI client using the required client.
+  // 3. Set up the Vertex AI client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const indexEndpointServiceClient = new aiplatform.v1.IndexEndpointServiceClient(clientOptions);
+  const indexEndpointServiceClient = new IndexEndpointServiceClient(clientOptions);
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
