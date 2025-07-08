@@ -95,7 +95,8 @@ export async function searchKnowledgeBase({
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
-  const searchLevels: string[] = ['High', 'Medium', 'Low'];
+  // SIMPLIFIED FOR DEBUGGING: Only searching 'High' priority as requested.
+  const searchLevels: string[] = ['High'];
   const searchErrors: string[] = [];
 
   for (const level of searchLevels) {
@@ -118,6 +119,11 @@ export async function searchKnowledgeBase({
         }],
       };
       
+      // Explicit check to provide a clearer error message.
+      if (typeof indexEndpointServiceClient.findNeighbors !== 'function') {
+        throw new Error(`Critical Error: indexEndpointServiceClient.findNeighbors is NOT a function. The AI Platform client library may not have been imported correctly by the build system.`);
+      }
+
       const [response] = await indexEndpointServiceClient.findNeighbors(request);
       const neighbors = response.nearestNeighbors?.[0]?.neighbors;
 

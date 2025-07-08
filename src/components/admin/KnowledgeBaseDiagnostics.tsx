@@ -11,6 +11,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
+import { useToast } from '@/hooks/use-toast';
 
 
 // Define the shape of the test case
@@ -75,6 +76,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
   const [kbTestResult, setKbTestResult] = useState<TestKnowledgeBaseOutput | null>(null);
   const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
   const [kbTestError, setKbTestError] = useState<string | null>(null);
+  const { toast } = useToast();
 
 
   const runIngestionTest = async (testCase: TestCase) => {
@@ -107,6 +109,10 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
     setIsTestingKb(true);
     setKbTestResult(null);
     setKbTestError(null);
+    toast({
+      title: "Starting Knowledge Base Test",
+      description: "Sending query to the retrieval pipeline...",
+    });
     try {
       const input: TestKnowledgeBaseInput = { 
         query: kbTestQuery,
