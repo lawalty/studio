@@ -2,19 +2,11 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read access to site assets like avatars
-    match /site_assets/{allPaths=**} {
-      allow read;
-    }
-
-    // Secure the knowledge base files
-    // WARNING: The 'write' rule is temporarily insecure for development purposes
-    // to allow the admin panel (which currently has no login) to function.
-    // This allows ANY user to upload/delete knowledge base files.
-    // This should be secured with proper authentication before production.
-    match /knowledge_base_files/{level}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if true;
+    // WARNING: This is an insecure rule for debugging purposes.
+    // It allows any user, authenticated or not, to read, write, and delete
+    // any file in your storage bucket.
+    match /{allPaths=**} {
+      allow read, write: if true;
     }
   }
 }
