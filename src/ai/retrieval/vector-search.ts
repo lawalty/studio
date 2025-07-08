@@ -12,7 +12,7 @@ import { protos } from '@google-cloud/aiplatform';
 // which can have issues with the module resolution of this specific gRPC-based library.
 // We still import `protos` separately to maintain strong type-safety for request/response objects.
 // eslint-disable-next-line
-const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1;
+const aiplatform = require('@google-cloud/aiplatform');
 
 // The maximum distance for a search result to be considered relevant.
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
@@ -93,7 +93,7 @@ export async function searchKnowledgeBase({
 
   // 3. Set up the Vertex AI client using the required client.
   const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const indexEndpointServiceClient = new IndexEndpointServiceClient(clientOptions);
+  const indexEndpointServiceClient = new aiplatform.v1.IndexEndpointServiceClient(clientOptions);
   const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
 
   // 4. Perform sequential search through priority levels.
