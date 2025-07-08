@@ -34,8 +34,7 @@ interface SearchParams {
 const {
   GCLOUD_PROJECT,
   VERTEX_AI_DEPLOYED_INDEX_ID,
-  VERTEX_AI_INDEX_ENDPOINT_ID,
-  LOCATION,
+  VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN, // Use the public domain for the endpoint URL
 } = process.env;
 
 // Define the structure of the neighbor objects from the REST API response
@@ -78,9 +77,9 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Validate environment configuration.
-  if (!GCLOUD_PROJECT || !VERTEX_AI_DEPLOYED_INDEX_ID || !VERTEX_AI_INDEX_ENDPOINT_ID || !LOCATION) {
+  if (!GCLOUD_PROJECT || !VERTEX_AI_DEPLOYED_INDEX_ID || !VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN) {
     throw new Error(
-      "Missing required environment variables for Vertex AI Search. Please set GCLOUD_PROJECT, VERTEX_AI_DEPLOYED_INDEX_ID, VERTEX_AI_INDEX_ENDPOINT_ID, and LOCATION in your .env.local file."
+      "Missing required environment variables for Vertex AI Search. Please set GCLOUD_PROJECT, VERTEX_AI_DEPLOYED_INDEX_ID, and VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN in your .env.local file."
     );
   }
 
@@ -99,7 +98,9 @@ export async function searchKnowledgeBase({
     scopes: 'https://www.googleapis.com/auth/cloud-platform',
   });
   const authToken = await auth.getAccessToken();
-  const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
+  
+  // Construct the correct URL for a public endpoint.
+  const endpointUrl = `https://${VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN}/v1/projects/${GCLOUD_PROJECT}:findNeighbors`;
   const allErrors: string[] = [];
 
   // 4. Perform prioritized, sequential search.
@@ -134,8 +135,8 @@ export async function searchKnowledgeBase({
       if (!response.ok) {
           const errorBody = await response.json();
           if (response.status === 501) {
-              const endpointId = process.env.VERTEX_AI_INDEX_ENDPOINT_ID;
-              throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured to serve requests. Action Required: 1. Go to the Vertex AI -> Vector Search -> Index Endpoints section in your Google Cloud Console. 2. Verify that the endpoint with ID '${endpointId}' exists and has a green checkmark indicating it is active. 3. Ensure your index is correctly deployed to this endpoint. 4. Confirm that the endpoint is a Public Endpoint, as private endpoints require different configurations.`);
+              const endpointDomain = process.env.VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN;
+              throw new Error(`The Vertex AI service returned a '501 Not Implemented' error. This indicates the Index Endpoint is not correctly configured or the public domain name is incorrect. Action Required: 1. Verify that the VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN in your .env.local file matches the 'Public domain name' in your Google Cloud Console. 2. Verify that the endpoint is active and the index is correctly deployed. 3. Confirm that the endpoint is a Public Endpoint.`);
           }
           throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
       }

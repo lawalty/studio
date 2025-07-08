@@ -79,6 +79,10 @@ For the Retrieval-Augmented Generation (RAG) knowledge base to function, you nee
 
     # The numeric ID of the public endpoint for your index.
     VERTEX_AI_INDEX_ENDPOINT_ID=your-index-endpoint-id
+    
+    # The full domain name of the public endpoint. You can find this on the
+    # Index Endpoints page in the "Public domain name" field.
+    VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN=your-public-endpoint-domain-name
 
     # The ID of your index deployment on the public endpoint.
     # This is often a string like 'deployed-my-index-v1'. You can find this on the
