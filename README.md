@@ -47,7 +47,18 @@ For client-side features to connect to your Firebase project, you need to provid
     *   Select your web app.
     *   You will find the configuration values (`apiKey`, `authDomain`, etc.) there.
 
-### 4. Add Server-Side Authentication (Local Development)
+### 4. Add Admin Password (Required for Admin Panel Access)
+
+To secure the admin panel, you must set an admin password. This is required for uploading and deleting files in the Knowledge Base.
+
+*   Add the following line to your `.env.local` file, choosing a strong password:
+    ```
+    ADMIN_PASSWORD=your_super_secret_password
+    ```
+
+*   This password will be required to access `/admin` and its sub-pages.
+
+### 5. Add Server-Side Authentication (Local Development)
 
 For server-side features like file indexing into the Knowledge Base to work on your local machine, the Firebase Admin SDK needs to authenticate to your Google Cloud project.
 
@@ -60,7 +71,7 @@ For server-side features like file indexing into the Knowledge Base to work on y
 *   **NOTE:** These local credentials can expire after a certain period. If you start seeing authentication errors in your local development environment after it was previously working, re-running this command will refresh your credentials and should fix the issue.
 *   **IMPORTANT**: This is not required for the deployed application, which authenticates automatically in the Google Cloud environment.
 
-### 5. Add Vertex AI Vector Search Config (Required for RAG)
+### 6. Add Vertex AI Vector Search Config (Required for RAG)
 
 For the Retrieval-Augmented Generation (RAG) knowledge base to function, you need to provide details about your Vertex AI Vector Search setup.
 
@@ -90,6 +101,6 @@ For the Retrieval-Augmented Generation (RAG) knowledge base to function, you nee
     VERTEX_AI_DEPLOYED_INDEX_ID=your-deployed-index-id
     ```
 
-### 6. Restart the App
+### 7. Restart the App
 
 After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect.
