@@ -16,9 +16,9 @@ const { IndexEndpointServiceClient } = require('@google-cloud/aiplatform').v1bet
 
 // The maximum distance for a search result to be considered relevant.
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
-// value indicates higher similarity. A distance of 0.3 is roughly equivalent to a
-// cosine similarity of 0.7, providing a good baseline for relevance.
-const MAX_DISTANCE_THRESHOLD = 0.3;
+// value indicates higher similarity. A distance of 0.5 is a moderately lenient
+// threshold, allowing for good semantic matches even with typos or different phrasing.
+const MAX_DISTANCE_THRESHOLD = 0.5;
 
 interface SearchResult {
   text: string;
