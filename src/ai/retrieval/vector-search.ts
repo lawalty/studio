@@ -7,12 +7,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
-import { protos } from '@google-cloud/aiplatform';
-// Using a two-step require for the client constructor, which can be more robust
-// in a Next.js server environment for certain gRPC-based libraries.
-const aiplatform = require('@google-cloud/aiplatform');
-const { IndexEndpointServiceClient } = aiplatform.v1;
-
+import { GoogleAuth } from 'google-auth-library';
 
 // The maximum distance for a search result to be considered relevant.
 // Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
@@ -42,8 +37,16 @@ const {
   LOCATION,
 } = process.env;
 
+// Define the structure of the neighbor objects from the REST API response
+interface RestApiNeighbor {
+    datapoint: {
+        datapointId: string;
+    };
+    distance: number;
+}
+
 // Helper function to process the neighbors returned from Vertex AI search
-async function processNeighbors(neighbors: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor[]): Promise<SearchResult[]> {
+async function processNeighbors(neighbors: RestApiNeighbor[]): Promise<SearchResult[]> {
   if (!neighbors || neighbors.length === 0) {
     return [];
   }
@@ -91,11 +94,13 @@ export async function searchKnowledgeBase({
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
 
-  // 3. Set up the Vertex AI client.
-  const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-  const indexEndpointServiceClient = new IndexEndpointServiceClient(clientOptions);
+  // 3. Set up authentication for the REST API call.
+  const auth = new GoogleAuth({
+    scopes: 'https://www.googleapis.com/auth/cloud-platform',
+  });
+  const authToken = await auth.getAccessToken();
 
-  // 4. Perform sequential search through priority levels.
+  // 4. Perform sequential search through priority levels using the REST API.
   const searchLevels: string[] = ['High', 'Medium', 'Low'];
   const searchErrors: string[] = [];
 
@@ -106,10 +111,9 @@ export async function searchKnowledgeBase({
         restricts.push({ namespace: 'topic', allow: [topic] });
       }
       
-      const endpoint = `projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}`;
+      const endpointUrl = `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
 
-      const request: protos.google.cloud.aiplatform.v1.IFindNeighborsRequest = {
-        indexEndpoint: endpoint,
+      const requestBody = {
         deployedIndexId: VERTEX_AI_INDEX_ID,
         queries: [{
           datapoint: {
@@ -121,24 +125,31 @@ export async function searchKnowledgeBase({
         }],
       };
       
-      // Explicit check to provide a clearer error message.
-      if (typeof indexEndpointServiceClient.findNeighbors !== 'function') {
-        throw new Error(`Critical Error: indexEndpointServiceClient.findNeighbors is NOT a function. The AI Platform client library may not have been imported correctly by the build system.`);
-      }
+      const response = await fetch(endpointUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-      const [response] = await indexEndpointServiceClient.findNeighbors(request);
-      const neighbors = response.nearestNeighbors?.[0]?.neighbors;
+      if (!response.ok) {
+        const errorBody = await response.json();
+        throw new Error(`API call failed with status ${response.status}: ${JSON.stringify(errorBody.error?.message || errorBody)}`);
+      }
+        
+      const responseData = await response.json();
+      const neighbors: RestApiNeighbor[] | undefined = responseData.nearestNeighbors?.[0]?.neighbors;
 
       if (neighbors && neighbors.length > 0) {
-        // Filter the results by the distance threshold.
         const relevantNeighbors = neighbors.filter(
-          (neighbor: protos.google.cloud.aiplatform.v1.FindNeighborsResponse.INeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
+          (neighbor: RestApiNeighbor) => (neighbor.distance ?? 1) < MAX_DISTANCE_THRESHOLD
         );
 
         if (relevantNeighbors.length > 0) {
           const results = await processNeighbors(relevantNeighbors);
           if (results.length > 0) {
-            // Found relevant results, return them immediately.
             console.log(`[searchKnowledgeBase] Found ${results.length} relevant results in '${level}' priority KB.`);
             return results;
           }
@@ -146,26 +157,21 @@ export async function searchKnowledgeBase({
       }
     } catch (error: any) {
       console.error(`Error searching level '${level}' in knowledge base:`, error);
-      // Collect errors instead of just logging. This helps diagnose config issues.
       searchErrors.push(`Level '${level}': ${error.message || 'Unknown error'}`);
     }
   }
 
-  // If we get here, it means no results were found in any level.
-  // If there were errors during the search, we should throw them now so the user is aware.
   if (searchErrors.length > 0) {
     const combinedErrors = searchErrors.join('; ');
-    if (combinedErrors.includes('PermissionDenied') || combinedErrors.includes('IAM')) {
+    if (combinedErrors.includes('PermissionDenied') || combinedErrors.includes('IAM') || combinedErrors.includes('403')) {
        throw new Error(`Vertex AI Search failed due to a permission issue. Please ensure the service account for your application has the "Vertex AI User" role.`);
     }
-    if (combinedErrors.includes('not found')) {
+    if (combinedErrors.includes('not found') || combinedErrors.includes('404')) {
        throw new Error(`Vertex AI Search failed because an endpoint or index was not found. Please verify your VERTEX_AI_INDEX_ID and VERTEX_AI_INDEX_ENDPOINT_ID environment variables.`);
     }
-    // Generic error for other cases.
     throw new Error(`Knowledge base search failed. Errors encountered: ${combinedErrors}`);
   }
 
-  // If the loop completes with no results and no errors, it's a genuine empty result.
   console.log('[searchKnowledgeBase] No relevant results found in any priority KB meeting the threshold.');
   return [];
 }
