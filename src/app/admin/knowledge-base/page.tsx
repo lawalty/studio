@@ -59,7 +59,7 @@ export default function KnowledgeBasePage() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high');
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
