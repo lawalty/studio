@@ -146,20 +146,35 @@ export default function StartPageContent() {
 
   // Typing animation effect
   useEffect(() => {
-    if (isLoading || !isImageLoaded) return;
-    setTypedMessage('');
-    
-    let i = 0;
-    const targetMessage = uiText.typedAnim;
-    const timer = setInterval(() => {
-      setTypedMessage(targetMessage.substring(0, i + 1));
-      i++;
-      if (i >= targetMessage.length) {
-        clearInterval(timer);
-      }
-    }, typingSpeedMs);
+    let animationDelayTimer: NodeJS.Timeout | null = null;
+    let typingTimer: NodeJS.Timeout | null = null;
 
-    return () => clearInterval(timer);
+    // Only start the process if not loading and the main image has loaded.
+    if (!isLoading && isImageLoaded) {
+      // Set a 3-second delay before the animation begins.
+      animationDelayTimer = setTimeout(() => {
+        setTypedMessage(''); // Ensure it starts from a blank slate.
+        let i = 0;
+        const targetMessage = uiText.typedAnim;
+        
+        typingTimer = setInterval(() => {
+          i++;
+          setTypedMessage(targetMessage.substring(0, i));
+          if (i >= targetMessage.length) {
+            clearInterval(typingTimer!);
+          }
+        }, typingSpeedMs);
+      }, 3000); // 3-second delay
+    } else {
+      // If we are loading or image is not loaded, ensure the message is cleared.
+      setTypedMessage('');
+    }
+
+    // Cleanup function to clear both timers when the effect re-runs or the component unmounts.
+    return () => {
+      if (animationDelayTimer) clearTimeout(animationDelayTimer);
+      if (typingTimer) clearInterval(typingTimer);
+    };
   }, [isLoading, isImageLoaded, typingSpeedMs, uiText.typedAnim]);
   
   // Image loading effect
