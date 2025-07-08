@@ -27,7 +27,7 @@ const testEmbeddingFlow = ai.defineFlow(
   async () => {
     try {
       const response = await ai.embed({
-        embedder: 'googleai/text-embedding-gecko',
+        embedder: 'googleai/text-embedding-004',
         content: 'This is a simple test sentence.',
       });
       

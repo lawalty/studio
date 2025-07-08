@@ -88,7 +88,7 @@ export async function searchKnowledgeBase({
 
   // 2. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
-    embedder: 'googleai/text-embedding-gecko',
+    embedder: 'googleai/text-embedding-004',
     content: query,
   });
   const queryEmbedding = embeddingResponse[0]?.embedding;
