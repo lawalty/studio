@@ -1,13 +1,37 @@
 
 rules_version = '2';
-
-// CAUTION: These rules are for development testing only.
-// They allow anyone to read and write to your entire database.
-// Before deploying to production, you must secure these rules.
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Default deny all other paths.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+
+    // Allow public read for site configurations (avatars, welcome messages, etc.)
+    // Only an authenticated admin can write to these documents.
+    match /configurations/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == 'admin-uid';
+    }
+
+    // Deny all client-side access to knowledge base chunks and metadata.
+    // These are only accessed by server-side Genkit flows which use the Admin SDK
+    // and bypass these rules. This is a critical security measure.
+    match /kb_chunks/{chunkId} {
+      allow read, write: if false;
+    }
+    match /kb_high_meta_v1/{metaId} {
+      allow read, write: if false;
+    }
+    match /kb_medium_meta_v1/{metaId} {
+      allow read, write: if false;
+    }
+    match /kb_low_meta_v1/{metaId} {
+      allow read, write: if false;
+    }
+     match /kb_archive_meta_v1/{metaId} {
+      allow read, write: if false;
     }
   }
 }

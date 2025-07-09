@@ -1,13 +1,27 @@
 
 rules_version = '2';
-
-// CAUTION: These rules are for development testing only.
-// They allow public read and write access to all files in your Storage bucket.
-// Before deploying to production, you must secure these rules.
 service firebase.storage {
   match /b/{bucket}/o {
+    
+    // Default deny all unless a more specific rule allows access.
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+
+    // Allow public read access for general site assets like logos and background images.
+    // Disallow client-side write access to prevent unauthorized changes.
+    match /site_assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == 'admin-uid';
+    }
+
+    // Secure the knowledge base files.
+    // - allow read: any user can read (e.g., for PDF downloads in the chat).
+    // - allow write: ONLY a logged-in user with the specific UID 'admin-uid' can upload, update, or delete files.
+    // This is how the admin panel gets its permissions.
+    match /knowledge_base_files/{allPaths=**} {
+       allow read: if true;
+       allow write: if request.auth != null && request.auth.uid == 'admin-uid';
     }
   }
 }
