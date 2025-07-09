@@ -1,13 +1,10 @@
-
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    // This rule allows anyone to read and write files.
-    // This is for demonstration purposes and should be secured
-    // with more specific rules in a production environment.
     match /{allPaths=**} {
-      allow read, write: if true;
+      // Allow read and write access for the next 30 days.
+      // This is a temporary rule for development and demonstration.
+      allow read, write: if request.time < timestamp.date(2024, 8, 9);
     }
   }
 }
