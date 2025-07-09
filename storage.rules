@@ -1,12 +1,12 @@
+
 rules_version = '2';
 
-// WARNING: These rules are insecure and grant public read/write access.
-// They are intended for short-term development and demonstration ONLY.
-// Re-secure your rules before launching to production.
 service firebase.storage {
   match /b/{bucket}/o {
+    // This rule grants access to all files in your storage for the next 30 days.
+    // After that, all requests will be denied.
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read, write: if request.time < timestamp.date(2024, 8, 14);
     }
   }
 }
