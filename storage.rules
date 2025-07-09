@@ -1,10 +1,10 @@
-
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // WARNING: Insecure. Allows anyone to read/write to your storage bucket.
-    // This is for debugging and initial development ONLY.
-    // Secure your data before going to production.
+    // THIS IS A TEST RULE - It allows anyone to read and write any file.
+    // This is NOT secure for a production app.
+    // TODO: Secure your storage before launch.
     match /{allPaths=**} {
       allow read, write: if true;
     }
