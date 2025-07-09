@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Mic, Bot, MessageSquareText } from 'lucide-react';
+import { Mic, Bot, MessageSquareText, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LanguageSelector from '@/components/layout/LanguageSelector';
 import { useLanguage } from '@/context/LanguageContext';
+import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
@@ -40,6 +41,7 @@ export default function StartPageContent() {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { language, translate } = useLanguage();
@@ -68,6 +70,7 @@ export default function StartPageContent() {
   useEffect(() => {
     const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      setConfigError(null);
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.maintenanceModeEnabled) {
@@ -91,13 +94,12 @@ export default function StartPageContent() {
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching site settings:", error);
+      setConfigError("Could not load site settings. This is often caused by an incorrect Firebase configuration in your .env.local file or security rules that block access. Please check your setup.");
       setIsLoading(false);
+      // Set defaults so the page is still somewhat functional
       setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
       setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
       setBackgroundUrl(null);
-      setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
-      setShowLanguageSelector(true);
-      setIsMaintenanceMode(false);
     });
 
     return () => unsubscribe();
@@ -151,11 +153,9 @@ export default function StartPageContent() {
     let animationDelayTimer: NodeJS.Timeout | null = null;
     let typingTimer: NodeJS.Timeout | null = null;
 
-    // Only start the process if not loading and the main image has loaded.
-    if (!isLoading && isImageLoaded) {
-      // Set a 3-second delay before the animation begins.
+    if (!isLoading && isImageLoaded && !configError) {
       animationDelayTimer = setTimeout(() => {
-        setTypedMessage(''); // Ensure it starts from a blank slate.
+        setTypedMessage(''); 
         let i = 0;
         const targetMessage = uiText.typedAnim;
         
@@ -166,18 +166,16 @@ export default function StartPageContent() {
             clearInterval(typingTimer!);
           }
         }, typingSpeedMs);
-      }, 3000); // 3-second delay
+      }, 3000); 
     } else {
-      // If we are loading or image is not loaded, ensure the message is cleared.
       setTypedMessage('');
     }
 
-    // Cleanup function to clear both timers when the effect re-runs or the component unmounts.
     return () => {
       if (animationDelayTimer) clearTimeout(animationDelayTimer);
       if (typingTimer) clearInterval(typingTimer);
     };
-  }, [isLoading, isImageLoaded, typingSpeedMs, uiText.typedAnim]);
+  }, [isLoading, isImageLoaded, typingSpeedMs, uiText.typedAnim, configError]);
   
   // Image loading effect
   useEffect(() => {
@@ -190,7 +188,6 @@ export default function StartPageContent() {
 
   // Maintenance mode redirect effect
   useEffect(() => {
-    // We get the search params from the component that wraps this one in a suspense boundary
     const isPreview = searchParams.get('preview') === 'true';
 
     if (isMaintenanceMode === true && !isPreview) {
@@ -218,6 +215,24 @@ export default function StartPageContent() {
           </CardContent>
         </Card>
       );
+    }
+    
+    if (configError) {
+        return (
+            <Card className="w-full max-w-2xl p-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
+                <CardHeader>
+                    <CardTitle className="text-2xl font-headline text-destructive flex items-center justify-center gap-2">
+                        <AlertTriangle /> Application Error
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Alert variant="destructive">
+                        <AlertTitle>Could not load configuration</AlertTitle>
+                        <AlertDescription>{configError}</AlertDescription>
+                    </Alert>
+                </CardContent>
+            </Card>
+        )
     }
 
     return (
@@ -300,7 +315,3 @@ export default function StartPageContent() {
     </div>
   );
 }
-
-    
-
-    
