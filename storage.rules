@@ -1,18 +1,11 @@
-
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-
-    // Allow public read for site assets (splash/background images, avatars)
-    match /site_assets/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == 'admin-uid';
-    }
-
-    // Secure knowledge base files. Only authenticated admin can read/write.
-    match /knowledge_base_files/{allPaths=**} {
-        allow read, write: if request.auth != null && request.auth.uid == 'admin-uid';
+    // WARNING: These are temporary, insecure rules for development and demonstration.
+    // They allow anyone to read and write to your Cloud Storage.
+    // These should be secured before launching to a real audience.
+    match /{allPaths=**} {
+      allow read, write: if true;
     }
   }
 }

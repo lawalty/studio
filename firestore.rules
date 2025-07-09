@@ -1,34 +1,11 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Allow public read for site assets, but only admin can write.
-    match /configurations/site_display_assets {
-      allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == 'admin-uid';
-    }
-
-    // Allow admin write for API keys, but no one can read them from the client.
-    match /configurations/api_keys_config {
-        allow read: if false; // No client-side reads
-        allow write: if request.auth != null && request.auth.uid == 'admin-uid';
-    }
-
-    // Secure knowledge base metadata. Admin can do anything.
-    match /kb_{level}_meta_v1/{docId} {
-        allow read, write, delete, update: if request.auth != null && request.auth.uid == 'admin-uid';
-    }
-
-    // Secure knowledge base chunks. Admin can do anything.
-    match /kb_chunks/{chunkId} {
-        allow read, write, delete, update: if request.auth != null && request.auth.uid == 'admin-uid';
-    }
-
-    // Secure diagnostic test collection. Admin can do anything.
-    match /__diagnostic_tests/{testId} {
-        allow read, write, delete, update: if request.auth != null && request.auth.uid == 'admin-uid';
+    // WARNING: These are temporary, insecure rules for development and demonstration.
+    // They allow anyone to read and write to your entire database.
+    // These should be secured before launching to a real audience.
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }
