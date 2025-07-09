@@ -6,23 +6,35 @@ export async function POST(request: NextRequest) {
   const { password } = await request.json();
   const adminPassword = process.env.ADMIN_PASSWORD;
 
-  if (!adminPassword || adminPassword.trim() === '' || adminPassword === 'your_super_secret_password_here') {
+  if (!adminPassword || adminPassword.trim() === '' || adminPassword === 'your_super_secret_password') {
     console.error("ADMIN_PASSWORD environment variable is not set or is the default value.");
     return NextResponse.json({ error: 'Server configuration error. Please set a secure admin password in your .env.local file.' }, { status: 500 });
   }
 
   if (password === adminPassword) {
     try {
+      // The UID 'admin-uid' is a fixed identifier for the admin user.
       const customToken = await admin.auth().createCustomToken('admin-uid');
       return NextResponse.json({ token: customToken });
     } catch (error: any) {
       console.error("Error creating custom token:", error);
       
-      const errorCode = error.code ? ` (Code: ${error.code})` : '';
-      const errorMessage = error.message ? ` Message: ${error.message}` : ' An unknown error occurred.';
+      let detailedError = `This is a server configuration issue.`;
 
-      // This detailed error will now be shown in the toast on the login page.
-      const detailedError = `This is a server configuration issue. Please see the details below and check your server logs for the full error object.\n---\nDetails from Server${errorCode}${errorMessage}`;
+      if (error.code === 'auth/invalid-credential') {
+        detailedError = `The server's credentials do not have permission to create login tokens.
+
+**Action Required:**
+1. Go to the Google Cloud Console -> IAM & Admin -> IAM.
+2. Find the user account you logged in with via the 'gcloud' command (it's your email address).
+3. Click the pencil icon to edit its roles.
+4. Click 'ADD ANOTHER ROLE' and search for 'Service Account Token Creator'.
+5. Select that role, save, and then **restart your application server**.
+
+Full error from Google: ${error.message}`;
+      } else {
+        detailedError += ` Please check the server logs for more details. Full error: ${error.message}`;
+      }
 
       return NextResponse.json({ error: detailedError }, { status: 500 });
     }

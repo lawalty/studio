@@ -13,23 +13,14 @@ import * as admin from 'firebase-admin';
 // This check ensures that Firebase is only initialized once.
 if (admin.apps.length === 0) {
   try {
-    // Prioritize the standard GCLOUD_PROJECT for server-side environments,
-    // falling back to the public one for local/client-side contexts.
-    const projectId = process.env.GCLOUD_PROJECT || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    
-    if (!projectId) {
-      // This error will be thrown if no project ID can be found.
-      throw new Error("Could not determine Firebase Project ID. Ensure GCLOUD_PROJECT or NEXT_PUBLIC_FIREBASE_PROJECT_ID is set.");
-    }
-
-    console.log(`[firebase-admin] Initializing Firebase Admin SDK for project: ${projectId}`);
-
-    admin.initializeApp({
-      projectId: projectId,
-    });
-    
+    // Initialize without arguments. It will automatically use Application
+    // Default Credentials (from `gcloud auth application-default login`)
+    // or other environment variables. This is the standard and most reliable method.
+    admin.initializeApp();
   } catch (error) {
     console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
+    // You might want to throw the error or handle it in a way that
+    // prevents the application from running with a misconfigured Admin SDK.
   }
 }
 
