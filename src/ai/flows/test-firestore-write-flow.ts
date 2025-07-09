@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to test server-side Firestore write access.
@@ -54,7 +55,7 @@ const testFirestoreWriteFlow = ai.defineFlow(
         if (rawError.includes("Could not refresh access token")) {
             detailedError = `The test failed due to a local authentication error. The server running on your local machine could not authenticate with Google Cloud services.
             
-**Action Required:** Please run 'gcloud auth application-default login' in your terminal and then restart the development server. See the 'Server-Side Authentication' section in README.md for full instructions.`;
+**Action Required:** Please run 'gcloud auth application-default login' in your terminal and then restart the development server. See the 'Local Server Authentication' section in README.md for full instructions.`;
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: The test failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and a billing account is linked.`;
         } else if (isPermissionsError) {
@@ -62,8 +63,8 @@ const testFirestoreWriteFlow = ai.defineFlow(
 
 **Action Required:**
 1.  Go to the Google Cloud Console -> **IAM & Admin**.
-2.  Find the service account for your application (e.g., your-project-id@serverless-robot-prod.iam.gserviceaccount.com for App Hosting).
-3.  Ensure this service account has the **"Firebase Admin"** or **"Cloud Datastore User"** role.`;
+2.  Find the service account for your application (e.g., for local dev this is your user account from 'gcloud auth'; for App Hosting it's a service account like 'PROJECT_NUMBER-compute@...').
+3.  Ensure this account has the **"Firebase Admin"** or **"Cloud Datastore User"** role.`;
         } else {
             detailedError = `The Firestore write test failed for an unexpected reason. Full technical error: ${rawError}`;
         }

@@ -56,7 +56,7 @@ const testTextGenerationFlow = ai.defineFlow(
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: The text generation feature failed because billing is not enabled for your Google Cloud project. Please link a billing account in the Google Cloud Console.`;
         } else {
-            detailedError = `The text generation test failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled).`;
+            detailedError = `The text generation test failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
         }
         
         return { success: false, error: detailedError };

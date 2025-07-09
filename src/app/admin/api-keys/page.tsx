@@ -291,7 +291,7 @@ export default function ApiKeysPage() {
                         Server Authentication Test
                     </CardTitle>
                     <CardDescription className="text-xs">
-                        Tests if the server can write to Firestore using local credentials (from &apos;gcloud auth&apos;). This confirms the fix for the RAG pipeline error.
+                        Tests if the server can write to Firestore using its configured credentials (e.g., from Application Default Credentials or a service account).
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

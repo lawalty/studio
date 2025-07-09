@@ -31,7 +31,7 @@ const testEmbeddingFlow = ai.defineFlow(
         content: 'This is a simple test sentence.',
       });
       
-      const embedding = response[0]?.embedding;
+      const embedding = response;
 
       if (embedding && embedding.length > 0) {
         return {
@@ -59,7 +59,7 @@ const testEmbeddingFlow = ai.defineFlow(
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: The embedding feature failed because billing is not enabled for your Google Cloud project. Please link a billing account in the Google Cloud Console.`;
         } else {
-            detailedError = `The embedding test failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled).`;
+            detailedError = `The embedding test failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
         }
         
         return { success: false, error: detailedError };
