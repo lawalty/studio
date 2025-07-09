@@ -1,9 +1,10 @@
-
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
+    // This rule allows full read and write access for the next 30 days.
+    // This is for demonstration purposes and should be secured before production.
     match /{allPaths=**} {
-       // Completely open for the next 30 days for demo purposes.
       allow read, write: if request.time < timestamp.date(2024, 8, 14);
     }
   }
