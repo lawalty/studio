@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -37,6 +37,7 @@ interface KnowledgeSource {
   topic: string;
   level: KnowledgeBaseLevel;
   createdAt: string;
+  createdAtDate: Date;
   indexingStatus: 'processing' | 'success' | 'failed';
   indexingError?: string;
   downloadURL?: string;
@@ -94,6 +95,18 @@ export default function KnowledgeBasePage() {
     fetchTopics();
   }, [selectedTopicForUpload]);
 
+  const updateSourceInState = (source: KnowledgeSource) => {
+    setSources(prev => {
+      const newSources = { ...prev };
+      const levelSources = newSources[source.level];
+      const sourceIndex = levelSources.findIndex(s => s.id === source.id);
+      if (sourceIndex > -1) {
+        levelSources[sourceIndex] = source;
+      }
+      return newSources;
+    });
+  };
+
   useEffect(() => {
     const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
       const q = query(collection(db, config.collectionName));
@@ -101,20 +114,22 @@ export default function KnowledgeBasePage() {
         const levelSources: KnowledgeSource[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          const createdAtDate = data.createdAt ? new Date(data.createdAt) : new Date();
           levelSources.push({
             id: doc.id,
             sourceName: data.sourceName || 'Unknown Source',
             description: data.description || '',
             topic: data.topic || 'General',
             level: level as KnowledgeBaseLevel,
-            createdAt: data.createdAt ? new Date(data.createdAt).toLocaleString() : 'Unknown date',
+            createdAt: createdAtDate.toLocaleString(),
+            createdAtDate: createdAtDate,
             indexingStatus: data.indexingStatus || 'failed',
             indexingError: data.indexingError || 'No status available.',
             downloadURL: data.downloadURL,
             chunksWritten: data.chunksWritten
           });
         });
-        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: levelSources.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) }));
+        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime()) }));
         setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       }, (error) => {
         console.error(`Error fetching ${level} priority sources:`, error);
@@ -189,7 +204,6 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to process ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        // Don't auto-delete, instead mark as failed to allow re-processing.
         await updateDoc(sourceDocRef, {
             indexingStatus: 'failed',
             indexingError: errorMessage,
@@ -340,6 +354,27 @@ export default function KnowledgeBasePage() {
       }
   }, []);
 
+  const handleRefreshStatus = useCallback(async (source: KnowledgeSource) => {
+    setOperationStatus(source.id, true);
+    try {
+        const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+        const docSnap = await getDoc(sourceDocRef);
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const newStatus = data.indexingStatus || 'failed';
+            const updatedSource = { ...source, indexingStatus: newStatus, indexingError: data.indexingError };
+            updateSourceInState(updatedSource);
+            toast({ title: "Status Refreshed", description: `Current status is: ${newStatus}` });
+        } else {
+            toast({ title: "Not Found", description: "Source document could not be found.", variant: "destructive" });
+        }
+    } catch (e: any) {
+        toast({ title: "Error Refreshing", description: e.message, variant: "destructive" });
+    } finally {
+        setOperationStatus(source.id, false);
+    }
+  }, []);
+
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
   };
@@ -380,6 +415,7 @@ export default function KnowledgeBasePage() {
                         <TableBody>
                             {levelSources.map(source => {
                                 const isOpInProgress = operationInProgress[source.id] || false;
+                                const isStuckProcessing = source.indexingStatus === 'processing' && (new Date().getTime() - source.createdAtDate.getTime()) > 3 * 60 * 1000;
                                 return (
                                     <TableRow key={source.id} className={cn(isOpInProgress && "opacity-50 pointer-events-none")}>
                                         <TableCell className="font-medium">
@@ -399,7 +435,7 @@ export default function KnowledgeBasePage() {
                                                             {source.indexingStatus === 'success' && <CheckCircle size={16} className="text-green-500" />}
                                                             {source.indexingStatus === 'processing' && <Loader2 size={16} className="animate-spin" />}
                                                             {source.indexingStatus === 'failed' && <AlertTriangle size={16} className="text-destructive" />}
-                                                            <span className="capitalize">{source.indexingStatus === 'success' ? 'Indexed' : source.indexingStatus}</span>
+                                                            <span className="capitalize">{source.indexingStatus}</span>
                                                         </div>
                                                     </TooltipTrigger>
                                                     <TooltipContent>
@@ -457,7 +493,18 @@ export default function KnowledgeBasePage() {
                                                       </DropdownMenuContent>
                                                     </DropdownMenu>
 
-                                                    {source.indexingStatus === 'failed' && (
+                                                    {source.indexingStatus === 'processing' && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button variant="ghost" size="icon" onClick={() => handleRefreshStatus(source)} disabled={anyOperationGloballyInProgress}>
+                                                                    <RefreshCw size={16} />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent><p>Refresh Status</p></TooltipContent>
+                                                        </Tooltip>
+                                                    )}
+                                                    
+                                                    {(source.indexingStatus === 'failed' || isStuckProcessing) && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
                                                                 <Button variant="ghost" size="icon" onClick={() => handleReindexSource(source)} disabled={anyOperationGloballyInProgress}>
