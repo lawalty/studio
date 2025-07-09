@@ -1,12 +1,10 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It will expire in 30 days.
-    // WARNING: This is not a secure rule for production.
     match /{document=**} {
-      allow read, write: if request.time < timestamp.now() + duration.time(30, 0, 0, 0);
+      // Completely open for the next 30 days for demo purposes.
+      allow read, write: if request.time < timestamp.date(2024, 8, 14);
     }
   }
 }

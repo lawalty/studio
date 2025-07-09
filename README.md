@@ -6,90 +6,55 @@ To get started, take a look at src/app/page.tsx.
 
 ## Environment Variables
 
-This project requires environment variables to connect to Google AI and Firebase services.
+This project requires environment variables to connect to Google AI and Firebase services. There are two places to manage these: `.env.local` for local development and `apphosting.yaml` for the live (production) deployment.
 
-### 1. Create `.env.local`
+### 1. Local Development Setup (`.env.local`)
 
-Create a new file named `.env.local` in the root directory of this project. This file is for your local secrets and will not be checked into version control. You can copy the template from the `.env` file.
+For running the app on your local machine (`npm run dev`).
 
-### 2. Add Google AI API Key (Required)
+**Action:** Create a new file named `.env.local` in the root directory. Copy the contents of the `.env` file into it and fill in the values.
 
-For the application's AI features to function correctly, you must provide a Google AI API key.
+**Variables to set in `.env.local`:**
+*   `NEXT_PUBLIC_FIREBASE_API_KEY`
+*   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+*   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+*   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` (e.g., `your-project-id.appspot.com`)
+*   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+*   `NEXT_PUBLIC_FIREBASE_APP_ID`
+*   `GOOGLE_AI_API_KEY` (Get from [Google AI Studio](https://aistudio.google.com/app/apikey))
+*   `GCLOUD_PROJECT` (Your Firebase/Google Cloud Project ID)
+*   `LOCATION` (e.g., `us-central1`)
+*   `VERTEX_AI_INDEX_ID`
+*   `VERTEX_AI_INDEX_ENDPOINT_ID`
+*   `VERTEX_AI_DEPLOYED_INDEX_ID`
+*   `VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN`
 
-*   Go to **[Google AI Studio](https://aistudio.google.com/app/apikey)** to create and copy your API key.
-*   Add the key to your `.env.local` file:
+**Local Server Authentication:**
+The server-side code needs to authenticate to Google Cloud.
+*   **Prerequisite**: Install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install).
+*   **Action**: Run `gcloud auth application-default login` in your terminal and follow the prompts. You only need to do this once.
 
-    ```
-    GOOGLE_AI_API_KEY=your_api_key_here
-    ```
+### 2. Production Deployment Setup (`apphosting.yaml` and Secret Manager)
 
-*   **IMPORTANT**: Ensure the API key is associated with a Google Cloud project that has the **"Vertex AI API"** enabled.
+For the live version of your app hosted on Firebase App Hosting.
 
-### 3. Add Firebase Config (Required for Database/Storage on Client)
+**Action:** The configuration is managed in two places: `apphosting.yaml` for public variables and Google Secret Manager for private keys.
 
-For client-side features to connect to your Firebase project, you need to provide the public Firebase configuration.
+**Public Variables (`apphosting.yaml`):**
+*   The `apphosting.yaml` file in your project root contains all the `NEXT_PUBLIC_*` variables. These are safe to commit to your repository.
+*   When you deploy, Firebase uses this file to configure your live app. **You have already corrected the storage bucket in this file.**
 
-*   Add the following lines to your `.env.local` file, replacing the placeholders with your actual Firebase project credentials:
+**Private Secrets (Secret Manager):**
+*   Sensitive keys (`GOOGLE_AI_API_KEY`, Vertex AI IDs, etc.) are referenced in `apphosting.yaml` but their actual values must be stored in Google Secret Manager for security.
+*   **Action Required:**
+    1.  Go to the [Google Cloud Secret Manager](https://console.cloud.google.com/security/secret-manager) for your project.
+    2.  For each secret variable listed in `apphosting.yaml` (like `GOOGLE_AI_API_KEY`), click **"Create Secret"**.
+    3.  Enter the **Secret name** exactly as it appears in `apphosting.yaml` (e.g., `GOOGLE_AI_API_KEY`).
+    4.  Enter the corresponding key/ID as the **Secret value**.
+    5.  Leave the other settings as default and click **"Create secret"**.
+    6.  **Crucially**, after creating the secret, you must grant your App Hosting service account access to it. Your service account will be named `PROJECT_NUMBER-compute@developer.gserviceaccount.com`. Grant it the **"Secret Manager Secret Accessor"** role.
 
-    ```
-    NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
-    NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
-    ```
+### 3. Restart / Redeploy
 
-*   **Where to find these values:** You can find your Firebase project's configuration in the Firebase Console:
-    *   Go to your Firebase project.
-    *   Click the gear icon next to "Project Overview" and select "Project settings".
-    *   In the "General" tab, scroll down to the "Your apps" section.
-    *   Select your web app.
-    *   You will find the configuration values (`apiKey`, `authDomain`, etc.) there.
-
-### 4. Add Server-Side Authentication (Local Development)
-
-For server-side features like file indexing into the Knowledge Base to work on your local machine, the Firebase Admin SDK needs to authenticate to your Google Cloud project.
-
-*   **Prerequisite**: You must have the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed.
-*   **Action**: Run the following command in your terminal and follow the prompts to log in with your Google account:
-    ```bash
-    gcloud auth application-default login
-    ```
-*   This command saves credentials on your local machine that the Admin SDK will automatically find when you run `npm run dev`. **You only need to do this once.**
-*   **NOTE:** These local credentials can expire after a certain period. If you start seeing authentication errors in your local development environment after it was previously working, re-running this command will refresh your credentials and should fix the issue.
-*   **IMPORTANT**: This is not required for the deployed application, which authenticates automatically in the Google Cloud environment.
-
-### 5. Add Vertex AI Vector Search Config (Required for RAG)
-
-For the Retrieval-Augmented Generation (RAG) knowledge base to function, you need to provide details about your Vertex AI Vector Search setup.
-
-*   **Prerequisite:** You must first create a Vector Search Index and a public Index Endpoint in the Google Cloud Console under "Vertex AI" -> "Vector Search".
-*   Add the following lines to your `.env.local` file:
-
-    ```
-    # The ID of your Google Cloud project (same as your Firebase project ID).
-    GCLOUD_PROJECT=your_project_id
-
-    # The region where you created your Vertex AI index (e.g., us-central1).
-    LOCATION=your-gcp-region
-
-    # The numeric ID of the Vector Search index itself.
-    VERTEX_AI_INDEX_ID=your-index-id
-
-    # The numeric ID of the public endpoint for your index.
-    VERTEX_AI_INDEX_ENDPOINT_ID=your-index-endpoint-id
-    
-    # The full domain name of the public endpoint. You can find this on the
-    # Index Endpoints page in the "Public domain name" field.
-    VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN=your-public-endpoint-domain-name
-
-    # The ID of your index deployment on the public endpoint.
-    # This is often a string like 'deployed-my-index-v1'. You can find this on the
-    # Index Endpoints page in the "Deployed indexes" column.
-    VERTEX_AI_DEPLOYED_INDEX_ID=your-deployed-index-id
-    ```
-
-### 6. Restart the App
-
-After creating or modifying the `.env.local` file, you **must restart the application** for the changes to take effect.
+*   **Local:** After changing `.env.local`, restart your development server (`npm run dev`).
+*   **Production:** After changing `apphosting.yaml` or secrets, redeploy the app from the terminal or your CI/CD pipeline.
