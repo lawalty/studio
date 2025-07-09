@@ -1,11 +1,11 @@
+
 rules_version = '2';
+
+// This is a temporary rule for development and demonstration.
+// It allows open access for the next 30 days.
+// After your demo, you should implement stricter security rules.
 service firebase.storage {
   match /b/{bucket}/o {
-    // TEMPORARY DEMO RULE: Allow public read/write access for the next 30 days.
-    // This rule provides open access to your storage buckets to anyone.
-    // It is intended for development and demonstration purposes only.
-    // This rule will expire automatically.
-    // After your demo, you should implement stricter security rules.
     match /{allPaths=**} {
       allow read, write: if request.time < timestamp.date(2024, 8, 15);
     }
