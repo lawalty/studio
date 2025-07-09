@@ -1,12 +1,13 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // THIS IS A TEST RULE - It allows anyone to read and write any file.
-    // This is NOT secure for a production app.
-    // TODO: Secure your storage before launch.
+    // Allow read/write access to all files for now
+    // This is for development and testing ONLY.
+    // Lock this down before production.
     match /{allPaths=**} {
-      allow read, write: if true;
+      allow read, write: if request.time < timestamp.date(2024, 8, 30);
     }
   }
 }

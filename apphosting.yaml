@@ -15,7 +15,7 @@ runConfig:
     - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
       value: '513112805900'
     - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-      value: 513112805900:web:9a6f209b3f3ab00fb31429
+      value: 1:513112805900:web:9a6f209b3f3ab00fb31429
     - variable: GCLOUD_PROJECT
       value: ai-blair-7fb8o
     - variable: LOCATION

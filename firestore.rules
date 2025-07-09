@@ -1,12 +1,13 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // THIS IS A TEST RULE - It allows anyone to read and write to any document.
-    // This is NOT secure for a production app.
-    // TODO: Secure your database before launch.
+    // Allow read/write access to all documents for now
+    // This is for development and testing ONLY.
+    // Lock this down before production.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if request.time < timestamp.date(2024, 8, 30);
     }
   }
 }
