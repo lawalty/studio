@@ -151,8 +151,7 @@ export default function KnowledgeBasePage() {
     setIsCurrentlyUploading(true);
 
     const sourceDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
-    let storageRef = null;
-
+    
     try {
         await setDoc(sourceDocRef, {
             id: sourceId,
@@ -163,16 +162,16 @@ export default function KnowledgeBasePage() {
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
         });
-        toast({ title: `Uploading: ${fileToUpload.name}`, description: "Uploading file to storage..." });
+        toast({ title: `Step 1: Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
         
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-        storageRef = ref(storage, storagePath);
+        const storageRef = ref(storage, storagePath);
         const uploadResult = await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(uploadResult.ref);
         
         await updateDoc(sourceDocRef, { downloadURL });
 
-        toast({ title: "Extracting Text", description: "AI is now reading the document...", variant: "default" });
+        toast({ title: "Step 2: Extracting Text", description: "AI is reading the document. This may take a moment." });
 
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         
@@ -180,7 +179,7 @@ export default function KnowledgeBasePage() {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
         }
 
-        toast({ title: "Text Ready", description: "Indexing content chunks...", variant: "default" });
+        toast({ title: "Step 3: Indexing Document", description: "Creating embeddings for content chunks. This is the final step." });
 
         const indexingInput: IndexDocumentInput = {
             sourceId,
@@ -196,7 +195,7 @@ export default function KnowledgeBasePage() {
             throw new Error(indexingResult.error || 'The indexing flow failed without a specific error.');
         }
 
-        toast({ title: "Indexing Complete", description: `${fileToUpload.name} is now in the knowledge base.`, variant: "default" });
+        toast({ title: "Indexing Complete!", description: `"${fileToUpload.name}" is now in the knowledge base.`, variant: "default" });
         return { success: true };
 
     } catch (e: any) {
@@ -638,3 +637,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
