@@ -1,10 +1,11 @@
+
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // WARNING: These are temporary, insecure rules for development and demonstration.
-    // They allow anyone to read and write to your Cloud Storage.
-    // These should be secured before launching to a real audience.
     match /{allPaths=**} {
+      // Allow read and write access for all users, including unauthenticated ones.
+      // This is insecure and should only be used for a short time during setup or for a demo.
       allow read, write: if true;
     }
   }
