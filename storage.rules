@@ -3,15 +3,10 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-
-    // Allow read/write access to all files for the next 30 days
-    // This is for development and demonstration purposes ONLY.
-    // WARNING: This makes your storage bucket publicly accessible.
-    // You MUST secure this before launching a production application.
+    // WARNING: Insecure rules. Allow all read/write access for 30 days for development.
+    // This should be secured before going to a real production environment.
     match /{allPaths=**} {
-      allow read, write: if request.time < timestamp.date(2024, 8, 20);
+      allow read, write: if request.time < timestamp.date(2024, 8, 15);
     }
   }
 }
-
-    
