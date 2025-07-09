@@ -1,9 +1,4 @@
 
-import { NextResponse } from 'next/server';
-
-export async function POST() {
-  return NextResponse.json(
-    { error: 'Admin login is temporarily disabled. Direct navigation is enabled.' },
-    { status: 503 } // Service Unavailable
-  );
-}
+// This API route has been disabled to resolve a build conflict.
+// The active route is located at /src/app/api/auth/login/route.ts
+    

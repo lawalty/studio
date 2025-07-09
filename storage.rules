@@ -1,13 +1,12 @@
-
 rules_version = '2';
 
-// This is a temporary rule for development and demonstration.
-// It allows open access for the next 30 days.
-// After your demo, you should implement stricter security rules.
+// Set to "test mode" for 30 days to allow all reads and writes.
+// This is for development and demonstration purposes.
+// TODO: Secure these rules before a full production launch.
 service firebase.storage {
   match /b/{bucket}/o {
     match /{allPaths=**} {
-      allow read, write: if request.time < timestamp.date(2024, 8, 15);
+      allow read, write: if request.time < timestamp.date(2024, 8, 17);
     }
   }
 }

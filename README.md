@@ -12,7 +12,7 @@ This project requires environment variables to connect to Google AI and Firebase
 
 For running the app on your local machine (`npm run dev`).
 
-**Action:** Create a new file named `.env.local` in the root directory. Copy the contents of the `.env` file into it and fill in the values.
+**Action:** Create a new file named `.env.local` in the root directory. Copy the contents of the `.env` file into it and fill in the values. The Project ID and Storage Bucket have been corrected in the `.env` template to prevent common errors.
 
 **Variables to set in `.env.local`:**
 *   `NEXT_PUBLIC_FIREBASE_API_KEY`
@@ -28,6 +28,7 @@ For running the app on your local machine (`npm run dev`).
 *   `VERTEX_AI_INDEX_ENDPOINT_ID`
 *   `VERTEX_AI_DEPLOYED_INDEX_ID`
 *   `VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN`
+*   `ADMIN_PASSWORD` (A password you create for securing the admin login)
 
 **Local Server Authentication:**
 The server-side code needs to authenticate to Google Cloud.
@@ -42,10 +43,10 @@ For the live version of your app hosted on Firebase App Hosting.
 
 **Public Variables (`apphosting.yaml`):**
 *   The `apphosting.yaml` file in your project root contains all the `NEXT_PUBLIC_*` variables. These are safe to commit to your repository.
-*   When you deploy, Firebase uses this file to configure your live app. **You have already corrected the storage bucket in this file.**
+*   When you deploy, Firebase uses this file to configure your live app. **The storage bucket has been corrected in this file.**
 
 **Private Secrets (Secret Manager):**
-*   Sensitive keys (`GOOGLE_AI_API_KEY`, Vertex AI IDs, etc.) are referenced in `apphosting.yaml` but their actual values must be stored in Google Secret Manager for security.
+*   Sensitive keys (`GOOGLE_AI_API_KEY`, `ADMIN_PASSWORD`, Vertex AI IDs, etc.) are referenced in `apphosting.yaml` but their actual values must be stored in Google Secret Manager for security.
 *   **Action Required:**
     1.  Go to the [Google Cloud Secret Manager](https://console.cloud.google.com/security/secret-manager) for your project.
     2.  For each secret variable listed in `apphosting.yaml` (like `GOOGLE_AI_API_KEY`), click **"Create Secret"**.
@@ -57,4 +58,4 @@ For the live version of your app hosted on Firebase App Hosting.
 ### 3. Restart / Redeploy
 
 *   **Local:** After changing `.env.local`, restart your development server (`npm run dev`).
-*   **Production:** After changing `apphosting.yaml` or secrets, redeploy the app from the terminal or your CI/CD pipeline.
+*   **Production:** After changing `apphosting.yaml` or secrets, redeploy the app by clicking "Publish" in Firebase Studio.
