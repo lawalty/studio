@@ -1,13 +1,13 @@
 
 rules_version = '2';
 
+// CAUTION: These rules are for development testing only.
+// They allow anyone to read and write to your entire database.
+// Before deploying to production, you must secure these rules.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to all documents for now
-    // This is for development and testing ONLY.
-    // Lock this down before production.
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2024, 8, 30);
+      allow read, write: if true;
     }
   }
 }

@@ -1,13 +1,13 @@
 
 rules_version = '2';
 
+// CAUTION: These rules are for development testing only.
+// They allow public read and write access to all files in your Storage bucket.
+// Before deploying to production, you must secure these rules.
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read/write access to all files for now
-    // This is for development and testing ONLY.
-    // Lock this down before production.
     match /{allPaths=**} {
-      allow read, write: if request.time < timestamp.date(2024, 8, 30);
+      allow read, write: if true;
     }
   }
 }
