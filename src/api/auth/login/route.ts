@@ -21,15 +21,16 @@ export async function POST(request: NextRequest) {
       
       let detailedError = `This is a server configuration issue.`;
 
-      if (error.code === 'auth/invalid-credential') {
-        detailedError = `The server's credentials do not have permission to create login tokens.
+      // This is a more specific check for the most common cause of this error.
+      if (error.code === 'auth/insufficient-permission' || (error.message && error.message.includes('iam.serviceAccounts.signBlob'))) {
+        detailedError = `The server's credentials do not have permission to create login tokens. This is the root cause of the 'Failed to create session token' error.
 
 **Action Required:**
 1. Go to the Google Cloud Console -> IAM & Admin -> IAM.
-2. Find the user account you logged in with via the 'gcloud' command (it's your email address).
+2. Find the user account you logged in with via the 'gcloud auth application-default login' command (it should be your email address).
 3. Click the pencil icon to edit its roles.
 4. Click 'ADD ANOTHER ROLE' and search for 'Service Account Token Creator'.
-5. Select that role, save, and then **restart your application server**.
+5. Select that role, save the changes, and then **restart your application server**.
 
 Full error from Google: ${error.message}`;
       } else {
