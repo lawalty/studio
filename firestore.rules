@@ -1,35 +1,31 @@
 
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if the user is the authenticated admin.
-    function isAdmin() {
-      return request.auth != null && request.auth.uid == 'admin-uid';
-    }
-
-    // Site configuration data:
-    // - Anyone can read it (for avatars, welcome messages, etc.).
-    // - Only the admin can write to it.
-    match /configurations/{docId} {
+    // Allow public read access to configuration files for site display
+    match /configurations/site_display_assets {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if request.auth.uid == 'admin-uid';
     }
 
-    // Knowledge base metadata:
-    // - Only the admin can read, create, update, or delete these documents.
+    // Allow admin to read and write to API key config. No public access.
+    match /configurations/api_keys_config {
+        allow read, write: if request.auth.uid == 'admin-uid';
+    }
+
+    // Allow admin to manage knowledge base metadata
     match /kb_{level}_meta_v1/{docId} {
-       allow read, write: if isAdmin();
+      allow read, write, delete: if request.auth.uid == 'admin-uid';
     }
 
-    // Deny all direct client access to the raw data chunks and diagnostic tests.
-    // These should only be accessed by server-side flows.
-    match /kb_chunks/{docId} {
-      allow read, write: if false;
+    // Disallow direct client access to chunks to prevent data leakage
+    match /kb_chunks/{chunkId} {
+      allow read, write, delete: if false;
     }
-    match /__diagnostic_tests/{docId} {
-        allow read, write: if false;
+
+    // Allow admin to run diagnostic tests
+    match /__diagnostic_tests/{testId} {
+        allow read, write, delete: if request.auth.uid == 'admin-uid';
     }
   }
 }

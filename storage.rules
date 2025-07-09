@@ -1,28 +1,16 @@
 
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Helper function to check if the user is the authenticated admin.
-    function isAdmin() {
-      return request.auth != null && request.auth.uid == 'admin-uid';
-    }
-
-    // Allow public read access to all files.
-    // This is needed for images on the site (avatars, splash screens) and for the
-    // server-side text extraction flow to access uploaded documents via their public URL.
-    match /{allPaths=**} {
-      allow read: if true;
-    }
-
-    // Restrict write access (upload, update, delete) to the authenticated admin user.
-    // This secures the knowledge base and site assets from unauthorized changes.
-    match /knowledge_base_files/{allPaths=**} {
-      allow write: if isAdmin();
-    }
+    // Allow public read access to all files in the site_assets folder
     match /site_assets/{allPaths=**} {
-      allow write: if isAdmin();
+      allow read: if true;
+      allow write: if request.auth.uid == 'admin-uid';
+    }
+
+    // Allow authenticated admin to read, write, and delete knowledge base files
+    match /knowledge_base_files/{allPaths=**} {
+      allow read, write, delete: if request.auth.uid == 'admin-uid';
     }
   }
 }
