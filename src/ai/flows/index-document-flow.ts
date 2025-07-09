@@ -93,13 +93,14 @@ export async function indexDocument({
           );
 
           chunks.forEach((chunkText, index) => {
-            const chunkDocRef = chunksCollection.doc(); 
-            const embedding = embeddingResponses[index]?.[0]?.embedding;
-            if (!embedding) {
-                // This will stop the process if any chunk fails to get an embedding
-                throw new Error(`Failed to generate embedding for chunk number ${index + 1}.`);
+            const newChunkDocRef = chunksCollection.doc();
+            const embeddingVector = embeddingResponses[index];
+
+            if (!embeddingVector || embeddingVector.length === 0) {
+              throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
-            batch.set(chunkDocRef, {
+            
+            batch.set(newChunkDocRef, {
               sourceId,
               sourceName,
               level,
@@ -108,9 +109,10 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding, // Save the generated embedding vector
+              embedding: embeddingVector,
             });
           });
+          
           await batch.commit();
         }
         
