@@ -1,11 +1,13 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // This rule allows full read and write access for the next 30 days.
-    // This is for demonstration purposes and should be secured before production.
+    // TEMPORARY DEMO RULE: Allow public read/write access for the next 30 days.
+    // This rule provides open access to your database to anyone.
+    // It is intended for development and demonstration purposes only.
+    // This rule will expire automatically.
+    // After your demo, you should implement stricter security rules.
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2024, 8, 14);
+      allow read, write: if request.time < timestamp.date(2024, 8, 15);
     }
   }
 }
