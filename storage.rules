@@ -1,12 +1,17 @@
+
 rules_version = '2';
 
-// Set to "test mode" for 30 days to allow all reads and writes.
-// This is for development and demonstration purposes.
-// TODO: Secure these rules before a full production launch.
 service firebase.storage {
   match /b/{bucket}/o {
+
+    // Allow read/write access to all files for the next 30 days
+    // This is for development and demonstration purposes ONLY.
+    // WARNING: This makes your storage bucket publicly accessible.
+    // You MUST secure this before launching a production application.
     match /{allPaths=**} {
-      allow read, write: if request.time < timestamp.date(2024, 8, 17);
+      allow read, write: if request.time < timestamp.date(2024, 8, 20);
     }
   }
 }
+
+    

@@ -1,3 +1,4 @@
+
 # Firebase Studio
 
 This is a NextJS starter in Firebase Studio.
@@ -59,3 +60,5 @@ For the live version of your app hosted on Firebase App Hosting.
 
 *   **Local:** After changing `.env.local`, restart your development server (`npm run dev`).
 *   **Production:** After changing `apphosting.yaml` or secrets, redeploy the app by clicking "Publish" in Firebase Studio.
+
+    
