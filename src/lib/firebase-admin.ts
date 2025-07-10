@@ -20,7 +20,9 @@ if (admin.apps.length === 0) {
     // after authenticating with 'gcloud auth application-default login', the SDK
     // automatically finds the necessary credentials.
     // The storageBucket is a required piece of configuration for the SDK to initialize correctly.
+    // Explicitly providing the projectId solves the "Failed to determine service account" error.
     admin.initializeApp({
+      projectId: process.env.GCLOUD_PROJECT,
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
     console.log('[firebase-admin] Initialized with Application Default Credentials.');
