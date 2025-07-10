@@ -19,11 +19,17 @@ let app: FirebaseApp;
 
 // This check prevents the app from being initialized multiple times.
 if (getApps().length === 0) {
-    // This check provides a clear error message if the developer has not
-    // configured their .env.local file correctly, which is the cause of the error.
+    // This new, more robust check provides a clear error message if any required
+    // environment variable is missing, which is the likely cause of the error.
     if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+        const missingVars = Object.entries(firebaseConfig)
+            .filter(([key, value]) => !value)
+            .map(([key]) => `NEXT_PUBLIC_FIREBASE_${key.replace(/([A-Z])/g, '_$1').toUpperCase()}`)
+            .join(', ');
+
         throw new Error(
             'CRITICAL: Client-side Firebase environment variables are missing. ' +
+            `The following variables were not found: [${missingVars}]. ` +
             'Please ensure your .env.local file is in the root directory and contains all ' +
             'NEXT_PUBLIC_FIREBASE_* variables. You MUST restart the dev server after changes.'
         );
