@@ -1,19 +1,22 @@
 
 rules_version = '2';
 
+// By default, deny all reads and writes.
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read and write access to the knowledge_base_files directory
-    // for any authenticated user. This is necessary for the admin panel
-    // to upload new source documents.
-    match /knowledge_base_files/{allPaths=**} {
-      allow read, write: if request.auth != null;
-    }
     
-    // Allow read/write access to site assets for authenticated users.
-    // This allows the admin panel to change avatars and splash images.
+    // Allow writes only to the designated knowledge_base_files directory
+    // for authenticated users. This is where all user-uploaded content
+    // for the RAG system will be stored.
+    match /knowledge_base_files/{allPaths=**} {
+      allow write: if request.auth != null;
+    }
+
+    // Allow public read access to site assets like logos and avatars.
+    // This allows the application front-end to display these images
+    // without requiring user authentication.
     match /site_assets/{allPaths=**} {
-       allow read, write: if request.auth != null;
+      allow read: if true;
     }
   }
 }

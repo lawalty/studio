@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Centralized Firebase Admin SDK Initialization
  *
@@ -13,11 +14,12 @@ import * as admin from 'firebase-admin';
 // This check ensures that Firebase is only initialized once.
 if (admin.apps.length === 0) {
   try {
-    // Initialize with arguments, including the storageBucket. This resolves
-    // issues where the Admin SDK cannot automatically determine the bucket,
-    // which is common in various environments. The values are read from
-    // process.env, which are set via .env.local or App Hosting secrets.
+    // For local development, it uses the service account credentials configured via
+    // 'gcloud auth application-default login'. In a deployed App Hosting environment,
+    // it automatically uses the app's service account.
     admin.initializeApp({
+      // The projectId is necessary for the SDK to know which project to connect to.
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
   } catch (error) {
@@ -28,6 +30,7 @@ if (admin.apps.length === 0) {
 }
 
 const db = admin.firestore();
+const storage = admin.storage();
 
-// We export the initialized db and the admin namespace.
-export { db, admin };
+// We export the initialized db, storage, and the admin namespace.
+export { db, admin, storage };
