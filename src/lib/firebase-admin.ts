@@ -2,36 +2,22 @@
  * @fileOverview Centralized Firebase Admin SDK Initialization
  *
  * This file initializes the Firebase Admin SDK for the entire server-side
- * application. It ensures that the SDK is initialized only once, preventing
- * potential conflicts and errors from multiple initializations.
+ * application. It ensures that the SDK is initialized only once.
+ * It is configured to use Application Default Credentials (ADC).
  *
- * Other server-side files should import the exported 'db', 'auth', and 'storage'
- * instances from this module instead of initializing their own.
+ * For local development, create a service account key JSON file and point to it
+ * using the GOOGLE_APPLICATION_CREDENTIALS environment variable in `.env.local`.
+ * For production on App Hosting, ADC is automatically configured.
  */
 import admin from 'firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
-// For local development, you must create a .env.local file and add the
-// SERVICE_ACCOUNT_KEY environment variable.
-// 1. Go to Firebase Console > Project Settings > Service accounts.
-// 2. Click "Generate new private key". A JSON file will be downloaded.
-// 3. Open the JSON file, copy the entire content, and paste it as the value for
-//    SERVICE_ACCOUNT_KEY in your .env.local file.
-//    It should look like: SERVICE_ACCOUNT_KEY='{"type": "service_account", ...}'
-const serviceAccount = process.env.SERVICE_ACCOUNT_KEY
-  ? JSON.parse(process.env.SERVICE_ACCOUNT_KEY)
-  : undefined;
-
 if (admin.apps.length === 0) {
   try {
     admin.initializeApp({
-      credential: serviceAccount
-        ? admin.credential.cert(serviceAccount)
-        : undefined, // In production (App Hosting), it will use Application Default Credentials.
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      projectId: process.env.GCLOUD_PROJECT,
     });
   } catch (error) {
     console.error(
@@ -43,7 +29,7 @@ if (admin.apps.length === 0) {
 
 const app = admin.app();
 const db = getFirestore(app);
-const storage = getStorage(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
-export { db, admin, storage, auth };
+export { db, admin, auth, storage };
