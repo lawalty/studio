@@ -13,10 +13,13 @@ import * as admin from 'firebase-admin';
 // This check ensures that Firebase is only initialized once.
 if (admin.apps.length === 0) {
   try {
-    // Initialize without arguments. It will automatically use Application
-    // Default Credentials (from `gcloud auth application-default login`)
-    // or other environment variables. This is the standard and most reliable method.
-    admin.initializeApp();
+    // Initialize with arguments, including the storageBucket. This resolves
+    // issues where the Admin SDK cannot automatically determine the bucket,
+    // which is common in various environments. The values are read from
+    // process.env, which are set via .env.local or App Hosting secrets.
+    admin.initializeApp({
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    });
   } catch (error) {
     console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
     // You might want to throw the error or handle it in a way that
