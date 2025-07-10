@@ -1,1 +1,1 @@
-// This file is a duplicate and is not used. The active configuration is in the root next.config.js file.
+// This file is a duplicate and has been removed. The active configuration is in the root next.config.js file.
