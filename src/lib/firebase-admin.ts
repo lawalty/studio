@@ -16,13 +16,13 @@ import { getStorage } from 'firebase-admin/storage';
 
 if (admin.apps.length === 0) {
   try {
-    admin.initializeApp({
-      projectId: process.env.GCLOUD_PROJECT,
-    });
-  } catch (error) {
+    // When GOOGLE_APPLICATION_CREDENTIALS is set in .env.local, it will be used.
+    // In production on App Hosting, it will automatically use the runtime service account.
+    admin.initializeApp();
+  } catch (error: any) {
     console.error(
       '[firebase-admin] Firebase Admin SDK initialization error:',
-      error
+      error.stack
     );
   }
 }
@@ -32,4 +32,4 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const storage = getStorage(app);
 
-export { db, admin, auth, storage };
+export { db, admin, auth, storage, app };

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth, db } from '@/lib/firebase-admin';
 
 const FIRESTORE_CONFIG_PATH = "configurations/site_display_assets";
-const DEFAULT_PASSWORD_FALLBACK = "thisiscool"; // Fallback only if Firestore fails
+const DEFAULT_PASSWORD_FALLBACK = "thisiscool";
 
 async function getAdminPassword(): Promise<string> {
   try {
@@ -10,13 +10,10 @@ async function getAdminPassword(): Promise<string> {
     const docSnap = await docRef.get();
     if (docSnap.exists()) {
       const data = docSnap.data();
-      // Use the password from Firestore if it exists and is not empty
       if (data?.adminPassword && data.adminPassword.trim() !== "") {
         return data.adminPassword;
       }
     }
-    // If no password in Firestore, use the environment variable as a fallback/initial value.
-    // This allows the first login to work before it's saved in the UI.
     const envPassword = process.env.ADMIN_PASSWORD;
     if (envPassword && envPassword.trim() !== '') {
         return envPassword;
@@ -24,7 +21,6 @@ async function getAdminPassword(): Promise<string> {
     return DEFAULT_PASSWORD_FALLBACK;
   } catch (error) {
     console.error("Error fetching admin password from Firestore, using fallback. Error:", error);
-    // Fallback to environment variable or default if Firestore is inaccessible
     return process.env.ADMIN_PASSWORD || DEFAULT_PASSWORD_FALLBACK;
   }
 }
@@ -51,13 +47,14 @@ export async function POST(request: NextRequest) {
     console.error("[Login API] Error creating custom token:", error);
     
     let detailedError = 'Failed to create session token due to a server-side error.';
+    const errorMessage = error.message || '';
 
-    if (error.code === 'auth/insufficient-permission' || (error.message && (error.message.includes('iam.serviceAccountTokenCreator') || error.message.includes('Permission denied')))) {
-        detailedError = 'Server configuration error: The service account or local user is missing the "Service Account Token Creator" IAM role in Google Cloud. Please grant this role to the principal running the application.';
-    } else if (error.message && error.message.includes('Could not refresh access token')) {
-        detailedError = "Local authentication error. The server could not authenticate with Google Cloud. Please run 'gcloud auth application-default login' in your terminal, ensure you are logged in with the correct account that has 'Service Account Token Creator' permissions, and then restart the development server.";
-    } else if (error.code === 'auth/invalid-credential' || (error.message && error.message.includes("Credential implementation provided to initializeApp() via the \"credential\" property failed")) || (error.message && error.message.includes("Error: Failed to parse service account key"))) {
-        detailedError = "Firebase Admin SDK initialization failed. This can be caused by an invalid or missing service account configuration for local development. Please ensure your SERVICE_ACCOUNT_KEY in .env.local is set correctly."
+    if (errorMessage.includes('Failed to parse service account key') || errorMessage.includes('Credential implementation provided')) {
+        detailedError = 'Firebase Admin SDK initialization failed. This usually means the `service-account-key.json` file is missing, malformed, or not pointed to correctly by GOOGLE_APPLICATION_CREDENTIALS in your .env.local file.';
+    } else if (errorMessage.includes('insufficient-permission') || errorMessage.includes('iam.serviceAccountTokenCreator')) {
+        detailedError = 'Server configuration error: The service account is missing the "Service Account Token Creator" IAM role in Google Cloud.';
+    } else if (errorMessage.includes('Could not refresh access token')) {
+        detailedError = "Local authentication error. Please run 'gcloud auth application-default login' in your terminal and restart the dev server.";
     }
 
     return NextResponse.json({ error: detailedError }, { status: 500 });
