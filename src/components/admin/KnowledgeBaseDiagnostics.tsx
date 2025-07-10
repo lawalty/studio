@@ -27,23 +27,24 @@ interface TestCase {
 const dataURIToFile = (dataURI: string, fileName: string): File | null => {
   try {
     const parts = dataURI.split(',');
-    if (parts.length !== 2 || !parts[1]) {
+    if (parts.length !== 2 || !parts[0].includes('base64')) {
       console.error("Invalid data URI format provided to dataURIToFile.", { dataURI: dataURI.substring(0, 50) + '...' });
       return null;
     }
-    const byteString = atob(parts[1]);
     const mimeString = parts[0].split(':')[1].split(';')[0];
-    const ab = new ArrayBuffer(byteString.length);
-    const ia = new Uint8Array(ab);
-    for (let i = 0; i < byteString.length; i++) {
-      ia[i] = byteString.charCodeAt(i);
+    const byteCharacters = atob(parts[1]);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
-    return new File([ab], fileName, { type: mimeString });
+    const byteArray = new Uint8Array(byteNumbers);
+    return new File([byteArray], fileName, { type: mimeString });
   } catch (e) {
     console.error("Failed to decode base64 string in dataURIToFile:", e);
     return null;
   }
 };
+
 
 // Define our test cases
 const TEST_CASES: TestCase[] = [
