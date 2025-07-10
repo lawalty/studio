@@ -140,6 +140,29 @@ export default function KnowledgeBasePage() {
     return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
+  const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
+    setOperationStatus(source.id, true);
+    toast({ title: `Deleting ${source.sourceName}...` });
+    try {
+      const result = await deleteSource({
+        id: source.id,
+        level: source.level,
+        sourceName: source.sourceName,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'The deletion flow failed on the server.');
+      }
+
+      toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
+    } catch (error: any) {
+      console.error("Error deleting source:", error);
+      toast({ title: "Deletion Failed", description: `Could not delete ${source.sourceName}. ${error.message}`, variant: "destructive" });
+    } finally {
+      setOperationStatus(source.id, false);
+    }
+  }, []);
+
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, topic: string, description: string): Promise<{ success: boolean; error?: string }> => {
     if (!fileToUpload || !topic) {
         toast({ title: "Upload Error", description: "A file and topic are required.", variant: "destructive" });
@@ -211,10 +234,16 @@ export default function KnowledgeBasePage() {
         // Instead of just marking as failed, we now trigger a full deletion.
         toast({ title: "Cleaning up failed upload...", description: `Attempting to remove "${fileToUpload.name}" from the system.` });
         try {
-            await deleteSource({
+            await handleDeleteSource({
                 id: sourceId,
                 level: targetLevel,
                 sourceName: fileToUpload.name,
+                // These properties are not needed by deleteSource but are part of the type.
+                description: '',
+                topic: '',
+                createdAt: '',
+                createdAtDate: new Date(),
+                indexingStatus: 'failed',
             });
             toast({ title: "Cleanup Successful", description: `Failed upload for "${fileToUpload.name}" has been removed.`, variant: "default" });
         } catch (deleteError: any) {
@@ -233,7 +262,7 @@ export default function KnowledgeBasePage() {
         setIsCurrentlyUploading(false);
     }
   }, [handleDeleteSource]);
-
+  
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
@@ -247,29 +276,6 @@ export default function KnowledgeBasePage() {
       fileInputRef.current.value = '';
     }
   };
-  
-  const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
-    setOperationStatus(source.id, true);
-    toast({ title: `Deleting ${source.sourceName}...` });
-    try {
-      const result = await deleteSource({
-        id: source.id,
-        level: source.level,
-        sourceName: source.sourceName,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'The deletion flow failed on the server.');
-      }
-
-      toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
-    } catch (error: any) {
-      console.error("Error deleting source:", error);
-      toast({ title: "Deletion Failed", description: `Could not delete ${source.sourceName}. ${error.message}`, variant: "destructive" });
-    } finally {
-      setOperationStatus(source.id, false);
-    }
-  }, []);
 
   const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
       if (source.level === newLevel) return;
@@ -656,3 +662,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
