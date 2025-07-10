@@ -94,9 +94,10 @@ export async function indexDocument({
 
           chunks.forEach((chunkText, index) => {
             const newChunkDocRef = chunksCollection.doc();
+            // CORRECTED: The embedding vector is the entire response, not a property of it.
             const embeddingVector = embeddingResponses[index];
 
-            if (!embeddingVector || embeddingVector.length === 0) {
+            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
             
@@ -122,7 +123,7 @@ export async function indexDocument({
           chunksWritten: chunks.length,
           indexedAt: new Date().toISOString(),
           indexingError: '',
-          sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString(),
+          sourceName, level, topic, downloadURL: downloadURL || null,
         }, { merge: true });
         
         return {
@@ -149,7 +150,7 @@ export async function indexDocument({
         }
 
         try {
-          await sourceDocRef.set({ indexingStatus: 'failed', indexingError: detailedError, sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
+          await sourceDocRef.set({ indexingStatus: 'failed', indexingError: detailedError, sourceName, level, topic, downloadURL: downloadURL || null }, { merge: true });
         } catch (updateError) {
           console.error(`[indexDocument] CRITICAL: Failed to write failure status back to Firestore for source '${sourceName}'.`, updateError);
         }
