@@ -1,11 +1,11 @@
-import { initializeApp, getApp, getApps, type FirebaseOptions } from "firebase/app";
+import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
 import { getFirestore } from "firebase/firestore";
 
 // The Firebase config is loaded from environment variables.
 // See the README.md file for instructions on how to set this up.
-const firebaseConfig: FirebaseOptions = {
+const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -14,40 +14,27 @@ const firebaseConfig: FirebaseOptions = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Check that all required environment variables are set.
-const requiredVars = [
-  'NEXT_PUBLIC_FIREBASE_API_KEY',
-  'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
-  'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-  'NEXT_PUBLIC_FIREBASE_APP_ID',
-];
+const requiredVars = Object.keys(firebaseConfig);
+const missingVars = requiredVars.filter(key => !(firebaseConfig as any)[key]);
 
-const missingVars = requiredVars.filter(varName => !process.env[varName]);
+let app: FirebaseApp;
 
 if (missingVars.length > 0) {
-  const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing in your .env.local file: ${missingVars.join(', ')}. The application cannot start without them. Please see README.md for setup instructions.`;
-  console.error(errorMessage);
-  // In a real app, you might want to throw an error or show a message to the user.
-  // For now, we log the error to the console.
-}
-
-
-// Initialize Firebase
-let app;
-if (getApps().length === 0) {
-  // Only initialize if all variables are present
-  if (missingVars.length === 0) {
-    app = initializeApp(firebaseConfig);
-  } else {
-    // If we're missing variables, we can't initialize.
-    // Create a dummy app object to avoid crashing the server on import,
-    // though client-side Firebase will not work.
-    app = {} as any; 
+  // If we are on the server during a build, this can be noisy.
+  // In a browser environment, it's a critical error.
+  if (typeof window !== 'undefined') {
+    const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing: ${missingVars.join(', ')}. The application cannot function correctly. Please see README.md for setup instructions.`;
+    console.error(errorMessage);
+    // Throw an error to prevent the app from continuing in a broken state.
+    throw new Error(errorMessage);
   }
+  // If on the server, we can't initialize. The app object will be undefined,
+  // which will cause errors if used, but prevents build-time crashes.
+  // We'll rely on the browser check to catch the problem during development.
+  app = {} as FirebaseApp; // Dummy object for server build
 } else {
-  app = getApp();
+  // Initialize Firebase
+  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 }
 
 const auth = getAuth(app);
