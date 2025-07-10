@@ -15,25 +15,24 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Centralized function to get the Firebase app instance.
-function getFirebaseApp(): FirebaseApp {
-    if (getApps().length === 0) {
-        // This check provides a clear error message if the developer has not
-        // configured their .env.local file correctly.
-        if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-            throw new Error(
-                'CRITICAL: Client-side Firebase environment variables are missing. ' +
-                'Please ensure your .env.local file is in the root directory and contains all ' +
-                'NEXT_PUBLIC_FIREBASE_* variables. You MUST restart the dev server after changes.'
-            );
-        }
-        return initializeApp(firebaseConfig);
-    } else {
-        return getApp();
+let app: FirebaseApp;
+
+// This check prevents the app from being initialized multiple times.
+if (getApps().length === 0) {
+    // This check provides a clear error message if the developer has not
+    // configured their .env.local file correctly, which is the cause of the error.
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+        throw new Error(
+            'CRITICAL: Client-side Firebase environment variables are missing. ' +
+            'Please ensure your .env.local file is in the root directory and contains all ' +
+            'NEXT_PUBLIC_FIREBASE_* variables. You MUST restart the dev server after changes.'
+        );
     }
+    app = initializeApp(firebaseConfig);
+} else {
+    app = getApp();
 }
 
-const app = getFirebaseApp();
 const auth = getAuth(app);
 const storage = getStorage(app);
 const db = getFirestore(app);
