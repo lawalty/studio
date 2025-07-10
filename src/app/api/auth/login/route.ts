@@ -25,10 +25,10 @@ export async function POST(request: NextRequest) {
     console.error("[Login API] Error creating custom token:", error);
     
     let detailedError = 'Failed to create session token due to a server-side error.';
-    if (error.code === 'auth/insufficient-permission' || (error.message && error.message.includes('iam.serviceAccountTokenCreator'))) {
-        detailedError = 'Server configuration error: The service account or local user is missing the "Service Account Token Creator" IAM role in Google Cloud.';
+    if (error.code === 'auth/insufficient-permission' || (error.message && (error.message.includes('iam.serviceAccountTokenCreator') || error.message.includes('Permission denied')))) {
+        detailedError = 'Server configuration error: The service account or local user is missing the "Service Account Token Creator" IAM role in Google Cloud. Please grant this role to the principal running the application.';
     } else if (error.message && error.message.includes('Could not refresh access token')) {
-        detailedError = "Local authentication error. Please run 'gcloud auth application-default login' and restart the server.";
+        detailedError = "Local authentication error. The server could not authenticate with Google Cloud. Please run 'gcloud auth application-default login' in your terminal, ensure you are logged in with the correct account that has 'Service Account Token Creator' permissions, and then restart the development server.";
     }
 
     return NextResponse.json({ error: detailedError }, { status: 500 });

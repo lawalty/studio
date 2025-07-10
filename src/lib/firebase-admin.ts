@@ -16,7 +16,11 @@ if (admin.apps.length === 0) {
     // For local development, it uses the service account credentials configured via
     // 'gcloud auth application-default login'. In a deployed App Hosting environment,
     // it automatically uses the app's service account.
-    admin.initializeApp();
+    // Explicitly providing the projectId from the environment variable ensures
+    // the Admin SDK knows which project to connect to, resolving token creation errors.
+    admin.initializeApp({
+      projectId: process.env.GCLOUD_PROJECT,
+    });
   } catch (error) {
     console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
     // You might want to throw the error or handle it in a way that
