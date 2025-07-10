@@ -49,12 +49,10 @@ export async function POST(request: NextRequest) {
     let detailedError = 'Failed to create session token due to a server-side error.';
     const errorMessage = error.message || '';
 
-    if (errorMessage.includes('Failed to parse service account key') || errorMessage.includes('Credential implementation provided')) {
-        detailedError = 'Firebase Admin SDK initialization failed. This usually means the `service-account-key.json` file is missing, malformed, or not pointed to correctly by GOOGLE_APPLICATION_CREDENTIALS in your .env.local file.';
+    if (errorMessage.includes('Failed to parse service account key') || errorMessage.includes('Credential implementation provided') || errorMessage.includes('GOOGLE_APPLICATION_CREDENTIALS')) {
+        detailedError = 'Firebase Admin SDK initialization failed. This is the most common cause of this error. Please check the following: 1. Your `.env.local` file MUST contain `GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json`. 2. The `service-account-key.json` file MUST be in the root directory of your project. 3. You MUST restart your development server after making any changes to these files.';
     } else if (errorMessage.includes('insufficient-permission') || errorMessage.includes('iam.serviceAccountTokenCreator')) {
         detailedError = 'Server configuration error: The service account is missing the "Service Account Token Creator" IAM role in Google Cloud.';
-    } else if (errorMessage.includes('Could not refresh access token')) {
-        detailedError = "Local authentication error. Please run 'gcloud auth application-default login' in your terminal and restart the dev server.";
     }
 
     return NextResponse.json({ error: detailedError }, { status: 500 });
