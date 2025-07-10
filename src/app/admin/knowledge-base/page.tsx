@@ -268,7 +268,7 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
+    await handleUpload(selectedFile, selectedLevelForUpload, uploadDescription);
     
     setSelectedFile(null);
     setUploadDescription('');
