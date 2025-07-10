@@ -9,12 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, KeyRound } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -38,6 +38,8 @@ export default function SiteSettingsPage() {
   const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
   const [configError, setConfigError] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -62,7 +64,10 @@ export default function SiteSettingsPage() {
           setMaintenanceModeEnabled(data.maintenanceModeEnabled === undefined ? false : data.maintenanceModeEnabled);
           setMaintenanceModeMessage(data.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE);
           setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
+          setAdminPassword(data.adminPassword || ''); // Load password from Firestore
         } else {
+          // On first run, create the doc with defaults
+          const envPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'thisiscool';
           const defaultSettings = {
             splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             backgroundUrl: DEFAULT_BACKGROUND_IMAGE_SRC,
@@ -71,8 +76,10 @@ export default function SiteSettingsPage() {
             maintenanceModeEnabled: false,
             maintenanceModeMessage: DEFAULT_MAINTENANCE_MESSAGE,
             showLanguageSelector: true,
+            adminPassword: envPassword,
           };
           await setDoc(docRef, defaultSettings, { merge: true });
+          // Set state to defaults
           setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
           setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC);
           setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
@@ -80,6 +87,7 @@ export default function SiteSettingsPage() {
           setMaintenanceModeEnabled(false);
           setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
           setShowLanguageSelector(true);
+          setAdminPassword(envPassword);
           toast({ title: "Initial Settings Created", description: "Default site settings have been saved." });
         }
       } catch (error: any) {
@@ -133,6 +141,17 @@ Please check your environment variables and Google Cloud Console settings.`;
 
   const handleSaveAllSiteSettings = async () => {
     setIsSaving(true);
+
+    if (adminPassword && adminPassword !== confirmAdminPassword) {
+      toast({
+        title: "Passwords Do Not Match",
+        description: "Please ensure the new password and confirmation match.",
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
+
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     let newSplashImageUrl = splashImagePreview;
     let newBackgroundUrl = backgroundImagePreview;
@@ -208,6 +227,11 @@ Please check your environment variables and Google Cloud Console settings.`;
         changesMade = true;
       }
 
+      if (adminPassword && adminPassword !== (currentData.adminPassword || '')) {
+        dataToUpdate.adminPassword = adminPassword;
+        changesMade = true;
+      }
+
       if (changesMade) {
         await updateDoc(siteAssetsDocRef, dataToUpdate);
         
@@ -225,6 +249,10 @@ Please check your environment variables and Google Cloud Console settings.`;
           setSelectedBackgroundFile(null);
         } else if (dataToUpdate.backgroundUrl === DEFAULT_BACKGROUND_IMAGE_SRC) {
           setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC);
+        }
+
+        if(dataToUpdate.adminPassword) {
+            setConfirmAdminPassword(''); // Clear confirmation field after successful save
         }
 
       } else {
@@ -287,6 +315,37 @@ Please check your environment variables and Google Cloud Console settings.`;
         <>
           <Card>
             <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><KeyRound /> Admin Password</CardTitle>
+              <CardDescription>
+                Change the password used to access the entire admin console.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="adminPassword">New Admin Password</Label>
+                <Input
+                  id="adminPassword"
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Enter new admin password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmAdminPassword">Confirm New Password</Label>
+                <Input
+                  id="confirmAdminPassword"
+                  type="password"
+                  value={confirmAdminPassword}
+                  onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                  placeholder="Confirm new admin password"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><Monitor /> Page Background Image</CardTitle>
               <CardDescription>
                 Upload a background image for the Start and Maintenance pages.
@@ -342,8 +401,8 @@ Please check your environment variables and Google Cloud Console settings.`;
                     width={400}
                     height={267}
                     className="rounded-lg border-2 border-primary shadow-md object-cover"
-                    data-ai-hint={splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
-                    unoptimized={splashImagePreview.startsWith('data:image/') || splashImagePreview.startsWith('blob:')}
+                    data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
+                    unoptimized={splashImageSrc.startsWith('data:image/')}
                     onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)}
                   />
                   <Input

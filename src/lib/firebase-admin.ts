@@ -13,6 +13,13 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
+// For local development, you must create a .env.local file and add the
+// SERVICE_ACCOUNT_KEY environment variable.
+// 1. Go to Firebase Console > Project Settings > Service accounts.
+// 2. Click "Generate new private key". A JSON file will be downloaded.
+// 3. Open the JSON file, copy the entire content, and paste it as the value for
+//    SERVICE_ACCOUNT_KEY in your .env.local file.
+//    It should look like: SERVICE_ACCOUNT_KEY='{"type": "service_account", ...}'
 const serviceAccount = process.env.SERVICE_ACCOUNT_KEY
   ? JSON.parse(process.env.SERVICE_ACCOUNT_KEY)
   : undefined;
@@ -22,7 +29,7 @@ if (admin.apps.length === 0) {
     admin.initializeApp({
       credential: serviceAccount
         ? admin.credential.cert(serviceAccount)
-        : undefined,
+        : undefined, // In production (App Hosting), it will use Application Default Credentials.
       projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
