@@ -162,6 +162,7 @@ export default function KnowledgeBasePage() {
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
         });
+
         toast({ title: `Step 1: Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
         
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
@@ -171,6 +172,8 @@ export default function KnowledgeBasePage() {
         
         await updateDoc(sourceDocRef, { downloadURL });
 
+        toast({ title: "Upload Complete!", description: "File is now stored securely. Beginning text extraction."});
+        
         toast({ title: "Step 2: Extracting Text", description: "AI is reading the document. This may take a moment." });
 
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
