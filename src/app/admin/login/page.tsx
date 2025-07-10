@@ -13,7 +13,7 @@ import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { app } from '@/lib/firebase';
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState('admin@app.com'); // Default admin email
+  const [email, setEmail] = useState('admin@app.com');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -24,7 +24,6 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      // 1. Send the email and password to our own API route.
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,11 +33,10 @@ export default function AdminLoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed.');
+        // This will now display the detailed error from the server.
+        throw new Error(data.error || 'Login failed due to an unknown server error.');
       }
 
-      // 2. If the password was correct, our API returns a custom token.
-      // Now, we sign in to Firebase with that token.
       let auth;
       try {
         auth = getAuth(app);
@@ -49,7 +47,6 @@ export default function AdminLoginPage() {
       
       await signInWithCustomToken(auth, data.token);
 
-      // 3. Redirect to the admin dashboard on success.
       router.push('/admin');
     } catch (error: any) {
       console.error("Login error:", error);
@@ -57,6 +54,7 @@ export default function AdminLoginPage() {
         title: 'Login Failed',
         description: error.message || 'An unknown error occurred.',
         variant: 'destructive',
+        duration: 9000, // Show the error for longer
       });
       setIsLoading(false);
     }
