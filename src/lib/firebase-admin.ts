@@ -5,10 +5,13 @@
  * application. It ensures that the SDK is initialized only once, preventing
  * potential conflicts and errors from multiple initializations.
  *
- * Other server-side files should import the exported 'db' and 'admin'
+ * Other server-side files should import the exported 'db', 'auth', and 'storage'
  * instances from this module instead of initializing their own.
  */
 import * as admin from 'firebase-admin';
+import { getAuth } from 'firebase-admin/auth';
+import { getStorage } from 'firebase-admin/storage';
+import { getFirestore } from 'firebase-admin/firestore';
 
 // This check ensures that Firebase is only initialized once.
 if (admin.apps.length === 0) {
@@ -16,11 +19,7 @@ if (admin.apps.length === 0) {
     // For local development, it uses the service account credentials configured via
     // 'gcloud auth application-default login'. In a deployed App Hosting environment,
     // it automatically uses the app's service account.
-    // Explicitly providing the projectId from the environment variable ensures
-    // the Admin SDK knows which project to connect to, resolving token creation errors.
-    admin.initializeApp({
-      projectId: process.env.GCLOUD_PROJECT,
-    });
+    admin.initializeApp();
   } catch (error) {
     console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
     // You might want to throw the error or handle it in a way that
@@ -28,9 +27,11 @@ if (admin.apps.length === 0) {
   }
 }
 
-const db = admin.firestore();
-const storage = admin.storage();
-const auth = admin.auth();
+const app = admin.apps[0]!;
 
-// We export the initialized db, storage, and the admin namespace.
+const db = getFirestore(app);
+const storage = getStorage(app);
+const auth = getAuth(app);
+
+// We export the initialized clients and the admin namespace.
 export { db, admin, storage, auth };
