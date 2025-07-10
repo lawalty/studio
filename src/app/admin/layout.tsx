@@ -16,34 +16,32 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   
-  const isAuthPage = pathname === '/admin/login' || pathname === '/admin/register';
+  const isLoginPage = pathname === '/admin/login';
 
   useEffect(() => {
-    const initializeAuthListener = () => {
-      if (!app || !app.options.apiKey) {
-        console.error("Firebase app is not initialized.");
-        setIsLoading(false);
-        if (!isAuthPage) {
-            router.replace('/admin/login');
-        }
-        return () => {};
+    let auth: any;
+    try {
+      auth = getAuth(app);
+    } catch (e) {
+      console.error("Firebase not initialized, cannot set up auth listener.", e);
+      setIsLoading(false);
+      if (!isLoginPage) {
+        router.replace('/admin/login');
       }
-
-      const auth = getAuth(app);
-      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-        setUser(currentUser);
-        if (!currentUser && !isAuthPage) {
-          router.replace('/admin/login');
-        }
-        setIsLoading(false);
-      });
-
-      return unsubscribe;
-    };
+      return;
+    }
     
-    const unsubscribe = initializeAuthListener();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsLoading(false);
+      if (!currentUser && !isLoginPage) {
+        router.replace('/admin/login');
+      }
+    });
+
     return () => unsubscribe();
-  }, [router, pathname, isAuthPage]);
+  }, [router, pathname, isLoginPage]);
+
 
   if (isLoading) {
     return (
@@ -55,7 +53,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   // If on a login or register page, just render the page itself.
-  if (isAuthPage) {
+  if (isLoginPage) {
     return <>{children}</>;
   }
 
