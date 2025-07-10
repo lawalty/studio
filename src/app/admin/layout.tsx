@@ -17,31 +17,38 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   
   useEffect(() => {
-    // This check prevents getAuth from running if the app failed to initialize
-    // (e.g., due to missing env vars), which can cause a crash.
-    if (!app || !app.options.apiKey) {
-      console.error("Firebase app is not initialized. Check your .env.local file.");
-      setIsLoading(false);
-      // If we are not on the login page, redirect.
-      if (pathname !== '/admin/login') {
-          router.replace('/admin/login');
-      }
-      return;
-    }
-
-    const auth = getAuth(app);
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUser(user);
-      } else {
-        setUser(null);
+    // This function will now be responsible for setting up the listener
+    const initializeAuthListener = () => {
+      // This check prevents getAuth from running if the app failed to initialize
+      if (!app || !app.options.apiKey) {
+        console.error("Firebase app is not initialized. Redirecting to login.");
+        setIsLoading(false);
         if (pathname !== '/admin/login') {
-          router.replace('/admin/login');
+            router.replace('/admin/login');
         }
+        return () => {}; // Return an empty unsubscribe function
       }
-      setIsLoading(false);
-    });
 
+      const auth = getAuth(app);
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          setUser(user);
+        } else {
+          setUser(null);
+          if (pathname !== '/admin/login') {
+            router.replace('/admin/login');
+          }
+        }
+        setIsLoading(false);
+      });
+
+      return unsubscribe;
+    };
+    
+    // Call the setup function
+    const unsubscribe = initializeAuthListener();
+
+    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, [router, pathname]);
 
