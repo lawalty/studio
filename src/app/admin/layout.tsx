@@ -40,7 +40,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [router, pathname, isLoginPage]);
+  }, [router, isLoginPage]);
 
 
   if (isLoading) {

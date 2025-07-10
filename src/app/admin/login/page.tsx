@@ -76,7 +76,9 @@ export default function AdminLoginPage() {
       // Reset reCAPTCHA on error
       recaptchaVerifierRef.current?.render().then(widgetId => {
           // @ts-ignore
-          window.grecaptcha.reset(widgetId);
+          if (window.grecaptcha) {
+            window.grecaptcha.reset(widgetId);
+          }
       });
     }
     setIsLoading(false);
