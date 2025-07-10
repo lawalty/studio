@@ -8,7 +8,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Home, LogOut, Loader2 } from 'lucide-react';
-import { app } from '@/lib/firebase'; // Direct import of the app instance
+import { app } from '@/lib/firebase'; 
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -16,11 +16,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   
-  // getAuth is now called inside useEffect to ensure it runs only on the client
-  // after the Firebase app instance is confirmed to be initialized.
   useEffect(() => {
     // This check prevents getAuth from running if the app failed to initialize
-    // (e.g., due to missing env vars), which was the source of the crash.
+    // (e.g., due to missing env vars), which can cause a crash.
     if (!app || !app.options.apiKey) {
       console.error("Firebase app is not initialized. Check your .env.local file.");
       setIsLoading(false);

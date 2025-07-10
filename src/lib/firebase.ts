@@ -21,10 +21,13 @@ const missingVars = Object.entries(firebaseConfig)
     .filter(([, value]) => !value)
     .map(([key]) => key);
 
-if (missingVars.length > 0) {
-    const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing in .env.local: ${missingVars.join(', ')}. The application cannot function without them. Please see README.md for setup instructions.`;
-    // This will cause a build-time error on the server or a runtime error in the browser,
-    // making the configuration problem immediately obvious.
+if (missingVars.length > 0 && typeof window !== 'undefined') {
+    const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing: ${missingVars.join(', ')}. 
+- Please ensure your .env.local file is in the root directory of the project.
+- Please verify the variable names in .env.local match the required names exactly.
+- After creating or editing the file, you MUST restart the 'npm run dev' server.`;
+    
+    // Throw a specific, helpful error that will be visible to the developer.
     throw new Error(errorMessage);
 }
 
