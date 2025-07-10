@@ -19,6 +19,7 @@ if (admin.apps.length === 0) {
     // When running in a Google Cloud environment (like App Hosting) or locally
     // after authenticating with 'gcloud auth application-default login', the SDK
     // automatically finds the necessary credentials.
+    // The storageBucket is a required piece of configuration for the SDK to initialize correctly.
     admin.initializeApp({
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
