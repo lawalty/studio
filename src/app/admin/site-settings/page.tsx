@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -14,7 +13,7 @@ import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
-import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -67,7 +66,7 @@ export default function SiteSettingsPage() {
           setAdminPassword(data.adminPassword || ''); // Load password from Firestore
         } else {
           // On first run, create the doc with defaults
-          const envPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'thisiscool';
+          const envPassword = process.env.ADMIN_PASSWORD || 'thisiscool';
           const defaultSettings = {
             splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             backgroundUrl: DEFAULT_BACKGROUND_IMAGE_SRC,
@@ -401,8 +400,8 @@ Please check your environment variables and Google Cloud Console settings.`;
                     width={400}
                     height={267}
                     className="rounded-lg border-2 border-primary shadow-md object-cover"
-                    data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
-                    unoptimized={splashImageSrc.startsWith('data:image/')}
+                    data-ai-hint={splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
+                    unoptimized={splashImagePreview.startsWith('data:image/')}
                     onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)}
                   />
                   <Input
