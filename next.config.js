@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 
-// Explicitly load .env.local variables for the Next.js process
-require('dotenv').config({ path: './.env.local' });
-
 const nextConfig = {
   output: 'standalone',
   images: {
