@@ -39,7 +39,14 @@ export default function AdminLoginPage() {
 
       // 2. If the password was correct, our API returns a custom token.
       // Now, we sign in to Firebase with that token.
-      const auth = getAuth(app);
+      let auth;
+      try {
+        auth = getAuth(app);
+      } catch (e) {
+        console.error("Firebase not initialized:", e);
+        throw new Error("Client-side Firebase has not been initialized. Check your environment variables and firebase.ts");
+      }
+      
       await signInWithCustomToken(auth, data.token);
 
       // 3. Redirect to the admin dashboard on success.
@@ -75,8 +82,7 @@ export default function AdminLoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                readOnly
-                className="bg-muted"
+                placeholder="admin@app.com"
               />
             </div>
             <div className="space-y-2">
