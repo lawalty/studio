@@ -15,10 +15,11 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-let app: FirebaseApp;
-
-// This check prevents the app from being initialized multiple times.
-if (getApps().length === 0) {
+function initializeClientApp(): FirebaseApp {
+    if (getApps().length > 0) {
+        return getApp();
+    }
+    
     // This new, more robust check provides a clear error message if any required
     // environment variable is missing, which is the likely cause of the error.
     if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
@@ -34,11 +35,11 @@ if (getApps().length === 0) {
             'NEXT_PUBLIC_FIREBASE_* variables. You MUST restart the dev server after changes.'
         );
     }
-    app = initializeApp(firebaseConfig);
-} else {
-    app = getApp();
+    
+    return initializeApp(firebaseConfig);
 }
 
+const app = initializeClientApp();
 const auth = getAuth(app);
 const storage = getStorage(app);
 const db = getFirestore(app);

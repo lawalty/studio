@@ -13,7 +13,7 @@ import { getStorage } from 'firebase-admin/storage';
 // Directly import the service account key.
 // IMPORTANT: The path is relative to the project root where the 'next' command is run.
 // This is a more robust method than relying on environment variables for local development.
-import serviceAccount from '../../../service-account-key.json';
+import serviceAccount from '../../service-account-key.json';
 
 if (admin.apps.length === 0) {
   try {
