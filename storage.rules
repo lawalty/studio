@@ -1,11 +1,19 @@
+
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read and write access for all paths to any user.
-    // This is a "test mode" rule for development and should be secured
-    // before going to production.
-    match /{allPaths=**} {
-      allow read, write: if request.time < timestamp.date(2024, 8, 22);
+    // Allow read and write access to the knowledge_base_files directory
+    // for any authenticated user. This is necessary for the admin panel
+    // to upload new source documents.
+    match /knowledge_base_files/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow read/write access to site assets for authenticated users.
+    // This allows the admin panel to change avatars and splash images.
+    match /site_assets/{allPaths=**} {
+       allow read, write: if request.auth != null;
     }
   }
 }
