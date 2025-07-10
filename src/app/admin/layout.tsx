@@ -5,13 +5,13 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Home, LogOut, Loader2 } from 'lucide-react';
 import { app } from '@/lib/firebase'; 
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -32,9 +32,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     const auth = getAuth(app);
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setIsAuthenticated(true);
+        setUser(user);
       } else {
-        setIsAuthenticated(false);
+        setUser(null);
         if (pathname !== '/admin/login') {
           router.replace('/admin/login');
         }
@@ -60,7 +60,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
 
-  if (!isAuthenticated) {
+  if (!user) {
     // This part is a fallback while redirecting for non-login pages.
     // It prevents rendering the admin layout for a split second before redirection.
     return (
