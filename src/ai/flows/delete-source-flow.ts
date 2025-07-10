@@ -52,7 +52,11 @@ const deleteSourceFlow = ai.defineFlow(
       }
 
       // 2. Delete the file from Cloud Storage, but only if it exists.
-      const bucket = admin.storage().bucket();
+      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+      if (!bucketName) {
+        throw new Error("Firebase Storage bucket name is not configured in environment variables.");
+      }
+      const bucket = admin.storage().bucket(bucketName);
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
       const file = bucket.file(storagePath);
 
