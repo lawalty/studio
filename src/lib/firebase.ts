@@ -15,25 +15,26 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-let app: FirebaseApp;
-
-// Check if all required environment variables are present
-const missingVars = Object.keys(firebaseConfig).filter(key => !(firebaseConfig as any)[key]);
+// Check for missing environment variables. This provides a clear error message
+// if the developer has not configured their .env.local file correctly.
+const missingVars = Object.entries(firebaseConfig)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
 
 if (missingVars.length > 0) {
-    // This check will only run in the browser, where 'window' is defined.
-    // It prevents server-side builds from failing but stops the client app from running in a broken state.
-    if (typeof window !== 'undefined') {
-        const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing: ${missingVars.join(', ')}. The application cannot function. Please see README.md for setup instructions in your .env.local file.`;
-        console.error(errorMessage);
-        // Throw an error to halt execution on the client, making the problem obvious.
-        throw new Error(errorMessage);
-    }
-    // For server-side rendering during build, we create a dummy app object to avoid crashing the build process.
-    app = {} as FirebaseApp;
+    const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing in .env.local: ${missingVars.join(', ')}. The application cannot function without them. Please see README.md for setup instructions.`;
+    // This will cause a build-time error on the server or a runtime error in the browser,
+    // making the configuration problem immediately obvious.
+    throw new Error(errorMessage);
+}
+
+
+// Initialize Firebase App
+let app: FirebaseApp;
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
 } else {
-    // If all variables are present, initialize Firebase. This ensures 'getApps()' runs only when it's safe.
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  app = getApp();
 }
 
 const auth = getAuth(app);
