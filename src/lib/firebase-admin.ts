@@ -2,39 +2,50 @@
  * @fileOverview Centralized Firebase Admin SDK Initialization
  *
  * This file initializes the Firebase Admin SDK for the entire server-side
- * application. It ensures that the SDK is initialized only once.
- * It is configured to use a direct import of the service account key.
+ * application. It ensures that the SDK is initialized only once, preventing
+ * potential conflicts and errors from multiple initializations.
+ *
+ * Other server-side files should import the exported 'db', 'auth', and 'storage'
+ * instances from this module instead of initializing their own.
  */
-import admin from 'firebase-admin';
+import * as admin from 'firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
+import { getFirestore } from 'firebase-admin/firestore';
 
-// Directly import the service account key.
-// IMPORTANT: The path is relative to the project root where the 'next' command is run.
-// This is a more robust method than relying on environment variables for local development.
-import serviceAccount from '../../service-account-key.json';
-
+// This check ensures that Firebase is only initialized once.
 if (admin.apps.length === 0) {
   try {
-    // Cast the imported JSON to the type the Admin SDK expects.
-    const credential = admin.credential.cert(serviceAccount as admin.ServiceAccount);
-    
-    admin.initializeApp({
-      credential,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    });
-  } catch (error: any) {
-    console.error(
-      '[firebase-admin] Firebase Admin SDK initialization error:',
-      error.stack
-    );
+    // Check if the SERVICE_ACCOUNT_KEY environment variable is set.
+    // This is the primary and more secure way for local development.
+    if (process.env.SERVICE_ACCOUNT_KEY) {
+      // Parse the stringified JSON service account key.
+      const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+      
+      // Initialize the app with the service account credentials.
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      });
+    } else {
+      // For deployed environments (like App Hosting) or local setups using gcloud ADC,
+      // initializeApp() will automatically use the available service account.
+      admin.initializeApp({
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      });
+    }
+  } catch (error) {
+    console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
+    // Throwing the error can help prevent the app from running with a misconfigured SDK.
+    throw error;
   }
 }
 
-const app = admin.app();
-const db = getFirestore(app);
-const auth = getAuth(app);
-const storage = getStorage(app);
+const app = admin.apps[0]!;
 
-export { db, admin, auth, storage, app };
+const db = getFirestore(app);
+const storage = getStorage(app);
+const auth = getAuth(app);
+
+// We export the initialized clients and the admin namespace.
+export { db, admin, storage, auth };

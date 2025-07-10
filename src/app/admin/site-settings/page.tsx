@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, KeyRound } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -37,8 +37,6 @@ export default function SiteSettingsPage() {
   const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
-  const [adminPassword, setAdminPassword] = useState('');
-  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
   const [configError, setConfigError] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -63,10 +61,8 @@ export default function SiteSettingsPage() {
           setMaintenanceModeEnabled(data.maintenanceModeEnabled === undefined ? false : data.maintenanceModeEnabled);
           setMaintenanceModeMessage(data.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE);
           setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
-          setAdminPassword(data.adminPassword || ''); // Load password from Firestore
         } else {
           // On first run, create the doc with defaults
-          const envPassword = process.env.ADMIN_PASSWORD || 'thisiscool';
           const defaultSettings = {
             splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             backgroundUrl: DEFAULT_BACKGROUND_IMAGE_SRC,
@@ -75,7 +71,6 @@ export default function SiteSettingsPage() {
             maintenanceModeEnabled: false,
             maintenanceModeMessage: DEFAULT_MAINTENANCE_MESSAGE,
             showLanguageSelector: true,
-            adminPassword: envPassword,
           };
           await setDoc(docRef, defaultSettings, { merge: true });
           // Set state to defaults
@@ -86,7 +81,6 @@ export default function SiteSettingsPage() {
           setMaintenanceModeEnabled(false);
           setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
           setShowLanguageSelector(true);
-          setAdminPassword(envPassword);
           toast({ title: "Initial Settings Created", description: "Default site settings have been saved." });
         }
       } catch (error: any) {
@@ -140,16 +134,6 @@ Please check your environment variables and Google Cloud Console settings.`;
 
   const handleSaveAllSiteSettings = async () => {
     setIsSaving(true);
-
-    if (adminPassword && adminPassword !== confirmAdminPassword) {
-      toast({
-        title: "Passwords Do Not Match",
-        description: "Please ensure the new password and confirmation match.",
-        variant: "destructive",
-      });
-      setIsSaving(false);
-      return;
-    }
 
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     let newSplashImageUrl = splashImagePreview;
@@ -226,11 +210,6 @@ Please check your environment variables and Google Cloud Console settings.`;
         changesMade = true;
       }
 
-      if (adminPassword && adminPassword !== (currentData.adminPassword || '')) {
-        dataToUpdate.adminPassword = adminPassword;
-        changesMade = true;
-      }
-
       if (changesMade) {
         await updateDoc(siteAssetsDocRef, dataToUpdate);
         
@@ -248,10 +227,6 @@ Please check your environment variables and Google Cloud Console settings.`;
           setSelectedBackgroundFile(null);
         } else if (dataToUpdate.backgroundUrl === DEFAULT_BACKGROUND_IMAGE_SRC) {
           setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC);
-        }
-
-        if(dataToUpdate.adminPassword) {
-            setConfirmAdminPassword(''); // Clear confirmation field after successful save
         }
 
       } else {
@@ -312,36 +287,13 @@ Please check your environment variables and Google Cloud Console settings.`;
         <p className="text-center text-muted-foreground">Loading site settings...</p>
        ) : (
         <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><KeyRound /> Admin Password</CardTitle>
-              <CardDescription>
-                Change the password used to access the entire admin console.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="adminPassword">New Admin Password</Label>
-                <Input
-                  id="adminPassword"
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Enter new admin password"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmAdminPassword">Confirm New Password</Label>
-                <Input
-                  id="confirmAdminPassword"
-                  type="password"
-                  value={confirmAdminPassword}
-                  onChange={(e) => setConfirmAdminPassword(e.target.value)}
-                  placeholder="Confirm new admin password"
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Admin Password Management</AlertTitle>
+              <AlertDescription>
+                The admin password is now managed exclusively in your <code className="font-mono bg-muted p-1 rounded">.env.local</code> file for improved security and reliability. Edit the <code className="font-mono bg-muted p-1 rounded">ADMIN_PASSWORD</code> variable there.
+              </AlertDescription>
+          </Alert>
 
           <Card>
             <CardHeader>
