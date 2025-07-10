@@ -8,30 +8,35 @@
  * Other server-side files should import the exported 'db', 'auth', and 'storage'
  * instances from this module instead of initializing their own.
  */
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
-import { getStorage } from 'firebase-admin/storage';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
-// This check ensures that Firebase is only initialized once.
+const serviceAccount = process.env.SERVICE_ACCOUNT_KEY
+  ? JSON.parse(process.env.SERVICE_ACCOUNT_KEY)
+  : undefined;
+
 if (admin.apps.length === 0) {
   try {
-    // For local development, it uses the service account credentials configured via
-    // 'gcloud auth application-default login'. In a deployed App Hosting environment,
-    // it automatically uses the app's service account.
-    admin.initializeApp();
+    admin.initializeApp({
+      credential: serviceAccount
+        ? admin.credential.cert(serviceAccount)
+        : undefined,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    });
   } catch (error) {
-    console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
-    // You might want to throw the error or handle it in a way that
-    // prevents the application from running with a misconfigured Admin SDK.
+    console.error(
+      '[firebase-admin] Firebase Admin SDK initialization error:',
+      error
+    );
   }
 }
 
-const app = admin.apps[0]!;
-
+const app = admin.app();
 const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-// We export the initialized clients and the admin namespace.
 export { db, admin, storage, auth };

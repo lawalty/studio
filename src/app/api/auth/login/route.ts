@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid password.' }, { status: 401 });
     }
 
-    // The UID 'admin-user' is a fixed identifier for your single admin user.
     const uid = 'admin-user';
     const customToken = await auth.createCustomToken(uid);
     
@@ -29,6 +28,8 @@ export async function POST(request: NextRequest) {
         detailedError = 'Server configuration error: The service account or local user is missing the "Service Account Token Creator" IAM role in Google Cloud. Please grant this role to the principal running the application.';
     } else if (error.message && error.message.includes('Could not refresh access token')) {
         detailedError = "Local authentication error. The server could not authenticate with Google Cloud. Please run 'gcloud auth application-default login' in your terminal, ensure you are logged in with the correct account that has 'Service Account Token Creator' permissions, and then restart the development server.";
+    } else if (error.code === 'auth/invalid-credential' || (error.message && error.message.includes("Credential implementation provided to initializeApp() via the \"credential\" property failed"))) {
+        detailedError = "Firebase Admin SDK initialization failed. This can be caused by an invalid or missing service account configuration for local development."
     }
 
     return NextResponse.json({ error: detailedError }, { status: 500 });
