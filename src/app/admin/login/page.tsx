@@ -3,13 +3,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { KeyRound, Loader2 } from 'lucide-react';
+import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { app } from '@/lib/firebase';
 
 export default function AdminLoginPage() {
