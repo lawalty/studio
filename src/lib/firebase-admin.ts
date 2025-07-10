@@ -3,21 +3,25 @@
  *
  * This file initializes the Firebase Admin SDK for the entire server-side
  * application. It ensures that the SDK is initialized only once.
- * It is configured to use Application Default Credentials (ADC).
- *
- * For local development, create a service account key JSON file and point to it
- * using the GOOGLE_APPLICATION_CREDENTIALS environment variable in `.env.local`.
- * For production on App Hosting, ADC is automatically configured.
+ * It is configured to use a direct import of the service account key.
  */
 import admin from 'firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
+// Directly import the service account key.
+// IMPORTANT: The path is relative to the project root where the 'next' command is run.
+// This is a more robust method than relying on environment variables for local development.
+import serviceAccount from '../../../service-account-key.json';
+
 if (admin.apps.length === 0) {
   try {
+    // Cast the imported JSON to the type the Admin SDK expects.
+    const credential = admin.credential.cert(serviceAccount as admin.ServiceAccount);
+    
     admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
+      credential,
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
   } catch (error: any) {
