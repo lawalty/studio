@@ -22,6 +22,17 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setIsLoading(true);
 
+    // This check ensures the app object is valid before we try to use it.
+    if (!app || !app.options.apiKey) {
+        toast({
+            title: 'Configuration Error',
+            description: 'The Firebase client is not configured. Please check your .env.local file and restart the server.',
+            variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+    }
+
     try {
       const response = await fetch('/api/auth/login', {
         method: 'POST',

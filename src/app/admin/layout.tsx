@@ -24,6 +24,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     if (!app || !app.options.apiKey) {
       console.error("Firebase app is not initialized. Check your .env.local file.");
       setIsLoading(false);
+      // If we are not on the login page, redirect.
+      if (pathname !== '/admin/login') {
+          router.replace('/admin/login');
+      }
       return;
     }
 
@@ -60,7 +64,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     // This part is a fallback while redirecting for non-login pages.
-    return null;
+    // It prevents rendering the admin layout for a split second before redirection.
+    return (
+        <div className="flex h-screen items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="ml-2">Redirecting to login...</p>
+        </div>
+    );
   }
 
   const handleLogout = async () => {
