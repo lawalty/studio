@@ -8,16 +8,25 @@ import { usePathname, useRouter } from 'next/navigation';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { LayoutDashboard, Home, LogOut, Loader2 } from 'lucide-react';
-import { app } from '@/lib/firebase'; // Ensure app is initialized
+import { app } from '@/lib/firebase'; // Direct import of the app instance
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
-  const auth = getAuth(app);
-
+  
+  // getAuth is now called inside useEffect to ensure it runs only on the client
+  // after the Firebase app instance is confirmed to be initialized.
   useEffect(() => {
+    // This check prevents getAuth from running if the app failed to initialize
+    // (e.g., due to missing env vars), which was the source of the crash.
+    if (!app || !app.options.apiKey) {
+      setIsLoading(false);
+      return;
+    }
+
+    const auth = getAuth(app);
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         setIsAuthenticated(true);
@@ -31,7 +40,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [auth, router, pathname]);
+  }, [router, pathname]);
 
   if (isLoading) {
     return (
@@ -55,6 +64,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   const handleLogout = async () => {
     try {
+      const auth = getAuth(app);
       await signOut(auth);
       router.push('/admin/login');
     } catch (error) {

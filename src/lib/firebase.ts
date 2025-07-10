@@ -1,3 +1,4 @@
+
 import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
@@ -14,27 +15,25 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-const requiredVars = Object.keys(firebaseConfig);
-const missingVars = requiredVars.filter(key => !(firebaseConfig as any)[key]);
-
 let app: FirebaseApp;
 
+// Check if all required environment variables are present
+const missingVars = Object.keys(firebaseConfig).filter(key => !(firebaseConfig as any)[key]);
+
 if (missingVars.length > 0) {
-  // If we are on the server during a build, this can be noisy.
-  // In a browser environment, it's a critical error.
-  if (typeof window !== 'undefined') {
-    const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing: ${missingVars.join(', ')}. The application cannot function correctly. Please see README.md for setup instructions.`;
-    console.error(errorMessage);
-    // Throw an error to prevent the app from continuing in a broken state.
-    throw new Error(errorMessage);
-  }
-  // If on the server, we can't initialize. The app object will be undefined,
-  // which will cause errors if used, but prevents build-time crashes.
-  // We'll rely on the browser check to catch the problem during development.
-  app = {} as FirebaseApp; // Dummy object for server build
+    // This check will only run in the browser, where 'window' is defined.
+    // It prevents server-side builds from failing but stops the client app from running in a broken state.
+    if (typeof window !== 'undefined') {
+        const errorMessage = `CRITICAL: The following client-side Firebase environment variables are missing: ${missingVars.join(', ')}. The application cannot function. Please see README.md for setup instructions in your .env.local file.`;
+        console.error(errorMessage);
+        // Throw an error to halt execution on the client, making the problem obvious.
+        throw new Error(errorMessage);
+    }
+    // For server-side rendering during build, we create a dummy app object to avoid crashing the build process.
+    app = {} as FirebaseApp;
 } else {
-  // Initialize Firebase
-  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    // If all variables are present, initialize Firebase. This ensures 'getApps()' runs only when it's safe.
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 }
 
 const auth = getAuth(app);
