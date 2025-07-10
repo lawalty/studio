@@ -18,8 +18,7 @@ if (admin.apps.length === 0) {
     // 'gcloud auth application-default login'. In a deployed App Hosting environment,
     // it automatically uses the app's service account.
     admin.initializeApp({
-      // The projectId is necessary for the SDK to know which project to connect to.
-      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      projectId: process.env.GCLOUD_PROJECT,
       storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
   } catch (error) {

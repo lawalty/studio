@@ -12,9 +12,8 @@ export async function POST(request: NextRequest) {
 
   if (password === adminPassword) {
     try {
-      // The UID 'admin-uid' is a fixed identifier for the admin user.
-      // This call was previously incorrect. It should use the global admin instance.
-      const customToken = await admin.auth().createCustomToken('admin-uid');
+      // The UID 'admin-user' is a fixed identifier for the admin user.
+      const customToken = await admin.auth().createCustomToken('admin-user');
       return NextResponse.json({ token: customToken });
     } catch (error) {
       console.error("Error creating custom token:", error);
