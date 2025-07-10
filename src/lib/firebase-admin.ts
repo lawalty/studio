@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Centralized Firebase Admin SDK Initialization
  *
@@ -19,7 +18,6 @@ if (admin.apps.length === 0) {
     // it automatically uses the app's service account.
     admin.initializeApp({
       projectId: process.env.GCLOUD_PROJECT,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     });
   } catch (error) {
     console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
