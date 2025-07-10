@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { KeyRound, Loader2 } from 'lucide-react';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import { app } from '@/lib/firebase'; // Import the initialized app
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
@@ -34,12 +35,10 @@ export default function AdminLoginPage() {
         throw new Error(data.error || 'Login failed');
       }
 
-      // The server returns a custom token upon successful password validation.
-      // We then use this token to sign in on the client side with Firebase Auth.
-      const auth = getAuth();
+      // Explicitly use the imported, initialized app
+      const auth = getAuth(app);
       await signInWithCustomToken(auth, data.token);
       
-      // On successful sign-in, redirect to the admin dashboard.
       router.push('/admin');
 
     } catch (error: any) {
