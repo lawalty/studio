@@ -149,20 +149,21 @@ export default function KnowledgeBasePage() {
     const sourceId = uuidv4();
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
-
-    const sourceDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
     
-    try {
-        await setDoc(sourceDocRef, {
-            id: sourceId,
-            sourceName: fileToUpload.name,
-            description,
-            topic,
-            level: targetLevel,
-            createdAt: new Date().toISOString(),
-            indexingStatus: 'processing',
-        });
+    // Create the metadata document immediately to track status
+    const sourceDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
+    await setDoc(sourceDocRef, {
+        id: sourceId,
+        sourceName: fileToUpload.name,
+        description,
+        topic,
+        level: targetLevel,
+        createdAt: new Date().toISOString(),
+        indexingStatus: 'processing',
+        indexingError: 'Starting upload...',
+    });
 
+    try {
         toast({ title: `Step 1: Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
         
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
@@ -170,8 +171,7 @@ export default function KnowledgeBasePage() {
         const uploadResult = await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(uploadResult.ref);
         
-        await updateDoc(sourceDocRef, { downloadURL });
-
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'File uploaded. Extracting text...' });
         toast({ title: "Upload Complete!", description: "File is now stored securely. Beginning text extraction."});
         
         toast({ title: "Step 2: Extracting Text", description: "AI is reading the document. This may take a moment." });
@@ -181,6 +181,7 @@ export default function KnowledgeBasePage() {
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText) {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
         }
+        await updateDoc(sourceDocRef, { indexingError: 'Text extracted. Indexing document...' });
 
         toast({ title: "Step 3: Indexing Document", description: "Creating embeddings for content chunks. This is the final step." });
 
@@ -206,17 +207,32 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to process ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'failed',
-            indexingError: errorMessage,
-        }).catch(updateError => console.error(`[handleUpload] Failed to update doc as 'failed':`, updateError));
+        // **AUTOMATIC CLEANUP ON FAILURE**
+        // Instead of just marking as failed, we now trigger a full deletion.
+        toast({ title: "Cleaning up failed upload...", description: `Attempting to remove "${fileToUpload.name}" from the system.` });
+        try {
+            await deleteSource({
+                id: sourceId,
+                level: targetLevel,
+                sourceName: fileToUpload.name,
+            });
+            toast({ title: "Cleanup Successful", description: `Failed upload for "${fileToUpload.name}" has been removed.`, variant: "default" });
+        } catch (deleteError: any) {
+            console.error(`[handleUpload] CRITICAL: Failed to automatically clean up source ${sourceId}.`, deleteError);
+            toast({ title: "Cleanup Failed", description: `Could not remove failed upload. Please delete it manually.`, variant: "destructive" });
+            // If cleanup fails, we still mark the original doc as failed.
+            await updateDoc(sourceDocRef, {
+                indexingStatus: 'failed',
+                indexingError: `Original error: ${errorMessage}. Cleanup also failed.`,
+            }).catch(updateError => console.error(`[handleUpload] Failed to update doc as 'failed' after cleanup failure:`, updateError));
+        }
 
         return { success: false, error: errorMessage };
     } finally {
         setOperationStatus(sourceId, false);
         setIsCurrentlyUploading(false);
     }
-  }, []);
+  }, [handleDeleteSource]);
 
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
