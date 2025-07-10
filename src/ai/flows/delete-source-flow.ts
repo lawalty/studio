@@ -51,7 +51,7 @@ const deleteSourceFlow = ai.defineFlow(
         await batch.commit();
       }
 
-      // 2. Delete the file from Cloud Storage
+      // 2. Delete the file from Cloud Storage, but only if it exists.
       const bucket = admin.storage().bucket();
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
       const file = bucket.file(storagePath);
