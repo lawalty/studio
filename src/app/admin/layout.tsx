@@ -16,28 +16,24 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   
+  const isAuthPage = pathname === '/admin/login' || pathname === '/admin/register';
+
   useEffect(() => {
-    // This function will now be responsible for setting up the listener
     const initializeAuthListener = () => {
-      // This check prevents getAuth from running if the app failed to initialize
       if (!app || !app.options.apiKey) {
-        console.error("Firebase app is not initialized. Redirecting to login.");
+        console.error("Firebase app is not initialized.");
         setIsLoading(false);
-        if (pathname !== '/admin/login') {
+        if (!isAuthPage) {
             router.replace('/admin/login');
         }
-        return () => {}; // Return an empty unsubscribe function
+        return () => {};
       }
 
       const auth = getAuth(app);
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (user) {
-          setUser(user);
-        } else {
-          setUser(null);
-          if (pathname !== '/admin/login') {
-            router.replace('/admin/login');
-          }
+      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        setUser(currentUser);
+        if (!currentUser && !isAuthPage) {
+          router.replace('/admin/login');
         }
         setIsLoading(false);
       });
@@ -45,12 +41,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       return unsubscribe;
     };
     
-    // Call the setup function
     const unsubscribe = initializeAuthListener();
-
-    // Cleanup subscription on unmount
     return () => unsubscribe();
-  }, [router, pathname]);
+  }, [router, pathname, isAuthPage]);
 
   if (isLoading) {
     return (
@@ -61,15 +54,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // If on the login page, just render the children (the login form) without the layout wrapper.
-  if (pathname === '/admin/login') {
+  // If on a login or register page, just render the page itself.
+  if (isAuthPage) {
     return <>{children}</>;
   }
 
-
+  // If not on an auth page and there is no user, show a loading state while redirecting.
   if (!user) {
-    // This part is a fallback while redirecting for non-login pages.
-    // It prevents rendering the admin layout for a split second before redirection.
     return (
         <div className="flex h-screen items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -78,6 +69,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  // If we have a user and are not on an auth page, render the full admin layout.
   const handleLogout = async () => {
     try {
       const auth = getAuth(app);
@@ -87,7 +79,6 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       console.error('Failed to log out:', error);
     }
   };
-
 
   return (
     <div className="container mx-auto px-4 py-8">

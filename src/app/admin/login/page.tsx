@@ -1,98 +1,118 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getAuth, isSignInWithWebAuthn, signInWithPasskey } from 'firebase/auth';
+import { app } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { KeyRound, Loader2 } from 'lucide-react';
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
-import { app } from '@/lib/firebase'; // Import the initialized app
+import { Fingerprint, Loader2, UserPlus } from 'lucide-react';
+import Link from 'next/link';
 
-export default function AdminLoginPage() {
-  const [password, setPassword] = useState('');
+export default function PasskeyLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(true);
+  const [isPasskeyAvailable, setIsPasskeyAvailable] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    async function checkAvailability() {
+      if (!app) return;
+      const auth = getAuth(app);
+      try {
+        const isAvailable = await isSignInWithWebAuthn(auth);
+        setIsPasskeyAvailable(isAvailable);
+      } catch (error) {
+        console.error("Error checking passkey availability:", error);
+        setIsPasskeyAvailable(false);
+      } finally {
+        setIsCheckingAvailability(false);
+      }
+    }
+    checkAvailability();
+  }, []);
+
+  const handleLogin = async () => {
     setIsLoading(true);
+    if (!app) {
+      toast({ title: 'Firebase Error', description: 'Firebase is not configured.', variant: 'destructive' });
+      setIsLoading(false);
+      return;
+    }
+    const auth = getAuth(app);
 
     try {
-      // This check ensures the app object is valid before we try to use it.
-      if (!app || !app.options.apiKey) {
-          toast({
-              title: 'Configuration Error',
-              description: 'The Firebase client is not configured. Please check your .env.local file and restart the server.',
-              variant: 'destructive',
-          });
-          setIsLoading(false);
-          return;
-      }
-
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      // DEFER aUTH CALL: Explicitly use the imported, initialized app inside the handler
-      const auth = getAuth(app);
-      await signInWithCustomToken(auth, data.token);
-      
+      await signInWithPasskey(auth);
       router.push('/admin');
-
     } catch (error: any) {
+      console.error("Passkey sign-in error:", error);
       toast({
         title: 'Login Failed',
-        description: error.message || 'An unknown error occurred.',
+        description: error.code === 'auth/cancelled-popup-request' ? 'Login process was cancelled.' : error.message,
         variant: 'destructive',
       });
+    } finally {
       setIsLoading(false);
     }
+  };
+
+  const renderContent = () => {
+    if (isCheckingAvailability) {
+      return (
+        <div className="flex items-center justify-center space-x-2">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Checking Passkey compatibility...</span>
+        </div>
+      );
+    }
+
+    if (!isPasskeyAvailable) {
+      return (
+        <CardContent>
+          <p className="text-destructive text-center">
+            Your browser or device does not support Passkeys. Please try a different browser like Chrome or Safari on a device with a screen lock (fingerprint, face ID, PIN).
+          </p>
+        </CardContent>
+      );
+    }
+
+    return (
+      <>
+        <CardContent>
+          <p className="text-center text-muted-foreground">
+            Sign in securely with your registered Passkey (e.g., fingerprint, face ID, or security key).
+          </p>
+        </CardContent>
+        <CardFooter className="flex-col gap-4">
+          <Button onClick={handleLogin} className="w-full" disabled={isLoading}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Fingerprint className="mr-2 h-4 w-4" />}
+            Sign In With Passkey
+          </Button>
+          <Button variant="link" asChild>
+            <Link href="/admin/register">
+              <UserPlus className="mr-2 h-4 w-4" />
+              First time? Register an admin user
+            </Link>
+          </Button>
+        </CardFooter>
+      </>
+    );
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted">
       <Card className="w-full max-w-sm shadow-2xl">
-        <form onSubmit={handleLogin}>
-          <CardHeader className="text-center">
-            <KeyRound className="mx-auto h-12 w-12 text-primary" />
-            <CardTitle className="mt-4 text-2xl font-headline">Admin Access</CardTitle>
-            <CardDescription>
-              Enter the password to access the admin console.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter admin password"
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? 'Verifying...' : 'Login'}
-            </Button>
-          </CardFooter>
-        </form>
+        <CardHeader className="text-center">
+          <Fingerprint className="mx-auto h-12 w-12 text-primary" />
+          <CardTitle className="mt-4 text-2xl font-headline">Admin Login</CardTitle>
+          <CardDescription>
+            Secure Passkey Authentication
+          </CardDescription>
+        </CardHeader>
+        {renderContent()}
       </Card>
     </div>
   );
