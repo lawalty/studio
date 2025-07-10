@@ -16,9 +16,7 @@ if (admin.apps.length === 0) {
     // For local development, it uses the service account credentials configured via
     // 'gcloud auth application-default login'. In a deployed App Hosting environment,
     // it automatically uses the app's service account.
-    admin.initializeApp({
-      projectId: process.env.GCLOUD_PROJECT,
-    });
+    admin.initializeApp();
   } catch (error) {
     console.error('[firebase-admin] Firebase Admin SDK initialization error:', error);
     // You might want to throw the error or handle it in a way that
@@ -28,6 +26,7 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 const storage = admin.storage();
+const auth = admin.auth();
 
 // We export the initialized db, storage, and the admin namespace.
-export { db, admin, storage };
+export { db, admin, storage, auth };

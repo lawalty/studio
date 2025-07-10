@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { app } from '@/lib/firebase-admin';
-
-// Initialize auth using the imported admin app
-const auth = getAuth(app);
+import { auth } from '@/lib/firebase-admin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,11 +24,13 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("[Login API] Error creating custom token:", error);
     
-    // Provide a more specific error message for the most common issue.
+    let detailedError = 'Failed to create session token due to a server-side error.';
     if (error.code === 'auth/insufficient-permission' || (error.message && error.message.includes('iam.serviceAccountTokenCreator'))) {
-        return NextResponse.json({ error: 'Server configuration error: The service account or local user is missing the "Service Account Token Creator" IAM role in Google Cloud.' }, { status: 500 });
+        detailedError = 'Server configuration error: The service account or local user is missing the "Service Account Token Creator" IAM role in Google Cloud.';
+    } else if (error.message && error.message.includes('Could not refresh access token')) {
+        detailedError = "Local authentication error. Please run 'gcloud auth application-default login' and restart the server.";
     }
 
-    return NextResponse.json({ error: 'Failed to create session token due to a server-side error.' }, { status: 500 });
+    return NextResponse.json({ error: detailedError }, { status: 500 });
   }
 }
