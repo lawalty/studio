@@ -1,108 +1,181 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { KeyRound, Loader2 } from 'lucide-react';
-import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import { Smartphone, KeyRound, Loader2 } from 'lucide-react';
+import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth';
 import { app } from '@/lib/firebase';
 
 export default function AdminLoginPage() {
-  const [email, setEmail] = useState('admin@app.com');
-  const [password, setPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const router = useRouter();
   const { toast } = useToast();
+  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  useEffect(() => {
+    // This effect initializes the reCAPTCHA verifier.
+    // It's designed to run only once when the component mounts.
+    if (recaptchaContainerRef.current && !recaptchaVerifierRef.current) {
+      try {
+        const auth = getAuth(app);
+        // Ensure the container is empty before rendering a new reCAPTCHA
+        recaptchaContainerRef.current.innerHTML = '';
+        
+        const verifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
+          'size': 'invisible', // Use invisible reCAPTCHA
+          'callback': () => {
+            // This callback is called when the reCAPTCHA is successfully verified.
+            // We don't need to do anything here for invisible reCAPTCHA as the
+            // sendOtp function will trigger it.
+          }
+        });
+        recaptchaVerifierRef.current = verifier;
+      } catch (error: any) {
+         console.error("Error initializing reCAPTCHA:", error);
+         toast({
+            title: "reCAPTCHA Error",
+            description: "Could not initialize the reCAPTCHA verifier. Phone sign-in may not work.",
+            variant: "destructive"
+         });
+      }
+    }
+  }, [toast]);
+
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
+    if (!recaptchaVerifierRef.current) {
+        toast({ title: 'Error', description: 'reCAPTCHA not ready. Please wait a moment and try again.', variant: 'destructive' });
+        setIsLoading(false);
+        return;
+    }
+
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const auth = getAuth(app);
+      const result = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifierRef.current);
+      setConfirmationResult(result);
+      toast({ title: 'Verification Code Sent', description: 'Please check your phone for the OTP.' });
+    } catch (error: any) {
+      console.error("Error sending OTP:", error);
+      toast({
+        title: 'Failed to Send Code',
+        description: error.message || 'An unknown error occurred. Please check the phone number and try again.',
+        variant: 'destructive',
       });
+      // Reset reCAPTCHA on error
+      recaptchaVerifierRef.current?.render().then(widgetId => {
+          // @ts-ignore
+          window.grecaptcha.reset(widgetId);
+      });
+    }
+    setIsLoading(false);
+  };
 
-      const data = await response.json();
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
 
-      if (!response.ok) {
-        // This will now display the detailed error from the server.
-        throw new Error(data.error || 'Login failed due to an unknown server error.');
-      }
+    if (!confirmationResult) {
+      toast({ title: 'Verification Error', description: 'Please request a verification code first.', variant: 'destructive' });
+      setIsLoading(false);
+      return;
+    }
 
-      let auth;
-      try {
-        auth = getAuth(app);
-      } catch (e) {
-        console.error("Firebase not initialized:", e);
-        throw new Error("Client-side Firebase has not been initialized. Check your environment variables and firebase.ts");
-      }
-      
-      await signInWithCustomToken(auth, data.token);
-
+    try {
+      await confirmationResult.confirm(otp);
+      toast({ title: 'Success!', description: 'You have been logged in successfully.' });
       router.push('/admin');
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error("Error verifying OTP:", error);
       toast({
         title: 'Login Failed',
-        description: error.message || 'An unknown error occurred.',
+        description: 'The verification code is invalid. Please try again.',
         variant: 'destructive',
-        duration: 9000, // Show the error for longer
       });
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted">
       <Card className="w-full max-w-sm shadow-2xl">
-        <form onSubmit={handleLogin}>
-          <CardHeader className="text-center">
-            <KeyRound className="mx-auto h-12 w-12 text-primary" />
-            <CardTitle className="mt-4 text-2xl font-headline">Admin Login</CardTitle>
-            <CardDescription>
-              Enter the password from your environment file.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="admin@app.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Enter admin password"
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Sign In
-            </Button>
-          </CardFooter>
-        </form>
+        {!confirmationResult ? (
+          <form onSubmit={handleSendOtp}>
+            <CardHeader className="text-center">
+              <Smartphone className="mx-auto h-12 w-12 text-primary" />
+              <CardTitle className="mt-4 text-2xl font-headline">Admin Phone Sign-In</CardTitle>
+              <CardDescription>
+                Enter your phone number to receive a verification code.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  required
+                  placeholder="+1 555-555-1234"
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex-col gap-4">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send Verification Code
+              </Button>
+            </CardFooter>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp}>
+            <CardHeader className="text-center">
+              <KeyRound className="mx-auto h-12 w-12 text-primary" />
+              <CardTitle className="mt-4 text-2xl font-headline">Enter Code</CardTitle>
+              <CardDescription>
+                A code was sent to {phoneNumber}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="otp">Verification Code</Label>
+                <Input
+                  id="otp"
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  required
+                  placeholder="123456"
+                  autoComplete="one-time-code"
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex-col gap-4">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Sign In
+              </Button>
+              <Button variant="link" size="sm" onClick={() => setConfirmationResult(null)}>
+                Use a different phone number
+              </Button>
+            </CardFooter>
+          </form>
+        )}
       </Card>
+      {/* This invisible div is where the reCAPTCHA widget will be rendered */}
+      <div ref={recaptchaContainerRef} id="recaptcha-container"></div>
     </div>
   );
 }
