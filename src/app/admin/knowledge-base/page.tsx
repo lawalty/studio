@@ -140,7 +140,7 @@ export default function KnowledgeBasePage() {
         setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       }, (error) => {
         console.error(`Error fetching ${level} priority sources:`, error);
-        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBLevel]: false }));
+        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       });
     });
 
@@ -513,7 +513,7 @@ export default function KnowledgeBasePage() {
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                                                 <AlertDialogDescription>This will permanently delete the source and all its indexed data. This action cannot be undone.</AlertDialogDescription>
-                                                            </HEADER>
+                                                            </AlertDialogHeader>
                                                             <AlertDialogFooter>
                                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                                 <AlertDialogAction onClick={() => handleDeleteSource(source)}>Delete</AlertDialogAction>

@@ -16,12 +16,11 @@ service cloud.firestore {
     
     // Allow authenticated users to manage the knowledge base metadata.
     // This covers the collections for high, medium, low, and archive priority levels.
-    match /kb_{level}_meta_v1/{docId} {
-      allow read, write: if request.auth != null;
+    match /{kb_collection}/{docId} {
+      allow read, create, update, delete: if kb_collection.matches('kb_(high|medium|low|archive)_meta_v1') && request.auth != null;
     }
     
-    // CRITICAL FIX: Allow authenticated users to manage individual chunks in the knowledge base.
-    // This was the missing rule that caused the indexing pipeline to hang.
+    // Allow authenticated users to manage individual chunks in the knowledge base.
     match /kb_chunks/{chunkId} {
       allow read, write: if request.auth != null;
     }
