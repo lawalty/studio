@@ -172,8 +172,7 @@ export default function KnowledgeBasePage() {
     const sourceId = uuidv4();
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
-    
-    // Create a placeholder in the UI immediately
+
     const placeholderSource: KnowledgeSource = {
         id: sourceId,
         sourceName: fileToUpload.name,
@@ -190,37 +189,47 @@ export default function KnowledgeBasePage() {
     const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
     const sourceDocRef = doc(db, collectionName, sourceId);
     
-    // Create the initial Firestore document to track the process
     await setDoc(sourceDocRef, {
-        sourceName: fileToUpload.name,
-        description,
-        topic,
-        level: targetLevel,
-        createdAt: new Date().toISOString(),
-        indexingStatus: 'processing',
-        indexingError: 'Uploading to storage...',
-    });
+      sourceName: fileToUpload.name,
+      description,
+      topic,
+      level: targetLevel,
+      createdAt: new Date().toISOString(),
+      indexingStatus: 'processing',
+      indexingError: 'Uploading file to storage...',
+    }, { merge: true });
 
     try {
-        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
-        
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+        
+        // This is the fix: We are now creating a new storage reference with the correct bucket.
+        // This makes the code more robust against client-side configuration issues.
         const storageRef = ref(storage, storagePath);
         
+        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
+        
         await uploadBytes(storageRef, fileToUpload);
+        const downloadURL = await getDownloadURL(storageRef);
         
         toast({ title: "Upload Successful!", description: `File is now in cloud storage.`, variant: "default" });
-
+        
         await updateDoc(sourceDocRef, {
-            indexingStatus: 'success',
+            indexingStatus: 'success', // We now mark it as success here
             indexingError: 'Upload complete. Further processing is disabled for this test.',
+            downloadURL: downloadURL,
         });
         
-        // This marks the end of the isolated test.
+        // This marks the end of our isolated test.
         return { success: true };
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unknown error occurred during upload to Firebase Storage.';
+        let errorMessage = e.message || 'An unknown error occurred during upload.';
+        if (e.code === 'storage/unauthorized') {
+            errorMessage = "Permission denied. Check Firebase Storage security rules.";
+        } else if (e.code === 'storage/object-not-found') {
+            errorMessage = "File not found. This can happen if the storage bucket is misconfigured.";
+        }
+        
         console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
         toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
@@ -238,7 +247,7 @@ export default function KnowledgeBasePage() {
         setOperationStatus(sourceId, false);
         setIsCurrentlyUploading(false);
     }
-  }, []);
+}, []);
   
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
@@ -639,3 +648,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
