@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, CheckCircle, AlertTriangle, FileText, Search, Image as ImageIcon } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, FileText, Search, Image as ImageIcon, Upload } from 'lucide-react';
 import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 
 // Define the shape of the test case
@@ -84,6 +85,11 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadResult, setImageUploadResult] = useState<{ status: 'success' | 'failure'; message: string } | null>(null);
+
+  const [manualFile, setManualFile] = useState<File | null>(null);
+  const [manualLevel, setManualLevel] = useState<KnowledgeBaseLevel>('High');
+  const [isUploadingManual, setIsUploadingManual] = useState(false);
+  const [manualUploadResult, setManualUploadResult] = useState<{ status: 'success' | 'failure'; message: string } | null>(null);
 
   const runImageUploadTest = async () => {
     setIsUploadingImage(true);
@@ -166,6 +172,34 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
     setIsTestingKb(false);
   };
 
+  const handleManualUpload = async () => {
+    if (!manualFile) {
+      toast({ title: 'No File Selected', description: 'Please select a file to upload.', variant: 'destructive' });
+      return;
+    }
+
+    setIsUploadingManual(true);
+    setManualUploadResult(null);
+    toast({ title: `Uploading ${manualFile.name}...` });
+
+    try {
+      const result = await handleUpload(manualFile, manualLevel, 'General', 'Manual diagnostic upload.');
+      if (result.success) {
+        setManualUploadResult({ status: 'success', message: `Successfully uploaded and processed ${manualFile.name}.` });
+        toast({ title: 'Manual Upload Successful', description: `${manualFile.name} is now in the knowledge base.` });
+      } else {
+        throw new Error(result.error || 'The upload function reported a failure.');
+      }
+    } catch (e: any) {
+      console.error("Manual upload test failed:", e);
+      const errorMessage = `Manual upload failed: ${e.message || 'Unknown error'}`;
+      setManualUploadResult({ status: 'failure', message: errorMessage });
+      toast({ title: 'Manual Upload Failed', description: errorMessage, variant: 'destructive' });
+    } finally {
+      setIsUploadingManual(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card className="border-primary/50">
@@ -246,60 +280,121 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
               </Alert>
             )}
           </Card>
+          
+          {/* Manual File Upload for Debugging */}
+          <Card className="p-4 bg-background/50">
+            <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <Upload size={16} />
+                    Manual File Upload Test
+                  </h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Directly upload a file to a specific KB level to test the upload and indexing flow.
+                  </p>
+                </div>
+            </div>
+            <div className="mt-4 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="manual-file">File</Label>
+                    <Input id="manual-file" type="file" onChange={(e) => setManualFile(e.target.files ? e.target.files[0] : null)} disabled={isUploadingManual || isAnyOperationInProgress} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="manual-level">KB Level</Label>
+                    <Select value={manualLevel} onValueChange={(v) => setManualLevel(v as KnowledgeBaseLevel)} disabled={isUploadingManual || isAnyOperationInProgress}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Medium">Medium</SelectItem>
+                        <SelectItem value="Low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                 <Button
+                    onClick={handleManualUpload}
+                    disabled={isAnyOperationInProgress || isUploadingManual || !manualFile}
+                    className="w-full"
+                  >
+                    {isUploadingManual && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Upload for Test
+                  </Button>
+            </div>
+             {manualUploadResult && (
+              <Alert className="mt-4" variant={manualUploadResult.status === 'success' ? 'default' : 'destructive'}>
+                {manualUploadResult.status === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                <AlertTitle>
+                  {manualUploadResult.status === 'success' ? 'Manual Upload Test Passed' : 'Manual Upload Test Failed'}
+                </AlertTitle>
+                <AlertDescription className="text-xs break-words">
+                  {manualUploadResult.message}
+                </AlertDescription>
+              </Alert>
+            )}
+          </Card>
         </CardContent>
       </Card>
       
       <Card className="border-primary/50">
-        <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Retrieval Pipeline Test
-            </CardTitle>
-            <CardDescription>
-                Manually test the RAG retrieval pipeline. This test mimics the real world by searching High, then Medium, then Low priority KBs.
-            </CardDescription>
-        </CardHeader>
-        <CardContent>
+          <CardHeader>
+              <CardTitle className="font-headline">Retrieval Pipeline Diagnostics</CardTitle>
+              <CardDescription>
+                Test the retrieval (RAG) part of the pipeline by sending a query to the vector search backend. This does not use the conversational AI, it only shows the raw context that would be sent to the AI.
+              </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-                <Label htmlFor="kbTestQuery">Test Query</Label>
-                <Input id="kbTestQuery" value={kbTestQuery} onChange={(e) => setKbTestQuery(e.target.value)} disabled={isTestingKb || isAnyOperationInProgress} />
+                <Label htmlFor="kb-test-query">Test Query</Label>
+                <Textarea 
+                    id="kb-test-query"
+                    value={kbTestQuery}
+                    onChange={(e) => setKbTestQuery(e.target.value)}
+                    placeholder="Enter a question to test the knowledge base..."
+                />
             </div>
-            <Button onClick={handleRunKbTest} disabled={isTestingKb || isAnyOperationInProgress} className="mt-4">
+             <Button onClick={handleRunKbTest} disabled={isTestingKb || isAnyOperationInProgress}>
                 {isTestingKb && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Run Search Test
+                <Search className="mr-2 h-4 w-4" />
+                Test Retrieval
             </Button>
-            {(kbTestResult || kbTestError) && (
-                <Alert className="mt-4" variant={kbTestResult ? "default" : "destructive"}>
-                    {kbTestResult ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                    <AlertTitle>{kbTestResult ? "Success" : "Failed"}</AlertTitle>
-                    <AlertDescription className="text-xs break-words whitespace-pre-wrap">
-                        {kbTestError
-                            ? kbTestError
-                            : kbTestResult && kbTestResult.searchResult?.length > 0
-                            ? `Successfully retrieved ${kbTestResult.searchResult.length} chunk(s) from the knowledge base.`
-                            : "Search was successful, but no relevant chunks were found for this query in any priority level. This might mean the 'relevance threshold' is too strict or the document doesn't contain a close match."}
-                    </AlertDescription>
+            {kbTestError && (
+                 <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Retrieval Test Failed</AlertTitle>
+                    <AlertDescription className="text-xs break-words whitespace-pre-wrap">{kbTestError}</AlertDescription>
                 </Alert>
             )}
-            {kbTestResult?.retrievedContext && (
-                <div className="mt-4">
-                    <Label className="text-xs font-bold">Retrieved Context for LLM</Label>
-                    <Textarea readOnly value={kbTestResult.retrievedContext} className="mt-1 h-48 text-xs bg-muted" />
+            {kbTestResult && (
+                <div className="mt-4 space-y-2">
+                    <h4 className="font-semibold">Test Results:</h4>
+                    {Array.isArray(kbTestResult.searchResult) && kbTestResult.searchResult.length > 0 ? (
+                        <Alert variant="default" className="max-h-96 overflow-y-auto">
+                            <CheckCircle className="h-4 w-4" />
+                            <AlertTitle>Found {kbTestResult.searchResult.length} Relevant Chunks</AlertTitle>
+                            <AlertDescription>
+                                {kbTestResult.searchResult.map((result: any, index: number) => (
+                                    <div key={index} className="mt-2 p-2 border rounded-md text-xs bg-muted/50">
+                                        <p><strong>Source:</strong> {result.sourceName} (L: {result.level}, T: {result.topic})</p>
+                                        <p><strong>Text:</strong> &quot;{result.text}&quot;</p>
+                                        <p><strong>Distance:</strong> {result.distance.toFixed(4)}</p>
+                                    </div>
+                                ))}
+                            </AlertDescription>
+                        </Alert>
+                    ) : (
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>No Relevant Chunks Found</AlertTitle>
+                            <AlertDescription>
+                                The vector search ran successfully but did not find any results in the knowledge base for your query that met the relevance threshold. Try a different query or check if relevant documents have been indexed.
+                            </AlertDescription>
+                        </Alert>
+                    )}
                 </div>
             )}
-             {kbTestResult?.searchResult && (
-                <div className="mt-4">
-                    <Label className="text-xs font-bold">Raw Search Result (for debugging)</Label>
-                    <Textarea
-                        readOnly
-                        value={JSON.stringify(kbTestResult.searchResult, null, 2)}
-                        className="mt-1 h-48 text-xs bg-muted font-mono"
-                        placeholder="Raw JSON output from the vector search will appear here..."
-                    />
-                </div>
-            )}
-        </CardContent>
-    </Card>
+          </CardContent>
+      </Card>
     </div>
   );
 }
