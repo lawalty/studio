@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { toast } from "@/hooks/use-toast";
+import { toast as toastFn, type useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
@@ -51,6 +51,83 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived', description: 'Archived sources are not used by the AI.' },
 };
 
+// **FIXED**: Moved the handleUpload function outside the component to make it a stable, standalone function.
+// This prevents it from being recreated on every render, which was causing issues with the async `uploadBytes` call.
+const handleUpload = async (
+  fileToUpload: File,
+  targetLevel: KnowledgeBaseLevel,
+  topic: string,
+  description: string,
+  toast: ReturnType<typeof useToast>['toast'],
+  setOperationStatus: (id: string, status: boolean) => void,
+  setIsCurrentlyUploading: (status: boolean) => void,
+  handleReindexSource: (source: KnowledgeSource) => void
+): Promise<{ success: boolean; error?: string }> => {
+    if (!fileToUpload || !topic) {
+        toast({ title: "Upload Error", description: "A file and topic are required.", variant: "destructive" });
+        return { success: false, error: "A file and topic are required." };
+    }
+
+    const sourceId = uuidv4();
+    setOperationStatus(sourceId, true);
+    setIsCurrentlyUploading(true);
+    
+    const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+    const fileRef = storageRef(storage, storagePath);
+
+    try {
+        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
+        
+        await uploadBytes(fileRef, fileToUpload);
+        const downloadURL = await getDownloadURL(fileRef);
+        
+        toast({ title: "Upload Successful!", description: `File is in cloud storage. Starting processing...`, variant: "default" });
+        
+        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+        const sourceDocRef = doc(db, collectionName, sourceId);
+        
+        const newSourceData: Omit<KnowledgeSource, 'id' | 'createdAt' | 'createdAtDate'> & { createdAt: string } = {
+          sourceName: fileToUpload.name,
+          description,
+          topic,
+          level: targetLevel,
+          createdAt: new Date().toISOString(),
+          indexingStatus: 'processing',
+          indexingError: null,
+          downloadURL: downloadURL,
+        };
+
+        await setDoc(sourceDocRef, newSourceData, { merge: true });
+
+        // Start the processing flow but don't wait for it here
+        const fullSourceForReindex: KnowledgeSource = {
+          ...newSourceData,
+          id: sourceId,
+          createdAt: new Date(newSourceData.createdAt).toLocaleString(),
+          createdAtDate: new Date(newSourceData.createdAt),
+        };
+        handleReindexSource(fullSourceForReindex);
+
+        return { success: true };
+
+    } catch (e: any) {
+        let errorMessage = e.message || 'An unknown error occurred during upload.';
+        if (e.code === 'storage/unauthorized') {
+            errorMessage = "Permission denied. Check Firebase Storage security rules.";
+        } else if (e.code === 'storage/object-not-found') {
+            errorMessage = "File not found. This can happen if the storage bucket is misconfigured.";
+        }
+        
+        console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
+        toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+        setOperationStatus(sourceId, false);
+        return { success: false, error: errorMessage };
+    } finally {
+        setIsCurrentlyUploading(false);
+    }
+};
+
+
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Archive': [] });
   const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Archive': true });
@@ -63,6 +140,7 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
+  const { toast } = useToast();
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
@@ -98,11 +176,21 @@ export default function KnowledgeBasePage() {
   const updateSourceInState = (source: KnowledgeSource) => {
     setSources(prev => {
       const newSources = { ...prev };
-      const levelSources = newSources[source.level];
+      // Remove from all levels first to handle moves
+      for (const key in newSources) {
+          const levelKey = key as KnowledgeBaseLevel;
+          newSources[levelKey] = newSources[levelKey].filter(s => s.id !== source.id);
+      }
+      // Add or update in the correct level
+      const levelSources = newSources[source.level] || [];
       const sourceIndex = levelSources.findIndex(s => s.id === source.id);
       if (sourceIndex > -1) {
         levelSources[sourceIndex] = source;
+      } else {
+        levelSources.push(source);
       }
+      newSources[source.level] = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
+      
       return newSources;
     });
   };
@@ -161,128 +249,8 @@ export default function KnowledgeBasePage() {
     } finally {
       setOperationStatus(source.id, false);
     }
-  }, []);
-
-  const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, topic: string, description: string): Promise<{ success: boolean; error?: string }> => {
-      if (!fileToUpload || !topic) {
-          toast({ title: "Upload Error", description: "A file and topic are required.", variant: "destructive" });
-          return { success: false, error: "A file and topic are required." };
-      }
-
-      const sourceId = uuidv4();
-      setOperationStatus(sourceId, true);
-      setIsCurrentlyUploading(true);
-      
-      const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-      const fileRef = storageRef(storage, storagePath);
-
-      try {
-          toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
-          await uploadBytes(fileRef, fileToUpload);
-          const downloadURL = await getDownloadURL(fileRef);
-          
-          toast({ title: "Upload Successful!", description: `File is in cloud storage. Starting processing...`, variant: "default" });
-          
-          const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-          const sourceDocRef = doc(db, collectionName, sourceId);
-          
-          await setDoc(sourceDocRef, {
-              sourceName: fileToUpload.name,
-              description,
-              topic,
-              level: targetLevel,
-              createdAt: new Date().toISOString(),
-              indexingStatus: 'processing',
-              indexingError: null,
-              downloadURL: downloadURL,
-          }, { merge: true });
-
-          // Start the processing flow but don't wait for it here
-          handleReindexSource({
-            id: sourceId,
-            sourceName: fileToUpload.name,
-            description,
-            topic,
-            level: targetLevel,
-            createdAt: new Date().toISOString(),
-            createdAtDate: new Date(),
-            indexingStatus: 'processing',
-            downloadURL,
-          });
-
-          return { success: true };
-
-      } catch (e: any) {
-          let errorMessage = e.message || 'An unknown error occurred during upload.';
-          if (e.code === 'storage/unauthorized') {
-              errorMessage = "Permission denied. Check Firebase Storage security rules.";
-          } else if (e.code === 'storage/object-not-found') {
-              errorMessage = "File not found. This can happen if the storage bucket is misconfigured.";
-          }
-          
-          console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
-          toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
-          return { success: false, error: errorMessage };
-      } finally {
-          setOperationStatus(sourceId, false);
-          setIsCurrentlyUploading(false);
-      }
-  }, []);
+  }, [toast]);
   
-  const handleFileUpload = async () => {
-    if (!selectedFile || !selectedTopicForUpload) {
-      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
-      return;
-    }
-    const result = await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
-    
-    if (result.success) {
-      setSelectedFile(null);
-      setUploadDescription('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
-      if (source.level === newLevel) return;
-      setOperationStatus(source.id, true);
-      toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
-
-      try {
-          const originalDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-          const docSnap = await getDoc(originalDocRef);
-          if (!docSnap.exists()) {
-              throw new Error("Original source document not found.");
-          }
-          const sourceData = docSnap.data();
-
-          const newDocData = { ...sourceData, level: newLevel };
-          const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
-          
-          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
-          const chunksSnapshot = await getDocs(chunksQuery);
-
-          const writeBatchForMove = writeBatch(db);
-
-          writeBatchForMove.set(newDocRef, newDocData);
-          writeBatchForMove.delete(originalDocRef);
-          chunksSnapshot.forEach(chunkDoc => {
-              writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
-          });
-
-          await writeBatchForMove.commit();
-          toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
-
-      } catch (error: any) {
-          console.error("Error moving source:", error);
-          toast({ title: "Move Failed", description: `Could not move ${source.sourceName}. ${error.message}`, variant: "destructive" });
-      } finally {
-          setOperationStatus(source.id, false);
-      }
-  }, []);
-
   const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
       setOperationStatus(source.id, true);
       const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
@@ -344,7 +312,70 @@ export default function KnowledgeBasePage() {
       } finally {
           setOperationStatus(source.id, false);
       }
-  }, []);
+  }, [toast]);
+
+  const handleFileUpload = async () => {
+    if (!selectedFile || !selectedTopicForUpload) {
+      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
+      return;
+    }
+    const result = await handleUpload(
+        selectedFile, 
+        selectedLevelForUpload, 
+        selectedTopicForUpload, 
+        uploadDescription,
+        toast,
+        setOperationStatus,
+        setIsCurrentlyUploading,
+        handleReindexSource
+    );
+    
+    if (result.success) {
+      setSelectedFile(null);
+      setUploadDescription('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
+      if (source.level === newLevel) return;
+      setOperationStatus(source.id, true);
+      toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
+
+      try {
+          const originalDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+          const docSnap = await getDoc(originalDocRef);
+          if (!docSnap.exists()) {
+              throw new Error("Original source document not found.");
+          }
+          const sourceData = docSnap.data();
+
+          const newDocData = { ...sourceData, level: newLevel };
+          const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
+          
+          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
+          const chunksSnapshot = await getDocs(chunksQuery);
+
+          const writeBatchForMove = writeBatch(db);
+
+          writeBatchForMove.set(newDocRef, newDocData);
+          writeBatchForMove.delete(originalDocRef);
+          chunksSnapshot.forEach(chunkDoc => {
+              writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
+          });
+
+          await writeBatchForMove.commit();
+          toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
+
+      } catch (error: any) {
+          console.error("Error moving source:", error);
+          toast({ title: "Move Failed", description: `Could not move ${source.sourceName}. ${error.message}`, variant: "destructive" });
+      } finally {
+          setOperationStatus(source.id, false);
+      }
+  }, [toast]);
 
   const handleRefreshStatus = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
@@ -354,7 +385,12 @@ export default function KnowledgeBasePage() {
         if (docSnap.exists()) {
             const data = docSnap.data();
             const newStatus = data.indexingStatus || 'failed';
-            const updatedSource = { ...source, indexingStatus: newStatus, indexingError: data.indexingError };
+            const updatedSource: KnowledgeSource = { 
+                ...source, 
+                indexingStatus: newStatus, 
+                indexingError: data.indexingError,
+                chunksWritten: data.chunksWritten
+            };
             updateSourceInState(updatedSource);
             toast({ title: "Status Refreshed", description: `Current status is: ${newStatus}` });
         } else {
@@ -365,7 +401,7 @@ export default function KnowledgeBasePage() {
     } finally {
         setOperationStatus(source.id, false);
     }
-  }, []);
+  }, [toast]);
 
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
@@ -611,7 +647,7 @@ export default function KnowledgeBasePage() {
               </AccordionTrigger>
               <AccordionContent>
                 <KnowledgeBaseDiagnostics
-                  handleUpload={handleUpload}
+                  handleUpload={(file, level, topic, description) => handleUpload(file, level, topic, description, toast, setOperationStatus, setIsCurrentlyUploading, handleReindexSource)}
                   isAnyOperationInProgress={anyOperationGloballyInProgress}
                 />
               </AccordionContent>
@@ -630,5 +666,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    

@@ -5,11 +5,12 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, CheckCircle, AlertTriangle, FileText, Search, Image as ImageIcon } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, FileText, Search } from 'lucide-react';
 import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
 import { Textarea } from '../ui/textarea';
 import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
 import { useToast } from '@/hooks/use-toast';
+import type { useToast as useToastType } from '@/hooks/use-toast';
 
 
 // Define the shape of the test case
@@ -58,12 +59,17 @@ const TEST_CASES: TestCase[] = [
     description: 'Tests PDF processing and smart text extraction from a common document type.',
     fileName: 'test_simple.pdf',
     mimeType: 'application/pdf',
-    base64Data: 'data:application/pdf;base64,JVBERi0xLjQKJdPr6eEKMSAwIG9iago8PC9UeXBlIC9DYXRhbG9nL1BhZ2VzIDIgMCBSPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZSAvUGFnZXMvQ291bnQgMS9LaWRzIFszIDAgUl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlIC9QYWdlL1BhcmVudCAyIDAgUi9SZXNvdXJjZXMgPDwvRm9udCA8PC9GMSA0IDAgUj4+L1Byb2NTZXQgWy9QREYgL1RleHRdPj4vTWVkaWFCb3ggWzAgMCA2MTIgNzkyXS9Db250ZW50cyA1IDAgUj4+CmVuZG9iago0IDAgb2JqCjw8L1R5cGUgL0ZvbnQvU3VidHlwZSAvVHlwZTEvQmFzZUZvbnQgL0hlbHZldGljYT4+CmVuZG9iago1IDAgb2JqCjw8L0xlbmd0aCA0ND4+CnN0cmVhbQpCVCAvRjEgMTIgVGYgNzAgNzAwIFRkIChUaGlzIGlzIGEgc2ltcGxlIHRlc3QgUERGLikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgNjU1MzUgZiAKMDAwMDAwMDA2MyA2NTUzNSBmIAowMDAwMDAwMTA5IDY1NTM1IGYgCjAwMDAwMDAyMzQgNjU1MzUgZiAKMDAwMDAwMDMwMyA2NTUzNSBmIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM4OAolJUVPRgo=',
+    base64Data: 'data:application/pdf;base64,JVBERi0xLjQKJdPr6eEKMSAwIG9iago8PC9UeXBlIC9DYXRhbG9nL1BhZ2VzIDIgMCBSPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZSAvUGFnZXMvQ291bnQgMS9LaWRzIFszIDAgUl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlIC9QYWdlL1BhcmVudCAyIDAgUi9SZXNvdXJjZXMgPDwvRm9udCA8PC9GMSA0IDAgUj4+L1Byb2NTZXQgWy9QREYgL1RleHRdPj4vTWVkaWFCb3ggWzAgMCA2MTIgNzkyXS9Db250ZW50cyA1IDAgUj4+CmVuZG9iago0IDAgb2JqCjw8L1R5cGUgL0ZvbnQvU3VidHlwZSAvVHlwZTEvQmFzZUZvbnQgL0hlbHZldGljYT4+CmVuZG9iago1IDAgb2JqCjw8L0xlbmd0aCA0ND4+CnN0cmVhbQpCVCAvRjEgMTIgVGYgNzAgNzAwIFRkIChUaGlzIGlzIGEgc2ltcGxlIHRlc3QgUERGLikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgNjU1MzUgZiAKMDAwMDAwMDA2MyA2NTUzNSBmIAowMDAwMDAwMTA5IDY1NTUzNSBmIAowMDAwMDAwMjM0IDY1NTMzNSBmIAowMDAwMDAwMzAzIDY1NTM1IGYgCnRyYWlsZXIKPDwvU2l6ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMzg4CiUlRU9GCg==',
   },
 ];
 
 interface KnowledgeBaseDiagnosticsProps {
-  handleUpload: (file: File, level: KnowledgeBaseLevel, topic: string, description: string) => Promise<{ success: boolean; error?: string }>;
+  handleUpload: (
+    file: File, 
+    level: KnowledgeBaseLevel, 
+    topic: string, 
+    description: string
+  ) => Promise<{ success: boolean; error?: string }>;
   isAnyOperationInProgress: boolean;
 }
 
@@ -91,6 +97,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
 
     try {
       setIngestionTestResults(prev => ({ ...prev, [testCase.name]: { status: 'running', message: `Uploading ${testCase.fileName}...` } }));
+      
       const result = await handleUpload(testFile, 'Low', testTopic, testDescription);
 
       if (result.success) {
@@ -237,5 +244,3 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
     </div>
   );
 }
-
-    
