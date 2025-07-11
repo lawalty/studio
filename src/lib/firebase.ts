@@ -34,6 +34,15 @@ function initializeClientApp(): FirebaseApp {
             'You MUST restart the dev server after making changes to this file.'
         );
     }
+
+    // Critical check specifically for storageBucket format, as this causes silent hangs.
+    if (firebaseConfig.storageBucket && !firebaseConfig.storageBucket.endsWith('.appspot.com')) {
+        throw new Error(
+            'CRITICAL: The NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET environment variable in your .env.local file is likely incorrect. ' +
+            `It should be in the format 'your-project-id.appspot.com', but it is currently set to '${firebaseConfig.storageBucket}'. ` +
+            'Please correct this and restart the dev server.'
+        );
+    }
     
     return initializeApp(firebaseConfig);
 }
