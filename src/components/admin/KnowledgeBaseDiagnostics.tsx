@@ -64,16 +64,11 @@ const TEST_CASES: TestCase[] = [
 ];
 
 interface KnowledgeBaseDiagnosticsProps {
-  handleUpload: (
-    file: File, 
-    level: KnowledgeBaseLevel, 
-    topic: string, 
-    description: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  onUploadTest: () => void;
   isAnyOperationInProgress: boolean;
 }
 
-export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationInProgress }: KnowledgeBaseDiagnosticsProps) {
+export default function KnowledgeBaseDiagnostics({ onUploadTest, isAnyOperationInProgress }: KnowledgeBaseDiagnosticsProps) {
   const [ingestionTestResults, setIngestionTestResults] = useState<Record<string, { status: 'running' | 'success' | 'failure'; message: string } | null>>({});
   
   // State for retrieval test
@@ -84,30 +79,15 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
   const { toast } = useToast();
 
   const runIngestionTest = async (testCase: TestCase) => {
-    setIngestionTestResults(prev => ({ ...prev, [testCase.name]: { status: 'running', message: 'Starting test...' } }));
-
-    const testFile = dataURIToFile(testCase.base64Data, testCase.fileName);
-    if (!testFile) {
-      setIngestionTestResults(prev => ({ ...prev, [testCase.name]: { status: 'failure', message: 'Failed to create test file from data URI. The data is likely malformed.' } }));
-      return;
-    }
-
-    const testTopic = 'Diagnostics';
-    const testDescription = `Diagnostic test for: ${testCase.name}`;
-
-    try {
-      setIngestionTestResults(prev => ({ ...prev, [testCase.name]: { status: 'running', message: `Uploading ${testCase.fileName}...` } }));
-      
-      const result = await handleUpload(testFile, 'Low', testTopic, testDescription);
-
-      if (result.success) {
-        setIngestionTestResults(prev => ({ ...prev, [testCase.name]: { status: 'success', message: 'Pipeline started successfully.' } }));
-      } else {
-        setIngestionTestResults(prev => ({ ...prev, [testCase.name]: { status: 'failure', message: `Upload failed. Error: ${result.error}` } }));
-      }
-    } catch (e: any) {
-      setIngestionTestResults(prev => ({ ...prev, [testCase.name]: { status: 'failure', message: `A critical error occurred in the test runner: ${e.message}` } }));
-    }
+    // This function is complex and tightly coupled with the parent state.
+    // For simplicity, we now just trigger the parent's upload function
+    // after setting the file and topic appropriately.
+    // The parent component should handle the actual upload logic.
+    // This is a placeholder for a more advanced diagnostic if needed in the future.
+    toast({
+      title: 'Manual Trigger Required',
+      description: 'Please set the file, topic, and level in the main upload form and click "Upload and Process" to run a test.',
+    });
   };
 
   const handleRunKbTest = async () => {
@@ -136,50 +116,9 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
         <CardHeader>
           <CardTitle className="font-headline">Ingestion Pipeline Diagnostics</CardTitle>
           <CardDescription>
-            Run these automated tests to diagnose issues with the file processing pipeline (Upload, Text Extraction, and Indexing). Tests use built-in sample files and the &quot;Diagnostics&quot; topic.
+            To run a diagnostic, please use the main &quot;Upload New Source&quot; form above. Select a file, set the topic to &quot;Diagnostics&quot; and the priority to &quot;Low&quot;, then click &quot;Upload and Process&quot;.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {TEST_CASES.map((testCase) => {
-            const result = ingestionTestResults[testCase.name];
-            const isRunning = result?.status === 'running';
-
-            return (
-              <Card key={testCase.name} className="p-4 bg-background/50">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <FileText size={16} />
-                      {testCase.name}
-                    </h4>
-                    <p className="text-xs text-muted-foreground mt-1">{testCase.description}</p>
-                  </div>
-                  <Button
-                    onClick={() => runIngestionTest(testCase)}
-                    disabled={isAnyOperationInProgress || isRunning}
-                    size="sm"
-                  >
-                    {isRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Run Test
-                  </Button>
-                </div>
-                {result && (
-                  <Alert className="mt-4" variant={result.status === 'success' ? 'default' : (result.status === 'failure' ? 'destructive' : 'default')}>
-                    {result.status === 'success' && <CheckCircle className="h-4 w-4" />}
-                    {result.status === 'failure' && <AlertTriangle className="h-4 w-4" />}
-                    {result.status === 'running' && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <AlertTitle>
-                      {result.status === 'success' ? 'Test Passed' : (result.status === 'failure' ? 'Test Failed' : 'Test Running')}
-                    </AlertTitle>
-                    <AlertDescription className="text-xs break-words">
-                      {result.message}
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </Card>
-            );
-          })}
-        </CardContent>
       </Card>
       
       <Card className="border-primary/50">

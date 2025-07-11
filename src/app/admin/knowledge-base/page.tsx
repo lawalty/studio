@@ -51,83 +51,6 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived', description: 'Archived sources are not used by the AI.' },
 };
 
-// **FIXED**: Moved the handleUpload function outside the component to make it a stable, standalone function.
-// This prevents it from being recreated on every render, which was causing issues with the async `uploadBytes` call.
-const handleUpload = async (
-  fileToUpload: File,
-  targetLevel: KnowledgeBaseLevel,
-  topic: string,
-  description: string,
-  toast: ReturnType<typeof useToast>['toast'],
-  setOperationStatus: (id: string, status: boolean) => void,
-  setIsCurrentlyUploading: (status: boolean) => void,
-  handleReindexSource: (source: KnowledgeSource) => void
-): Promise<{ success: boolean; error?: string }> => {
-    if (!fileToUpload || !topic) {
-        toast({ title: "Upload Error", description: "A file and topic are required.", variant: "destructive" });
-        return { success: false, error: "A file and topic are required." };
-    }
-
-    const sourceId = uuidv4();
-    setOperationStatus(sourceId, true);
-    setIsCurrentlyUploading(true);
-    
-    const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-    const fileRef = storageRef(storage, storagePath);
-
-    try {
-        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
-        
-        await uploadBytes(fileRef, fileToUpload);
-        const downloadURL = await getDownloadURL(fileRef);
-        
-        toast({ title: "Upload Successful!", description: `File is in cloud storage. Starting processing...`, variant: "default" });
-        
-        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-        const sourceDocRef = doc(db, collectionName, sourceId);
-        
-        const newSourceData: Omit<KnowledgeSource, 'id' | 'createdAt' | 'createdAtDate'> & { createdAt: string } = {
-          sourceName: fileToUpload.name,
-          description,
-          topic,
-          level: targetLevel,
-          createdAt: new Date().toISOString(),
-          indexingStatus: 'processing',
-          indexingError: undefined,
-          downloadURL: downloadURL,
-        };
-
-        await setDoc(sourceDocRef, newSourceData, { merge: true });
-
-        // Start the processing flow but don't wait for it here
-        const fullSourceForReindex: KnowledgeSource = {
-          ...newSourceData,
-          id: sourceId,
-          createdAt: new Date(newSourceData.createdAt).toLocaleString(),
-          createdAtDate: new Date(newSourceData.createdAt),
-        };
-        handleReindexSource(fullSourceForReindex);
-
-        return { success: true };
-
-    } catch (e: any) {
-        let errorMessage = e.message || 'An unknown error occurred during upload.';
-        if (e.code === 'storage/unauthorized') {
-            errorMessage = "Permission denied. Check Firebase Storage security rules.";
-        } else if (e.code === 'storage/object-not-found') {
-            errorMessage = "File not found. This can happen if the storage bucket is misconfigured.";
-        }
-        
-        console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
-        toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
-        setOperationStatus(sourceId, false);
-        return { success: false, error: errorMessage };
-    } finally {
-        setIsCurrentlyUploading(false);
-    }
-};
-
-
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Archive': [] });
   const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Archive': true });
@@ -319,23 +242,91 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    const result = await handleUpload(
-        selectedFile, 
-        selectedLevelForUpload, 
-        selectedTopicForUpload, 
-        uploadDescription,
-        toast,
-        setOperationStatus,
-        setIsCurrentlyUploading,
-        handleReindexSource
-    );
-    
-    if (result.success) {
-      setSelectedFile(null);
-      setUploadDescription('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+
+    const fileToUpload = selectedFile;
+    const targetLevel = selectedLevelForUpload;
+    const topic = selectedTopicForUpload;
+    const description = uploadDescription;
+
+    const sourceId = uuidv4();
+    setOperationStatus(sourceId, true);
+    setIsCurrentlyUploading(true);
+
+    const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+    const sourceDocRef = doc(db, collectionName, sourceId);
+
+    try {
+        // 1. Upload file to storage
+        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
+        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+        const fileRef = storageRef(storage, storagePath);
+        await uploadBytes(fileRef, fileToUpload);
+        const downloadURL = await getDownloadURL(fileRef);
+        toast({ title: "Upload Successful!", description: `File is in cloud storage. Starting processing...`, variant: "default" });
+
+        // 2. Create initial metadata document in Firestore
+        const newSourceData: Omit<KnowledgeSource, 'id' | 'createdAt' | 'createdAtDate'> & { createdAt: string } = {
+          sourceName: fileToUpload.name,
+          description,
+          topic,
+          level: targetLevel,
+          createdAt: new Date().toISOString(),
+          indexingStatus: 'processing',
+          downloadURL: downloadURL,
+        };
+        await setDoc(sourceDocRef, newSourceData, { merge: true });
+
+        // 3. Extract text
+        let extractedText: string | undefined;
+        if (fileToUpload.type === 'text/plain') {
+            toast({ description: 'Plain text file detected, skipping AI extraction.' });
+            extractedText = await fileToUpload.text();
+        } else {
+            toast({ description: 'Extracting text with AI...' });
+            const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+            if (extractionResult.error || !extractionResult.extractedText) {
+                throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
+            }
+            extractedText = extractionResult.extractedText;
+        }
+
+        // 4. Index the document
+        toast({ description: 'Indexing content...' });
+        const indexingInput: IndexDocumentInput = {
+            sourceId,
+            sourceName: fileToUpload.name,
+            text: extractedText,
+            level: targetLevel,
+            topic,
+            downloadURL,
+        };
+        const indexingResult = await indexDocument(indexingInput);
+        if (!indexingResult.success) {
+            throw new Error(indexingResult.error || 'The indexing flow failed.');
+        }
+
+        toast({ title: "Processing Complete", description: `${fileToUpload.name} has been fully indexed.`, variant: "default" });
+
+        // Reset form
+        setSelectedFile(null);
+        setUploadDescription('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+
+    } catch (e: any) {
+        const errorMessage = e.message || 'An unknown error occurred during the process.';
+        console.error(`[handleUpload] Pipeline failed for ${fileToUpload.name}:`, e);
+        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+        // Update Firestore with failure status
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'failed',
+            indexingError: errorMessage,
+        }).catch(updateError => console.error("Error updating doc with failure status:", updateError));
+
+    } finally {
+        setOperationStatus(sourceId, false);
+        setIsCurrentlyUploading(false);
     }
   };
 
@@ -647,7 +638,7 @@ export default function KnowledgeBasePage() {
               </AccordionTrigger>
               <AccordionContent>
                 <KnowledgeBaseDiagnostics
-                  handleUpload={(file, level, topic, description) => handleUpload(file, level, topic, description, toast, setOperationStatus, setIsCurrentlyUploading, handleReindexSource)}
+                  onUploadTest={handleFileUpload}
                   isAnyOperationInProgress={anyOperationGloballyInProgress}
                 />
               </AccordionContent>
@@ -666,5 +657,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
