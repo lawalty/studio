@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A flow to completely delete a knowledge base source, including
+ * @fileOverview A server function to completely delete a knowledge base source, including
  * its metadata, indexed chunks, and the original file from Cloud Storage.
  *
  * - deleteSource - The main function to trigger the deletion process.
@@ -10,7 +10,6 @@
  */
 import { z } from 'zod';
 import { db, admin } from '@/lib/firebase-admin';
-import { ai } from '@/ai/genkit';
 
 const DeleteSourceInputSchema = z.object({
   id: z.string().describe('The unique ID of the source document to delete.'),
@@ -32,13 +31,7 @@ const LEVEL_CONFIG_SERVER: Record<string, { collectionName: string }> = {
     'Archive': { collectionName: 'kb_archive_meta_v1' },
   };
 
-const deleteSourceFlow = ai.defineFlow(
-  {
-    name: 'deleteSourceFlow',
-    inputSchema: DeleteSourceInputSchema,
-    outputSchema: DeleteSourceOutputSchema,
-  },
-  async ({ id, level, sourceName }) => {
+export async function deleteSource({ id, level, sourceName }: DeleteSourceInput): Promise<DeleteSourceOutput> {
     try {
       // 1. Delete all associated chunks from Firestore
       const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
@@ -64,7 +57,7 @@ const deleteSourceFlow = ai.defineFlow(
       if (exists) {
         await file.delete();
       } else {
-        console.warn(`[deleteSourceFlow] Storage file not found at path ${storagePath}, but proceeding with Firestore deletion.`);
+        console.warn(`[deleteSource] Storage file not found at path ${storagePath}, but proceeding with Firestore deletion.`);
       }
 
       // 3. Delete the source metadata document
@@ -78,12 +71,7 @@ const deleteSourceFlow = ai.defineFlow(
       return { success: true };
 
     } catch (error: any) {
-      console.error(`[deleteSourceFlow] Failed to delete source ${id}:`, error);
+      console.error(`[deleteSource] Failed to delete source ${id}:`, error);
       return { success: false, error: error.message || 'An unknown server error occurred during deletion.' };
     }
-  }
-);
-
-export async function deleteSource(input: DeleteSourceInput): Promise<DeleteSourceOutput> {
-  return deleteSourceFlow(input);
 }
