@@ -173,19 +173,19 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
     
-    const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-    const sourceDocRef = doc(db, collectionName, sourceId);
-
-    await setDoc(sourceDocRef, {
+    // Create a temporary placeholder in the UI while uploading
+    const placeholderSource: KnowledgeSource = {
         id: sourceId,
         sourceName: fileToUpload.name,
         description,
         topic,
         level: targetLevel,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().toLocaleString(),
+        createdAtDate: new Date(),
         indexingStatus: 'processing',
         indexingError: 'Starting upload...',
-    });
+    };
+    setSources(prev => ({ ...prev, [targetLevel]: [placeholderSource, ...prev[targetLevel]] }));
 
     try {
         toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
@@ -196,35 +196,22 @@ export default function KnowledgeBasePage() {
         await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(storageRef);
         
-        await updateDoc(sourceDocRef, {
-            downloadURL: downloadURL,
-            indexingError: "Extracting text...",
-        });
+        toast({ title: "Upload Successful!", description: `File is now in cloud storage.`, variant: "default" });
 
-        toast({ title: "Upload Successful!", description: `"${fileToUpload.name}" is now being processed.`, variant: "default" });
-
-        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-        if (extractionResult.error || !extractionResult.extractedText) {
-          throw new Error(extractionResult.error || "Text extraction failed to produce any content.");
-        }
+        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+        const sourceDocRef = doc(db, collectionName, sourceId);
         
-        await updateDoc(sourceDocRef, { indexingError: "Indexing content..." });
-        
-        const indexInput: IndexDocumentInput = {
-            sourceId: sourceId,
+        await setDoc(sourceDocRef, {
+            id: sourceId,
             sourceName: fileToUpload.name,
-            text: extractionResult.extractedText,
+            description,
+            topic,
             level: targetLevel,
-            topic: topic,
+            createdAt: new Date().toISOString(),
             downloadURL: downloadURL,
-        };
-
-        const indexResult = await indexDocument(indexInput);
-        if (!indexResult.success) {
-            throw new Error(indexResult.error || "The indexing flow failed on the server.");
-        }
-        
-        await updateDoc(sourceDocRef, { indexingStatus: 'success', indexingError: null, chunksWritten: indexResult.chunksWritten });
+            indexingStatus: 'success', // TEMPORARY: Mark as success after upload
+            indexingError: 'Upload complete. Further processing is temporarily disabled.',
+        });
         
         return { success: true };
 
@@ -233,10 +220,21 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
         toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'failed',
-            indexingError: errorMessage,
-        });
+        // Attempt to create a failure record in Firestore
+        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+        const sourceDocRef = doc(db, collectionName, sourceId);
+        try {
+            await setDoc(sourceDocRef, {
+                id: sourceId,
+                sourceName: fileToUpload.name,
+                description, topic, level: targetLevel,
+                createdAt: new Date().toISOString(),
+                indexingStatus: 'failed',
+                indexingError: errorMessage,
+            });
+        } catch (dbError) {
+            console.error("Additionally failed to write failure status to Firestore:", dbError);
+        }
 
         return { success: false, error: errorMessage };
     } finally {
