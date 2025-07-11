@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,7 +38,7 @@ interface KnowledgeSource {
   level: KnowledgeBaseLevel;
   createdAt: string;
   createdAtDate: Date;
-  indexingStatus: 'processing' | 'success' | 'failed';
+  indexingStatus: 'pending' | 'processing' | 'success' | 'failed';
   indexingError?: string;
   downloadURL?: string;
   chunksWritten?: number;
@@ -61,7 +61,7 @@ export default function KnowledgeBasePage() {
   const [uploadDescription, setUploadDescription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
@@ -78,7 +78,6 @@ export default function KnowledgeBasePage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          // Adding 'Diagnostics' topic for the new test runner
           const topicsString = data.conversationalTopics || '';
           let topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
           if (!topicsArray.includes('Diagnostics')) {
@@ -95,28 +94,25 @@ export default function KnowledgeBasePage() {
     };
     fetchTopics();
   }, [selectedTopicForUpload]);
-
-  const updateSourceInState = (source: KnowledgeSource) => {
+  
+  const updateSourceInState = useCallback((source: KnowledgeSource) => {
     setSources(prev => {
-      const newSources = { ...prev };
-      // Remove from all levels first to handle moves
-      for (const key in newSources) {
-          const levelKey = key as KnowledgeBaseLevel;
-          newSources[levelKey] = newSources[levelKey].filter(s => s.id !== source.id);
-      }
-      // Add or update in the correct level
-      const levelSources = newSources[source.level] || [];
-      const sourceIndex = levelSources.findIndex(s => s.id === source.id);
-      if (sourceIndex > -1) {
-        levelSources[sourceIndex] = source;
-      } else {
-        levelSources.push(source);
-      }
-      newSources[source.level] = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
-      
-      return newSources;
+        const newSources = { ...prev };
+        Object.keys(newSources).forEach(key => {
+            const levelKey = key as KnowledgeBaseLevel;
+            newSources[levelKey] = newSources[levelKey].filter(s => s.id !== source.id);
+        });
+        const levelSources = newSources[source.level] || [];
+        const sourceIndex = levelSources.findIndex(s => s.id === source.id);
+        if (sourceIndex > -1) {
+            levelSources[sourceIndex] = source;
+        } else {
+            levelSources.push(source);
+        }
+        newSources[source.level] = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
+        return newSources;
     });
-  };
+  }, []);
 
   useEffect(() => {
     const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
@@ -144,7 +140,7 @@ export default function KnowledgeBasePage() {
         setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       }, (error) => {
         console.error(`Error fetching ${level} priority sources:`, error);
-        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
+        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBLevel]: false }));
       });
     });
 
@@ -173,139 +169,105 @@ export default function KnowledgeBasePage() {
       setOperationStatus(source.id, false);
     }
   }, [toast]);
-  
-  const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
-      setOperationStatus(source.id, true);
-      const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-  
-      try {
-          if (!source.downloadURL) throw new Error("Source has no download URL, cannot re-process.");
-          
-          await updateDoc(sourceDocRef, {
-              indexingStatus: 'processing',
-              indexingError: '',
-              chunksWritten: 0,
-          });
-  
-          toast({ title: `Re-processing ${source.sourceName}...` });
-  
-          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
-          const chunksSnapshot = await getDocs(chunksQuery);
-          if (!chunksSnapshot.empty) {
-              const batch = writeBatch(db);
-              chunksSnapshot.forEach(doc => batch.delete(doc.ref));
-              await batch.commit();
-              toast({ description: "Cleared old indexed data." });
-          }
-          
-          toast({ description: "Re-extracting text..." });
-          
-          const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
-          
-          if (extractionResult.error || !extractionResult.extractedText) {
-              throw new Error(extractionResult?.error || 'Text re-extraction failed to produce content.');
-          }
-  
-          toast({ description: "Re-indexing text..." });
-          const indexingInput: IndexDocumentInput = {
-              sourceId: source.id,
-              sourceName: source.sourceName,
-              text: extractionResult.extractedText,
-              level: source.level,
-              topic: source.topic,
-              downloadURL: source.downloadURL,
-          };
-  
-          const indexingResult = await indexDocument(indexingInput);
-  
-          if (!indexingResult.success) {
-              throw new Error(indexingResult.error || 'The re-indexing flow failed.');
-          }
-          
-          toast({ title: "Re-indexing Successful", description: `${source.sourceName} is now up-to-date.`, variant: "default" });
-  
-      } catch (error: any) {
-          const errorMessage = error.message || "An unknown error occurred during re-indexing.";
-          toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive", duration: 10000 });
-          
-          await updateDoc(sourceDocRef, {
-              indexingStatus: 'failed',
-              indexingError: errorMessage
-          }).catch(updateError => console.error("Error updating doc with failure status after re-indexing attempt:", updateError));
-      } finally {
-          setOperationStatus(source.id, false);
-      }
-  }, [toast]);
 
+  const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
+    setOperationStatus(source.id, true);
+    const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+
+    try {
+        if (!source.downloadURL) throw new Error("Source has no download URL, cannot re-process.");
+        
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'processing',
+            indexingError: null,
+            chunksWritten: 0,
+        });
+        
+        toast({ title: `Re-processing ${source.sourceName}...` });
+        
+        // No need to call flows directly. The Firestore trigger will handle it.
+
+    } catch (error: any) {
+        const errorMessage = error.message || "An unknown error occurred during re-indexing.";
+        toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive", duration: 10000 });
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'failed',
+            indexingError: errorMessage
+        }).catch(updateError => console.error("Error updating doc with failure status after re-indexing attempt:", updateError));
+    } finally {
+        setOperationStatus(source.id, false);
+    }
+  }, [toast]);
+  
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
-      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
-      return;
+        toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
+        return;
     }
 
     const fileToUpload = selectedFile;
     const targetLevel = selectedLevelForUpload;
     const topic = selectedTopicForUpload;
     const description = uploadDescription;
-
     const sourceId = uuidv4();
-    setOperationStatus(sourceId, true);
+
     setIsCurrentlyUploading(true);
+    setOperationStatus(sourceId, true);
+    toast({ title: `Starting Upload...`, description: `Preparing "${fileToUpload.name}".` });
 
     const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
     const sourceDocRef = doc(db, collectionName, sourceId);
 
+    let unsubscribeFromStatus: (() => void) | null = null;
+
     try {
-        // 1. Upload file to storage
-        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
+        // Step 1: Create a placeholder document in Firestore
+        const newSourceData: Omit<KnowledgeSource, 'id' | 'createdAt' | 'createdAtDate'> & { createdAt: string } = {
+            sourceName: fileToUpload.name,
+            description,
+            topic,
+            level: targetLevel,
+            createdAt: new Date().toISOString(),
+            indexingStatus: 'pending',
+            downloadURL: '',
+        };
+        await setDoc(sourceDocRef, newSourceData);
+
+        // Step 2: Set up a real-time listener for status updates
+        unsubscribeFromStatus = onSnapshot(sourceDocRef, (snapshot) => {
+            const data = snapshot.data();
+            if (!data) return;
+
+            const status = data.indexingStatus;
+            const error = data.indexingError;
+
+            if (status === 'processing') {
+                toast({ title: 'Processing...', description: 'File is being analyzed and indexed.', variant: 'default' });
+            } else if (status === 'success') {
+                toast({ title: "Processing Complete", description: `${fileToUpload.name} has been fully indexed.`, variant: "success" });
+                setIsCurrentlyUploading(false);
+                setOperationStatus(sourceId, false);
+                if (unsubscribeFromStatus) unsubscribeFromStatus();
+            } else if (status === 'failed') {
+                toast({ title: "Processing Failed", description: error || 'An unknown error occurred.', variant: "destructive", duration: 10000 });
+                setIsCurrentlyUploading(false);
+                setOperationStatus(sourceId, false);
+                if (unsubscribeFromStatus) unsubscribeFromStatus();
+            }
+        });
+
+        // Step 3: Upload the file to Storage
+        toast({ title: `Uploading File...`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
         await uploadBytes(fileRef, fileToUpload);
         const downloadURL = await getDownloadURL(fileRef);
-        toast({ title: "Upload Successful!", description: `File is in cloud storage. Starting processing...`, variant: "default" });
 
-        // 2. Create initial metadata document in Firestore
-        const newSourceData: Omit<KnowledgeSource, 'id' | 'createdAt' | 'createdAtDate'> & { createdAt: string } = {
-          sourceName: fileToUpload.name,
-          description,
-          topic,
-          level: targetLevel,
-          createdAt: new Date().toISOString(),
-          indexingStatus: 'processing',
-          downloadURL: downloadURL,
-        };
-        await setDoc(sourceDocRef, newSourceData, { merge: true });
-
-        // 3. Extract text
-        let extractedText: string | undefined;
-        if (fileToUpload.type === 'text/plain') {
-            toast({ description: 'Plain text file detected, skipping AI extraction.' });
-            extractedText = await fileToUpload.text();
-        } else {
-            toast({ description: 'Extracting text with AI...' });
-            const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-            if (extractionResult.error || !extractionResult.extractedText) {
-                throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
-            }
-            extractedText = extractionResult.extractedText;
-        }
-
-        // 4. Index the document
-        toast({ description: 'Indexing content...' });
-        const indexingInput: IndexDocumentInput = {
-            sourceId,
-            sourceName: fileToUpload.name,
-            text: extractedText,
-            level: targetLevel,
-            topic,
-            downloadURL,
-        };
-        const indexingResult = await indexDocument(indexingInput);
-        if (!indexingResult.success) {
-            throw new Error(indexingResult.error || 'The indexing flow failed.');
-        }
-
-        toast({ title: "Processing Complete", description: `${fileToUpload.name} has been fully indexed.`, variant: "default" });
+        // Step 4: Update the document with the downloadURL, which triggers the backend flow
+        await updateDoc(sourceDocRef, {
+            downloadURL: downloadURL,
+            indexingStatus: 'processing' 
+        });
 
         // Reset form
         setSelectedFile(null);
@@ -316,17 +278,17 @@ export default function KnowledgeBasePage() {
 
     } catch (e: any) {
         const errorMessage = e.message || 'An unknown error occurred during the process.';
-        console.error(`[handleUpload] Pipeline failed for ${fileToUpload.name}:`, e);
-        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
-        // Update Firestore with failure status
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'failed',
-            indexingError: errorMessage,
-        }).catch(updateError => console.error("Error updating doc with failure status:", updateError));
-
-    } finally {
-        setOperationStatus(sourceId, false);
+        console.error(`[handleUpload] Client-side error for ${fileToUpload.name}:`, e);
+        toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+        
+        // Clean up on failure
+        if (unsubscribeFromStatus) unsubscribeFromStatus();
+        await deleteDoc(sourceDocRef).catch(delErr => console.error("Error cleaning up firestore doc:", delErr));
+        const fileRefToDelete = storageRef(storage, `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`);
+        await deleteObject(fileRefToDelete).catch(delErr => console.error("Error cleaning up storage file:", delErr));
+        
         setIsCurrentlyUploading(false);
+        setOperationStatus(sourceId, false);
     }
   };
 
@@ -434,7 +396,7 @@ export default function KnowledgeBasePage() {
                         <TableBody>
                             {levelSources.map(source => {
                                 const isOpInProgress = operationInProgress[source.id] || false;
-                                const isStuckProcessing = source.indexingStatus === 'processing' && (new Date().getTime() - source.createdAtDate.getTime()) > 3 * 60 * 1000;
+                                const isStuckProcessing = source.indexingStatus === 'processing' && (new Date().getTime() - source.createdAtDate.getTime()) > 5 * 60 * 1000;
                                 return (
                                     <TableRow key={source.id} className={cn(isOpInProgress && "opacity-50 pointer-events-none")}>
                                         <TableCell className="font-medium">
@@ -453,6 +415,7 @@ export default function KnowledgeBasePage() {
                                                         <div className="flex items-center gap-2">
                                                             {source.indexingStatus === 'success' && <CheckCircle size={16} className="text-green-500" />}
                                                             {source.indexingStatus === 'processing' && <Loader2 size={16} className="animate-spin" />}
+                                                            {source.indexingStatus === 'pending' && <Loader2 size={16} className="animate-spin text-amber-500" />}
                                                             {source.indexingStatus === 'failed' && <AlertTriangle size={16} className="text-destructive" />}
                                                             <span className="capitalize">{source.indexingStatus}</span>
                                                         </div>
@@ -460,7 +423,8 @@ export default function KnowledgeBasePage() {
                                                     <TooltipContent>
                                                         {source.indexingStatus === 'success' && <p>{source.chunksWritten ?? 0} chunks written.</p>}
                                                         {source.indexingStatus === 'failed' && <p>Error: {source.indexingError}</p>}
-                                                        {source.indexingStatus === 'processing' && <p>File is currently being processed.</p>}
+                                                        {source.indexingStatus === 'processing' && <p>File is being processed by the backend.</p>}
+                                                        {source.indexingStatus === 'pending' && <p>Waiting for file upload to complete.</p>}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
@@ -549,7 +513,7 @@ export default function KnowledgeBasePage() {
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                                                                 <AlertDialogDescription>This will permanently delete the source and all its indexed data. This action cannot be undone.</AlertDialogDescription>
-                                                            </AlertDialogHeader>
+                                                            </HEADER>
                                                             <AlertDialogFooter>
                                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                                 <AlertDialogAction onClick={() => handleDeleteSource(source)}>Delete</AlertDialogAction>
@@ -586,7 +550,7 @@ export default function KnowledgeBasePage() {
             <CardHeader>
               <CardTitle className="font-headline">Upload New Source</CardTitle>
               <CardDescription>
-                Add content to the knowledge base. Processable files (PDF, TXT, DOCX) will be chunked and written to Firestore for the Vector Search extension to index.
+                Add a new source to the knowledge base. The file will be uploaded, and a Cloud Function will trigger to process and index it.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

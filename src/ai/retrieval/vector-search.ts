@@ -1,3 +1,4 @@
+'use server';
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
  *
