@@ -8,17 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Mic, Bot, MessageSquareText, AlertTriangle, UploadCloud, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes } from "firebase/storage";
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LanguageSelector from '@/components/layout/LanguageSelector';
 import { useLanguage } from '@/context/LanguageContext';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
-import { Input } from '../ui/input';
-import { useToast } from '@/hooks/use-toast';
-
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
@@ -46,40 +42,15 @@ export default function StartPageContent() {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [testFile, setTestFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { language, translate } = useLanguage();
-  const { toast } = useToast();
 
   const [uiText, setUiText] = useState({
     welcome: welcomeMessage,
     typedAnim: TARGET_ANIMATION_MESSAGE,
     ...TEXT_ELEMENTS_EN,
   });
-
-  const handlePublicUpload = async () => {
-    if (!testFile) {
-      toast({ title: "No file selected", description: "Please choose a file to upload.", variant: "destructive" });
-      return;
-    }
-
-    setIsUploading(true);
-    toast({ title: "Starting Public Upload Test..." });
-
-    try {
-      const publicRef = storageRef(storage, `public_test_uploads/${testFile.name}`);
-      await uploadBytes(publicRef, testFile);
-      toast({ title: "Public Upload Successful!", description: "The file was uploaded successfully from outside the admin area.", variant: "default" });
-    } catch (error: any) {
-      console.error("Public upload test failed:", error);
-      toast({ title: "Public Upload Failed", description: `Error: ${error.message}`, variant: "destructive" });
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
 
   // Keydown listener for admin access
   useEffect(() => {
@@ -321,20 +292,6 @@ export default function StartPageContent() {
               </Button>
             </div>
           </CardContent>
-        </Card>
-
-        <Card className="w-full max-w-2xl p-6 mt-8 shadow-2xl border bg-card/80 backdrop-blur-sm">
-            <CardHeader>
-                <CardTitle>Temporary Upload Test</CardTitle>
-                <CardDescription>This is a temporary test to check for public file upload functionality.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row items-center gap-4">
-                <Input type="file" onChange={(e) => setTestFile(e.target.files ? e.target.files[0] : null)} className="flex-grow" />
-                <Button onClick={handlePublicUpload} disabled={isUploading || !testFile}>
-                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                    Upload Test File
-                </Button>
-            </CardContent>
         </Card>
       </>
     );
