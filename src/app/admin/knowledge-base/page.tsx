@@ -194,41 +194,24 @@ export default function KnowledgeBasePage() {
         const storageRef = ref(storage, storagePath);
         
         await uploadBytes(storageRef, fileToUpload);
-        const downloadURL = await getDownloadURL(storageRef);
-
-        await updateDoc(sourceDocRef, { downloadURL });
-
-        toast({ title: 'Extracting Text...', description: 'Your file is being read by the AI.' });
-
-        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-        if (extractionResult.error || !extractionResult.extractedText) {
-          throw new Error(extractionResult.error || "Text extraction failed to produce any content. The document might be empty or unreadable.");
-        }
-
-        toast({ title: 'Indexing Content...', description: 'Generating embeddings and saving to the knowledge base.' });
-
-        const indexingInput: IndexDocumentInput = {
-          sourceId: sourceId,
-          sourceName: fileToUpload.name,
-          text: extractionResult.extractedText,
-          level: targetLevel,
-          topic: topic,
-          downloadURL: downloadURL,
-        };
-
-        const indexingResult = await indexDocument(indexingInput);
-        if (!indexingResult.success) {
-          throw new Error(indexingResult.error || "The server-side indexing flow failed.");
-        }
         
-        toast({ title: "Processing Complete!", description: `"${fileToUpload.name}" has been successfully added to the knowledge base.`, variant: "default" });
+        // **ISOLATED UPLOAD STEP**
+        // If we reach here, the upload was successful.
+        // We will update the status to 'success' and stop.
+        
+        toast({ title: "Upload Successful!", description: `"${fileToUpload.name}" has been saved to storage.`, variant: "default" });
+
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'success',
+            indexingError: 'File uploaded to storage. Further processing is temporarily disabled.',
+        });
         
         return { success: true };
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unknown processing error occurred.';
-        console.error(`[handleUpload] Failed to process ${fileToUpload.name}:`, e);
-        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+        const errorMessage = e.message || 'An unknown processing error occurred during upload.';
+        console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
+        toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
         await updateDoc(sourceDocRef, {
             indexingStatus: 'failed',
