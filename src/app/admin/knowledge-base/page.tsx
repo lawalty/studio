@@ -164,90 +164,84 @@ export default function KnowledgeBasePage() {
   }, []);
 
   const handleUpload = useCallback(async (fileToUpload: File, targetLevel: KnowledgeBaseLevel, topic: string, description: string): Promise<{ success: boolean; error?: string }> => {
-    if (!fileToUpload || !topic) {
-        toast({ title: "Upload Error", description: "A file and topic are required.", variant: "destructive" });
-        return { success: false, error: "A file and topic are required." };
-    }
+      if (!fileToUpload || !topic) {
+          toast({ title: "Upload Error", description: "A file and topic are required.", variant: "destructive" });
+          return { success: false, error: "A file and topic are required." };
+      }
 
-    const sourceId = uuidv4();
-    setOperationStatus(sourceId, true);
-    setIsCurrentlyUploading(true);
-    
-    // This is the fix: We are creating a new storage reference with the correct bucket.
-    // This makes the code more robust against client-side configuration issues.
-    const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-    const fileRef = storageRef(storage, storagePath);
+      const sourceId = uuidv4();
+      setOperationStatus(sourceId, true);
+      setIsCurrentlyUploading(true);
+      
+      const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+      const fileRef = storageRef(storage, storagePath);
 
-    try {
-        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
-        
-        await uploadBytes(fileRef, fileToUpload);
-        const downloadURL = await getDownloadURL(fileRef);
-        
-        toast({ title: "Upload Successful!", description: `File is now in cloud storage.`, variant: "default" });
-        
-        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-        const sourceDocRef = doc(db, collectionName, sourceId);
-        
-        await setDoc(sourceDocRef, {
+      try {
+          toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
+          await uploadBytes(fileRef, fileToUpload);
+          const downloadURL = await getDownloadURL(fileRef);
+          
+          toast({ title: "Upload Successful!", description: `File is in cloud storage. Starting processing...`, variant: "default" });
+          
+          const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+          const sourceDocRef = doc(db, collectionName, sourceId);
+          
+          await setDoc(sourceDocRef, {
+              sourceName: fileToUpload.name,
+              description,
+              topic,
+              level: targetLevel,
+              createdAt: new Date().toISOString(),
+              indexingStatus: 'processing',
+              indexingError: null,
+              downloadURL: downloadURL,
+          }, { merge: true });
+
+          // Start the processing flow but don't wait for it here
+          handleReindexSource({
+            id: sourceId,
             sourceName: fileToUpload.name,
             description,
             topic,
             level: targetLevel,
             createdAt: new Date().toISOString(),
-            indexingStatus: 'success', // We now mark it as success here
-            indexingError: 'Upload complete. Further processing is disabled for this test.',
-            downloadURL: downloadURL,
-        }, { merge: true });
+            createdAtDate: new Date(),
+            indexingStatus: 'processing',
+            downloadURL,
+          });
 
-        // This marks the end of our isolated test.
-        return { success: true };
+          return { success: true };
 
-    } catch (e: any) {
-        let errorMessage = e.message || 'An unknown error occurred during upload.';
-        if (e.code === 'storage/unauthorized') {
-            errorMessage = "Permission denied. Check Firebase Storage security rules.";
-        } else if (e.code === 'storage/object-not-found') {
-            errorMessage = "File not found. This can happen if the storage bucket is misconfigured.";
-        }
-        
-        console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
-        toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
-        
-        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-        const sourceDocRef = doc(db, collectionName, sourceId);
-        try {
-            await setDoc(sourceDocRef, {
-                sourceName: fileToUpload.name,
-                description,
-                topic,
-                level: targetLevel,
-                createdAt: new Date().toISOString(),
-                indexingStatus: 'failed',
-                indexingError: `Storage Upload Error: ${errorMessage}`,
-            }, { merge: true });
-        } catch (dbError) {
-            console.error("Additionally failed to write failure status to Firestore:", dbError);
-        }
-
-        return { success: false, error: errorMessage };
-    } finally {
-        setOperationStatus(sourceId, false);
-        setIsCurrentlyUploading(false);
-    }
-}, []);
+      } catch (e: any) {
+          let errorMessage = e.message || 'An unknown error occurred during upload.';
+          if (e.code === 'storage/unauthorized') {
+              errorMessage = "Permission denied. Check Firebase Storage security rules.";
+          } else if (e.code === 'storage/object-not-found') {
+              errorMessage = "File not found. This can happen if the storage bucket is misconfigured.";
+          }
+          
+          console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
+          toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+          return { success: false, error: errorMessage };
+      } finally {
+          setOperationStatus(sourceId, false);
+          setIsCurrentlyUploading(false);
+      }
+  }, []);
   
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
+    const result = await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
     
-    setSelectedFile(null);
-    setUploadDescription('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    if (result.success) {
+      setSelectedFile(null);
+      setUploadDescription('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -636,3 +630,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    

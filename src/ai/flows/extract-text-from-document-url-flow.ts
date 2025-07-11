@@ -40,11 +40,27 @@ CRITICAL INSTRUCTIONS:
         prompt: [{ text: prompt }, { media: { url: documentUrl } }],
         config: {
           temperature: 0.1,
+          safetySettings: [
+            {
+                category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+                threshold: 'BLOCK_NONE',
+            },
+            {
+                category: 'HARM_CATEGORY_HATE_SPEECH',
+                threshold: 'BLOCK_NONE',
+            },
+            {
+                category: 'HARM_CATEGORY_HARASSMENT',
+                threshold: 'BLOCK_NONE',
+            },
+            {
+                category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                threshold: 'BLOCK_NONE',
+            },
+          ]
         },
       });
 
-      // **FIXED**: More robust check for the returned text.
-      // Now handles cases where the API returns a successful but empty response.
       const text = generationResult?.text?.trim();
 
       if (text) {
@@ -79,3 +95,5 @@ CRITICAL INSTRUCTIONS:
       return { error: detailedError };
     }
 }
+
+    
