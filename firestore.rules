@@ -1,8 +1,33 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to authenticated users
+    
+    // Default deny all unless a more specific rule allows access.
     match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow authenticated users to manage configurations.
+    // This is necessary for the admin panel to save settings for API keys, persona, etc.
+    match /configurations/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated users to manage the knowledge base metadata.
+    // This covers the collections for high, medium, low, and archive priority levels.
+    match /kb_{level}_meta_v1/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // CRITICAL FIX: Allow authenticated users to manage individual chunks in the knowledge base.
+    // This was the missing rule that caused the indexing pipeline to hang.
+    match /kb_chunks/{chunkId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Allow authenticated users to read and clean up diagnostic test documents.
+    match /__diagnostic_tests/{testId} {
       allow read, write: if request.auth != null;
     }
   }

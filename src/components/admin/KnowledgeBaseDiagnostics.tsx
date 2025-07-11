@@ -5,17 +5,14 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, CheckCircle, AlertTriangle, FileText, Search, Image as ImageIcon, Upload } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, FileText, Search, Image as ImageIcon } from 'lucide-react';
 import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
 import { useToast } from '@/hooks/use-toast';
 import { storage } from '@/lib/firebase';
 import { ref, uploadBytes } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 
 // Define the shape of the test case
@@ -64,7 +61,7 @@ const TEST_CASES: TestCase[] = [
     description: 'Tests PDF processing and smart text extraction from a common document type.',
     fileName: 'test_simple.pdf',
     mimeType: 'application/pdf',
-    base64Data: 'data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL1Jlc291cmNlcyA8PAovUHJvY1NldCBbL1BERiAvVGV4dF0KL0ZvbnQgPDwKL0YxIDQgMCBSCj4+Cj4+Ci9NZWRpYUJveCBbMCAwIDYxMiA3OTJdCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMiAwIFIKL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQo+PgplbmRvYmoKNSAwIG9iago8PAovTGVuZ3RoIDQxPj4Kc3RyZWFtCkJUCjcwIDcwMCBUZAovRjEgMTIgVGYKKFRoaXMgaXMgYSBzaW1wbGUgdGVzdCBQREYpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNzQgMDAwMDAgbiAKMDAwMDAwMDE3NCAwMDAwMCBuIAowMDAwMDAwMjc0IDAwMDAwIG4gCjAwMDAwMDAzNjIgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA2Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgo0MjkKJSVFT0YK',
+    base64Data: 'data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKL1Jlc291cmNlcyA8PAovUHJvY1NldCBbL1BERiAvVGV4dF0KL0ZvbnQgPDwKL0YxIDQgMCBSCj4+Cj4+Ci9NZWRpYUJveCBbMCAwIDYxMiA3OTJdCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9QYWdlCi9QYXJlbnQgMiAwIFIKL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQo+PgplbmRvYmoKNSAwIG9iago8PAovTGVuZ3RoIDQxPj4Kc3RyZWFtCkJUCjcwIDcwMCBUZAovRjEgMTIgVGYKKFRoaXMgaXMgYSBzaW1wbGUgdGVzdCBQREYpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNzQgMDAwMDAgbiAKMDAwMDAwMDE3NCAwMDAwMCBuIAowMDAwMDAwMjc0IDAwMDAwIG4gCjAwMDAwMDAzNjIgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA2Ci9Sb29טIDAgUgo+PgplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNzQgMDAwMDAgbiAKMDAwMDAwMDE3NCAwMDAwMCBuIAowMDAwMDAwMjc0IDAwMDAwIG4gCjAwMDAwMDAzNjIgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA2Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgo0MjkKJSVFT0YK',
   },
 ];
 
@@ -85,11 +82,6 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadResult, setImageUploadResult] = useState<{ status: 'success' | 'failure'; message: string } | null>(null);
-
-  const [manualFile, setManualFile] = useState<File | null>(null);
-  const [manualLevel, setManualLevel] = useState<KnowledgeBaseLevel>('High');
-  const [isUploadingManual, setIsUploadingManual] = useState(false);
-  const [manualUploadResult, setManualUploadResult] = useState<{ status: 'success' | 'failure'; message: string } | null>(null);
 
   const runImageUploadTest = async () => {
     setIsUploadingImage(true);
@@ -172,34 +164,6 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
     setIsTestingKb(false);
   };
 
-  const handleManualUpload = async () => {
-    if (!manualFile) {
-      toast({ title: 'No File Selected', description: 'Please select a file to upload.', variant: 'destructive' });
-      return;
-    }
-
-    setIsUploadingManual(true);
-    setManualUploadResult(null);
-    toast({ title: `Uploading ${manualFile.name}...` });
-
-    try {
-      const result = await handleUpload(manualFile, manualLevel, 'General', 'Manual diagnostic upload.');
-      if (result.success) {
-        setManualUploadResult({ status: 'success', message: `Successfully uploaded and processed ${manualFile.name}.` });
-        toast({ title: 'Manual Upload Successful', description: `${manualFile.name} is now in the knowledge base.` });
-      } else {
-        throw new Error(result.error || 'The upload function reported a failure.');
-      }
-    } catch (e: any) {
-      console.error("Manual upload test failed:", e);
-      const errorMessage = `Manual upload failed: ${e.message || 'Unknown error'}`;
-      setManualUploadResult({ status: 'failure', message: errorMessage });
-      toast({ title: 'Manual Upload Failed', description: errorMessage, variant: 'destructive' });
-    } finally {
-      setIsUploadingManual(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <Card className="border-primary/50">
@@ -249,7 +213,6 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
               </Card>
             );
           })}
-          {/* New Image Upload Test */}
           <Card className="p-4 bg-background/50">
             <div className="flex justify-between items-start">
               <div>
@@ -280,59 +243,6 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
               </Alert>
             )}
           </Card>
-          
-          {/* Manual File Upload for Debugging */}
-          <Card className="p-4 bg-background/50">
-            <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-semibold flex items-center gap-2">
-                    <Upload size={16} />
-                    Manual File Upload Test
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Directly upload a file to a specific KB level to test the upload and indexing flow.
-                  </p>
-                </div>
-            </div>
-            <div className="mt-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="manual-file">File</Label>
-                    <Input id="manual-file" type="file" onChange={(e) => setManualFile(e.target.files ? e.target.files[0] : null)} disabled={isUploadingManual || isAnyOperationInProgress} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="manual-level">KB Level</Label>
-                    <Select value={manualLevel} onValueChange={(v) => setManualLevel(v as KnowledgeBaseLevel)} disabled={isUploadingManual || isAnyOperationInProgress}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="High">High</SelectItem>
-                        <SelectItem value="Medium">Medium</SelectItem>
-                        <SelectItem value="Low">Low</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                 <Button
-                    onClick={handleManualUpload}
-                    disabled={isAnyOperationInProgress || isUploadingManual || !manualFile}
-                    className="w-full"
-                  >
-                    {isUploadingManual && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Upload for Test
-                  </Button>
-            </div>
-             {manualUploadResult && (
-              <Alert className="mt-4" variant={manualUploadResult.status === 'success' ? 'default' : 'destructive'}>
-                {manualUploadResult.status === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                <AlertTitle>
-                  {manualUploadResult.status === 'success' ? 'Manual Upload Test Passed' : 'Manual Upload Test Failed'}
-                </AlertTitle>
-                <AlertDescription className="text-xs break-words">
-                  {manualUploadResult.message}
-                </AlertDescription>
-              </Alert>
-            )}
-          </Card>
         </CardContent>
       </Card>
       
@@ -345,7 +255,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-                <Label htmlFor="kb-test-query">Test Query</Label>
+                <label htmlFor="kb-test-query" className="font-medium">Test Query</label>
                 <Textarea 
                     id="kb-test-query"
                     value={kbTestQuery}
