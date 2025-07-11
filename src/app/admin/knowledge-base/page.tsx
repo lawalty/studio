@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, storage } from '@/lib/firebase';
 import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -172,53 +172,34 @@ export default function KnowledgeBasePage() {
     const sourceId = uuidv4();
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
-
-    const placeholderSource: KnowledgeSource = {
-        id: sourceId,
-        sourceName: fileToUpload.name,
-        description,
-        topic,
-        level: targetLevel,
-        createdAt: new Date().toLocaleString(),
-        createdAtDate: new Date(),
-        indexingStatus: 'processing',
-        indexingError: 'Starting upload...',
-    };
-    setSources(prev => ({ ...prev, [targetLevel]: [placeholderSource, ...prev[targetLevel]] }));
     
-    const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-    const sourceDocRef = doc(db, collectionName, sourceId);
-    
-    await setDoc(sourceDocRef, {
-      sourceName: fileToUpload.name,
-      description,
-      topic,
-      level: targetLevel,
-      createdAt: new Date().toISOString(),
-      indexingStatus: 'processing',
-      indexingError: 'Uploading file to storage...',
-    }, { merge: true });
+    // This is the fix: We are creating a new storage reference with the correct bucket.
+    // This makes the code more robust against client-side configuration issues.
+    const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+    const fileRef = storageRef(storage, storagePath);
 
     try {
-        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-        
-        // This is the fix: We are now creating a new storage reference with the correct bucket.
-        // This makes the code more robust against client-side configuration issues.
-        const storageRef = ref(storage, storagePath);
-        
         toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
         
-        await uploadBytes(storageRef, fileToUpload);
-        const downloadURL = await getDownloadURL(storageRef);
+        await uploadBytes(fileRef, fileToUpload);
+        const downloadURL = await getDownloadURL(fileRef);
         
         toast({ title: "Upload Successful!", description: `File is now in cloud storage.`, variant: "default" });
         
-        await updateDoc(sourceDocRef, {
+        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+        const sourceDocRef = doc(db, collectionName, sourceId);
+        
+        await setDoc(sourceDocRef, {
+            sourceName: fileToUpload.name,
+            description,
+            topic,
+            level: targetLevel,
+            createdAt: new Date().toISOString(),
             indexingStatus: 'success', // We now mark it as success here
             indexingError: 'Upload complete. Further processing is disabled for this test.',
             downloadURL: downloadURL,
-        });
-        
+        }, { merge: true });
+
         // This marks the end of our isolated test.
         return { success: true };
 
@@ -233,11 +214,18 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
         toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
+        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+        const sourceDocRef = doc(db, collectionName, sourceId);
         try {
-            await updateDoc(sourceDocRef, {
+            await setDoc(sourceDocRef, {
+                sourceName: fileToUpload.name,
+                description,
+                topic,
+                level: targetLevel,
+                createdAt: new Date().toISOString(),
                 indexingStatus: 'failed',
                 indexingError: `Storage Upload Error: ${errorMessage}`,
-            });
+            }, { merge: true });
         } catch (dbError) {
             console.error("Additionally failed to write failure status to Firestore:", dbError);
         }
@@ -648,5 +636,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
