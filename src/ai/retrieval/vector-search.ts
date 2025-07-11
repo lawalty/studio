@@ -91,10 +91,11 @@ export async function searchKnowledgeBase({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
-  const queryEmbedding = embeddingResponse[0]?.embedding;
-  if (!queryEmbedding) {
+
+  if (!embeddingResponse || embeddingResponse.length === 0) {
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
+  const queryEmbedding = embeddingResponse;
 
   // 3. Set up authentication for the REST API call.
   const auth = new GoogleAuth({
