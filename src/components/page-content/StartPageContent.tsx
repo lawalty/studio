@@ -6,15 +6,19 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Mic, Bot, MessageSquareText, AlertTriangle } from 'lucide-react';
+import { Mic, Bot, MessageSquareText, AlertTriangle, UploadCloud, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes } from "firebase/storage";
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LanguageSelector from '@/components/layout/LanguageSelector';
 import { useLanguage } from '@/context/LanguageContext';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
+import { Input } from '../ui/input';
+import { useToast } from '@/hooks/use-toast';
+
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
@@ -42,15 +46,40 @@ export default function StartPageContent() {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [testFile, setTestFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { language, translate } = useLanguage();
+  const { toast } = useToast();
 
   const [uiText, setUiText] = useState({
     welcome: welcomeMessage,
     typedAnim: TARGET_ANIMATION_MESSAGE,
     ...TEXT_ELEMENTS_EN,
   });
+
+  const handlePublicUpload = async () => {
+    if (!testFile) {
+      toast({ title: "No file selected", description: "Please choose a file to upload.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    toast({ title: "Starting Public Upload Test..." });
+
+    try {
+      const publicRef = storageRef(storage, `public_test_uploads/${testFile.name}`);
+      await uploadBytes(publicRef, testFile);
+      toast({ title: "Public Upload Successful!", description: "The file was uploaded successfully from outside the admin area.", variant: "default" });
+    } catch (error: any) {
+      console.error("Public upload test failed:", error);
+      toast({ title: "Public Upload Failed", description: `Error: ${error.message}`, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
 
   // Keydown listener for admin access
   useEffect(() => {
@@ -236,62 +265,78 @@ export default function StartPageContent() {
     }
 
     return (
-      <Card className="w-full max-w-2xl p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
-        <CardHeader className="p-0">
-          <CardTitle className="text-4xl font-headline text-primary">
-            {uiText.welcome}
-          </CardTitle>
-          <p className="text-lg text-muted-foreground h-7 animate-in fade-in delay-500">
-            {typedMessage}
-          </p>
-        </CardHeader>
-        <CardContent className="p-0 space-y-6">
-          <Image
-            src={splashImageSrc}
-            alt="AI Blair welcome splash"
-            width={400}
-            height={267}
-            className={cn(
-              "rounded-lg shadow-md object-cover w-full h-auto transition-opacity duration-700 ease-in-out",
-              isImageLoaded ? "opacity-100" : "opacity-0"
-            )}
-            priority
-            unoptimized={splashImageSrc.startsWith('data:image/')}
-            onLoad={() => setIsImageLoaded(true)}
-            onError={() => {
-              setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-              setIsImageLoaded(true);
-            }}
-            data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
-          />
-          <div className="flex items-center justify-center gap-2">
-            <CardDescription className="text-lg m-0">
-              {uiText.chooseMode}
-            </CardDescription>
-            {showLanguageSelector && <LanguageSelector />}
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/audio-only">
-                <Mic className="h-8 w-8 text-primary" />
-                <span className="font-semibold">{uiText.audioOnly}</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/audio-text">
-                <Bot className="h-8 w-8 text-primary" />
-                <span className="font-semibold">{uiText.audioText}</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
-              <Link href="/chat/text-only">
-                <MessageSquareText className="h-8 w-8 text-primary" />
-                <span className="font-semibold">{uiText.textOnly}</span>
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <>
+        <Card className="w-full max-w-2xl p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
+          <CardHeader className="p-0">
+            <CardTitle className="text-4xl font-headline text-primary">
+              {uiText.welcome}
+            </CardTitle>
+            <p className="text-lg text-muted-foreground h-7 animate-in fade-in delay-500">
+              {typedMessage}
+            </p>
+          </CardHeader>
+          <CardContent className="p-0 space-y-6">
+            <Image
+              src={splashImageSrc}
+              alt="AI Blair welcome splash"
+              width={400}
+              height={267}
+              className={cn(
+                "rounded-lg shadow-md object-cover w-full h-auto transition-opacity duration-700 ease-in-out",
+                isImageLoaded ? "opacity-100" : "opacity-0"
+              )}
+              priority
+              unoptimized={splashImageSrc.startsWith('data:image/')}
+              onLoad={() => setIsImageLoaded(true)}
+              onError={() => {
+                setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+                setIsImageLoaded(true);
+              }}
+              data-ai-hint={splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
+            />
+            <div className="flex items-center justify-center gap-2">
+              <CardDescription className="text-lg m-0">
+                {uiText.chooseMode}
+              </CardDescription>
+              {showLanguageSelector && <LanguageSelector />}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
+                <Link href="/chat/audio-only">
+                  <Mic className="h-8 w-8 text-primary" />
+                  <span className="font-semibold">{uiText.audioOnly}</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
+                <Link href="/chat/audio-text">
+                  <Bot className="h-8 w-8 text-primary" />
+                  <span className="font-semibold">{uiText.audioText}</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="h-auto py-4 flex flex-col gap-2">
+                <Link href="/chat/text-only">
+                  <MessageSquareText className="h-8 w-8 text-primary" />
+                  <span className="font-semibold">{uiText.textOnly}</span>
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="w-full max-w-2xl p-6 mt-8 shadow-2xl border bg-card/80 backdrop-blur-sm">
+            <CardHeader>
+                <CardTitle>Temporary Upload Test</CardTitle>
+                <CardDescription>This is a temporary test to check for public file upload functionality.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row items-center gap-4">
+                <Input type="file" onChange={(e) => setTestFile(e.target.files ? e.target.files[0] : null)} className="flex-grow" />
+                <Button onClick={handlePublicUpload} disabled={isUploading || !testFile}>
+                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                    Upload Test File
+                </Button>
+            </CardContent>
+        </Card>
+      </>
     );
   };
 
