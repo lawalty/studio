@@ -172,8 +172,7 @@ export default function KnowledgeBasePage() {
     const sourceId = uuidv4();
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
-    
-    // Create a temporary placeholder in the UI while uploading
+
     const placeholderSource: KnowledgeSource = {
         id: sourceId,
         sourceName: fileToUpload.name,
@@ -186,6 +185,20 @@ export default function KnowledgeBasePage() {
         indexingError: 'Starting upload...',
     };
     setSources(prev => ({ ...prev, [targetLevel]: [placeholderSource, ...prev[targetLevel]] }));
+    
+    const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+    const sourceDocRef = doc(db, collectionName, sourceId);
+    
+    // Create the document first to track status
+    await setDoc(sourceDocRef, {
+        id: sourceId,
+        sourceName: fileToUpload.name,
+        description,
+        topic,
+        level: targetLevel,
+        createdAt: new Date().toISOString(),
+        indexingStatus: 'processing',
+    });
 
     try {
         toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
@@ -196,20 +209,11 @@ export default function KnowledgeBasePage() {
         await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(storageRef);
         
-        toast({ title: "Upload Successful!", description: `File is now in cloud storage.`, variant: "default" });
+        toast({ title: "Upload Successful!", description: `File is now in cloud storage. Further processing is temporarily disabled.`, variant: "default" });
 
-        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-        const sourceDocRef = doc(db, collectionName, sourceId);
-        
-        await setDoc(sourceDocRef, {
-            id: sourceId,
-            sourceName: fileToUpload.name,
-            description,
-            topic,
-            level: targetLevel,
-            createdAt: new Date().toISOString(),
+        await updateDoc(sourceDocRef, {
             downloadURL: downloadURL,
-            indexingStatus: 'success', // TEMPORARY: Mark as success after upload
+            indexingStatus: 'success',
             indexingError: 'Upload complete. Further processing is temporarily disabled.',
         });
         
@@ -220,15 +224,8 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
         toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        // Attempt to create a failure record in Firestore
-        const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
-        const sourceDocRef = doc(db, collectionName, sourceId);
         try {
-            await setDoc(sourceDocRef, {
-                id: sourceId,
-                sourceName: fileToUpload.name,
-                description, topic, level: targetLevel,
-                createdAt: new Date().toISOString(),
+            await updateDoc(sourceDocRef, {
                 indexingStatus: 'failed',
                 indexingError: errorMessage,
             });
@@ -642,5 +639,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    

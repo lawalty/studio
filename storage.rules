@@ -1,9 +1,27 @@
+
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow file uploads only for authenticated users
+    
+    // Default deny all unless a more specific rule allows access.
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
+    }
+
+    // Allow public read access for general site assets like logos and background images.
+    // Disallow write access to prevent unauthorized changes from the client.
+    match /site_assets/{allPaths=**} {
+      allow read;
+      allow write: if false;
+    }
+
+    // Secure the knowledge base files.
+    // Allow any authenticated user (i.e., any logged-in admin) to upload files.
+    // Allow anyone to read the files (e.g., for PDF downloads in chat).
+    match /knowledge_base_files/{allPaths=**} {
+       allow read;
+       allow write: if request.auth != null;
     }
   }
 }
