@@ -105,10 +105,10 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
 
       // 2. Define the storage path
       const storagePath = `knowledge_base_files/High/simple_image_test_${uuidv4()}.png`;
-      const storageRef = ref(storage, storagePath);
+      const fileRef = ref(storage, storagePath);
 
       // 3. Upload the file
-      await uploadBytes(storageRef, imageFile);
+      await uploadBytes(fileRef, imageFile);
 
       // 4. Report success
       const successMessage = `Successfully uploaded ${imageFile.name} to storage.`;
@@ -135,7 +135,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
       return;
     }
 
-    const testTopic = 'General';
+    const testTopic = 'Diagnostics';
     const testDescription = `Diagnostic test for: ${testCase.name}`;
 
     try {
@@ -206,7 +206,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
         <CardHeader>
           <CardTitle className="font-headline">Ingestion Pipeline Diagnostics</CardTitle>
           <CardDescription>
-            Run these automated tests to diagnose issues with the file processing pipeline (Upload, Text Extraction, and Indexing). Tests use built-in sample files and the &quot;General&quot; topic.
+            Run these automated tests to diagnose issues with the file processing pipeline (Upload, Text Extraction, and Indexing). Tests use built-in sample files and the &quot;Diagnostics&quot; topic.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
