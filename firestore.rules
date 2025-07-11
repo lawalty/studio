@@ -1,31 +1,9 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny all access
+    // Allow read/write access to authenticated users
     match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Allow logged-in users to read/write their own data.
-    // This is a common pattern for user-specific data.
-    match /users/{userId}/{documents=**} {
-      allow read, write: if request.auth.uid == userId;
-    }
-
-    // Allow any authenticated user to read from shared collections like 'configurations'
-    // and 'kb_chunks'. This is necessary for the app functionality.
-    match /configurations/{docId} {
-      allow read: if request.auth != null;
-    }
-    match /kb_chunks/{docId} {
-        allow read: if request.auth != null;
-    }
-    
-    // Allow authenticated admin user to write to any document.
-    // The Admin SDK bypasses these rules, but this is good practice for client-side admin tools.
-    match /{document=**} {
-      allow write: if request.auth.uid == 'admin-user-uid';
+      allow read, write: if request.auth != null;
     }
   }
 }

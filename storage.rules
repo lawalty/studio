@@ -1,15 +1,9 @@
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read access to all files by default
+    // Allow file uploads only for authenticated users
     match /{allPaths=**} {
-      allow read;
-      // Allow writes for now to unblock the admin upload functionality.
-      // In a production app with public user uploads, this should be
-      // tightened to only allow authenticated users to write to specific paths.
-      // e.g., allow write: if request.auth != null && request.resource.size < 5 * 1024 * 1024;
-      allow write: if true;
+      allow read, write: if request.auth != null;
     }
   }
 }
