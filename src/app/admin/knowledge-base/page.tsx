@@ -172,7 +172,8 @@ export default function KnowledgeBasePage() {
     const sourceId = uuidv4();
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
-
+    
+    // Create a placeholder in the UI immediately
     const placeholderSource: KnowledgeSource = {
         id: sourceId,
         sourceName: fileToUpload.name,
@@ -189,15 +190,15 @@ export default function KnowledgeBasePage() {
     const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
     const sourceDocRef = doc(db, collectionName, sourceId);
     
-    // Create the document first to track status
+    // Create the initial Firestore document to track the process
     await setDoc(sourceDocRef, {
-        id: sourceId,
         sourceName: fileToUpload.name,
         description,
         topic,
         level: targetLevel,
         createdAt: new Date().toISOString(),
         indexingStatus: 'processing',
+        indexingError: 'Uploading to storage...',
     });
 
     try {
@@ -207,27 +208,26 @@ export default function KnowledgeBasePage() {
         const storageRef = ref(storage, storagePath);
         
         await uploadBytes(storageRef, fileToUpload);
-        const downloadURL = await getDownloadURL(storageRef);
         
-        toast({ title: "Upload Successful!", description: `File is now in cloud storage. Further processing is temporarily disabled.`, variant: "default" });
+        toast({ title: "Upload Successful!", description: `File is now in cloud storage.`, variant: "default" });
 
         await updateDoc(sourceDocRef, {
-            downloadURL: downloadURL,
             indexingStatus: 'success',
-            indexingError: 'Upload complete. Further processing is temporarily disabled.',
+            indexingError: 'Upload complete. Further processing is disabled for this test.',
         });
         
+        // This marks the end of the isolated test.
         return { success: true };
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unknown processing error occurred during upload.';
+        const errorMessage = e.message || 'An unknown error occurred during upload to Firebase Storage.';
         console.error(`[handleUpload] Failed to upload ${fileToUpload.name}:`, e);
         toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
         try {
             await updateDoc(sourceDocRef, {
                 indexingStatus: 'failed',
-                indexingError: errorMessage,
+                indexingError: `Storage Upload Error: ${errorMessage}`,
             });
         } catch (dbError) {
             console.error("Additionally failed to write failure status to Firestore:", dbError);
