@@ -195,17 +195,33 @@ export default function KnowledgeBasePage() {
         
         await uploadBytes(storageRef, fileToUpload);
         const downloadURL = await getDownloadURL(storageRef);
+
+        await updateDoc(sourceDocRef, { downloadURL });
+
+        toast({ title: 'Extracting Text...', description: 'Your file is being read by the AI.' });
+
+        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+        if (extractionResult.error || !extractionResult.extractedText) {
+          throw new Error(extractionResult.error || "Text extraction failed to produce any content. The document might be empty or unreadable.");
+        }
+
+        toast({ title: 'Indexing Content...', description: 'Generating embeddings and saving to the knowledge base.' });
+
+        const indexingInput: IndexDocumentInput = {
+          sourceId: sourceId,
+          sourceName: fileToUpload.name,
+          text: extractionResult.extractedText,
+          level: targetLevel,
+          topic: topic,
+          downloadURL: downloadURL,
+        };
+
+        const indexingResult = await indexDocument(indexingInput);
+        if (!indexingResult.success) {
+          throw new Error(indexingResult.error || "The server-side indexing flow failed.");
+        }
         
-        // TEMPORARY: Mark as success right after upload for testing.
-        await updateDoc(sourceDocRef, {
-            downloadURL,
-            indexingStatus: 'success',
-            indexingError: 'File uploaded successfully. Server processing is temporarily disabled.',
-            chunksWritten: 0,
-            indexedAt: new Date().toISOString(),
-        });
-        
-        toast({ title: "Upload Successful!", description: "File is now stored. Further processing is disabled for this test.", variant: "default" });
+        toast({ title: "Processing Complete!", description: `"${fileToUpload.name}" has been successfully added to the knowledge base.`, variant: "default" });
         
         return { success: true };
 
