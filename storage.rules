@@ -1,11 +1,16 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // WARNING: TEMPORARY DEBUGGING RULE
-    // This allows anyone, authenticated or not, to read and write to storage.
-    // This is insecure and MUST be changed back.
-    match /{allPaths=**} {
-      allow read, write: if true;
+    
+    // Allow authenticated users to read and write to the knowledge base.
+    match /knowledge_base_files/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Allow read access to site assets (like avatars) for everyone.
+    match /site_assets/{allPaths=**} {
+      allow read: if true;
     }
   }
 }
