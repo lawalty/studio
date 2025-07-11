@@ -23,31 +23,27 @@ export default function AdminLoginPage() {
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
-    // This effect initializes the reCAPTCHA verifier.
-    // It's designed to run only once when the component mounts.
-    if (recaptchaContainerRef.current && !recaptchaVerifierRef.current) {
-      try {
+    if (recaptchaVerifierRef.current) {
+        return;
+    }
+    
+    try {
         const auth = getAuth(app);
-        // Ensure the container is empty before rendering a new reCAPTCHA
-        recaptchaContainerRef.current.innerHTML = '';
-        
-        const verifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-          'size': 'invisible', // Use invisible reCAPTCHA
-          'callback': () => {
-            // This callback is called when the reCAPTCHA is successfully verified.
-            // We don't need to do anything here for invisible reCAPTCHA as the
-            // sendOtp function will trigger it.
-          }
-        });
-        recaptchaVerifierRef.current = verifier;
-      } catch (error: any) {
-         console.error("Error initializing reCAPTCHA:", error);
-         toast({
+        if (recaptchaContainerRef.current) {
+            recaptchaVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
+                'size': 'invisible',
+                'callback': () => {
+                    // This callback is called when the reCAPTCHA is successfully verified.
+                }
+            });
+        }
+    } catch (error: any) {
+        console.error("Error initializing reCAPTCHA:", error);
+        toast({
             title: "reCAPTCHA Error",
-            description: "Could not initialize the reCAPTCHA verifier. Phone sign-in may not work.",
+            description: "Could not initialize the reCAPTCHA verifier. Please ensure the Phone sign-in provider is enabled in your Firebase console.",
             variant: "destructive"
-         });
-      }
+        });
     }
   }, [toast]);
 
@@ -56,7 +52,7 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     if (!recaptchaVerifierRef.current) {
-        toast({ title: 'Error', description: 'reCAPTCHA not ready. Please wait a moment and try again.', variant: 'destructive' });
+        toast({ title: 'Error', description: 'reCAPTCHA not ready. Please refresh the page and try again.', variant: 'destructive' });
         setIsLoading(false);
         return;
     }
@@ -65,20 +61,13 @@ export default function AdminLoginPage() {
       const auth = getAuth(app);
       const result = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifierRef.current);
       setConfirmationResult(result);
-      toast({ title: 'Verification Code Sent', description: 'Please check your phone for the OTP.' });
+      toast({ title: 'Verification Code Sent', description: 'Please check your phone for the OTP (or use your test code).' });
     } catch (error: any) {
       console.error("Error sending OTP:", error);
       toast({
         title: 'Failed to Send Code',
-        description: error.message || 'An unknown error occurred. Please check the phone number and try again.',
+        description: error.code === 'auth/invalid-phone-number' ? 'The phone number is not valid. Please include the country code (e.g., +1).' : 'An unknown error occurred. Please check the phone number and try again.',
         variant: 'destructive',
-      });
-      // Reset reCAPTCHA on error
-      recaptchaVerifierRef.current?.render().then(widgetId => {
-          // @ts-ignore
-          if (window.grecaptcha) {
-            window.grecaptcha.reset(widgetId);
-          }
       });
     }
     setIsLoading(false);
@@ -176,7 +165,6 @@ export default function AdminLoginPage() {
           </form>
         )}
       </Card>
-      {/* This invisible div is where the reCAPTCHA widget will be rendered */}
       <div ref={recaptchaContainerRef} id="recaptcha-container"></div>
     </div>
   );
