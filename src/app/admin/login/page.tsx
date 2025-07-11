@@ -23,19 +23,20 @@ export default function AdminLoginPage() {
   const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
   useEffect(() => {
-    if (recaptchaVerifierRef.current) {
+    if (recaptchaVerifierRef.current || !recaptchaContainerRef.current) {
         return;
     }
     
     try {
         const auth = getAuth(app);
-        if (recaptchaContainerRef.current) {
-            recaptchaVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-                'size': 'invisible',
-                'callback': () => {
-                    // This callback is called when the reCAPTCHA is successfully verified.
-                }
-            });
+        // Ensure the container is empty before initializing.
+        if (recaptchaContainerRef.current.childElementCount === 0) {
+          recaptchaVerifierRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
+              'size': 'invisible',
+              'callback': () => {
+                  // This callback is called when the reCAPTCHA is successfully verified.
+              }
+          });
         }
     } catch (error: any) {
         console.error("Error initializing reCAPTCHA:", error);
