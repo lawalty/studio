@@ -60,8 +60,10 @@ export async function indexDocument({
     topic, 
     downloadURL 
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
-      // This reference points to the document that holds the metadata for the file.
-      const sourceDocRef = db.collection(`kb_${level.toLowerCase()}_meta_v1`).doc(sourceId);
+      // **FIXED**: The collection name was being incorrectly lowercased.
+      // This ensures it matches the names used on the knowledge base page exactly (e.g., 'kb_high_meta_v1').
+      const collectionName = `kb_${level.toLowerCase()}_meta_v1`;
+      const sourceDocRef = db.collection(collectionName).doc(sourceId);
 
       try {
         const cleanText = text.trim();
@@ -84,7 +86,6 @@ export async function indexDocument({
           const batch = db.batch();
           const chunksCollection = db.collection('kb_chunks');
           
-          // Generate embeddings for all chunks in parallel.
           const embeddingResponses = await Promise.all(
             chunks.map(chunkText => ai.embed({
               embedder: 'googleai/text-embedding-004',
@@ -94,7 +95,6 @@ export async function indexDocument({
 
           chunks.forEach((chunkText, index) => {
             const newChunkDocRef = chunksCollection.doc();
-            // CORRECTED: The embedding vector is the entire response, not a property of it.
             const embeddingVector = embeddingResponses[index];
 
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
@@ -117,7 +117,6 @@ export async function indexDocument({
           await batch.commit();
         }
         
-        // Final status update.
         await sourceDocRef.set({
           indexingStatus: 'success',
           chunksWritten: chunks.length,

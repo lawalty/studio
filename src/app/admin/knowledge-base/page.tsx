@@ -191,7 +191,6 @@ export default function KnowledgeBasePage() {
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const storageRef = ref(storage, storagePath);
         
-        // **FIXED**: Added `await` here. This was the critical bug.
         const uploadResult = await uploadBytes(storageRef, fileToUpload);
         
         const downloadURL = await getDownloadURL(uploadResult.ref);
@@ -203,7 +202,7 @@ export default function KnowledgeBasePage() {
 
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         
-        if (!extractionResult || extractionResult.error || !extractionResult.extractedText) {
+        if (extractionResult.error || !extractionResult.extractedText) {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
         }
         await updateDoc(sourceDocRef, { indexingError: 'Text extracted. Indexing document...' });
@@ -266,7 +265,8 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    await handleUpload(selectedFile, selectedLevelForUpload, uploadDescription);
+    // **FIXED**: Corrected arguments passed to `handleUpload`.
+    await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
     
     setSelectedFile(null);
     setUploadDescription('');
@@ -341,7 +341,7 @@ export default function KnowledgeBasePage() {
           
           const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
           
-          if (!extractionResult || extractionResult.error || !extractionResult.extractedText) {
+          if (extractionResult.error || !extractionResult.extractedText) {
               throw new Error(extractionResult?.error || 'Text re-extraction failed to produce content.');
           }
   

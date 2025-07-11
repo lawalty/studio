@@ -33,7 +33,7 @@ CRITICAL INSTRUCTIONS:
 3.  Ignore page headers, footers, page numbers, and irrelevant metadata.
 4.  Do NOT add any commentary, preamble, explanation, or summary.
 5.  Do NOT wrap the output in code blocks or any other formatting.
-6.  Your final output must ONLY be the clean, extracted text from the document.`;
+6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
 
       const generationResult = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
@@ -43,9 +43,11 @@ CRITICAL INSTRUCTIONS:
         },
       });
 
-      const text = generationResult?.text;
+      // **FIXED**: More robust check for the returned text.
+      // Now handles cases where the API returns a successful but empty response.
+      const text = generationResult?.text?.trim();
 
-      if (text && typeof text === 'string' && text.trim().length > 0) {
+      if (text) {
         let cleanedText = text.replace(/```[a-z]*/g, '').replace(/```/g, '');
         cleanedText = cleanedText.trim();
         return { extractedText: cleanedText };
