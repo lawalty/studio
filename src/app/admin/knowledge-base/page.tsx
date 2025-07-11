@@ -173,7 +173,9 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
     
-    const sourceDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
+    const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+    const sourceDocRef = doc(db, collectionName, sourceId);
+
     await setDoc(sourceDocRef, {
         id: sourceId,
         sourceName: fileToUpload.name,
@@ -186,44 +188,25 @@ export default function KnowledgeBasePage() {
     });
 
     try {
-        toast({ title: `Step 1: Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
+        toast({ title: `Uploading File`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
         
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const storageRef = ref(storage, storagePath);
         
-        const uploadResult = await uploadBytes(storageRef, fileToUpload);
+        await uploadBytes(storageRef, fileToUpload);
+        const downloadURL = await getDownloadURL(storageRef);
         
-        const downloadURL = await getDownloadURL(uploadResult.ref);
-        
-        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'File uploaded. Extracting text...' });
-        toast({ title: "Upload Complete!", description: "File is now stored securely. Beginning text extraction."});
-        
-        toast({ title: "Step 2: Extracting Text", description: "AI is reading the document. This may take a moment." });
-
-        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-        
-        if (extractionResult.error || !extractionResult.extractedText) {
-            throw new Error(extractionResult?.error || 'Text extraction failed to produce content.');
-        }
-        await updateDoc(sourceDocRef, { indexingError: 'Text extracted. Indexing document...' });
-
-        toast({ title: "Step 3: Indexing Document", description: "Creating embeddings for content chunks. This is the final step." });
-
-        const indexingInput: IndexDocumentInput = {
-            sourceId,
-            sourceName: fileToUpload.name,
-            text: extractionResult.extractedText,
-            level: targetLevel,
-            topic,
+        // TEMPORARY: Mark as success right after upload for testing.
+        await updateDoc(sourceDocRef, {
             downloadURL,
-        };
-        const indexingResult = await indexDocument(indexingInput);
-
-        if (!indexingResult.success) {
-            throw new Error(indexingResult.error || 'The indexing flow failed without a specific error.');
-        }
-
-        toast({ title: "Indexing Complete!", description: `"${fileToUpload.name}" is now in the knowledge base.`, variant: "default" });
+            indexingStatus: 'success',
+            indexingError: 'File uploaded successfully. Server processing is temporarily disabled.',
+            chunksWritten: 0,
+            indexedAt: new Date().toISOString(),
+        });
+        
+        toast({ title: "Upload Successful!", description: "File is now stored. Further processing is disabled for this test.", variant: "default" });
+        
         return { success: true };
 
     } catch (e: any) {
@@ -231,41 +214,23 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to process ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        toast({ title: "Cleaning up failed upload...", description: `Attempting to remove "${fileToUpload.name}" from the system.` });
-        try {
-            await handleDeleteSource({
-                id: sourceId,
-                level: targetLevel,
-                sourceName: fileToUpload.name,
-                description: '',
-                topic: '',
-                createdAt: '',
-                createdAtDate: new Date(),
-                indexingStatus: 'failed',
-            });
-            toast({ title: "Cleanup Successful", description: `Failed upload for "${fileToUpload.name}" has been removed.`, variant: "default" });
-        } catch (deleteError: any) {
-            console.error(`[handleUpload] CRITICAL: Failed to automatically clean up source ${sourceId}.`, deleteError);
-            toast({ title: "Cleanup Failed", description: `Could not remove failed upload. Please delete it manually.`, variant: "destructive" });
-            await updateDoc(sourceDocRef, {
-                indexingStatus: 'failed',
-                indexingError: `Original error: ${errorMessage}. Cleanup also failed.`,
-            }).catch(updateError => console.error(`[handleUpload] Failed to update doc as 'failed' after cleanup failure:`, updateError));
-        }
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'failed',
+            indexingError: errorMessage,
+        });
 
         return { success: false, error: errorMessage };
     } finally {
         setOperationStatus(sourceId, false);
         setIsCurrentlyUploading(false);
     }
-  }, [handleDeleteSource]);
+  }, []);
   
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    // **FIXED**: Corrected arguments passed to `handleUpload`.
     await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
     
     setSelectedFile(null);
