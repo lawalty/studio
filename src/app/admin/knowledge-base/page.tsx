@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { toast as toastFn, type useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
@@ -93,7 +93,7 @@ const handleUpload = async (
           level: targetLevel,
           createdAt: new Date().toISOString(),
           indexingStatus: 'processing',
-          indexingError: null,
+          indexingError: undefined,
           downloadURL: downloadURL,
         };
 
@@ -401,7 +401,7 @@ export default function KnowledgeBasePage() {
     } finally {
         setOperationStatus(source.id, false);
     }
-  }, [toast]);
+  }, [toast, updateSourceInState]);
 
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
@@ -666,3 +666,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
