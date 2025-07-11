@@ -5,13 +5,16 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, CheckCircle, AlertTriangle, FileText, Search } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, FileText, Search, Image as ImageIcon } from 'lucide-react';
 import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { testKnowledgeBase, type TestKnowledgeBaseInput, type TestKnowledgeBaseOutput } from '@/ai/flows/test-knowledge-base-flow';
 import { useToast } from '@/hooks/use-toast';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
 
 
 // Define the shape of the test case
@@ -78,6 +81,43 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
   const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
   const [kbTestError, setKbTestError] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadResult, setImageUploadResult] = useState<{ status: 'success' | 'failure'; message: string } | null>(null);
+
+  const runImageUploadTest = async () => {
+    setIsUploadingImage(true);
+    setImageUploadResult(null);
+    toast({ title: 'Starting Simple Image Upload Test...' });
+
+    try {
+      // 1. Fetch the placeholder image data
+      const response = await fetch('https://placehold.co/100x100.png');
+      if (!response.ok) throw new Error(`Failed to fetch placeholder image: ${response.statusText}`);
+      const imageBlob = await response.blob();
+      const imageFile = new File([imageBlob], "simple_image_test.png", { type: "image/png" });
+
+      // 2. Define the storage path
+      const storagePath = `knowledge_base_files/High/simple_image_test_${uuidv4()}.png`;
+      const storageRef = ref(storage, storagePath);
+
+      // 3. Upload the file
+      await uploadBytes(storageRef, imageFile);
+
+      // 4. Report success
+      const successMessage = `Successfully uploaded ${imageFile.name} to storage.`;
+      setImageUploadResult({ status: 'success', message: successMessage });
+      toast({ title: 'Image Upload Successful!', description: 'The simple image upload test passed.' });
+
+    } catch (e: any) {
+      console.error("Simple image upload test failed:", e);
+      const errorMessage = `Image upload failed: ${e.message || 'Unknown error'}`;
+      setImageUploadResult({ status: 'failure', message: errorMessage });
+      toast({ title: 'Image Upload Failed', description: errorMessage, variant: 'destructive' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
 
   const runIngestionTest = async (testCase: TestCase) => {
@@ -152,7 +192,7 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
                   </div>
                   <Button
                     onClick={() => runIngestionTest(testCase)}
-                    disabled={isAnyOperationInProgress || isRunning}
+                    disabled={isAnyOperationInProgress || isRunning || isUploadingImage}
                     size="sm"
                   >
                     {isRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -175,6 +215,37 @@ export default function KnowledgeBaseDiagnostics({ handleUpload, isAnyOperationI
               </Card>
             );
           })}
+          {/* New Image Upload Test */}
+          <Card className="p-4 bg-background/50">
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="font-semibold flex items-center gap-2">
+                  <ImageIcon size={16} />
+                  Simple Image Upload Run Test
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1">Uploads a 100x100 placeholder image directly to storage, bypassing all other pipeline steps and Firestore.</p>
+              </div>
+              <Button
+                onClick={runImageUploadTest}
+                disabled={isAnyOperationInProgress || isUploadingImage || Object.values(ingestionTestResults).some(r => r?.status === 'running')}
+                size="sm"
+              >
+                {isUploadingImage && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Run Test
+              </Button>
+            </div>
+            {imageUploadResult && (
+              <Alert className="mt-4" variant={imageUploadResult.status === 'success' ? 'default' : 'destructive'}>
+                {imageUploadResult.status === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                <AlertTitle>
+                  {imageUploadResult.status === 'success' ? 'Image Upload Test Passed' : 'Image Upload Test Failed'}
+                </AlertTitle>
+                <AlertDescription className="text-xs break-words">
+                  {imageUploadResult.message}
+                </AlertDescription>
+              </Alert>
+            )}
+          </Card>
         </CardContent>
       </Card>
       
