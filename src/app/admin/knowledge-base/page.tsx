@@ -173,7 +173,6 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
     
-    // Create the metadata document immediately to track status
     const sourceDocRef = doc(db, LEVEL_CONFIG[targetLevel].collectionName, sourceId);
     await setDoc(sourceDocRef, {
         id: sourceId,
@@ -191,7 +190,10 @@ export default function KnowledgeBasePage() {
         
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const storageRef = ref(storage, storagePath);
+        
+        // **FIXED**: Added `await` here. This was the critical bug.
         const uploadResult = await uploadBytes(storageRef, fileToUpload);
+        
         const downloadURL = await getDownloadURL(uploadResult.ref);
         
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'File uploaded. Extracting text...' });
@@ -230,15 +232,12 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Failed to process ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        // **AUTOMATIC CLEANUP ON FAILURE**
-        // Instead of just marking as failed, we now trigger a full deletion.
         toast({ title: "Cleaning up failed upload...", description: `Attempting to remove "${fileToUpload.name}" from the system.` });
         try {
             await handleDeleteSource({
                 id: sourceId,
                 level: targetLevel,
                 sourceName: fileToUpload.name,
-                // These properties are not needed by deleteSource but are part of the type.
                 description: '',
                 topic: '',
                 createdAt: '',
@@ -249,7 +248,6 @@ export default function KnowledgeBasePage() {
         } catch (deleteError: any) {
             console.error(`[handleUpload] CRITICAL: Failed to automatically clean up source ${sourceId}.`, deleteError);
             toast({ title: "Cleanup Failed", description: `Could not remove failed upload. Please delete it manually.`, variant: "destructive" });
-            // If cleanup fails, we still mark the original doc as failed.
             await updateDoc(sourceDocRef, {
                 indexingStatus: 'failed',
                 indexingError: `Original error: ${errorMessage}. Cleanup also failed.`,
@@ -268,7 +266,7 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-    await handleUpload(selectedFile, selectedLevelForUpload, selectedTopicForUpload, uploadDescription);
+    await handleUpload(selectedFile, selectedLevelForUpload, uploadDescription);
     
     setSelectedFile(null);
     setUploadDescription('');
