@@ -1,19 +1,18 @@
 /**
- * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Vertex AI Vector Search.
+ * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
  *
- * - searchKnowledgeBase - Finds relevant text chunks from a Vertex AI index. It searches 'High' priority documents first,
+ * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It searches 'High' priority documents first,
  *   then 'Medium', then 'Low', returning the first set of relevant results it finds that meet a confidence threshold.
  */
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
-import { GoogleAuth } from 'google-auth-library';
 
 // The maximum distance for a search result to be considered relevant.
-// Vertex AI Vector Search uses distance metrics (like Cosine distance), where a smaller
+// Firestore's vector search uses distance metrics (like Cosine distance), where a smaller
 // value indicates higher similarity. A distance of 0 means a perfect match.
-// A value of 1.0 is a reasonable starting point. Values up to ~1.4 can still be relevant.
-// We are setting this to 1.4 to be more inclusive.
-const MAX_DISTANCE_THRESHOLD = 1.4;
+// We are setting this to 0.7, which is a good starting point for high-quality matches.
+// A lower value makes the search stricter, and a higher value makes it more lenient.
+const MAX_DISTANCE_THRESHOLD = 0.7; 
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low')[]> = ['High', 'Medium', 'Low'];
 
@@ -32,61 +31,12 @@ interface SearchParams {
   limit?: number;
 }
 
-const {
-  GCLOUD_PROJECT,
-  LOCATION,
-  VERTEX_AI_INDEX_ENDPOINT_ID,
-  VERTEX_AI_DEPLOYED_INDEX_ID,
-  VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN,
-} = process.env;
-
-// Define the structure of the neighbor objects from the REST API response
-interface RestApiNeighbor {
-    datapoint: {
-        datapointId: string;
-    };
-    distance: number;
-}
-
-// Helper function to process the neighbors returned from Vertex AI search
-async function processNeighbors(neighbors: RestApiNeighbor[]): Promise<SearchResult[]> {
-  if (!neighbors || neighbors.length === 0) {
-    return [];
-  }
-
-  const neighborDocs = await Promise.all(
-    neighbors.map(async (neighbor: RestApiNeighbor) => {
-      if (!neighbor.datapoint?.datapointId) return null;
-
-      const docRef = db.collection('kb_chunks').doc(neighbor.datapoint.datapointId);
-      const docSnap = await docRef.get();
-      
-      if (!docSnap.exists) return null;
-
-      return {
-        ...(docSnap.data() as Omit<SearchResult, 'distance'>),
-        distance: neighbor.distance || 0,
-      };
-    })
-  );
-
-  return neighborDocs
-    .filter((doc): doc is SearchResult => doc !== null);
-}
-
 export async function searchKnowledgeBase({
   query,
   topic,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
-  // 1. Validate environment configuration.
-  if (!GCLOUD_PROJECT || !LOCATION || !VERTEX_AI_INDEX_ENDPOINT_ID || !VERTEX_AI_DEPLOYED_INDEX_ID || !VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN) {
-    throw new Error(
-      "Missing required environment variables for Vertex AI Search. Please check your .env.local file for GCLOUD_PROJECT, LOCATION, VERTEX_AI_INDEX_ENDPOINT_ID, VERTEX_AI_DEPLOYED_INDEX_ID, and VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN."
-    );
-  }
-
-  // 2. Generate an embedding for the user's query.
+  // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
@@ -97,106 +47,51 @@ export async function searchKnowledgeBase({
   }
   const queryEmbedding = embeddingResponse;
 
-  // 3. Set up authentication for the REST API call.
-  const auth = new GoogleAuth({
-    scopes: 'https://www.googleapis.com/auth/cloud-platform',
-  });
-  const authToken = await auth.getAccessToken();
-  
-  // Clean up the domain name to prevent common user errors like extra spaces or including https://
-  const cleanedDomain = VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN.trim().replace(/^https?:\/\//, '');
-
-  // Construct the correct URL for a public endpoint.
-  const endpointUrl = `https://${cleanedDomain}/v1/projects/${GCLOUD_PROJECT}/locations/${LOCATION}/indexEndpoints/${VERTEX_AI_INDEX_ENDPOINT_ID}:findNeighbors`;
-  
-  const allErrors: string[] = [];
-
-  // 4. Perform prioritized, sequential search.
+  // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
     try {
-      const restricts: any[] = [{ namespace: 'level', allowList: [level] }];
-      if (topic) {
-        restricts.push({ namespace: 'topic', allowList: [topic] });
-      }
-
-      const requestBody = {
-        deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID,
-        queries: [{
-          datapoint: {
-            datapointId: `query-${level}`,
-            featureVector: queryEmbedding,
-            restricts: restricts,
-          },
-          neighborCount: limit,
-        }],
-      };
+      // Start building the query against the 'kb_chunks' collection
+      let chunksQuery: FirebaseFirestore.Query = db.collection('kb_chunks');
       
-      const response = await fetch(endpointUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(requestBody),
+      // Apply the mandatory level filter
+      chunksQuery = chunksQuery.where('level', '==', level);
+
+      // Apply the optional topic filter if provided
+      if (topic) {
+        chunksQuery = chunksQuery.where('topic', '==', topic);
+      }
+      
+      // Perform the vector search
+      const snapshot = await chunksQuery.findNearest('embedding', queryEmbedding, {
+          limit: limit,
+          distanceMeasure: 'COSINE'
       });
 
-      if (!response.ok) {
-          const errorBody = await response.json();
-          const errorMessage = errorBody.error?.message || JSON.stringify(errorBody);
-          // A 404 error here is critical and likely means a configuration issue.
-          if (response.status === 404) {
-              if (errorMessage.includes("is not found")) { // The error contains 'Index ... is not found'
-                  throw new Error(`CRITICAL: The Vertex AI service found your endpoint but could not find the Deployed Index on it. This means your 'VERTEX_AI_DEPLOYED_INDEX_ID' in .env.local is incorrect.
-
-**ACTION REQUIRED:**
-1.  Go to the Google Cloud Console -> Vertex AI -> Vector Search.
-2.  Click on the 'INDEX ENDPOINTS' tab.
-3.  Click on your public endpoint (ID: ${VERTEX_AI_INDEX_ENDPOINT_ID}).
-4.  In the 'Deployed indexes' table, find the exact ID (e.g., 'deployed-my-index-v1').
-5.  Copy this ID and paste it as the value for 'VERTEX_AI_DEPLOYED_INDEX_ID' in your .env.local file.
-6.  Restart your server.
-
-Raw error from Google: ${errorMessage}`);
-              }
-              throw new Error(`The Vertex AI service returned a '404 Not Found' error. This can indicate a misconfiguration in the URL path. Please verify that your GCLOUD_PROJECT, LOCATION, and VERTEX_AI_INDEX_ENDPOINT_ID in .env.local are all correct. The service could not find the specified endpoint. Raw error: ${errorMessage}`);
-          }
-          throw new Error(`API call failed with status ${response.status}: ${errorMessage}`);
+      if (snapshot.empty) {
+        console.log(`[searchKnowledgeBase] No results found in '${level}' priority knowledge base.`);
+        continue; // Try the next level
       }
-          
-      const responseData = await response.json();
-      const neighbors: RestApiNeighbor[] | undefined = responseData.nearestNeighbors?.[0]?.neighbors;
 
-      if (neighbors && neighbors.length > 0) {
-        const relevantNeighbors = neighbors.filter(
-          (neighbor: RestApiNeighbor) => (neighbor.distance ?? 2) < MAX_DISTANCE_THRESHOLD
-        );
+      // Filter out results that don't meet our confidence threshold
+      const relevantResults = snapshot.docs
+        .map(doc => ({
+          ...doc.data(),
+          distance: doc.distance,
+        } as SearchResult))
+        .filter(result => result.distance < MAX_DISTANCE_THRESHOLD);
 
-        if (relevantNeighbors.length > 0) {
-          const results = await processNeighbors(relevantNeighbors);
-          if (results.length > 0) {
-            console.log(`[searchKnowledgeBase] Found ${results.length} relevant results in '${level}' priority knowledge base.`);
-            return results; // Found results, so return immediately.
-          }
-        }
+      if (relevantResults.length > 0) {
+        console.log(`[searchKnowledgeBase] Found ${relevantResults.length} relevant results in '${level}' priority knowledge base.`);
+        return relevantResults; // Found results, so return immediately.
       }
+
     } catch (error: any) {
-        // This enhanced error logging helps diagnose low-level network issues.
-        let detailedErrorMessage = error.message;
-        // The 'cause' property in Node.js fetch often contains the underlying network error code.
-        if (error.cause) {
-            const cause = error.cause as { code?: string; message?: string };
-            const errorCode = cause.code || 'Unknown Cause';
-            detailedErrorMessage = `A low-level network error occurred: ${errorCode}. This often means the Public Endpoint Domain Name in your .env.local file is incorrect or unreachable. Action Required: Please double-check it for typos. You can test it by running 'ping ${cleanedDomain}' in your terminal.`;
-        }
-        allErrors.push(`Level '${level}': ${detailedErrorMessage}`);
+        console.error(`[searchKnowledgeBase] Error searching in '${level}' priority level:`, error);
+        // Don't re-throw; we want to allow the search to continue to the next priority level.
     }
   }
 
-  // If we get here, no relevant results were found in any priority level.
-  if (allErrors.length > 0) {
-    throw new Error(`Knowledge base search failed. Errors encountered: ${allErrors.join('; ')}`);
-  }
-
+  // If we get here, no relevant results were found in any priority level that met the threshold.
   console.log('[searchKnowledgeBase] No relevant results found in any knowledge base meeting the threshold.');
   return [];
 }
