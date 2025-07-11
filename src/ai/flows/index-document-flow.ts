@@ -122,7 +122,7 @@ export async function indexDocument({
           indexingStatus: 'success',
           chunksWritten: chunks.length,
           indexedAt: new Date().toISOString(),
-          indexingError: '',
+          indexingError: null,
           sourceName, level, topic, downloadURL: downloadURL || null,
         }, { merge: true });
         
