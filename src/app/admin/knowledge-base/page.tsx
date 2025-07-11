@@ -194,17 +194,37 @@ export default function KnowledgeBasePage() {
         const storageRef = ref(storage, storagePath);
         
         await uploadBytes(storageRef, fileToUpload);
+        const downloadURL = await getDownloadURL(storageRef);
         
-        // **ISOLATED UPLOAD STEP**
-        // If we reach here, the upload was successful.
-        // We will update the status to 'success' and stop.
-        
-        toast({ title: "Upload Successful!", description: `"${fileToUpload.name}" has been saved to storage.`, variant: "default" });
-
         await updateDoc(sourceDocRef, {
-            indexingStatus: 'success',
-            indexingError: 'File uploaded to storage. Further processing is temporarily disabled.',
+            downloadURL: downloadURL,
+            indexingError: "Extracting text...",
         });
+
+        toast({ title: "Upload Successful!", description: `"${fileToUpload.name}" is now being processed.`, variant: "default" });
+
+        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+        if (extractionResult.error || !extractionResult.extractedText) {
+          throw new Error(extractionResult.error || "Text extraction failed to produce any content.");
+        }
+        
+        await updateDoc(sourceDocRef, { indexingError: "Indexing content..." });
+        
+        const indexInput: IndexDocumentInput = {
+            sourceId: sourceId,
+            sourceName: fileToUpload.name,
+            text: extractionResult.extractedText,
+            level: targetLevel,
+            topic: topic,
+            downloadURL: downloadURL,
+        };
+
+        const indexResult = await indexDocument(indexInput);
+        if (!indexResult.success) {
+            throw new Error(indexResult.error || "The indexing flow failed on the server.");
+        }
+        
+        await updateDoc(sourceDocRef, { indexingStatus: 'success', indexingError: null, chunksWritten: indexResult.chunksWritten });
         
         return { success: true };
 
@@ -624,3 +644,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
