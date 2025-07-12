@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Mic, Bot, MessageSquareText, AlertTriangle, UploadCloud, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import LanguageSelector from '@/components/layout/LanguageSelector';
@@ -69,7 +69,7 @@ export default function StartPageContent() {
   // Firestore listener for dynamic settings
   useEffect(() => {
     const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    const unsubscribe = onSnapshot(docRef, async (docSnap) => {
       setConfigError(null);
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -84,12 +84,29 @@ export default function StartPageContent() {
           setIsMaintenanceMode(false);
         }
       } else {
-        setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
-        setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
-        setBackgroundUrl(null);
-        setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
-        setShowLanguageSelector(true);
-        setIsMaintenanceMode(false);
+        // Document doesn't exist, so create it with default values.
+        try {
+            const defaultSettings = {
+                splashWelcomeMessage: DEFAULT_WELCOME_MESSAGE,
+                splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
+                backgroundUrl: DEFAULT_BACKGROUND_IMAGE_SRC,
+                typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
+                maintenanceModeEnabled: false,
+                maintenanceModeMessage: "Exciting updates are on the way! We'll be back online shortly.",
+                showLanguageSelector: true,
+            };
+            await setDoc(docRef, defaultSettings);
+            // After creating, set state to defaults
+            setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
+            setSplashImageSrc(DEFAULT_SPLASH_IMAGE_SRC);
+            setBackgroundUrl(null);
+            setTypingSpeedMs(DEFAULT_TYPING_SPEED_MS);
+            setShowLanguageSelector(true);
+            setIsMaintenanceMode(false);
+        } catch (error) {
+            console.error("Error creating default site settings:", error);
+            setConfigError("Could not create default site settings in Firestore. Please check permissions.");
+        }
       }
       setIsLoading(false);
     }, (error) => {
