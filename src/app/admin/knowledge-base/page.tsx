@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
+import { processDocumentFlow } from '@/ai/flows/process-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -25,7 +26,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 
-// Exporting this type for use in the diagnostics component
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
 
 interface KnowledgeSource {
@@ -79,12 +79,9 @@ export default function KnowledgeBasePage() {
           const data = docSnap.data();
           const topicsString = data.conversationalTopics || '';
           let topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
-          if (!topicsArray.includes('Diagnostics')) {
-            topicsArray.push('Diagnostics');
-          }
           setAvailableTopics(topicsArray);
           if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
-            setSelectedTopicForUpload(topicsArray.find((t: string) => t !== 'Diagnostics') || topicsArray[0]);
+            setSelectedTopicForUpload(topicsArray[0]);
           }
         }
       } catch (error) {
@@ -94,25 +91,7 @@ export default function KnowledgeBasePage() {
     fetchTopics();
   }, [selectedTopicForUpload]);
   
-  const updateSourceInState = useCallback((source: KnowledgeSource) => {
-    setSources(prev => {
-        const newSources = { ...prev };
-        Object.keys(newSources).forEach(key => {
-            const levelKey = key as KnowledgeBaseLevel;
-            newSources[levelKey] = newSources[levelKey].filter(s => s.id !== source.id);
-        });
-        const levelSources = newSources[source.level] || [];
-        const sourceIndex = levelSources.findIndex(s => s.id === source.id);
-        if (sourceIndex > -1) {
-            levelSources[sourceIndex] = source;
-        } else {
-            levelSources.push(source);
-        }
-        newSources[source.level] = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
-        return newSources;
-    });
-  }, []);
-
+  // This effect will listen for real-time updates on all knowledge base levels
   useEffect(() => {
     const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
       const q = query(collection(db, config.collectionName));
@@ -151,12 +130,11 @@ export default function KnowledgeBasePage() {
     setOperationStatus(source.id, true);
     toast({ title: `Deleting ${source.sourceName}...` });
     try {
-      await deleteSource({ // Assuming this flow handles both Storage and Firestore deletion
+      await deleteSource({
         id: source.id,
         level: source.level,
         sourceName: source.sourceName,
       });
-
       toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
     } catch (error: any) {
       console.error("Error deleting source:", error);
@@ -168,22 +146,32 @@ export default function KnowledgeBasePage() {
   
   const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
-    const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-
+    toast({ title: `Re-processing ${source.sourceName}...` });
+    
     try {
-        toast({ title: `Re-processing ${source.sourceName}...` });
-        // By setting the status to 'pending', we can trigger the Cloud Function again if it's set up to respond to updates as well.
-        // For now, this just resets the state for a manual re-upload if needed, or triggers an onCreate-based function if the doc were recreated.
-        // A more robust solution would be a dedicated "re-index" flow or specific trigger.
+        const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
         await updateDoc(sourceDocRef, {
             indexingStatus: 'pending',
             indexingError: "Awaiting re-processing...",
             chunksWritten: 0,
         });
 
+        const result = await processDocumentFlow({
+            sourceId: source.id,
+            sourceName: source.sourceName,
+            level: source.level,
+            topic: source.topic,
+            downloadURL: source.downloadURL!,
+            mimeType: source.mimeType!,
+        });
+
+        if (!result.success) {
+            throw new Error(result.error || "The re-processing flow failed on the server.");
+        }
     } catch (error: any) {
         const errorMessage = error.message || "An unknown error occurred during re-indexing.";
-        toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive", duration: 10000 });
+        toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive" });
+        const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
         await updateDoc(sourceDocRef, {
             indexingStatus: 'failed',
             indexingError: errorMessage
@@ -191,7 +179,8 @@ export default function KnowledgeBasePage() {
     } finally {
         setOperationStatus(source.id, false);
     }
-  }, [toast]);
+}, [toast]);
+
   
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
@@ -219,7 +208,7 @@ export default function KnowledgeBasePage() {
         await uploadBytes(fileRef, fileToUpload);
         const downloadURL = await getDownloadURL(fileRef);
 
-        // Step 2: Create the metadata document in Firestore to trigger the backend function
+        // Step 2: Create the initial metadata document in Firestore
         const newSourceData = {
             id: sourceId,
             sourceName: fileToUpload.name,
@@ -228,12 +217,27 @@ export default function KnowledgeBasePage() {
             level: targetLevel,
             createdAt: new Date().toISOString(),
             indexingStatus: 'pending',
-            downloadURL: downloadURL,
-            mimeType: fileToUpload.type || 'application/octet-stream', // Pass mimeType to backend
+            downloadURL,
+            mimeType: fileToUpload.type || 'application/octet-stream',
         };
         await setDoc(sourceDocRef, newSourceData);
+        toast({ title: "Upload Complete", description: "Server is now processing the file...", variant: "default" });
 
-        toast({ title: "Upload Complete", description: "Backend processing has been initiated.", variant: "default" });
+        // Step 3: Directly call the server-side flow and wait for the result
+        const result = await processDocumentFlow({
+            sourceId,
+            sourceName: fileToUpload.name,
+            level: targetLevel,
+            topic,
+            downloadURL,
+            mimeType: fileToUpload.type || 'application/octet-stream',
+        });
+
+        if (!result.success) {
+            throw new Error(result.error || "The processing flow failed on the server.");
+        }
+
+        // The real-time listener will catch the final 'success' state.
         
         // Reset form
         setSelectedFile(null);
@@ -247,10 +251,11 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Client-side error for ${fileToUpload.name}:`, e);
         toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        // No need to clean up Firestore doc if it was never created
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'failed',
+            indexingError: errorMessage,
+        }).catch(updateError => console.error("Error updating doc with failure status:", updateError));
     } finally {
-        // The backend function is now responsible for status updates.
-        // We can remove the real-time listener from the client.
         setIsCurrentlyUploading(false);
         setOperationStatus(sourceId, false);
     }
@@ -292,24 +297,6 @@ export default function KnowledgeBasePage() {
       } finally {
           setOperationStatus(source.id, false);
       }
-  }, [toast]);
-
-  const handleRefreshStatus = useCallback(async (source: KnowledgeSource) => {
-    setOperationStatus(source.id, true);
-    try {
-        const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-        const docSnap = await getDoc(sourceDocRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            toast({ title: "Status Refreshed", description: `Current status is: ${data.indexingStatus || 'N/A'}` });
-        } else {
-            toast({ title: "Not Found", description: "Source document could not be found.", variant: "destructive" });
-        }
-    } catch (e: any) {
-        toast({ title: "Error Refreshing", description: e.message, variant: "destructive" });
-    } finally {
-        setOperationStatus(source.id, false);
-    }
   }, [toast]);
 
   const getFileExtension = (filename: string) => {
@@ -378,7 +365,7 @@ export default function KnowledgeBasePage() {
                                                         {source.indexingStatus === 'success' && <p>{source.chunksWritten ?? 0} chunks written.</p>}
                                                         {source.indexingStatus === 'failed' && <p>Error: {source.indexingError}</p>}
                                                         {source.indexingStatus === 'processing' && <p>{source.indexingError || 'File is being processed...'}</p>}
-                                                        {source.indexingStatus === 'pending' && <p>Waiting for backend to start processing.</p>}
+                                                        {source.indexingStatus === 'pending' && <p>Waiting for server to start processing.</p>}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
@@ -493,7 +480,7 @@ export default function KnowledgeBasePage() {
             <CardHeader>
               <CardTitle className="font-headline">Upload New Source</CardTitle>
               <CardDescription>
-                Add a new source to the knowledge base. The file will be uploaded, and a Cloud Function will trigger to process and index it.
+                Add a new source to the knowledge base. The file will be uploaded and processed by a server-side flow.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -506,8 +493,8 @@ export default function KnowledgeBasePage() {
                   <Select value={selectedTopicForUpload} onValueChange={setSelectedTopicForUpload}>
                       <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
                       <SelectContent>
-                        {availableTopics.filter(t => t !== 'Diagnostics').length > 0 ? (
-                           availableTopics.filter((t: string) => t !== 'Diagnostics').map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)
+                        {availableTopics.length > 0 ? (
+                           availableTopics.map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)
                         ) : (
                            <SelectItem value="General" disabled>No topics configured</SelectItem>
                         )}
@@ -536,7 +523,7 @@ export default function KnowledgeBasePage() {
                 Upload and Process
               </Button>
             </CardFooter>
-          </_Card>
+          </Card>
           
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="diagnostics">
@@ -545,7 +532,6 @@ export default function KnowledgeBasePage() {
               </AccordionTrigger>
               <AccordionContent>
                 <KnowledgeBaseDiagnostics
-                  onUploadTest={handleFileUpload}
                   isAnyOperationInProgress={anyOperationGloballyInProgress}
                 />
               </AccordionContent>

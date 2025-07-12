@@ -1,21 +1,24 @@
-/**
- * @fileOverview Centralized Genkit AI Initialization
- *
- * This file configures and initializes the Genkit AI plugin for the entire
- * application. It is set up to automatically use Application Default Credentials
- * (ADC), which is the standard and secure way to authenticate in a Google Cloud
- * environment.
- */
-import { genkit } from 'genkit';
+'use server';
+import { ai, configureGenkit } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
+import { firebase } from "@genkit-ai/firebase";
 
-// Initialize the Google AI plugin. By not passing an explicit apiKey,
-// the plugin will automatically use the Application Default Credentials.
-// In local development, this uses the credentials from 'gcloud auth application-default login'.
-// In a deployed environment (App Hosting), it automatically uses the app's service account.
-const plugins = [googleAI()];
-
-// This is the main exported object for Genkit.
-export const ai = genkit({
-  plugins,
+// Initialize Genkit and configure plugins.
+// This is done once and can be used throughout the application.
+configureGenkit({
+  plugins: [
+    // The Google AI plugin is used to generate content, embeddings, and more.
+    googleAI({
+      apiKey: process.env.GOOGLE_AI_API_KEY,
+    }),
+    // The Firebase plugin is used to integrate with Firebase services like Firestore.
+    firebase(),
+  ],
+  // Log telemetry to the console and to Google Cloud.
+  logSinks: ['firebase'],
+  // Enable tracing and metrics for observability.
+  enableTracingAndMetrics: true,
 });
+
+// Export the configured AI instance for use in other parts of the application.
+export { ai };
