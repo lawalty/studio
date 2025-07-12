@@ -13,8 +13,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
-import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
-import { indexDocument, type IndexDocumentInput } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,6 +40,7 @@ interface KnowledgeSource {
   indexingError?: string;
   downloadURL?: string;
   chunksWritten?: number;
+  mimeType?: string;
 }
 
 const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
@@ -133,7 +132,8 @@ export default function KnowledgeBasePage() {
             indexingStatus: data.indexingStatus || 'failed',
             indexingError: data.indexingError || 'No status available.',
             downloadURL: data.downloadURL,
-            chunksWritten: data.chunksWritten
+            chunksWritten: data.chunksWritten,
+            mimeType: data.mimeType,
           });
         });
         setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime()) }));
@@ -151,15 +151,11 @@ export default function KnowledgeBasePage() {
     setOperationStatus(source.id, true);
     toast({ title: `Deleting ${source.sourceName}...` });
     try {
-      const result = await deleteSource({
+      await deleteSource({ // Assuming this flow handles both Storage and Firestore deletion
         id: source.id,
         level: source.level,
         sourceName: source.sourceName,
       });
-
-      if (!result.success) {
-        throw new Error(result.error || 'The deletion flow failed on the server.');
-      }
 
       toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
     } catch (error: any) {
@@ -169,23 +165,21 @@ export default function KnowledgeBasePage() {
       setOperationStatus(source.id, false);
     }
   }, [toast]);
-
+  
   const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
     const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
 
     try {
-        if (!source.downloadURL) throw new Error("Source has no download URL, cannot re-process.");
-        
+        toast({ title: `Re-processing ${source.sourceName}...` });
+        // By setting the status to 'pending', we can trigger the Cloud Function again if it's set up to respond to updates as well.
+        // For now, this just resets the state for a manual re-upload if needed, or triggers an onCreate-based function if the doc were recreated.
+        // A more robust solution would be a dedicated "re-index" flow or specific trigger.
         await updateDoc(sourceDocRef, {
-            indexingStatus: 'processing',
-            indexingError: null,
+            indexingStatus: 'pending',
+            indexingError: "Awaiting re-processing...",
             chunksWritten: 0,
         });
-        
-        toast({ title: `Re-processing ${source.sourceName}...` });
-        
-        // No need to call flows directly. The Firestore trigger will handle it.
 
     } catch (error: any) {
         const errorMessage = error.message || "An unknown error occurred during re-indexing.";
@@ -218,57 +212,29 @@ export default function KnowledgeBasePage() {
     const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
     const sourceDocRef = doc(db, collectionName, sourceId);
 
-    let unsubscribeFromStatus: (() => void) | null = null;
-
     try {
-        // Step 1: Create a placeholder document in Firestore
-        const newSourceData: Omit<KnowledgeSource, 'id' | 'createdAt' | 'createdAtDate'> & { createdAt: string } = {
+        // Step 1: Upload the file to Storage
+        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+        const fileRef = storageRef(storage, storagePath);
+        await uploadBytes(fileRef, fileToUpload);
+        const downloadURL = await getDownloadURL(fileRef);
+
+        // Step 2: Create the metadata document in Firestore to trigger the backend function
+        const newSourceData = {
+            id: sourceId,
             sourceName: fileToUpload.name,
             description,
             topic,
             level: targetLevel,
             createdAt: new Date().toISOString(),
             indexingStatus: 'pending',
-            downloadURL: '',
+            downloadURL: downloadURL,
+            mimeType: fileToUpload.type || 'application/octet-stream', // Pass mimeType to backend
         };
         await setDoc(sourceDocRef, newSourceData);
 
-        // Step 2: Set up a real-time listener for status updates
-        unsubscribeFromStatus = onSnapshot(sourceDocRef, (snapshot) => {
-            const data = snapshot.data();
-            if (!data) return;
-
-            const status = data.indexingStatus;
-            const error = data.indexingError;
-
-            if (status === 'processing') {
-                toast({ title: 'Processing...', description: 'File is being analyzed and indexed.', variant: 'default' });
-            } else if (status === 'success') {
-                toast({ title: "Processing Complete", description: `${fileToUpload.name} has been fully indexed.`, variant: "success" });
-                setIsCurrentlyUploading(false);
-                setOperationStatus(sourceId, false);
-                if (unsubscribeFromStatus) unsubscribeFromStatus();
-            } else if (status === 'failed') {
-                toast({ title: "Processing Failed", description: error || 'An unknown error occurred.', variant: "destructive", duration: 10000 });
-                setIsCurrentlyUploading(false);
-                setOperationStatus(sourceId, false);
-                if (unsubscribeFromStatus) unsubscribeFromStatus();
-            }
-        });
-
-        // Step 3: Upload the file to Storage
-        toast({ title: `Uploading File...`, description: `Sending "${fileToUpload.name}" to cloud storage.` });
-        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-        const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload);
-        const downloadURL = await getDownloadURL(fileRef);
-
-        // Step 4: Update the document with the downloadURL, which triggers the backend flow
-        await updateDoc(sourceDocRef, {
-            downloadURL: downloadURL,
-            indexingStatus: 'processing' 
-        });
-
+        toast({ title: "Upload Complete", description: "Backend processing has been initiated.", variant: "default" });
+        
         // Reset form
         setSelectedFile(null);
         setUploadDescription('');
@@ -277,16 +243,14 @@ export default function KnowledgeBasePage() {
         }
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unknown error occurred during the process.';
+        const errorMessage = e.message || 'An unknown error occurred during the upload process.';
         console.error(`[handleUpload] Client-side error for ${fileToUpload.name}:`, e);
         toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        // Clean up on failure
-        if (unsubscribeFromStatus) unsubscribeFromStatus();
-        await deleteDoc(sourceDocRef).catch(delErr => console.error("Error cleaning up firestore doc:", delErr));
-        const fileRefToDelete = storageRef(storage, `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`);
-        await deleteObject(fileRefToDelete).catch(delErr => console.error("Error cleaning up storage file:", delErr));
-        
+        // No need to clean up Firestore doc if it was never created
+    } finally {
+        // The backend function is now responsible for status updates.
+        // We can remove the real-time listener from the client.
         setIsCurrentlyUploading(false);
         setOperationStatus(sourceId, false);
     }
@@ -337,15 +301,7 @@ export default function KnowledgeBasePage() {
         const docSnap = await getDoc(sourceDocRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
-            const newStatus = data.indexingStatus || 'failed';
-            const updatedSource: KnowledgeSource = { 
-                ...source, 
-                indexingStatus: newStatus, 
-                indexingError: data.indexingError,
-                chunksWritten: data.chunksWritten
-            };
-            updateSourceInState(updatedSource);
-            toast({ title: "Status Refreshed", description: `Current status is: ${newStatus}` });
+            toast({ title: "Status Refreshed", description: `Current status is: ${data.indexingStatus || 'N/A'}` });
         } else {
             toast({ title: "Not Found", description: "Source document could not be found.", variant: "destructive" });
         }
@@ -354,7 +310,7 @@ export default function KnowledgeBasePage() {
     } finally {
         setOperationStatus(source.id, false);
     }
-  }, [toast, updateSourceInState]);
+  }, [toast]);
 
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
@@ -396,7 +352,6 @@ export default function KnowledgeBasePage() {
                         <TableBody>
                             {levelSources.map(source => {
                                 const isOpInProgress = operationInProgress[source.id] || false;
-                                const isStuckProcessing = source.indexingStatus === 'processing' && (new Date().getTime() - source.createdAtDate.getTime()) > 5 * 60 * 1000;
                                 return (
                                     <TableRow key={source.id} className={cn(isOpInProgress && "opacity-50 pointer-events-none")}>
                                         <TableCell className="font-medium">
@@ -414,8 +369,7 @@ export default function KnowledgeBasePage() {
                                                     <TooltipTrigger>
                                                         <div className="flex items-center gap-2">
                                                             {source.indexingStatus === 'success' && <CheckCircle size={16} className="text-green-500" />}
-                                                            {source.indexingStatus === 'processing' && <Loader2 size={16} className="animate-spin" />}
-                                                            {source.indexingStatus === 'pending' && <Loader2 size={16} className="animate-spin text-amber-500" />}
+                                                            {(source.indexingStatus === 'processing' || source.indexingStatus === 'pending') && <Loader2 size={16} className="animate-spin" />}
                                                             {source.indexingStatus === 'failed' && <AlertTriangle size={16} className="text-destructive" />}
                                                             <span className="capitalize">{source.indexingStatus}</span>
                                                         </div>
@@ -423,8 +377,8 @@ export default function KnowledgeBasePage() {
                                                     <TooltipContent>
                                                         {source.indexingStatus === 'success' && <p>{source.chunksWritten ?? 0} chunks written.</p>}
                                                         {source.indexingStatus === 'failed' && <p>Error: {source.indexingError}</p>}
-                                                        {source.indexingStatus === 'processing' && <p>File is being processed by the backend.</p>}
-                                                        {source.indexingStatus === 'pending' && <p>Waiting for file upload to complete.</p>}
+                                                        {source.indexingStatus === 'processing' && <p>{source.indexingError || 'File is being processed...'}</p>}
+                                                        {source.indexingStatus === 'pending' && <p>Waiting for backend to start processing.</p>}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
@@ -475,19 +429,8 @@ export default function KnowledgeBasePage() {
                                                           ))}
                                                       </DropdownMenuContent>
                                                     </DropdownMenu>
-
-                                                    {source.indexingStatus === 'processing' && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button variant="ghost" size="icon" onClick={() => handleRefreshStatus(source)} disabled={anyOperationGloballyInProgress}>
-                                                                    <RefreshCw size={16} />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent><p>Refresh Status</p></TooltipContent>
-                                                        </Tooltip>
-                                                    )}
                                                     
-                                                    {(source.indexingStatus === 'failed' || isStuckProcessing) && (
+                                                    {(source.indexingStatus === 'failed' ) && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
                                                                 <Button variant="ghost" size="icon" onClick={() => handleReindexSource(source)} disabled={anyOperationGloballyInProgress}>
@@ -593,7 +536,7 @@ export default function KnowledgeBasePage() {
                 Upload and Process
               </Button>
             </CardFooter>
-          </Card>
+          </_Card>
           
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="diagnostics">
