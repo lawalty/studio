@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -13,7 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
-import { processDocumentFlow } from '@/ai/flows/process-document-flow';
+import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
+import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -47,7 +47,7 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'High': { collectionName: 'kb_high_meta_v1', title: 'High Priority', description: 'Manage high priority sources.' },
   'Medium': { collectionName: 'kb_medium_meta_v1', title: 'Medium Priority', description: 'Manage medium priority sources.' },
   'Low': { collectionName: 'kb_low_meta_v1', title: 'Low Priority', description: 'Manage low priority sources.' },
-  'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived', description: 'Archived sources are not used by the AI.' },
+  'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archived sources are not used by the AI.' },
 };
 
 export default function KnowledgeBasePage() {
@@ -147,31 +147,41 @@ export default function KnowledgeBasePage() {
   const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
     toast({ title: `Re-processing ${source.sourceName}...` });
-    
-    try {
-        const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'pending',
-            indexingError: "Awaiting re-processing...",
-            chunksWritten: 0,
-        });
 
-        const result = await processDocumentFlow({
+    const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+    await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Starting re-processing...", chunksWritten: 0 });
+
+    try {
+        let textToProcess: string | undefined = undefined;
+
+        if (source.mimeType === 'text/plain' && source.downloadURL) {
+            const response = await fetch(source.downloadURL);
+            if (!response.ok) throw new Error("Could not fetch the text file from storage.");
+            textToProcess = await response.text();
+        } else if (source.downloadURL) {
+            await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType}...` });
+            const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
+            if (extractionResult.error || !extractionResult.extractedText) {
+                throw new Error(extractionResult.error || 'Text extraction failed to produce content.');
+            }
+            textToProcess = extractionResult.extractedText;
+        } else {
+            throw new Error("Source is missing a download URL, cannot re-process.");
+        }
+
+        await updateDoc(sourceDocRef, { indexingError: "Indexing document chunks..." });
+        await indexDocument({
             sourceId: source.id,
             sourceName: source.sourceName,
+            text: textToProcess,
             level: source.level,
             topic: source.topic,
-            downloadURL: source.downloadURL!,
-            mimeType: source.mimeType!,
+            downloadURL: source.downloadURL,
         });
 
-        if (!result.success) {
-            throw new Error(result.error || "The re-processing flow failed on the server.");
-        }
     } catch (error: any) {
         const errorMessage = error.message || "An unknown error occurred during re-indexing.";
         toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive" });
-        const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
         await updateDoc(sourceDocRef, {
             indexingStatus: 'failed',
             indexingError: errorMessage
@@ -179,7 +189,7 @@ export default function KnowledgeBasePage() {
     } finally {
         setOperationStatus(source.id, false);
     }
-}, [toast]);
+  }, [toast]);
 
   
   const handleFileUpload = async () => {
@@ -198,7 +208,7 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     toast({ title: `Starting Upload...`, description: `Preparing "${fileToUpload.name}".` });
 
-    const collectionName = `kb_${targetLevel.toLowerCase()}_meta_v1`;
+    const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
     const sourceDocRef = doc(db, collectionName, sourceId);
 
     try {
@@ -210,34 +220,41 @@ export default function KnowledgeBasePage() {
 
         // Step 2: Create the initial metadata document in Firestore
         const newSourceData = {
-            id: sourceId,
-            sourceName: fileToUpload.name,
-            description,
-            topic,
-            level: targetLevel,
+            sourceName: fileToUpload.name, description, topic, level: targetLevel,
             createdAt: new Date().toISOString(),
-            indexingStatus: 'pending',
+            indexingStatus: 'processing',
+            indexingError: 'Awaiting server processing...',
             downloadURL,
             mimeType: fileToUpload.type || 'application/octet-stream',
         };
         await setDoc(sourceDocRef, newSourceData);
         toast({ title: "Upload Complete", description: "Server is now processing the file...", variant: "default" });
 
-        // Step 3: Directly call the server-side flow and wait for the result
-        const result = await processDocumentFlow({
-            sourceId,
-            sourceName: fileToUpload.name,
-            level: targetLevel,
-            topic,
-            downloadURL,
-            mimeType: fileToUpload.type || 'application/octet-stream',
-        });
+        // Step 3: Get text (either by direct read or extraction)
+        let textToProcess: string | undefined = undefined;
 
-        if (!result.success) {
-            throw new Error(result.error || "The processing flow failed on the server.");
+        if (fileToUpload.type === 'text/plain') {
+            await updateDoc(sourceDocRef, { indexingError: 'Reading text file...' });
+            textToProcess = await fileToUpload.text();
+        } else {
+            await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${fileToUpload.type}...` });
+            const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+            if (extractionResult.error || !extractionResult.extractedText) {
+                throw new Error(extractionResult.error || 'Text extraction failed to produce content.');
+            }
+            textToProcess = extractionResult.extractedText;
         }
 
-        // The real-time listener will catch the final 'success' state.
+        // Step 4: Call the indexing flow
+        await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
+        await indexDocument({
+            sourceId,
+            sourceName: fileToUpload.name,
+            text: textToProcess,
+            level: targetLevel,
+            topic,
+            downloadURL
+        });
         
         // Reset form
         setSelectedFile(null);
@@ -249,7 +266,7 @@ export default function KnowledgeBasePage() {
     } catch (e: any) {
         const errorMessage = e.message || 'An unknown error occurred during the upload process.';
         console.error(`[handleUpload] Client-side error for ${fileToUpload.name}:`, e);
-        toast({ title: "Upload Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
         await updateDoc(sourceDocRef, {
             indexingStatus: 'failed',
@@ -417,7 +434,7 @@ export default function KnowledgeBasePage() {
                                                       </DropdownMenuContent>
                                                     </DropdownMenu>
                                                     
-                                                    {(source.indexingStatus === 'failed' ) && (
+                                                    {(source.indexingStatus === 'failed' || source.indexingStatus === 'success' ) && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
                                                                 <Button variant="ghost" size="icon" onClick={() => handleReindexSource(source)} disabled={anyOperationGloballyInProgress}>
