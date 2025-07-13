@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "ai-blair-7fb8o"
-  }
+    "default": "ai-blair-7fb8o",
+    "v2": "ai-blair-v2"
+  },
+  "targets": {},
+  "etags": {}
 }

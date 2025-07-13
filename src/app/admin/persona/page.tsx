@@ -125,10 +125,8 @@ export default function PersonaPage() {
   };
 
   const handleResponsePauseTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (value === '' || /^\\d*$/.test(value)) { // Allow empty or only digits
-      setResponsePauseTime(value);
-    }
+    // Correctly and simply update the state. Validation happens on save.
+    setResponsePauseTime(e.target.value);
   };
   
   const handleAnimationSyncFactorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,7 +197,7 @@ export default function PersonaPage() {
     }
 
 
-    const pauseTimeMs = parseInt(responsePauseTime);
+    const pauseTimeMs = parseInt(responsePauseTime, 10);
     const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
 
     const syncFactor = parseFloat(animationSyncFactor);
@@ -422,7 +420,7 @@ export default function PersonaPage() {
                           onError={() => { console.warn("Custom animated avatar failed to load, falling back."); setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);}}
                         />
                       <Input type="file" accept="image/gif" ref={animatedAvatarInputRef} onChange={handleAnimatedAvatarChange} className="hidden" id="animated-avatar-upload"/>
-                      <Button variant="outline" size="sm" onClick={() => animatedAvatarInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/>Choose GIF</Button>
+                      <Button variant="outline" size="sm" onClick={() => animatedAvatarInputTef.current?.click()}><UploadCloud className="mr-2 h-4 w-4"/>Choose GIF</Button>
                       {selectedAnimatedAvatarFile && <p className="text-xs text-muted-foreground">New: {selectedAnimatedAvatarFile.name}</p>}
                       <Button variant="link" size="sm" onClick={handleResetAnimatedAvatar} className="text-xs">Reset to default</Button>
                     </CardContent>

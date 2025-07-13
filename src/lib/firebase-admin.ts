@@ -3,34 +3,27 @@
  *
  * This file initializes the Firebase Admin SDK for the entire server-side
  * application. It ensures that the SDK is initialized only once.
- * It is configured to use Application Default Credentials, which is the standard
- * for Google Cloud environments and local development with 'gcloud auth'.
+ * It is configured to use Application Default Credentials for both local
+ * development and deployed environments.
  */
-import * as admin from 'firebase-admin';
+import admin from 'firebase-admin';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 
-// Initialize the Firebase Admin SDK.
-// This is required for any server-side logic that interacts with Firebase services.
-// It should only be called once per application instance.
 if (admin.apps.length === 0) {
   try {
-    // When running in a Google Cloud environment (like App Hosting) or locally
-    // after authenticating with 'gcloud auth application-default login', the SDK
-    // automatically finds the necessary credentials.
-    // The storageBucket is a required piece of configuration for the SDK to initialize correctly.
-    // Explicitly providing the projectId solves the "Failed to determine service account" error.
-    admin.initializeApp({
-      projectId: process.env.GCLOUD_PROJECT,
-      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    });
-    console.log('[firebase-admin] Initialized with Application Default Credentials.');
+    // By calling initializeApp() without arguments, the SDK automatically
+    // uses Application Default Credentials. In local development, this
+    // uses the credentials from 'gcloud auth application-default login'.
+    // In a deployed App Hosting environment, it uses the app's service account.
+    admin.initializeApp();
   } catch (error: any) {
     console.error(
       '[firebase-admin] Firebase Admin SDK initialization error:',
       error.stack
     );
+    throw new Error('Failed to initialize Firebase Admin SDK. See server logs for details.');
   }
 }
 

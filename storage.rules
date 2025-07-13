@@ -8,9 +8,11 @@ service firebase.storage {
       allow read, write: if request.auth != null;
     }
 
-    // Allow read access to site assets (like avatars) for everyone.
+    // Allow read access to site assets for everyone, but only allow
+    // authenticated users (admins) to write them.
     match /site_assets/{allPaths=**} {
       allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }

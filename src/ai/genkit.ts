@@ -1,24 +1,37 @@
 'use server';
-import { ai, configureGenkit } from '@genkit-ai/core';
+import { ai as coreAI, flow as coreFlow, configureGenkit, defineFlow, startFlow } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
 import { firebase } from "@genkit-ai/firebase";
 
-// Initialize Genkit and configure plugins.
-// This is done once and can be used throughout the application.
-configureGenkit({
-  plugins: [
-    // The Google AI plugin is used to generate content, embeddings, and more.
-    googleAI({
-      apiKey: process.env.GOOGLE_AI_API_KEY,
-    }),
-    // The Firebase plugin is used to integrate with Firebase services like Firestore.
-    firebase(),
-  ],
-  // Log telemetry to the console and to Google Cloud.
-  logSinks: ['firebase'],
-  // Enable tracing and metrics for observability.
-  enableTracingAndMetrics: true,
-});
+// A flag to ensure configureGenkit is only called once.
+let genkitConfigured = false;
 
-// Export the configured AI instance for use in other parts of the application.
-export { ai };
+function ensureGenkitConfigured() {
+  if (!genkitConfigured) {
+    configureGenkit({
+      plugins: [
+        googleAI(),
+        firebase(),
+      ],
+      logSinks: ['firebase'],
+      enableTracingAndMetrics: true,
+    });
+    genkitConfigured = true;
+  }
+}
+
+// Ensure configuration is run when the module is loaded.
+ensureGenkitConfigured();
+
+/**
+ * A wrapper around the core AI function to ensure Genkit is configured.
+ */
+export const ai = (...args: Parameters<typeof coreAI>) => {
+  ensureGenkitConfigured();
+  return coreAI(...args);
+};
+
+/**
+ * A wrapper around the core flow function to ensure Genkit is configured.
+ */
+export { defineFlow, startFlow };
