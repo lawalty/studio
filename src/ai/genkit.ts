@@ -10,7 +10,7 @@ if (!genkitConfigured) {
   configureGenkit({
     plugins: [
       googleAI(),
-      firebase(),
+      firebase,
     ],
     logSinks: ['firebase'],
     enableTracingAndMetrics: true,
