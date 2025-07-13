@@ -32,13 +32,7 @@ const SmsPromptInputSchema = z.object({
     context: z.string().describe("Relevant information from the knowledge base."),
 });
 
-const generateSmsResponseFlow = ai.defineFlow(
-  {
-    name: 'generateSmsResponseFlow',
-    inputSchema: GenerateSmsResponseInputSchema,
-    outputSchema: GenerateSmsResponseOutputSchema,
-  },
-  async (flowInput) => {
+const generateSmsResponseFlow = async (flowInput: GenerateSmsResponseInput): Promise<GenerateSmsResponseOutput> => {
     // 1. Search the knowledge base for relevant context (general search, no filters)
     const searchResult = await searchKnowledgeBase({ query: flowInput.userMessage, limit: 3 });
 
@@ -90,8 +84,7 @@ Your concise SMS-ready response:`,
         smsResponse: "Sorry, I'm having trouble connecting right now.",
       };
     }
-  }
-);
+  };
   
 export async function generateSmsResponse(
   input: GenerateSmsResponseInput

@@ -18,21 +18,13 @@ const TestEmbeddingOutputSchema = z.object({
 });
 export type TestEmbeddingOutput = z.infer<typeof TestEmbeddingOutputSchema>;
 
-const testEmbeddingFlow = ai.defineFlow(
-  {
-    name: 'testEmbeddingFlow',
-    inputSchema: z.void(),
-    outputSchema: TestEmbeddingOutputSchema,
-  },
-  async () => {
+const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
     try {
-      const response = await ai.embed({
+      const embedding = await ai.embed({
         embedder: 'googleai/text-embedding-004',
         content: 'This is a simple test sentence.',
       });
       
-      const embedding = response;
-
       if (embedding && embedding.length > 0) {
         return {
           success: true,
@@ -64,8 +56,7 @@ const testEmbeddingFlow = ai.defineFlow(
         
         return { success: false, error: detailedError };
     }
-  }
-);
+  };
 
 export async function testEmbedding(): Promise<TestEmbeddingOutput> {
   return testEmbeddingFlow();

@@ -6,7 +6,6 @@
  * - SendSmsOutput - The return type for the function.
  */
 'use server';
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
 import twilio from 'twilio';
@@ -26,13 +25,7 @@ const SendSmsOutputSchema = z.object({
 });
 export type SendSmsOutput = z.infer<typeof SendSmsOutputSchema>;
 
-const sendSmsFlow = ai.defineFlow(
-  {
-    name: 'sendSmsFlow',
-    inputSchema: SendSmsInputSchema,
-    outputSchema: SendSmsOutputSchema,
-  },
-  async ({ toPhoneNumber, messageBody }) => {
+const sendSmsFlow = async ({ toPhoneNumber, messageBody }: SendSmsInput): Promise<SendSmsOutput> => {
     try {
       const docRef = db.doc(FIRESTORE_KEYS_PATH);
       const docSnap = await docRef.get();
@@ -66,8 +59,7 @@ const sendSmsFlow = ai.defineFlow(
         error: error.message || 'An unknown error occurred while sending the SMS.',
       };
     }
-  }
-);
+  };
 
 export async function sendSms(input: SendSmsInput): Promise<SendSmsOutput> {
   return sendSmsFlow(input);

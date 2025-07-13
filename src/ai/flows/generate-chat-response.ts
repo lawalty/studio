@@ -37,13 +37,7 @@ const GenerateChatResponseOutputSchema = z.object({
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
 // Define the flow at the top level.
-const generateChatResponseFlow = ai.defineFlow(
-  {
-    name: 'generateChatResponseFlow',
-    inputSchema: GenerateChatResponseInputSchema,
-    outputSchema: GenerateChatResponseOutputSchema,
-  },
-  async ({ personaTraits, conversationalTopics, chatHistory, language }) => {
+const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const historyForRAG = chatHistory ? JSON.parse(JSON.stringify(chatHistory)) : [];
     const lastUserMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1].parts[0].text : '';
@@ -74,9 +68,7 @@ const generateChatResponseFlow = ai.defineFlow(
   </content>
 </document>`
               )
-              .join('
-
-');
+              .join('\n\n');
         }
       }
     } catch (e) {
@@ -111,8 +103,7 @@ Your primary goal is to answer user questions based on retrieved documents.
     const finalPrompt = `The user is conversing in ${language}.
 Here is the full conversation history:
 <history>
-${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts[0].text}`).join('
-')}
+${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
 </history>
 
 Here is the context retrieved from the knowledge base to answer the user's latest message.
@@ -161,8 +152,7 @@ ${retrievedContext || 'NO_CONTEXT_FOUND'}
         shouldEndConversation: false,
       };
     }
-  }
-);
+  };
 
 // Export a wrapper function that calls the flow.
 export async function generateChatResponse(

@@ -17,13 +17,7 @@ const TranslateTextOutputSchema = z.object({
 export type TranslateTextOutput = z.infer<typeof TranslateTextOutputSchema>;
 
 
-const translateTextFlow = ai.defineFlow(
-  {
-    name: 'translateTextFlow',
-    inputSchema: TranslateTextInputSchema,
-    outputSchema: TranslateTextOutputSchema,
-  },
-  async ({ text, targetLanguage }) => {
+const translateTextFlow = async ({ text, targetLanguage }: TranslateTextInput): Promise<TranslateTextOutput> => {
     try {
       const prompt = `You are an expert translator. Translate the following English text to ${targetLanguage}.
       - The target dialect is for Mexico City.
@@ -63,8 +57,7 @@ const translateTextFlow = ai.defineFlow(
       
       throw new Error(detailedError);
     }
-  }
-);
+  };
 
 export async function translateText(
   input: TranslateTextInput

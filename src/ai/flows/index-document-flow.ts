@@ -60,8 +60,6 @@ export async function indexDocument({
     topic, 
     downloadURL 
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
-      // **FIXED**: The collection name was being incorrectly lowercased.
-      // This ensures it matches the names used on the knowledge base page exactly (e.g., 'kb_high_meta_v1').
       const collectionName = `kb_${level.toLowerCase()}_meta_v1`;
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
 

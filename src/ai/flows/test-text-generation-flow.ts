@@ -18,13 +18,7 @@ const TestTextGenerationOutputSchema = z.object({
 });
 export type TestTextGenerationOutput = z.infer<typeof TestTextGenerationOutputSchema>;
 
-const testTextGenerationFlow = ai.defineFlow(
-  {
-    name: 'testTextGenerationFlow',
-    inputSchema: z.void(),
-    outputSchema: TestTextGenerationOutputSchema,
-  },
-  async () => {
+const testTextGenerationFlow = async (): Promise<TestTextGenerationOutput> => {
     try {
       const { text } = await ai.generate({
           model: 'googleai/gemini-1.5-flash',
@@ -61,8 +55,7 @@ const testTextGenerationFlow = ai.defineFlow(
         
         return { success: false, error: detailedError };
     }
-  }
-);
+  };
   
 export async function testTextGeneration(): Promise<TestTextGenerationOutput> {
   return testTextGenerationFlow();

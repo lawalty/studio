@@ -34,7 +34,7 @@ CRITICAL INSTRUCTIONS:
 5.  Do NOT wrap the output in code blocks or any other formatting.
 6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
 
-      const generationResult = await ai.generate({
+      const {text} = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
         prompt: [{ text: prompt }, { media: { url: documentUrl } }],
         config: {
@@ -60,15 +60,14 @@ CRITICAL INSTRUCTIONS:
         },
       });
 
-      const text = generationResult?.text?.trim();
+      const extractedText = text?.trim();
 
-      if (text) {
-        let cleanedText = text.replace(/```[a-z]*/g, '').replace(/```/g, '');
+      if (extractedText) {
+        let cleanedText = extractedText.replace(/```[a-z]*/g, '').replace(/```/g, '');
         cleanedText = cleanedText.trim();
         return { extractedText: cleanedText };
       } else {
-        const finishReason = generationResult?.finishReason || 'Unknown';
-        const errorMessage = `Text extraction failed to produce content. This may be due to a malformed or empty file, a content safety block (Reason: ${finishReason}), or a temporary API issue. Please try a different document.`;
+        const errorMessage = `Text extraction failed to produce content. This may be due to a malformed or empty file, a content safety block, or a temporary API issue. Please try a different document.`;
         return { error: errorMessage };
       }
       

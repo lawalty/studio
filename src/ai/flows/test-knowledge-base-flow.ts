@@ -8,7 +8,6 @@
  * - TestKnowledgeBaseOutput - The return type for the function.
  */
 
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 
@@ -24,13 +23,7 @@ const TestKnowledgeBaseOutputSchema = z.object({
 export type TestKnowledgeBaseOutput = z.infer<typeof TestKnowledgeBaseOutputSchema>;
 
 
-const testKnowledgeBaseFlow = ai.defineFlow(
-  {
-    name: 'testKnowledgeBaseFlow',
-    inputSchema: TestKnowledgeBaseInputSchema,
-    outputSchema: TestKnowledgeBaseOutputSchema,
-  },
-  async ({ query }) => {
+const testKnowledgeBaseFlow = async ({ query }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
     // Perform the prioritized, sequential search.
     const searchResult = await searchKnowledgeBase({ query }); 
     const contextString = `Here is some context I found that might be relevant to the user's question. Use this information to form your answer.
@@ -44,8 +37,7 @@ ${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL)
 Based on this context, please answer the user's question.
 `;
     return { retrievedContext: contextString, searchResult };
-  }
-);
+  };
 
 export async function testKnowledgeBase(
   input: TestKnowledgeBaseInput

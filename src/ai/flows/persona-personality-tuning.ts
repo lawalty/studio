@@ -33,13 +33,7 @@ export type AdjustAiPersonaAndPersonalityOutput = z.infer<
   typeof AdjustAiPersonaAndPersonalityOutputSchema
 >;
 
-const adjustAiPersonaAndPersonalityFlow = ai.defineFlow(
-  {
-    name: 'adjustAiPersonaAndPersonalityFlow',
-    inputSchema: AdjustAiPersonaAndPersonalityInputSchema,
-    outputSchema: AdjustAiPersonaAndPersonalityOutputSchema,
-  },
-  async (flowInput) => {
+const adjustAiPersonaAndPersonalityFlow = async (flowInput: AdjustAiPersonaAndPersonalityInput): Promise<AdjustAiPersonaAndPersonalityOutput> => {
     
     const prompt = ai.definePrompt({
       name: 'adjustAiPersonaAndPersonalityPrompt',
@@ -66,8 +60,7 @@ Confirmation:`,
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
         throw new Error(`The AI persona could not be updated. Details: ${errorMessage}`);
     }
-  }
-);
+  };
   
 export async function adjustAiPersonaAndPersonality(
   input: AdjustAiPersonaAndPersonalityInput

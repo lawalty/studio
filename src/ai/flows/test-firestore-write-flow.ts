@@ -9,7 +9,6 @@
  * - testFirestoreWrite - A function that performs a test write and delete.
  * - TestFirestoreWriteOutput - The return type for the function.
  */
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
 
@@ -19,13 +18,7 @@ const TestFirestoreWriteOutputSchema = z.object({
 });
 export type TestFirestoreWriteOutput = z.infer<typeof TestFirestoreWriteOutputSchema>;
 
-const testFirestoreWriteFlow = ai.defineFlow(
-  {
-    name: 'testFirestoreWriteFlow',
-    inputSchema: z.void(),
-    outputSchema: TestFirestoreWriteOutputSchema,
-  },
-  async () => {
+const testFirestoreWriteFlow = async (): Promise<TestFirestoreWriteOutput> => {
     const testDocRef = db.collection('__diagnostic_tests').doc('firestore_write_test');
     try {
       // 1. Write a document
@@ -71,8 +64,7 @@ const testFirestoreWriteFlow = ai.defineFlow(
         
         return { success: false, error: detailedError };
     }
-  }
-);
+  };
 
 export async function testFirestoreWrite(): Promise<TestFirestoreWriteOutput> {
   return testFirestoreWriteFlow();
