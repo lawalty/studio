@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),

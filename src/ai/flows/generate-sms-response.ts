@@ -7,9 +7,9 @@
  */
 'use server';
 
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const GenerateSmsResponseInputSchema = z.object({
   userMessage: z.string().describe('The user message to respond to.'),

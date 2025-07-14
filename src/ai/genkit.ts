@@ -1,9 +1,8 @@
-
 'use server';
 import { configureGenkit, type Plugin } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
 import { firebase as firebasePlugin } from '@genkit-ai/firebase';
-import genkit from 'genkit';
+import { genkit } from 'genkit';
 
 const plugins: Plugin<any>[] = [
   googleAI(),

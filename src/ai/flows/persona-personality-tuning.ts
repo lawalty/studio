@@ -8,8 +8,8 @@
  * - AdjustAiPersonaAndPersonalityOutput - The return type for the adjustAiPersonaAndPersonality function.
  */
 
-import { ai } from '@/ai/genkit';
 import {z} from 'zod';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
   personaTraits: z

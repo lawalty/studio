@@ -7,8 +7,8 @@
  * - testTextGeneration - A function that calls the text generation model.
  * - TestTextGenerationOutput - The return type.
  */
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 
 const TestTextGenerationOutputSchema = z.object({

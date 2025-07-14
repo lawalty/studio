@@ -5,8 +5,8 @@
  * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It searches 'High' priority documents first,
  *   then 'Medium', then 'Low', returning the first set of relevant results it finds that meet a confidence threshold.
  */
-import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 // The maximum distance for a search result to be considered relevant.
 // Firestore's vector search uses distance metrics (like Cosine distance), where a smaller

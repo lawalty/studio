@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
+import '@/ai/genkit'; // Ensures Genkit is configured
 
 const TestKnowledgeBaseInputSchema = z.object({
   query: z.string().describe('The test query to search for in the knowledge base.'),

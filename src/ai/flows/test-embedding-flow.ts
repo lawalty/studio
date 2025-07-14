@@ -8,8 +8,8 @@
  * - testEmbedding - A function that calls the embedding model with a hardcoded string.
  * - TestEmbeddingOutput - The return type for the function.
  */
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const TestEmbeddingOutputSchema = z.object({
   success: z.boolean().describe('Indicates if the embedding was generated successfully.'),

@@ -6,10 +6,10 @@
  * strictly instructed to use information from a knowledge base to answer
  * questions and only use its persona for conversational filler.
  */
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 import { translateText } from './translate-text-flow';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 // Zod schema for the input of the generateChatResponse flow.
 export const GenerateChatResponseInputSchema = z.object({

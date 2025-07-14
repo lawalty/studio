@@ -2,8 +2,8 @@
 /**
  * @fileOverview A flow to translate text from English to a specified target language.
  */
-import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const TranslateTextInputSchema = z.object({
   text: z.string().describe('The English text to be translated.'),
