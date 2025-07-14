@@ -1,4 +1,3 @@
-
 'use server';
 
 import { type Plugin } from '@genkit-ai/core';
@@ -12,7 +11,7 @@ const plugins: Plugin<any>[] = [
 
 if (process.env.NODE_ENV === 'production') {
   // Correctly call the firebase function to initialize the plugin
-  plugins.push(firebasePlugin.firebase());
+  plugins.push((firebasePlugin as any)());
 }
 
 export const ai = genkit({
