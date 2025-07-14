@@ -38,7 +38,7 @@
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
-    "firebase": "11.5.0",
+    "firebase": "^10.12.2",
     "firebase-admin": "^12.1.1",
     "fs": "^0.0.1-security",
     "genkit": "^1.0.0",
