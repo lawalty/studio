@@ -1,4 +1,5 @@
 
+
 'use server';
 import { configureGenkit, type Plugin } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
@@ -20,3 +21,4 @@ configureGenkit({
 });
 
 export { genkit as ai };
+
