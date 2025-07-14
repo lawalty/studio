@@ -1,8 +1,9 @@
 
 'use server';
+
 import { type Plugin } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
-import { firebase } from '@genkit-ai/firebase';
+import * as firebasePlugin from '@genkit-ai/firebase';
 import { genkit } from 'genkit';
 
 const plugins: Plugin<any>[] = [
@@ -11,7 +12,7 @@ const plugins: Plugin<any>[] = [
 
 if (process.env.NODE_ENV === 'production') {
   // Correctly call the firebase function to initialize the plugin
-  plugins.push(firebase());
+  plugins.push(firebasePlugin.firebase());
 }
 
 export const ai = genkit({
