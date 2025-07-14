@@ -1,17 +1,17 @@
 'use server';
-import { configureGenkit, type Plugin } from '@genkit-ai/core';
+import { genkit, type Plugin } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
-import { firebase } from '@genkit-ai/firebase';
+import { firebase as firebasePlugin } from '@genkit-ai/firebase';
 
 const plugins: Plugin<any>[] = [
   googleAI(),
 ];
 
 if (process.env.NODE_ENV === 'production') {
-  plugins.push(firebase());
+  plugins.push(firebasePlugin());
 }
 
-export const ai = configureGenkit({
+export const ai = genkit({
   plugins,
   logSinks: process.env.NODE_ENV === 'production' ? ['firebase'] : [],
   enableTracingAndMetrics: true,
