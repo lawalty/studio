@@ -2,7 +2,7 @@
 'use server';
 import { type Plugin } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
-import firebasePlugin from '@genkit-ai/firebase';
+import { firebase } from '@genkit-ai/firebase';
 import { genkit } from 'genkit';
 
 const plugins: Plugin<any>[] = [
@@ -10,11 +10,11 @@ const plugins: Plugin<any>[] = [
 ];
 
 if (process.env.NODE_ENV === 'production') {
-  plugins.push(firebasePlugin());
+  // Correctly call the firebase function to initialize the plugin
+  plugins.push(firebase());
 }
 
 export const ai = genkit({
   plugins,
-  logSinks: process.env.NODE_ENV === 'production' ? ['firebase'] : [],
   enableTracingAndMetrics: true,
 });
