@@ -1,4 +1,3 @@
-
 'use server';
 import { genkit, type Plugin } from '@genkit-ai/core';
 import { googleAI } from '@genkit-ai/googleai';
