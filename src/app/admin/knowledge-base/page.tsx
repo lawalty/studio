@@ -170,7 +170,7 @@ export default function KnowledgeBasePage() {
             throw new Error("Source is missing a download URL, cannot re-process.");
         }
 
-        await updateDoc(sourceDocRef, { indexingError: "Indexing document chunks..." });
+        await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
         await indexDocument({
             sourceId: source.id,
             sourceName: source.sourceName,
@@ -568,5 +568,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    

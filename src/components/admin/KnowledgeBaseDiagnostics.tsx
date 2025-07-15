@@ -64,11 +64,10 @@ const TEST_CASES: TestCase[] = [
 ];
 
 interface KnowledgeBaseDiagnosticsProps {
-  onUploadTest: () => void;
   isAnyOperationInProgress: boolean;
 }
 
-export default function KnowledgeBaseDiagnostics({ onUploadTest, isAnyOperationInProgress }: KnowledgeBaseDiagnosticsProps) {
+export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress }: KnowledgeBaseDiagnosticsProps) {
   const [ingestionTestResults, setIngestionTestResults] = useState<Record<string, { status: 'running' | 'success' | 'failure'; message: string } | null>>({});
   
   // State for retrieval test
@@ -82,7 +81,6 @@ export default function KnowledgeBaseDiagnostics({ onUploadTest, isAnyOperationI
     // This function is complex and tightly coupled with the parent state.
     // For simplicity, we now just trigger the parent's upload function
     // after setting the file and topic appropriately.
-    // The parent component should handle the actual upload logic.
     // This is a placeholder for a more advanced diagnostic if needed in the future.
     toast({
       title: 'Manual Trigger Required',
