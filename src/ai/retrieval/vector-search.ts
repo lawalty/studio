@@ -39,12 +39,12 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
-  const embedding = await ai.embed({
+  const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
 
-  const queryEmbedding = embedding;
+  const queryEmbedding = embeddingResponse;
 
   if (!queryEmbedding || queryEmbedding.length === 0) {
     throw new Error("Failed to generate a valid embedding for the search query.");
