@@ -39,15 +39,15 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
-  const embeddingResponse = await ai.embed({
+  const embedding = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
 
-  if (!embeddingResponse || embeddingResponse.length === 0) {
+  if (!embedding || embedding.length === 0) {
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
-  const queryEmbedding = embeddingResponse;
+  const queryEmbedding = embedding;
 
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {

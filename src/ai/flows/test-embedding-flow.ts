@@ -25,7 +25,7 @@ const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
         content: 'This is a simple test sentence.',
       });
       
-      if (embedding && embedding.length > 0) {
+      if (embedding && Array.isArray(embedding) && embedding.length > 0) {
         return {
           success: true,
           embeddingVectorLength: embedding.length,
