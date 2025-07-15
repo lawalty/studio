@@ -46,9 +46,11 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  const embedding = embeddingResponse;
+  // Correctly and safely extract the embedding vector.
+  const embedding = embeddingResponse?.[0]?.embedding;
   
   if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+    console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   
