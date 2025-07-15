@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     try {
         const docRef = db.doc(FIRESTORE_SITE_ASSETS_PATH);
         const docSnap = await docRef.get();
-        if (docSnap.exists() && docSnap.data()?.personaTraits) {
+        if (docSnap.exists && docSnap.data()?.personaTraits) {
             personaTraits = docSnap.data()!.personaTraits;
         }
     } catch (e) {
