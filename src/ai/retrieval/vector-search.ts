@@ -8,6 +8,8 @@
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
+
 
 // The maximum distance for a search result to be considered relevant.
 // Firestore's vector search uses distance metrics (like Cosine distance), where a smaller
@@ -44,10 +46,11 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  if (!embeddingResponse || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || embeddingResponse[0].embedding.length === 0) {
+  const embedding = embeddingResponse?.[0]?.embedding;
+  
+  if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
-  const queryEmbedding = embeddingResponse[0].embedding;
   
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
@@ -64,7 +67,7 @@ export async function searchKnowledgeBase({
       }
       
       // Perform the vector search
-      const vectorQuery = chunksQuery.findNearest('embedding', queryEmbedding, {
+      const vectorQuery = chunksQuery.findNearest('embedding', embedding, {
           limit: limit,
           distanceMeasure: 'COSINE'
       });
@@ -76,10 +79,11 @@ export async function searchKnowledgeBase({
         continue; // Try the next level
       }
 
-      // Filter out results that don't meet our confidence threshold
+      // Filter out results that don't meet our confidence threshold.
+      // We must iterate over the snapshot directly to get the `distance` property.
       const relevantResults: SearchResult[] = [];
       snapshot.forEach(doc => {
-        const distance = doc.distance;
+        const distance = (doc as any).distance; // Cast to any to access distance, as it's not in the default TS type
         if (distance < MAX_DISTANCE_THRESHOLD) {
           relevantResults.push({
             ...(doc.data() as Omit<SearchResult, 'distance'>),
