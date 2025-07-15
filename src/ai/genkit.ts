@@ -1,3 +1,4 @@
+
 'use server';
 
 import { googleAI } from '@genkit-ai/googleai';
@@ -10,5 +11,4 @@ export const ai = genkit({
     // The firebase() plugin is used for production logging and authentication.
     process.env.NODE_ENV === 'production' ? (firebasePlugin as any)() : undefined,
   ].filter(p => p), // Filter out undefined plugins
-  enableTracingAndMetrics: true,
 });
