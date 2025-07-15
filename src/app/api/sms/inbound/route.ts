@@ -1,5 +1,5 @@
 'use server';
-import { NextRequest } from 'next/server';
+
 import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
 import { sendSms } from '@/ai/flows/send-sms-flow';
 import { db } from '@/lib/firebase-admin';
@@ -12,7 +12,7 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
  * @param request The incoming request from Twilio.
  * @returns A TwiML response to acknowledge receipt.
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const fromPhoneNumber = formData.get('From') as string;
