@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A dedicated flow to handle the entire lifecycle of an inbound SMS.
@@ -22,7 +23,11 @@ const HandleInboundSmsInputSchema = z.object({
 });
 export type HandleInboundSmsInput = z.infer<typeof HandleInboundSmsInputSchema>;
 
-export const handleInboundSms = ai.defineFlow(
+export async function handleInboundSms(input: HandleInboundSmsInput): Promise<void> {
+  return handleInboundSmsFlow(input);
+}
+
+const handleInboundSmsFlow = ai.defineFlow(
   {
     name: 'handleInboundSmsFlow',
     inputSchema: HandleInboundSmsInputSchema,
