@@ -22,7 +22,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Offload all logic to the Genkit flow to avoid bundling issues.
-    await handleInboundSms({ fromPhoneNumber, userMessage });
+    // This is an async call but we don't need to wait for it to finish
+    // before responding to Twilio's webhook.
+    handleInboundSms({ fromPhoneNumber, userMessage });
 
     // Respond to Twilio's webhook request with empty TwiML to acknowledge receipt.
     const twiml = '<Response></Response>';
