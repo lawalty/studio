@@ -91,10 +91,9 @@ export async function indexDocument({
             }))
           );
 
-          chunks.forEach((chunkText, index) => {
+          embeddingResponses.forEach((embeddingVector, index) => {
             const newChunkDocRef = chunksCollection.doc();
-            const embeddingVector = embeddingResponses[index];
-
+            
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
@@ -104,7 +103,7 @@ export async function indexDocument({
               sourceName,
               level,
               topic,
-              text: chunkText,
+              text: chunks[index],
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,

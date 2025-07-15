@@ -44,11 +44,12 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  if (!embedding || embedding.length === 0) {
-    throw new Error("Failed to generate a valid embedding for the search query.");
-  }
   const queryEmbedding = embedding;
 
+  if (!queryEmbedding || queryEmbedding.length === 0) {
+    throw new Error("Failed to generate a valid embedding for the search query.");
+  }
+  
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
     try {
