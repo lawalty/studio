@@ -1,3 +1,4 @@
+
 'use server';
 
 import { generateSmsResponse } from '@/ai/flows/generate-sms-response';
@@ -14,9 +15,11 @@ const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a helpful assistant.";
  */
 export async function POST(request: Request) {
   try {
-    const formData = await request.formData();
-    const fromPhoneNumber = formData.get('From') as string;
-    const userMessage = formData.get('Body') as string;
+    // Twilio sends data as 'application/x-www-form-urlencoded'
+    const bodyText = await request.text();
+    const params = new URLSearchParams(bodyText);
+    const fromPhoneNumber = params.get('From');
+    const userMessage = params.get('Body');
 
     if (!fromPhoneNumber || !userMessage) {
       return new Response('Missing "From" or "Body" in the request payload.', { status: 400 });
@@ -27,7 +30,7 @@ export async function POST(request: Request) {
     try {
         const docRef = db.doc(FIRESTORE_SITE_ASSETS_PATH);
         const docSnap = await docRef.get();
-        if (docSnap.exists && docSnap.data()?.personaTraits) {
+        if (docSnap.exists() && docSnap.data()?.personaTraits) {
             personaTraits = docSnap.data()!.personaTraits;
         }
     } catch (e) {
