@@ -8,6 +8,7 @@
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import { FieldValue, VectorValue } from 'firebase-admin/firestore';
 
 // The maximum distance for a search result to be considered relevant.
 // Firestore's vector search uses distance metrics (like Cosine distance), where a smaller
@@ -44,7 +45,11 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  const queryEmbedding = embeddingResponse;
+  if (!embeddingResponse || embeddingResponse.length === 0) {
+    throw new Error("Failed to generate embeddings for the search query.");
+  }
+
+  const queryEmbedding = embeddingResponse[0].embedding;
 
   if (!queryEmbedding || queryEmbedding.length === 0) {
     throw new Error("Failed to generate a valid embedding for the search query.");
@@ -65,10 +70,12 @@ export async function searchKnowledgeBase({
       }
       
       // Perform the vector search
-      const snapshot = await chunksQuery.findNearest('embedding', queryEmbedding, {
+      const vectorQuery = chunksQuery.findNearest('embedding', new VectorValue(queryEmbedding), {
           limit: limit,
           distanceMeasure: 'COSINE'
       });
+
+      const snapshot = await vectorQuery.get();
 
       if (snapshot.empty) {
         console.log(`[searchKnowledgeBase] No results found in '${level}' priority knowledge base.`);
@@ -77,10 +84,14 @@ export async function searchKnowledgeBase({
 
       // Filter out results that don't meet our confidence threshold
       const relevantResults = snapshot.docs
-        .map(doc => ({
-          ...doc.data(),
-          distance: doc.distance,
-        } as SearchResult))
+        .map(doc => {
+          const data = doc.data();
+          const distance = doc.distance;
+          return {
+            ...data,
+            distance,
+          } as SearchResult;
+        })
         .filter(result => result.distance < MAX_DISTANCE_THRESHOLD);
 
       if (relevantResults.length > 0) {
