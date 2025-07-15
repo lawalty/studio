@@ -42,14 +42,12 @@ export async function searchKnowledgeBase({
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
-    output: 'embedding'
   });
 
-  const queryEmbedding = embeddingResponse;
-
-  if (!queryEmbedding || queryEmbedding.length === 0) {
+  if (!embeddingResponse || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || embeddingResponse[0].embedding.length === 0) {
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
+  const queryEmbedding = embeddingResponse[0].embedding;
   
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
