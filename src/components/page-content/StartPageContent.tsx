@@ -196,7 +196,7 @@ export default function StartPageContent() {
   
   // Image loading effect
   useEffect(() => {
-    if (splashImageSrc === DEFAULT_SPLASH_IMAGE_SRC || !splashImageSrc) {
+    if (splashImageSrc === TRANSPARENT_PIXEL || !splashImageSrc) {
       setIsImageLoaded(true);
     } else {
       setIsImageLoaded(false);
