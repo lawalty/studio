@@ -1,4 +1,3 @@
-
 'use server';
 
 import { handleInboundSms } from '@/ai/flows/handle-inbound-sms-flow';
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Offload all logic to the Genkit flow to avoid bundling issues.
+    // Offload all logic to the self-contained Genkit flow.
     // This is an async call but we don't need to wait for it to finish
     // before responding to Twilio's webhook.
     handleInboundSms({ fromPhoneNumber, userMessage });
