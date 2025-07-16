@@ -210,60 +210,86 @@ export default function KnowledgeBasePage() {
     const topic = selectedTopicForUpload;
     const description = uploadDescription;
     const sourceId = uuidv4();
+    const mimeType = fileToUpload.type || 'application/octet-stream';
 
     setIsCurrentlyUploading(true);
     setOperationStatus(sourceId, true);
-    toast({ title: `Starting Upload...`, description: `Preparing "${fileToUpload.name}".` });
 
     const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
     const sourceDocRef = doc(db, collectionName, sourceId);
 
     try {
-        // Step 1: Upload the file to Storage
+        // Step 1: Create initial metadata and upload file in parallel
+        toast({ title: "Uploading File...", description: `Preparing "${fileToUpload.name}".` });
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload);
-        const downloadURL = await getDownloadURL(fileRef);
-
-        // Step 2: Create the initial metadata document in Firestore
+        
         const newSourceData = {
             sourceName: fileToUpload.name, description, topic, level: targetLevel,
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
-            indexingError: 'Awaiting server processing...',
-            downloadURL,
-            mimeType: fileToUpload.type || 'application/octet-stream',
+            indexingError: 'Uploading to cloud storage...',
+            mimeType,
         };
+
+        // Write initial data to Firestore immediately so user sees it in the list.
         await setDoc(sourceDocRef, newSourceData);
-        toast({ title: "Upload Complete", description: "Server is now processing the file...", variant: "default" });
 
-        // Step 3: Get text (either by direct read or extraction)
+        const uploadTask = uploadBytes(fileRef, fileToUpload);
+        await uploadTask;
+        const downloadURL = await getDownloadURL(fileRef);
+
+        // Update doc with download URL
+        await updateDoc(sourceDocRef, { downloadURL });
+
+        // Step 2: Get text (either by direct read or extraction)
         let textToProcess: string | undefined = undefined;
-
-        if (fileToUpload.type === 'text/plain') {
-            await updateDoc(sourceDocRef, { indexingError: 'Reading text file...' });
+        
+        if (mimeType === 'text/plain') {
+            await updateDoc(sourceDocRef, { indexingError: 'Reading plain text file...' });
             textToProcess = await fileToUpload.text();
         } else {
-            await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${fileToUpload.type}...` });
-            const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-            if (extractionResult.error || !extractionResult.extractedText) {
-                throw new Error(extractionResult.error || 'Text extraction failed to produce content.');
+            await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${mimeType}...` });
+            try {
+                const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+                if (extractionResult.error || !extractionResult.extractedText) {
+                    throw new Error(extractionResult.error || 'Text extraction returned no content.');
+                }
+                textToProcess = extractionResult.extractedText;
+            } catch (extractionError: any) {
+                // This catch is specifically for the text extraction step
+                const specificError = `Text extraction failed: ${extractionError.message}`;
+                toast({ title: "Processing Failed", description: specificError, variant: "destructive", duration: 10000 });
+                await updateDoc(sourceDocRef, { indexingStatus: 'failed', indexingError: specificError });
+                setIsCurrentlyUploading(false);
+                setOperationStatus(sourceId, false);
+                return;
             }
-            textToProcess = extractionResult.extractedText;
         }
-
-        // Step 4: Call the indexing flow
-        await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
-        await indexDocument({
-            sourceId,
-            sourceName: fileToUpload.name,
-            text: textToProcess,
-            level: targetLevel,
-            topic,
-            downloadURL
-        });
         
-        // Reset form
+        // Step 3: Call the indexing flow
+        await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
+        try {
+            await indexDocument({
+                sourceId,
+                sourceName: fileToUpload.name,
+                text: textToProcess,
+                level: targetLevel,
+                topic,
+                downloadURL
+            });
+        } catch (indexingError: any) {
+            // This catch is specifically for the indexing step
+            const specificError = `Indexing/Embedding failed: ${indexingError.message}`;
+            toast({ title: "Processing Failed", description: specificError, variant: "destructive", duration: 10000 });
+            await updateDoc(sourceDocRef, { indexingStatus: 'failed', indexingError: specificError });
+            setIsCurrentlyUploading(false);
+            setOperationStatus(sourceId, false);
+            return;
+        }
+        
+        // Reset form on full success
+        toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed.` });
         setSelectedFile(null);
         setUploadDescription('');
         if (fileInputRef.current) {
@@ -271,19 +297,25 @@ export default function KnowledgeBasePage() {
         }
 
     } catch (e: any) {
-        const errorMessage = e.message || 'An unknown error occurred during the upload process.';
-        console.error(`[handleUpload] Client-side error for ${fileToUpload.name}:`, e);
+        // This is a general catch-all for other errors (e.g., storage upload, firestore writes)
+        const errorMessage = `An unexpected error occurred: ${e.message || 'Unknown error.'}`;
+        console.error(`[handleUpload] General error for ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
         
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'failed',
-            indexingError: errorMessage,
-        }).catch(updateError => console.error("Error updating doc with failure status:", updateError));
+        try {
+            await updateDoc(sourceDocRef, {
+                indexingStatus: 'failed',
+                indexingError: errorMessage,
+            });
+        } catch (updateError) {
+            console.error("Critical: Failed to write final failure status to Firestore.", updateError);
+        }
     } finally {
         setIsCurrentlyUploading(false);
         setOperationStatus(sourceId, false);
     }
   };
+
 
   const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
       if (source.level === newLevel) return;
