@@ -9,6 +9,6 @@ export const ai = genkit({
   plugins: [
     googleAI(),
     // The firebase() plugin is used for production logging and authentication.
-    process.env.NODE_ENV === 'production' ? (firebasePlugin as any)() : undefined,
+    process.env.NODE_ENV === 'production' ? firebasePlugin.firebase() : undefined,
   ].filter(p => p), // Filter out undefined plugins
 });
