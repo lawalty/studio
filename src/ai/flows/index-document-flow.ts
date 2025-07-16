@@ -2,7 +2,7 @@
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text, generating an
- * embedding for each chunk, and writing the complete data to Firestore.
+ * embedding for each chunk with a retry mechanism, and writing the complete data to Firestore.
  *
  * - indexDocument - Chunks text, generates embeddings, and writes to Firestore.
  * - IndexDocumentInput - The input type for the function.
@@ -52,6 +52,33 @@ function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: 
     return chunks;
   }
 
+// Helper function for retrying API calls with exponential backoff
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDelay = 1000): Promise<T> {
+    let lastError: any;
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await fn();
+        } catch (error: any) {
+            lastError = error;
+            // Check for quota-related errors specifically
+            const errorMessage = (error.message || '').toLowerCase();
+            if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || (error.status && error.status === 429)) {
+                if (i < retries - 1) { // Don't wait on the last attempt
+                    const delay = initialDelay * Math.pow(2, i) + Math.random() * 1000;
+                    console.log(`[withRetry] Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${i + 1}/${retries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            } else {
+                // For non-retriable errors, fail immediately
+                throw error;
+            }
+        }
+    }
+    console.error(`[withRetry] Failed after ${retries} attempts.`);
+    throw lastError;
+}
+
+
 export async function indexDocument({ 
     sourceId, 
     sourceName, 
@@ -84,11 +111,13 @@ export async function indexDocument({
           const batch = db.batch();
           const chunksCollection = db.collection('kb_chunks');
           
+          // Use Promise.all with the retry mechanism for each embedding call.
+          // This allows parallel execution with individual retry logic.
           const embeddingResponses = await Promise.all(
-            chunks.map(chunkText => ai.embed({
-              embedder: 'googleai/text-embedding-004',
-              content: chunkText,
-            }))
+            chunks.map(chunkText => withRetry(() => ai.embed({
+                embedder: 'googleai/text-embedding-004',
+                content: chunkText,
+            })))
           );
 
           embeddingResponses.forEach((embeddingVector, index) => {
@@ -133,7 +162,9 @@ export async function indexDocument({
         const rawError = e instanceof Error ? e.message : (e.message || JSON.stringify(e));
         let detailedError: string;
 
-        if (rawError.includes("Could not refresh access token")) {
+        if (rawError.toLowerCase().includes('quota') || rawError.includes('429')) {
+            detailedError = `Indexing failed after multiple retries due to API rate limits (quota exceeded). Please wait a few minutes before trying again or request a quota increase in your Google Cloud project.`;
+        } else if (rawError.includes("Could not refresh access token")) {
             detailedError = `Indexing failed due to a local authentication error. Please run 'gcloud auth application-default login' and restart the dev server. See README.md.`;
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. Please enable it in the Google Cloud Console.`;
