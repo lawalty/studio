@@ -131,15 +131,21 @@ export default function KnowledgeBasePage() {
     setOperationStatus(source.id, true);
     toast({ title: `Deleting ${source.sourceName}...` });
     try {
-      await deleteSource({
+      const result = await deleteSource({
         id: source.id,
         level: source.level,
         sourceName: source.sourceName,
       });
-      toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
+
+      if (result.success) {
+        toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
+      } else {
+        throw new Error(result.error || "An unknown error occurred during deletion.");
+      }
+
     } catch (error: any) {
       console.error("Error deleting source:", error);
-      toast({ title: "Deletion Failed", description: `Could not delete ${source.sourceName}. ${error.message}`, variant: "destructive" });
+      toast({ title: "Deletion Failed", description: `Could not delete ${source.sourceName}. ${error.message}`, variant: "destructive", duration: 10000 });
     } finally {
       setOperationStatus(source.id, false);
     }

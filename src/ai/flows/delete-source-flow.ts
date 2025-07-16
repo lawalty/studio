@@ -32,22 +32,16 @@ const LEVEL_CONFIG_SERVER: Record<string, { collectionName: string }> = {
   };
 
 export async function deleteSource({ id, level, sourceName }: DeleteSourceInput): Promise<DeleteSourceOutput> {
+    const levelConfig = LEVEL_CONFIG_SERVER[level];
+    if (!levelConfig) {
+      return { success: false, error: `Invalid level '${level}' provided.` };
+    }
+    
     try {
-      // 1. Delete all associated chunks from Firestore
-      const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
-      const chunksSnapshot = await chunksQuery.get();
-      if (!chunksSnapshot.empty) {
-        const batch = db.batch();
-        chunksSnapshot.docs.forEach(doc => {
-          batch.delete(doc.ref);
-        });
-        await batch.commit();
-      }
-
-      // 2. Delete the file from Cloud Storage, but only if it exists.
+      // 1. Delete the file from Cloud Storage first. This is the most likely step to fail due to permissions.
       const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
       if (!bucketName) {
-        throw new Error("Firebase Storage bucket name is not configured in environment variables.");
+        throw new Error("CRITICAL: Firebase Storage bucket name is not configured in environment variables.");
       }
       const bucket = admin.storage().bucket(bucketName);
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
@@ -57,21 +51,38 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
       if (exists) {
         await file.delete();
       } else {
-        console.warn(`[deleteSource] Storage file not found at path ${storagePath}, but proceeding with Firestore deletion.`);
+        // If file doesn't exist, we can still proceed to clean up Firestore.
+        console.warn(`[deleteSource] Storage file not found at path ${storagePath}, proceeding with Firestore cleanup.`);
       }
 
-      // 3. Delete the source metadata document
-      const levelConfig = LEVEL_CONFIG_SERVER[level];
-      if (!levelConfig) {
-        throw new Error(`Invalid level '${level}' provided.`);
+      // 2. Delete all associated chunks from Firestore's 'kb_chunks' collection.
+      const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
+      const chunksSnapshot = await chunksQuery.get();
+      const batch = db.batch(); // Use a single batch for all Firestore deletions.
+      if (!chunksSnapshot.empty) {
+        chunksSnapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+        });
       }
+
+      // 3. Delete the source metadata document.
       const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
-      await sourceDocRef.delete();
+      batch.delete(sourceDocRef);
+
+      // 4. Commit all Firestore deletions at once.
+      await batch.commit();
 
       return { success: true };
 
     } catch (error: any) {
       console.error(`[deleteSource] Failed to delete source ${id}:`, error);
-      return { success: false, error: error.message || 'An unknown server error occurred during deletion.' };
+      let errorMessage = error.message || 'An unknown server error occurred during deletion.';
+      
+      // Provide more specific feedback for common permission errors.
+      if (error.code === 403 || (error.message && error.message.includes('permission denied'))) {
+          errorMessage = `Deletion failed due to a permissions error. The server's service account needs the "Storage Object Admin" role to delete files from Cloud Storage. Please check IAM settings.`
+      }
+
+      return { success: false, error: errorMessage };
     }
 }
