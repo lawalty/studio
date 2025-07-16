@@ -44,6 +44,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
         throw new Error("CRITICAL: Firebase Storage bucket name is not configured in environment variables.");
       }
       const bucket = admin.storage().bucket(bucketName);
+      // CORRECTED: The path must include the level.
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
       const file = bucket.file(storagePath);
 
