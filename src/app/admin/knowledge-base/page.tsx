@@ -161,20 +161,16 @@ export default function KnowledgeBasePage() {
     try {
         let textToProcess: string | undefined = undefined;
 
-        if (source.mimeType === 'text/plain' && source.downloadURL) {
-            const response = await fetch(source.downloadURL);
-            if (!response.ok) throw new Error("Could not fetch the text file from storage.");
-            textToProcess = await response.text();
-        } else if (source.downloadURL) {
-            await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType}...` });
-            const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
-            if (extractionResult.error || !extractionResult.extractedText) {
-                throw new Error(extractionResult.error || 'Text extraction failed to produce content.');
-            }
-            textToProcess = extractionResult.extractedText;
-        } else {
+        if (!source.downloadURL) {
             throw new Error("Source is missing a download URL, cannot re-process.");
         }
+        
+        await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType}...` });
+        const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
+        if (extractionResult.error || !extractionResult.extractedText) {
+            throw new Error(extractionResult.error || 'Text extraction failed to produce content.');
+        }
+        textToProcess = extractionResult.extractedText;
 
         await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
         await indexDocument({
@@ -235,36 +231,30 @@ export default function KnowledgeBasePage() {
         // Write initial data to Firestore immediately so user sees it in the list.
         await setDoc(sourceDocRef, newSourceData);
 
-        const uploadTask = uploadBytes(fileRef, fileToUpload);
-        await uploadTask;
+        await uploadBytes(fileRef, fileToUpload);
         const downloadURL = await getDownloadURL(fileRef);
 
         // Update doc with download URL
         await updateDoc(sourceDocRef, { downloadURL });
 
-        // Step 2: Get text (either by direct read or extraction)
+        // Step 2: Extract text from the now-uploaded file
         let textToProcess: string | undefined = undefined;
         
-        if (mimeType === 'text/plain') {
-            await updateDoc(sourceDocRef, { indexingError: 'Reading plain text file...' });
-            textToProcess = await fileToUpload.text();
-        } else {
-            await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${mimeType}...` });
-            try {
-                const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-                if (extractionResult.error || !extractionResult.extractedText) {
-                    throw new Error(extractionResult.error || 'Text extraction returned no content.');
-                }
-                textToProcess = extractionResult.extractedText;
-            } catch (extractionError: any) {
-                // This catch is specifically for the text extraction step
-                const specificError = `Text extraction failed: ${extractionError.message}`;
-                toast({ title: "Processing Failed", description: specificError, variant: "destructive", duration: 10000 });
-                await updateDoc(sourceDocRef, { indexingStatus: 'failed', indexingError: specificError });
-                setIsCurrentlyUploading(false);
-                setOperationStatus(sourceId, false);
-                return;
+        await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${mimeType}...` });
+        try {
+            const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+            if (extractionResult.error || !extractionResult.extractedText) {
+                throw new Error(extractionResult.error || 'Text extraction returned no content.');
             }
+            textToProcess = extractionResult.extractedText;
+        } catch (extractionError: any) {
+            // This catch is specifically for the text extraction step
+            const specificError = `Text extraction failed: ${extractionError.message}`;
+            toast({ title: "Processing Failed", description: specificError, variant: "destructive", duration: 10000 });
+            await updateDoc(sourceDocRef, { indexingStatus: 'failed', indexingError: specificError });
+            setIsCurrentlyUploading(false);
+            setOperationStatus(sourceId, false);
+            return;
         }
         
         // Step 3: Call the indexing flow
