@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, MessageSquare, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search } from 'lucide-react';
+import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -24,9 +24,6 @@ interface ApiKeys {
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
-  twilioAccountSid: string;
-  twilioAuthToken: string;
-  twilioPhoneNumber: string;
 }
 
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
@@ -36,9 +33,6 @@ export default function ApiKeysPage() {
     tts: '',
     voiceId: '',
     useTtsApi: true,
-    twilioAccountSid: '',
-    twilioAuthToken: '',
-    twilioPhoneNumber: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -61,9 +55,6 @@ export default function ApiKeysPage() {
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
-            twilioAccountSid: data.twilioAccountSid || '',
-            twilioAuthToken: data.twilioAuthToken || '',
-            twilioPhoneNumber: data.twilioPhoneNumber || '',
           });
         }
       } catch (error) {
@@ -91,7 +82,6 @@ export default function ApiKeysPage() {
     setIsLoading(true);
     try {
       const docRef = doc(db, FIRESTORE_KEYS_PATH);
-      // Note: We no longer save the googleAiApiKey here as it's managed by environment variables.
       const { ...keysToSave } = apiKeys;
       await setDoc(docRef, keysToSave, { merge: true }); 
       toast({ title: "Settings Saved", description: "Your service settings have been saved to Firestore." });
@@ -135,7 +125,7 @@ export default function ApiKeysPage() {
       <CardHeader>
         <CardTitle className="font-headline">API Key &amp; Services Management</CardTitle>
         <CardDescription>
-          Manage keys for all AI services and third-party integrations like Twilio.
+          Manage keys for AI services.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -159,25 +149,6 @@ export default function ApiKeysPage() {
                   </p>
               </AlertDescription>
             </Alert>
-
-            <Separator className="my-6" />
-
-            <div className="flex items-center gap-2 mb-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">Twilio SMS Configuration</h3>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="twilioAccountSid" className="font-medium">Twilio Account SID</Label>
-                <Input id="twilioAccountSid" name="twilioAccountSid" value={apiKeys.twilioAccountSid} onChange={handleChange} placeholder="Enter Twilio Account SID" />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="twilioAuthToken" className="font-medium">Twilio Auth Token</Label>
-                <Input id="twilioAuthToken" name="twilioAuthToken" type="password" value={apiKeys.twilioAuthToken} onChange={handleChange} placeholder="Enter Twilio Auth Token" />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="twilioPhoneNumber" className="font-medium">Twilio Phone Number</Label>
-                <Input id="twilioPhoneNumber" name="twilioPhoneNumber" value={apiKeys.twilioPhoneNumber} onChange={handleChange} placeholder="Enter your Twilio phone number (e.g., +15551234567)" />
-            </div>
 
             <Separator className="my-6" />
             
