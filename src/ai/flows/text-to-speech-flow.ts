@@ -1,11 +1,17 @@
 
 'use server';
-
+/**
+ * @fileOverview A flow to convert text to speech using a Genkit-configured model.
+ *
+ * - textToSpeech - Converts a string of text into a base64 encoded WAV audio data URI.
+ */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import wav from 'wav';
 import { googleAI } from '@genkit-ai/googleai';
 
+// Helper function to convert raw PCM audio data from the model into a WAV file format,
+// then encode it as a Base64 string for easy use in data URIs.
 async function toWav(
   pcmData: Buffer,
   channels = 1,
@@ -19,7 +25,7 @@ async function toWav(
       bitDepth: sampleWidth * 8,
     });
 
-    let bufs: any[] = [];
+    const bufs: any[] = [];
     writer.on('error', reject);
     writer.on('data', function (d) {
       bufs.push(d);
@@ -33,12 +39,18 @@ async function toWav(
   });
 }
 
+// Define the schema for the flow's input and output.
+const TextToSpeechInputSchema = z.string();
+const TextToSpeechOutputSchema = z.object({
+  media: z.string().describe('The generated audio as a data URI string in WAV format.'),
+});
 
-export const textToSpeechFlow = ai.defineFlow(
+// Define the Genkit flow. This is an internal function and is not exported.
+const textToSpeechFlow = ai.defineFlow(
   {
     name: 'textToSpeechFlow',
-    inputSchema: z.string(),
-    outputSchema: z.any(),
+    inputSchema: TextToSpeechInputSchema,
+    outputSchema: TextToSpeechOutputSchema,
   },
   async (query) => {
     const { media } = await ai.generate({
@@ -54,8 +66,9 @@ export const textToSpeechFlow = ai.defineFlow(
       prompt: query,
     });
     if (!media) {
-      throw new Error('no media returned');
+      throw new Error('No media was returned from the text-to-speech service.');
     }
+    // The model returns raw PCM data; we need to convert it to a usable format like WAV.
     const audioBuffer = Buffer.from(
       media.url.substring(media.url.indexOf(',') + 1),
       'base64'
@@ -65,3 +78,11 @@ export const textToSpeechFlow = ai.defineFlow(
     };
   }
 );
+
+/**
+ * The public-facing async function that can be safely imported by client components.
+ * It takes a string as input and returns the result from the flow.
+ */
+export async function textToSpeech(text: string): Promise<{ media: string }> {
+  return textToSpeechFlow(text);
+}
