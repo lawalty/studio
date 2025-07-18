@@ -148,7 +148,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [messages]);
 
     // Configuration State
-    const [isLoadingConfig, setIsLoadingConfig] = useState(isLoadingConfig);
+    const [isLoadingConfig, setIsLoadingConfig] = useState(true);
     const configRef = useRef({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
