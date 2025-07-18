@@ -18,6 +18,7 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
 
 
 export interface Message {
@@ -33,7 +34,7 @@ export interface Message {
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
-const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const DEFAULT_PERSONA_TRAITS = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
@@ -125,7 +126,7 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
 };
 
 interface ChatInterfaceProps {
-    communicationMode: CommunicationMode;
+    communicationMode: 'audio-only' | 'audio-text' | 'text-only';
 }
 
 export default function ChatInterface({ communicationMode }: ChatInterfaceProps) {
@@ -143,7 +144,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         messagesRef.current = messages;
     }, [messages]);
 
-    // Configuration State
+    // Configuration State stored in a ref to avoid re-renders
     const configRef = useRef({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
@@ -154,17 +155,18 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         useTtsApi: true,
         responsePauseTimeMs: DEFAULT_USER_SPEECH_PAUSE_TIME_MS,
         splashScreenWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE,
+        animationSyncFactor: 0.9,
     });
 
     // Refs for external APIs and timers
-    const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
+    const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const recognitionRef = useRef<any | null>(null);
     const speechRecognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const finalTranscriptRef = useRef<string>(''); // Ref to hold transcript
+    const finalTranscriptRef = useRef<string>('');
 
     // Hooks
     const router = useRouter();
-    const { language } = useLanguage();
+    const { language, translate } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
 
     // UI Text (State for translations)
@@ -186,6 +188,44 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setMessages(prev => [...prev, newMessage]);
     }, []);
     
+    const speakText = useCallback(async (textToSpeak: string) => {
+        if (communicationMode === 'text-only' || textToSpeak.trim() === "") {
+            return;
+        }
+
+        if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+        if (audioPlayerRef.current) audioPlayerRef.current.pause();
+
+        setIsSpeaking(true);
+
+        try {
+            const { media } = await textToSpeech(textToSpeak);
+            if (!audioPlayerRef.current) {
+                audioPlayerRef.current = new Audio();
+            }
+            const audio = audioPlayerRef.current;
+            audio.src = media;
+            
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error("Audio playback error:", error);
+                    setIsSpeaking(false);
+                });
+            }
+
+            audio.onended = () => {
+                setIsSpeaking(false);
+            };
+
+        } catch (e) {
+            console.error("TTS API Error:", e);
+            // Fallback to browser TTS might be added here if needed
+            setIsSpeaking(false);
+        }
+    }, [communicationMode]);
+
+
     const handleSendMessage = useCallback(async (text: string) => {
         if (text.trim() === '' || hasConversationEnded || isSendingMessage) return;
 
@@ -202,66 +242,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }));
 
         try {
-            const { personaTraits, conversationalTopics, useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
-            
-            const cleanupAndResolve = () => {
-                setIsSpeaking(false);
-                if (elevenLabsAudioRef.current?.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-                }
-                if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
-            };
-
-            const speak = (textToSpeak: string) => {
-                if (typeof window !== 'undefined') window.speechSynthesis.cancel();
-                if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
-                
-                if (communicationMode === 'text-only' || textToSpeak.trim() === "") {
-                    cleanupAndResolve();
-                    return;
-                }
-            
-                const tryBrowserFallback = () => {
-                    if (typeof window !== 'undefined' && window.speechSynthesis) {
-                      const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
-                      utterance.onstart = () => setIsSpeaking(true);
-                      utterance.onend = cleanupAndResolve;
-                      utterance.onerror = (e) => {
-                        console.error("Browser TTS Error:", e);
-                        cleanupAndResolve();
-                      };
-                      window.speechSynthesis.speak(utterance);
-                    } else {
-                      cleanupAndResolve();
-                    }
-                };
-                
-                if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-                    fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
-                        method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
-                        body: JSON.stringify({ text: textToSpeak.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
-                    }).then(response => {
-                        if (!response.ok) throw new Error(`API Error ${response.status}`);
-                        return response.blob();
-                    }).then(audioBlob => {
-                        if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-                        const audio = elevenLabsAudioRef.current;
-                        audio.src = URL.createObjectURL(audioBlob);
-                        audio.onplay = () => setIsSpeaking(true);
-                        audio.onended = cleanupAndResolve;
-                        audio.onerror = (e) => {
-                            console.error("ElevenLabs Audio Playback Error:", e);
-                            tryBrowserFallback();
-                        };
-                        return audio.play();
-                    }).catch(e => {
-                        console.error("ElevenLabs API Error:", e);
-                        tryBrowserFallback();
-                    });
-                } else {
-                    tryBrowserFallback();
-                }
-            }
+            const { personaTraits, conversationalTopics } = configRef.current;
             
             const result: GenerateChatResponseOutput = await generateChatResponse({
                 personaTraits, conversationalTopics,
@@ -270,7 +251,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             });
 
             addMessage(result.aiResponse, 'model', result.pdfReference);
-            speak(result.aiResponse);
+            await speakText(result.aiResponse);
 
             if (result.shouldEndConversation) {
                 setHasConversationEnded(true);
@@ -283,7 +264,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } finally {
             setIsSendingMessage(false);
         }
-    }, [addMessage, communicationMode, hasConversationEnded, isListening, isSendingMessage, uiText.errorEncountered, language]);
+    }, [addMessage, hasConversationEnded, isListening, isSendingMessage, uiText.errorEncountered, language, speakText]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0) return;
@@ -378,12 +359,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           try {
             finalTranscriptRef.current = '';
             recognitionRef.current?.start();
-            setIsListening(true);
           } catch (startError: any) {
             if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
               toast({ variant: 'destructive', title: uiText.micErrorTitle, description: uiText.micErrorDesc.replace('{error}', `${startError.name}: ${startError.message || 'Could not start microphone.'}`) });
             }
-            setIsListening(false);
           }
         }
     }, [communicationMode, hasConversationEnded, isListening, isSendingMessage, isSpeaking, stopListeningAndProcess, toast, uiText]);
@@ -404,6 +383,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         recognition.interimResults = true;
         recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
+        recognition.onstart = () => {
+            setIsListening(true);
+        }
+        
         recognition.onresult = (event: any) => {
           let interimTranscript = '';
           let finalTranscript = '';
@@ -427,6 +410,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         recognition.onend = () => {
           setIsListening(false);
+          if (finalTranscriptRef.current.trim()) {
+              handleSendMessage(finalTranscriptRef.current.trim());
+              finalTranscriptRef.current = '';
+          }
         };
 
         recognition.onerror = (event: any) => {
@@ -444,17 +431,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 clearTimeout(speechRecognitionTimerRef.current);
             }
         };
-    }, [communicationMode, toast, uiText, language]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [communicationMode, language, toast, uiText.micNotReadyTitle, uiText.micNotReadyDesc, uiText.micErrorTitle]);
     
-    // New Effect to handle sending the message after listening stops
-    useEffect(() => {
-        if (!isListening && finalTranscriptRef.current.trim()) {
-            handleSendMessage(finalTranscriptRef.current.trim());
-            finalTranscriptRef.current = ''; // Clear the ref after sending
-        }
-    }, [isListening, handleSendMessage]);
-    
-    // Effect for initial data load - NOW RUNS ONLY ONCE
+    // ONE-TIME Effect for initial data load
     useEffect(() => {
         const fetchAllData = async () => {
           setIsLoadingConfig(true);
@@ -478,6 +458,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               configRef.current.conversationalTopics = assets.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE;
               configRef.current.splashScreenWelcomeMessage = assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE;
               configRef.current.responsePauseTimeMs = assets.responsePauseTimeMs ?? DEFAULT_USER_SPEECH_PAUSE_TIME_MS;
+              configRef.current.animationSyncFactor = assets.animationSyncFactor ?? 0.9;
             }
           } catch (e) {
             toast({ title: "Config Error", description: `Could not load app settings. Using defaults.`, variant: "destructive" });
@@ -487,7 +468,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         fetchAllData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Empty dependency array ensures this runs only ONCE.
+    }, []); 
     
     // Component lifecycle cleanup
     useEffect(() => {
@@ -496,14 +477,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (speechRecognitionTimerRef.current) clearTimeout(speechRecognitionTimerRef.current);
             if (recognitionRef.current) try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
             if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) window.speechSynthesis.cancel();
-            if (elevenLabsAudioRef.current) {
-                if (elevenLabsAudioRef.current.src && !elevenLabsAudioRef.current.paused) {
-                    elevenLabsAudioRef.current.pause();
-                    if (elevenLabsAudioRef.current.src.startsWith('blob:')) {
-                        URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+            if (audioPlayerRef.current) {
+                if (audioPlayerRef.current.src && !audioPlayerRef.current.paused) {
+                    audioPlayerRef.current.pause();
+                    if (audioPlayerRef.current.src.startsWith('blob:')) {
+                        URL.revokeObjectURL(audioPlayerRef.current.src);
                     }
                 }
-                elevenLabsAudioRef.current.src = '';
+                audioPlayerRef.current.src = '';
             }
         };
     }, [dismissAllToasts]);
@@ -511,7 +492,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const handleEndChatManually = useCallback(() => {
         if (isListening) stopListeningAndProcess();
         if (isSpeaking) {
-          if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
+          if (audioPlayerRef.current) audioPlayerRef.current.pause();
           window.speechSynthesis.cancel();
         }
         setHasConversationEnded(true);
@@ -620,8 +601,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               </div>
             )}
             {!hasConversationEnded && !isSpeaking && !isSendingMessage && (
-              <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8">
-                  <Power className="mr-2 h-5 w-5" /> {uiText.endChat}
+               <Button onClick={toggleListening} variant="default" size="lg" className="mt-8 h-16 w-16 rounded-full animate-pulse">
+                  <Mic className="h-8 w-8" />
               </Button>
             )}
           </div>
