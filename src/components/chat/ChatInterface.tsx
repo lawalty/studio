@@ -36,7 +36,7 @@ export interface Message {
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
-const DEFAULT_PERSONA_TRAITS = "You are IA Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
@@ -248,6 +248,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const stateRef = useRef<ChatState>({
     isSpeaking: false,
@@ -256,7 +257,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     hasConversationEnded: false,
     isEndingSession: false,
     communicationMode,
-    messages: [],
+    messages,
   });
 
   useEffect(() => {
@@ -270,6 +271,12 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       messages,
     };
   }, [isSpeaking, isListening, isSendingMessage, hasConversationEnded, communicationMode, messages]);
+
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const currentAiMessageIdRef = useRef<string | null>(null);
   const speechRecognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -944,7 +951,17 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           {hasConversationEnded && (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
-                 <ConversationLog messages={messages} avatarSrc={avatarSrc} typingSpeedMs={typingSpeedMs} animationSyncFactor={animationSyncFactor} communicationMode={communicationMode} lastOverallMessageId={lastOverallMessage?.id || null} hasConversationEnded={hasConversationEnded} forceFinishAnimationForMessageId={forceFinishAnimationForMessageId} />
+                 <ConversationLog
+                    scrollAreaRef={scrollAreaRef}
+                    messages={messages}
+                    avatarSrc={avatarSrc}
+                    typingSpeedMs={typingSpeedMs}
+                    animationSyncFactor={animationSyncFactor}
+                    communicationMode={communicationMode}
+                    lastOverallMessageId={lastOverallMessage?.id || null}
+                    hasConversationEnded={hasConversationEnded}
+                    forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
+                  />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                     <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
                     <Button onClick={handleStartNewChat} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
@@ -975,7 +992,17 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
           </Card>
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
-          <ConversationLog messages={messagesForLog} avatarSrc={avatarSrc} typingSpeedMs={typingSpeedMs} animationSyncFactor={animationSyncFactor} communicationMode={communicationMode} lastOverallMessageId={lastOverallMessage?.id || null} hasConversationEnded={hasConversationEnded} forceFinishAnimationForMessageId={forceFinishAnimationForMessageId} />
+          <ConversationLog
+            scrollAreaRef={scrollAreaRef}
+            messages={messagesForLog}
+            avatarSrc={avatarSrc}
+            typingSpeedMs={typingSpeedMs}
+            animationSyncFactor={animationSyncFactor}
+            communicationMode={communicationMode}
+            lastOverallMessageId={lastOverallMessage?.id || null}
+            hasConversationEnded={hasConversationEnded}
+            forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
+          />
           <MessageInput onSendMessage={handleSendMessage} isSending={isSendingMessage} isSpeaking={isSpeaking} showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening} inputValue={inputValue} onInputValueChange={setInputValue} disabled={hasConversationEnded || showPreparingGreeting} />
           {hasConversationEnded ? (
              <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">

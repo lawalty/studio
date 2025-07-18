@@ -1,7 +1,7 @@
 import type { Message, CommunicationMode } from '@/components/chat/ChatInterface';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
 
 interface ConversationLogProps {
@@ -12,7 +12,8 @@ interface ConversationLogProps {
   communicationMode: CommunicationMode;
   lastOverallMessageId: string | null; 
   hasConversationEnded: boolean;
-  forceFinishAnimationForMessageId: string | null; 
+  forceFinishAnimationForMessageId: string | null;
+  scrollAreaRef: React.RefObject<HTMLDivElement>;
 }
 
 export default function ConversationLog({ 
@@ -23,9 +24,9 @@ export default function ConversationLog({
   communicationMode,
   lastOverallMessageId,
   hasConversationEnded,
-  forceFinishAnimationForMessageId 
+  forceFinishAnimationForMessageId,
+  scrollAreaRef
 }: ConversationLogProps) {
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { translate } = useLanguage();
   const [emptyMessage, setEmptyMessage] = useState('Start the conversation by typing or using the microphone.');
 
@@ -33,38 +34,30 @@ export default function ConversationLog({
     translate('Start the conversation by typing or using the microphone.').then(setEmptyMessage);
   }, [translate]);
 
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-        const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (viewport) {
-            viewport.scrollTop = viewport.scrollHeight;
-        }
-    }
-  }, [messages]);
-
   return (
     <ScrollArea
-      ref={scrollAreaRef}
       className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
       data-testid="conversation-log-scroll-area"
     >
-        {messages.map((msg) => (
-          <ChatBubble 
-            key={msg.id} 
-            message={msg} 
-            avatarSrc={avatarSrc}
-            typingSpeedMs={typingSpeedMs}
-            animationSyncFactor={animationSyncFactor}
-            communicationMode={communicationMode}
-            isNewlyAddedAiMessage={msg.sender === 'model' && msg.id === lastOverallMessageId && !hasConversationEnded}
-            forceFinishAnimation={forceFinishAnimationForMessageId === msg.id}
-          />
-        ))}
-        {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">{emptyMessage}</p>
-          </div>
-        )}
+        <div ref={scrollAreaRef} className="h-full">
+            {messages.map((msg) => (
+              <ChatBubble 
+                key={msg.id} 
+                message={msg} 
+                avatarSrc={avatarSrc}
+                typingSpeedMs={typingSpeedMs}
+                animationSyncFactor={animationSyncFactor}
+                communicationMode={communicationMode}
+                isNewlyAddedAiMessage={msg.sender === 'model' && msg.id === lastOverallMessageId && !hasConversationEnded}
+                forceFinishAnimation={forceFinishAnimationForMessageId === msg.id}
+              />
+            ))}
+            {messages.length === 0 && (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">{emptyMessage}</p>
+              </div>
+            )}
+        </div>
     </ScrollArea>
   );
 }
