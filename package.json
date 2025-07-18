@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@genkit-ai/core": "^1.0.0",
     "@genkit-ai/googleai": "^1.0.0",
     "@google-cloud/storage": "^7.11.0",
     "@opentelemetry/exporter-jaeger": "^2.0.1",
@@ -42,6 +41,7 @@
     "firebase": "^11.5.0",
     "firebase-admin": "^12.1.1",
     "fs": "^0.0.1-security",
+    "genkit": "^1.0.0",
     "handlebars": "^4.7.8",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
