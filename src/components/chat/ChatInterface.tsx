@@ -572,10 +572,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
     
     // UI Rendering Logic
-    let currentAvatarToDisplay = configRef.current.avatarSrc;
+    let currentAvatarToDisplay = configRef.current.avatarSrc || DEFAULT_AVATAR_PLACEHOLDER_URL;
     let isDisplayingAnimatedAvatar = false;
-    if (isSpeaking && communicationMode !== 'text-only' && configRef.current.animatedAvatarSrc && configRef.current.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) {
-      currentAvatarToDisplay = configRef.current.animatedAvatarSrc;
+
+    const animatedAvatarSrc = configRef.current.animatedAvatarSrc;
+    if (isSpeaking && communicationMode !== 'text-only' && animatedAvatarSrc && animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) {
+      currentAvatarToDisplay = animatedAvatarSrc;
       isDisplayingAnimatedAvatar = true;
     }
 
@@ -681,5 +683,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
