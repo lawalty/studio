@@ -140,9 +140,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
-    const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const [showPreparingGreeting, setShowPreparingGreeting] = useState(true);
 
     const messagesRef = useRef<Message[]>([]);
     useEffect(() => {
@@ -150,7 +148,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [messages]);
 
     // Configuration State
-    const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+    const [isLoadingConfig, setIsLoadingConfig] = useState(isLoadingConfig);
     const configRef = useRef({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
@@ -172,18 +170,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     // Hooks
     const router = useRouter();
-    const { language, translate } = useLanguage();
-    const languageRef = useRef(language);
-    const translateRef = useRef(translate);
-    useEffect(() => {
-        languageRef.current = language;
-        translateRef.current = translate;
-    }, [language, translate]);
-
+    const { language } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
 
     // UI Text (State for translations)
-    const [uiText, setUiText] = useState({
+    const [uiText] = useState({
         loadingConfig: "Loading Chat Configuration", pleaseWait: "Please wait a moment...", preparingGreeting: "Preparing greeting...", listening: "Listening...",
         isPreparing: "AI Blair is preparing...", isTyping: "AI Blair is typing...", conversationEnded: "Conversation Ended", saveAsPdf: "Save as PDF",
         startNewChat: "Start New Chat", endChat: "End Chat", micNotReadyTitle: "Mic Not Ready", micNotReadyDesc: "Speech recognition not available. Try refreshing.",
@@ -286,7 +277,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const result: GenerateChatResponseOutput = await generateChatResponse({
                 personaTraits, conversationalTopics,
                 chatHistory: historyForGenkit,
-                language: languageRef.current,
+                language: language,
             });
 
             addMessage(result.aiResponse, 'model', result.pdfReference);
@@ -303,7 +294,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } finally {
             setIsSendingMessage(false);
         }
-    }, [addMessage, communicationMode, hasConversationEnded, isListening, isSendingMessage, uiText.errorEncountered]);
+    }, [addMessage, communicationMode, hasConversationEnded, isListening, isSendingMessage, uiText.errorEncountered, language]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0) return;
@@ -422,7 +413,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = languageRef.current === 'Spanish' ? 'es-MX' : 'en-US';
+        recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
         recognition.onresult = (event: any) => {
           let interimTranscript = '';
@@ -464,69 +455,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 clearTimeout(speechRecognitionTimerRef.current);
             }
         };
-    }, [communicationMode, toast, uiText]);
-
-    useEffect(() => {
-      if(!isLoadingConfig && !aiHasInitiatedConversation) {
-        const initConversation = async () => {
-          const { customGreeting, personaTraits, conversationalTopics, useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
-    
-          const speak = (textToSpeak: string) => {
-              if (typeof window === 'undefined' || communicationMode === 'text-only' || !textToSpeak) return;
-              
-              const playAudio = (src: string) => {
-                  const audio = new Audio(src);
-                  audio.play().catch(e => console.error("Audio playback failed", e));
-              };
-              
-              const tryBrowserFallback = () => {
-                  if (window.speechSynthesis) {
-                      const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
-                      window.speechSynthesis.speak(utterance);
-                  }
-              };
-              
-              if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-                  fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, {
-                      method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey },
-                      body: JSON.stringify({ text: textToSpeak.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
-                  })
-                  .then(response => {
-                      if (!response.ok) throw new Error(`API Error ${response.status}`);
-                      return response.blob();
-                  })
-                  .then(audioBlob => { playAudio(URL.createObjectURL(audioBlob)); })
-                  .catch(e => { console.error("ElevenLabs API Error:", e); tryBrowserFallback(); });
-              } else {
-                  tryBrowserFallback();
-              }
-          };
-    
-          let greetingToUse = customGreeting?.trim() ? customGreeting.trim() : "";
-    
-          if (!greetingToUse) {
-            try {
-              const result = await generateChatResponse({ personaTraits, conversationalTopics, language: languageRef.current, chatHistory: [] });
-              greetingToUse = result.aiResponse;
-            } catch (error) {
-              console.error("Error generating initial greeting:", error);
-              greetingToUse = languageRef.current === 'Spanish' ? "Hola! ¿Como puedo ayudarte hoy?" : "Hello! How can I help you today?";
-            }
-          }
-    
-          if (languageRef.current !== 'English' && customGreeting) {
-            greetingToUse = await translateRef.current(greetingToUse);
-          }
-    
-          addMessage(greetingToUse, 'model');
-          setShowPreparingGreeting(false);
-          setAiHasInitiatedConversation(true);
-          speak(greetingToUse);
-        };
-    
-        initConversation();
-      }
-    }, [isLoadingConfig, aiHasInitiatedConversation, addMessage, communicationMode]);
+    }, [communicationMode, toast, uiText, language]);
     
     // New Effect to handle sending the message after listening stops
     useEffect(() => {
@@ -665,7 +594,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     const audioOnlyLiveIndicator = () => {
       if (hasConversationEnded) return null;
-      if (showPreparingGreeting) return <div className="flex items-center justify-center rounded-lg bg-secondary p-3 text-secondary-foreground shadow animate-pulse"> <Loader2 size={20} className="mr-2 animate-spin" /> {uiText.preparingGreeting} </div>;
       if (isListening) return <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>;
       if (isSendingMessage && !isSpeaking) return <div className="flex items-center justify-center rounded-lg bg-muted p-3 text-muted-foreground shadow animate-pulse font-bold text-lg text-primary"> {uiText.isPreparing} </div>;
       return null;
@@ -679,15 +607,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       if (isLoadingConfig) {
           return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2> <p className="mt-2 text-muted-foreground">{uiText.pleaseWait}</p> </div> );
       }
-      if (!aiHasInitiatedConversation) {
-        return (
-          <div className="flex flex-col items-center justify-center h-full text-center py-8">
-            <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
-            <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.preparingGreeting}</h2>
-            <p className="mt-2 text-muted-foreground">{uiText.pleaseWait}</p>
-          </div>
-        );
-      }
+
       if (communicationMode === 'audio-only') {
         return (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
@@ -708,7 +628,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                    </div>
               </div>
             )}
-            {aiHasInitiatedConversation && !hasConversationEnded && !showPreparingGreeting && !isSpeaking && !isSendingMessage && (
+            {!hasConversationEnded && !isSpeaking && !isSendingMessage && (
               <Button onClick={handleEndChatManually} variant="default" size="default" className="mt-8">
                   <Power className="mr-2 h-5 w-5" /> {uiText.endChat}
               </Button>
@@ -724,9 +644,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               <CardContent className="pt-6 flex flex-col items-center">
                 <Image {...imageProps} alt="AI Blair Avatar" />
                 <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{configRef.current.splashScreenWelcomeMessage}</h2>
-                {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
-                  <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">{uiText.preparingGreeting}</p>
-                )}
                 {isSendingMessage && !isSpeaking && <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">{uiText.isTyping}</p>}
               </CardContent>
             </Card>
@@ -739,16 +656,16 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               onSendMessage={handleSendMessage} isSending={isSendingMessage} isSpeaking={isSpeaking}
               showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
               inputValue={inputValue} onInputValueChange={setInputValue}
-              disabled={hasConversationEnded || showPreparingGreeting}
+              disabled={hasConversationEnded}
             />
             {hasConversationEnded ? (
                <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-3">
                   <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
                   <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
                </div>
-            ) : aiHasInitiatedConversation && (
+            ) : (
                <div className="mt-3 flex justify-end">
-                  <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={showPreparingGreeting || isSendingMessage || isSpeaking}><Power className="mr-2 h-4 w-4" /> {uiText.endChat}</Button>
+                  <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSendingMessage || isSpeaking}><Power className="mr-2 h-4 w-4" /> {uiText.endChat}</Button>
                </div>
             )}
           </div>
@@ -764,3 +681,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
