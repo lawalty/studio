@@ -4,7 +4,7 @@
 /**
  * @fileOverview AI Persona and Personality Tuning flow.
  *
- * - adjustAiPersonaAndPersonality - Allows adjusting various traits and attributes for IA Blair v2's conversational style.
+ * - adjustAiPersonaAndPersonality - Allows adjusting various traits and attributes for IA Blair's conversational style.
  * - AdjustAiPersonaAndPersonalityInput - The input type for the adjustAiPersonaAndPersonality function.
  * - AdjustAiPersonaAndPersonalityOutput - The return type for the adjustAiPersonaAndPersonality function.
  */
@@ -27,7 +27,7 @@ const AdjustAiPersonaAndPersonalityOutputSchema = z.object({
   updatedPersonaDescription: z
     .string()
     .describe(
-      'A confirmation message from IA Blair v2, in its new character, indicating that its persona and personality have been successfully updated.'
+      'A confirmation message from IA Blair, in its new character, indicating that its persona and personality have been successfully updated.'
     ),
 });
 export type AdjustAiPersonaAndPersonalityOutput = z.infer<
@@ -40,10 +40,10 @@ const adjustAiPersonaAndPersonalityFlow = async (flowInput: AdjustAiPersonaAndPe
       name: 'adjustAiPersonaAndPersonalityPrompt',
       input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
       output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
-      prompt: `You are IA Blair v2. Your personality settings have just been updated with the following traits:
+      prompt: `You are IA Blair. Your personality settings have just been updated with the following traits:
 "{{{personaTraits}}}"
 
-Please provide a concise and natural-sounding confirmation, in your new character as IA Blair v2, that your settings have been successfully applied. Do not list or repeat the persona traits in your response; simply confirm the update in character, reflecting this new personality. For example, if your new persona is very formal, your confirmation should be formal. If it's very friendly, be friendly.
+Please provide a concise and natural-sounding confirmation, in your new character as IA Blair, that your settings have been successfully applied. Do not list or repeat the persona traits in your response; simply confirm the update in character, reflecting this new personality. For example, if your new persona is very formal, your confirmation should be formal. If it's very friendly, be friendly.
 Confirmation:`,
     });
 
