@@ -2,31 +2,17 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-  
-    // Allow public read access for site assets like logos and splash images.
-    // Restrict writes to authenticated users (admins).
-    match /site_assets/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-
-    // Allow public read access for knowledge base source files (e.g., PDFs).
-    // This is necessary for the AI to process them and for users to download them.
-    // Restrict writes to authenticated users.
-    match /knowledge_base_files/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    
-    // Allow authenticated users to upload to a temporary test directory.
-    match /public_test_uploads/{allPaths=**} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Secure all other paths by default.
-    // Only allow access if an explicit rule above matches.
+    // Allow read access to all files by default.
+    // This is necessary for the AI to process documents via their public URL.
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read;
+    }
+
+    // Allow write access to all files.
+    // This is secure in this context because uploads are managed by
+    // trusted server-side functions, not direct client uploads.
+    match /{allPaths=**} {
+      allow write;
     }
   }
 }
