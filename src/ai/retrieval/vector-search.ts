@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const MAX_DISTANCE_THRESHOLD = 0.7; 
 
-const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Spanish PDFs', 'Chat History'];
+const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
 
 interface SearchResult {
   sourceId: string;
@@ -89,5 +89,3 @@ export async function searchKnowledgeBase({
 
   return [];
 }
-
-    
