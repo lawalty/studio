@@ -206,6 +206,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const [typingSpeedMs, setTypingSpeedMs] = useState<number>(DEFAULT_TYPING_SPEED_MS);
   const [animationSyncFactor, setAnimationSyncFactor] = useState<number>(DEFAULT_ANIMATION_SYNC_FACTOR);
   const [forceFinishAnimationForMessageId, setForceFinishAnimationForMessageId] = useState<string | null>(null);
+  const [newlyAddedAiMessageId, setNewlyAddedAiMessageId] = useState<string | null>(null);
 
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   
@@ -313,10 +314,11 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
   const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference'], audioDurationMs?: number): string => {
     const newMessageId = Date.now().toString() + Math.random();
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { id: newMessageId, text, sender: sender, timestamp: Date.now(), pdfReference, audioDurationMs },
-    ]);
+    const newMessage: Message = { id: newMessageId, text, sender, timestamp: Date.now(), pdfReference, audioDurationMs };
+    setMessages(prev => [...prev, newMessage]);
+    if (sender === 'model') {
+      setNewlyAddedAiMessageId(newMessageId);
+    }
     return newMessageId;
   }, []);
   
@@ -517,7 +519,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
       
       if (stateRef.current.communicationMode !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
-        const randomAckPhrase = translatedAckPhrases[Math.floor(Math.random() * translatedAckPhrases.length)];
         await speakText(randomAckPhrase, null, undefined, true);
       }
 
@@ -902,8 +903,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     return () => { performResetOnUnmount(); };
   }, [resetConversation]);
 
-  const lastOverallMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-
   let currentAvatarToDisplay = avatarSrc;
   let isDisplayingAnimatedAvatar = false;
   if (isSpeaking && stateRef.current.communicationMode !== 'text-only' && animatedAvatarSrc && animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) {
@@ -957,7 +956,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
                     typingSpeedMs={typingSpeedMs}
                     animationSyncFactor={animationSyncFactor}
                     communicationMode={communicationMode}
-                    lastOverallMessageId={lastOverallMessage?.id || null}
+                    newlyAddedAiMessageId={newlyAddedAiMessageId}
                     hasConversationEnded={hasConversationEnded}
                     forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
                   />
@@ -997,7 +996,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             typingSpeedMs={typingSpeedMs}
             animationSyncFactor={animationSyncFactor}
             communicationMode={communicationMode}
-            lastOverallMessageId={lastOverallMessage?.id || null}
+            newlyAddedAiMessageId={newlyAddedAiMessageId}
             hasConversationEnded={hasConversationEnded}
             forceFinishAnimationForMessageId={forceFinishAnimationForMessageId}
           />

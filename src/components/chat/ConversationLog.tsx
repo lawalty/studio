@@ -10,7 +10,7 @@ interface ConversationLogProps {
   typingSpeedMs: number;
   animationSyncFactor: number;
   communicationMode: CommunicationMode;
-  lastOverallMessageId: string | null; 
+  newlyAddedAiMessageId: string | null; 
   hasConversationEnded: boolean;
   forceFinishAnimationForMessageId: string | null;
 }
@@ -21,7 +21,7 @@ export default function ConversationLog({
   typingSpeedMs,
   animationSyncFactor,
   communicationMode,
-  lastOverallMessageId,
+  newlyAddedAiMessageId,
   hasConversationEnded,
   forceFinishAnimationForMessageId,
 }: ConversationLogProps) {
@@ -46,7 +46,7 @@ export default function ConversationLog({
                 typingSpeedMs={typingSpeedMs}
                 animationSyncFactor={animationSyncFactor}
                 communicationMode={communicationMode}
-                isNewlyAddedAiMessage={msg.sender === 'model' && msg.id === lastOverallMessageId && !hasConversationEnded}
+                isNewlyAddedAiMessage={msg.id === newlyAddedAiMessageId && !hasConversationEnded}
                 forceFinishAnimation={forceFinishAnimationForMessageId === msg.id}
               />
             ))}
