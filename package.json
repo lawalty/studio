@@ -1,3 +1,4 @@
+
 {
   "name": "nextn",
   "version": "0.1.0",
@@ -9,7 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@genkit-ai/googleai": "^1.0.0",
+    "@genkit-ai/googleai": "^1.0.1",
     "@google-cloud/storage": "^7.11.0",
     "@opentelemetry/exporter-jaeger": "^2.0.1",
     "@opentelemetry/winston-transport": "^0.14.0",
@@ -38,15 +39,15 @@
     "cmdk": "^1.0.0",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
-    "firebase": "^11.5.0",
-    "firebase-admin": "^12.1.1",
+    "firebase": "10.12.2",
+    "firebase-admin": "12.1.1",
     "fs": "^0.0.1-security",
     "genkit": "^1.0.0",
     "handlebars": "^4.7.8",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
     "lucide-react": "^0.394.0",
-    "next": "^14.2.30",
+    "next": "14.2.4",
     "next-themes": "^0.3.0",
     "react": "^18",
     "react-day-picker": "^8.10.1",
