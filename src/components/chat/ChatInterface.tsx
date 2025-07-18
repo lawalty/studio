@@ -8,7 +8,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
-import InitialGreetingHandler from './InitialGreetingHandler';
 import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { useToast } from "@/hooks/use-toast";
@@ -143,7 +142,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const [showPreparingGreeting, setShowPreparingGreeting] = useState(false);
+    const [showPreparingGreeting, setShowPreparingGreeting] = useState(true);
 
     const messagesRef = useRef<Message[]>([]);
     useEffect(() => {
@@ -173,7 +172,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     // Hooks
     const router = useRouter();
-    const { language } = useLanguage();
+    const { language, translate } = useLanguage();
+    const languageRef = useRef(language);
+    const translateRef = useRef(translate);
+    useEffect(() => {
+        languageRef.current = language;
+        translateRef.current = translate;
+    }, [language, translate]);
+
     const { toast, dismiss: dismissAllToasts } = useToast();
 
     // UI Text (State for translations)
@@ -211,7 +217,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }));
 
         try {
-            const { personaTraits, conversationalTopics } = configRef.current;
+            const { personaTraits, conversationalTopics, useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
             
             const cleanupAndResolve = () => {
                 setIsSpeaking(false);
@@ -230,7 +236,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     return;
                 }
             
-                const { useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
                 const tryBrowserFallback = () => {
                     if (typeof window !== 'undefined' && window.speechSynthesis) {
                       const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
@@ -281,7 +286,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const result: GenerateChatResponseOutput = await generateChatResponse({
                 personaTraits, conversationalTopics,
                 chatHistory: historyForGenkit,
-                language: language,
+                language: languageRef.current,
             });
 
             addMessage(result.aiResponse, 'model', result.pdfReference);
@@ -295,11 +300,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             console.error("Error in generateChatResponse:", error);
             const errorMessage = uiText.errorEncountered;
             addMessage(errorMessage, 'model');
-            // speak(errorMessage);
         } finally {
             setIsSendingMessage(false);
         }
-    }, [addMessage, communicationMode, hasConversationEnded, isListening, isSendingMessage, language, uiText.errorEncountered]);
+    }, [addMessage, communicationMode, hasConversationEnded, isListening, isSendingMessage, uiText.errorEncountered]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0) return;
@@ -418,7 +422,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
+        recognition.lang = languageRef.current === 'Spanish' ? 'es-MX' : 'en-US';
 
         recognition.onresult = (event: any) => {
           let interimTranscript = '';
@@ -443,7 +447,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         recognition.onend = () => {
           setIsListening(false);
-          setInputValue('');
         };
 
         recognition.onerror = (event: any) => {
@@ -461,16 +464,77 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 clearTimeout(speechRecognitionTimerRef.current);
             }
         };
-    }, [language, communicationMode, toast, uiText]);
+    }, [communicationMode, toast, uiText]);
 
+    useEffect(() => {
+      if(!isLoadingConfig && !aiHasInitiatedConversation) {
+        const initConversation = async () => {
+          const { customGreeting, personaTraits, conversationalTopics, useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
+    
+          const speak = (textToSpeak: string) => {
+              if (typeof window === 'undefined' || communicationMode === 'text-only' || !textToSpeak) return;
+              
+              const playAudio = (src: string) => {
+                  const audio = new Audio(src);
+                  audio.play().catch(e => console.error("Audio playback failed", e));
+              };
+              
+              const tryBrowserFallback = () => {
+                  if (window.speechSynthesis) {
+                      const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
+                      window.speechSynthesis.speak(utterance);
+                  }
+              };
+              
+              if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+                  fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, {
+                      method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey },
+                      body: JSON.stringify({ text: textToSpeak.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
+                  })
+                  .then(response => {
+                      if (!response.ok) throw new Error(`API Error ${response.status}`);
+                      return response.blob();
+                  })
+                  .then(audioBlob => { playAudio(URL.createObjectURL(audioBlob)); })
+                  .catch(e => { console.error("ElevenLabs API Error:", e); tryBrowserFallback(); });
+              } else {
+                  tryBrowserFallback();
+              }
+          };
+    
+          let greetingToUse = customGreeting?.trim() ? customGreeting.trim() : "";
+    
+          if (!greetingToUse) {
+            try {
+              const result = await generateChatResponse({ personaTraits, conversationalTopics, language: languageRef.current, chatHistory: [] });
+              greetingToUse = result.aiResponse;
+            } catch (error) {
+              console.error("Error generating initial greeting:", error);
+              greetingToUse = languageRef.current === 'Spanish' ? "Hola! ¿Como puedo ayudarte hoy?" : "Hello! How can I help you today?";
+            }
+          }
+    
+          if (languageRef.current !== 'English' && customGreeting) {
+            greetingToUse = await translateRef.current(greetingToUse);
+          }
+    
+          addMessage(greetingToUse, 'model');
+          setShowPreparingGreeting(false);
+          setAiHasInitiatedConversation(true);
+          speak(greetingToUse);
+        };
+    
+        initConversation();
+      }
+    }, [isLoadingConfig, aiHasInitiatedConversation, addMessage, communicationMode]);
+    
     // New Effect to handle sending the message after listening stops
     useEffect(() => {
         if (!isListening && finalTranscriptRef.current.trim()) {
             handleSendMessage(finalTranscriptRef.current.trim());
             finalTranscriptRef.current = ''; // Clear the ref after sending
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isListening]); // Only depends on isListening
+    }, [isListening, handleSendMessage]); // Only depends on isListening
 
     // Effect for initial data load
     useEffect(() => {
@@ -617,13 +681,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       }
       if (!aiHasInitiatedConversation) {
         return (
-            <InitialGreetingHandler
-              config={configRef.current}
-              addMessage={addMessage}
-              setAiHasInitiatedConversation={setAiHasInitiatedConversation}
-              setShowPreparingGreeting={setShowPreparingGreeting}
-              communicationMode={communicationMode}
-            />
+          <div className="flex flex-col items-center justify-center h-full text-center py-8">
+            <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
+            <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.preparingGreeting}</h2>
+            <p className="mt-2 text-muted-foreground">{uiText.pleaseWait}</p>
+          </div>
         );
       }
       if (communicationMode === 'audio-only') {
@@ -702,5 +764,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
