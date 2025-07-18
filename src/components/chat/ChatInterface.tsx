@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
+import InitialGreetingHandler from './InitialGreetingHandler';
 import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { useToast } from "@/hooks/use-toast";
@@ -191,12 +192,70 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         chatLogTitle: "Chat with AI Blair"
     });
 
-    const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference']): string => {
-        const newMessageId = Date.now().toString() + Math.random();
-        const newMessage: Message = { id: newMessageId, text, sender, timestamp: Date.now(), pdfReference };
+    const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference']) => {
+        const newMessage: Message = { id: uuidv4(), text, sender, timestamp: Date.now(), pdfReference };
         setMessages(prev => [...prev, newMessage]);
-        return newMessageId;
     }, []);
+
+    const speakText = useCallback((textToSpeak: string) => {
+        if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+        if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
+    
+        const cleanupAndResolve = () => {
+            setIsSpeaking(false);
+            if (elevenLabsAudioRef.current?.src.startsWith('blob:')) {
+                URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+            }
+            if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
+        };
+    
+        if (communicationMode === 'text-only' || textToSpeak.trim() === "") {
+            cleanupAndResolve();
+            return;
+        }
+    
+        const { useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
+        const tryBrowserFallback = () => {
+            if (typeof window !== 'undefined' && window.speechSynthesis) {
+              const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
+              utterance.onstart = () => setIsSpeaking(true);
+              utterance.onend = cleanupAndResolve;
+              utterance.onerror = (e) => {
+                console.error("Browser TTS Error:", e);
+                cleanupAndResolve();
+              };
+              window.speechSynthesis.speak(utterance);
+            } else {
+              cleanupAndResolve();
+            }
+        };
+        
+        if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+            fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
+                method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
+                body: JSON.stringify({ text: textToSpeak.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
+            }).then(response => {
+                if (!response.ok) throw new Error(`API Error ${response.status}`);
+                return response.blob();
+            }).then(audioBlob => {
+                if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
+                const audio = elevenLabsAudioRef.current;
+                audio.src = URL.createObjectURL(audioBlob);
+                audio.onplay = () => setIsSpeaking(true);
+                audio.onended = cleanupAndResolve;
+                audio.onerror = (e) => {
+                    console.error("ElevenLabs Audio Playback Error:", e);
+                    tryBrowserFallback();
+                };
+                return audio.play();
+            }).catch(e => {
+                console.error("ElevenLabs API Error:", e);
+                tryBrowserFallback();
+            });
+        } else {
+            tryBrowserFallback();
+        }
+    }, [communicationMode]);
 
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0) return;
@@ -279,67 +338,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             parts: [{ text: msg.text }] 
         }));
 
-        const speakTextAndAddMessage = async (textToSpeak: string, pdfRef?: Message['pdfReference']) => {
-            addMessage(textToSpeak, 'model', pdfRef);
-
-            if (typeof window !== 'undefined') window.speechSynthesis.cancel();
-            if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
-
-            const cleanupAndResolve = () => {
-                setIsSpeaking(false);
-                if (elevenLabsAudioRef.current?.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-                }
-                if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
-            };
-
-            if (communicationMode === 'text-only' || textToSpeak.trim() === "") {
-                cleanupAndResolve();
-                return;
-            }
-
-            const { useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
-            const tryBrowserFallback = () => {
-                if (typeof window !== 'undefined' && window.speechSynthesis) {
-                  const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
-                  utterance.onstart = () => { setIsSpeaking(true); };
-                  utterance.onend = cleanupAndResolve;
-                  utterance.onerror = cleanupAndResolve;
-                  window.speechSynthesis.speak(utterance);
-                } else {
-                  cleanupAndResolve();
-                }
-            };
-            
-            if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-                try {
-                    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
-                        method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
-                        body: JSON.stringify({ text: textToSpeak.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
-                    });
-                    if (!response.ok) throw new Error(`API Error ${response.status}`);
-                    
-                    const audioBlob = await response.blob();
-                    if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-                    const audio = elevenLabsAudioRef.current;
-                    audio.src = URL.createObjectURL(audioBlob);
-                    audio.onplay = () => { setIsSpeaking(true); };
-                    audio.onended = cleanupAndResolve;
-                    audio.onerror = () => tryBrowserFallback();
-                    audio.play().catch(() => tryBrowserFallback());
-                } catch(e) {
-                    tryBrowserFallback();
-                }
-            } else {
-                tryBrowserFallback();
-            }
-        };
-
         try {
             const { personaTraits, conversationalTopics } = configRef.current;
             
             if (communicationMode !== 'text-only' && text.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
-                await speakTextAndAddMessage(randomAckPhrase);
+                speakText(randomAckPhrase);
+                addMessage(randomAckPhrase, 'model');
             }
             
             const result: GenerateChatResponseOutput = await generateChatResponse({
@@ -348,7 +352,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 language: language,
             });
 
-            await speakTextAndAddMessage(result.aiResponse, result.pdfReference);
+            addMessage(result.aiResponse, 'model', result.pdfReference);
+            speakText(result.aiResponse);
 
             if (result.shouldEndConversation) {
                 setHasConversationEnded(true);
@@ -357,11 +362,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } catch (error) {
             console.error("Error in generateChatResponse:", error);
             const errorMessage = uiText.errorEncountered;
-            await speakTextAndAddMessage(errorMessage);
+            addMessage(errorMessage, 'model');
+            speakText(errorMessage);
         } finally {
             setIsSendingMessage(false);
         }
-    }, [hasConversationEnded, isSendingMessage, isListening, addMessage, communicationMode, language, uiText.errorEncountered]);
+    }, [hasConversationEnded, isSendingMessage, isListening, addMessage, communicationMode, language, uiText.errorEncountered, speakText]);
     
     // Effect for ending chat and archiving
     useEffect(() => {
@@ -503,89 +509,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         fetchAllData();
     }, [toast]);
     
-    // Effect for initial greeting
-    useEffect(() => {
-        if (isLoadingConfig || aiHasInitiatedConversation || hasConversationEnded || messages.length > 0) {
-            return;
-        }
-
-        const initConversation = async () => {
-            setAiHasInitiatedConversation(true);
-            setShowPreparingGreeting(true);
-
-            let greetingToUse = configRef.current.customGreeting?.trim() ? configRef.current.customGreeting.trim() : "";
-            if (!greetingToUse) {
-                try {
-                    const result = await generateChatResponse({
-                        personaTraits: configRef.current.personaTraits, 
-                        conversationalTopics: configRef.current.conversationalTopics, 
-                        language, chatHistory: []
-                    });
-                    greetingToUse = result.aiResponse;
-                } catch (error) {
-                    greetingToUse = language === 'Spanish' ? "Hola! ¿Como puedo ayudarte hoy?" : "Hello! How can I help you today?";
-                }
-            }
-            if (language !== 'English' && configRef.current.customGreeting) {
-              greetingToUse = await translate(greetingToUse);
-            }
-
-            addMessage(greetingToUse, 'model');
-
-            if (communicationMode === 'text-only' || greetingToUse.trim() === "") {
-                setShowPreparingGreeting(false);
-                return;
-            }
-
-            const { useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
-            const cleanupAndResolve = () => {
-                setIsSpeaking(false);
-                setShowPreparingGreeting(false);
-                if (elevenLabsAudioRef.current?.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-                }
-                if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
-            };
-
-            const tryBrowserFallback = () => {
-                if (typeof window !== 'undefined' && window.speechSynthesis) {
-                  const utterance = new SpeechSynthesisUtterance(greetingToUse.replace(/EZCORP/gi, "easy corp"));
-                  utterance.onstart = () => { setIsSpeaking(true); };
-                  utterance.onend = cleanupAndResolve;
-                  utterance.onerror = cleanupAndResolve;
-                  window.speechSynthesis.speak(utterance);
-                } else {
-                  cleanupAndResolve();
-                }
-            };
-
-            if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-                try {
-                    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
-                        method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
-                        body: JSON.stringify({ text: greetingToUse.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
-                    });
-                    if (!response.ok) throw new Error(`API Error ${response.status}`);
-                    const audioBlob = await response.blob();
-                    if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-                    const audio = elevenLabsAudioRef.current;
-                    audio.src = URL.createObjectURL(audioBlob);
-                    audio.onplay = () => { setIsSpeaking(true); };
-                    audio.onended = cleanupAndResolve;
-                    audio.onerror = () => tryBrowserFallback();
-                    audio.play().catch(() => tryBrowserFallback());
-                } catch(e) {
-                    tryBrowserFallback();
-                }
-            } else {
-                tryBrowserFallback();
-            }
-        };
-        
-        initConversation();
-    }, [isLoadingConfig, aiHasInitiatedConversation, hasConversationEnded, messages.length, language, translate, addMessage, communicationMode]);
-
-
     // Component lifecycle cleanup
     useEffect(() => {
         return () => {
@@ -691,8 +614,20 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       : messages;
 
     const mainContent = () => {
-      if (isLoadingConfig && !aiHasInitiatedConversation) {
+      if (isLoadingConfig) {
           return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2> <p className="mt-2 text-muted-foreground">{uiText.pleaseWait}</p> </div> );
+      }
+      if (!aiHasInitiatedConversation) {
+        return (
+            <InitialGreetingHandler
+              config={configRef.current}
+              addMessage={addMessage}
+              speakText={speakText}
+              setAiHasInitiatedConversation={setAiHasInitiatedConversation}
+              setShowPreparingGreeting={setShowPreparingGreeting}
+              communicationMode={communicationMode}
+            />
+        );
       }
       if (communicationMode === 'audio-only') {
         return (
