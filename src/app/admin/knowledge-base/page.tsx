@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -408,6 +408,17 @@ export default function KnowledgeBasePage() {
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button variant="ghost" size="icon" asChild disabled={!source.downloadURL || anyOperationGloballyInProgress}>
+                                                                <a href={source.downloadURL} target="_blank" rel="noopener noreferrer">
+                                                                    <Eye size={16} />
+                                                                </a>
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>View File</p></TooltipContent>
+                                                    </Tooltip>
+
                                                     <AlertDialog>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
@@ -584,5 +595,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
