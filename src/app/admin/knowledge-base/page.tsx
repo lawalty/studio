@@ -218,106 +218,108 @@ export default function KnowledgeBasePage() {
 
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
-      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
-      return;
+        toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
+        return;
     }
     if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
-      toast({ title: "Missing Information", description: "Please link the Spanish PDF to its English source document.", variant: "destructive" });
-      return;
+        toast({ title: "Missing Information", description: "Please link the Spanish PDF to its English source document.", variant: "destructive" });
+        return;
     }
-  
+
     const fileToUpload = selectedFile;
     const targetLevel = selectedLevelForUpload;
     const topic = selectedTopicForUpload;
     const description = uploadDescription;
     const sourceId = uuidv4();
     const mimeType = fileToUpload.type || 'application/octet-stream';
-  
+
     setIsCurrentlyUploading(true);
     setOperationStatus(sourceId, true);
     toast({ title: `Processing "${fileToUpload.name}"...`, description: "This may take a minute. Please wait." });
-  
-    const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
-    const sourceDocRef = doc(db, collectionName, sourceId);
-  
+
+    let sourceDocRef: ReturnType<typeof doc> | null = null;
+
     try {
-      // Step 1: Create initial placeholder metadata in Firestore
-      const newSourceData: Partial<KnowledgeSource> = {
-        sourceName: fileToUpload.name, description, topic, level: targetLevel,
-        createdAt: new Date().toISOString(),
-        indexingStatus: 'processing',
-        indexingError: 'Initializing upload...',
-        mimeType,
-      };
-      if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
-        newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
-      }
-      await setDoc(sourceDocRef, newSourceData);
-  
-      // Step 2: Upload file to Cloud Storage
-      await updateDoc(sourceDocRef, { indexingError: 'Uploading to cloud storage...' });
-      const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-      const fileRef = storageRef(storage, storagePath);
-      await uploadBytes(fileRef, fileToUpload);
-      const downloadURL = await getDownloadURL(fileRef);
-  
-      // Update doc with download URL
-      await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
-  
-      // Step 3: Extract text from the now-uploaded file
-      const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-      if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-        throw new Error(extractionResult.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
-      }
-  
-      // Step 4: Call the indexing flow
-      await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
-      
-      const indexInput: Parameters<typeof indexDocument>[0] = {
-        sourceId,
-        sourceName: fileToUpload.name,
-        text: extractionResult.extractedText,
-        level: targetLevel,
-        topic,
-        downloadURL
-      };
-      if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
-        indexInput.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
-      }
-      const indexingResult = await indexDocument(indexInput);
-  
-      // Step 5: Final Validation
-      if (!indexingResult.success || indexingResult.chunksWritten === 0) {
-        throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
-      }
-      
-      // Final success toast - ONLY show if everything worked
-      toast({ title: "Processing Complete!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
-  
-      // Reset form on full success
-      setSelectedFile(null);
-      setUploadDescription('');
-      setLinkedEnglishSourceIdForUpload('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-  
+        // Step 1: Upload file to Cloud Storage FIRST.
+        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+        const fileRef = storageRef(storage, storagePath);
+        await uploadBytes(fileRef, fileToUpload);
+        const downloadURL = await getDownloadURL(fileRef);
+
+        // Step 2: Now that upload is successful, create the Firestore document.
+        const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
+        sourceDocRef = doc(db, collectionName, sourceId);
+        
+        const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
+            sourceName: fileToUpload.name, description, topic, level: targetLevel,
+            createdAt: new Date().toISOString(),
+            indexingStatus: 'processing',
+            indexingError: 'Upload complete. Starting text extraction...',
+            mimeType,
+            downloadURL,
+        };
+        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
+            newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+        }
+        await setDoc(sourceDocRef, newSourceData);
+
+        // Step 3: Extract text from the now-uploaded file.
+        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+        if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+            throw new Error(extractionResult.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
+        }
+
+        // Step 4: Call the indexing flow.
+        await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
+
+        const indexInput: Parameters<typeof indexDocument>[0] = {
+            sourceId,
+            sourceName: fileToUpload.name,
+            text: extractionResult.extractedText,
+            level: targetLevel,
+            topic,
+            downloadURL
+        };
+        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
+            indexInput.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+        }
+        const indexingResult = await indexDocument(indexInput);
+
+        // Step 5: Final Validation.
+        if (!indexingResult.success || indexingResult.chunksWritten === 0) {
+            throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
+        }
+
+        // The ONE final success toast.
+        toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
+
+        // Reset form on full success.
+        setSelectedFile(null);
+        setUploadDescription('');
+        setLinkedEnglishSourceIdForUpload('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+
     } catch (e: any) {
-      const errorMessage = `Processing Failed: ${e.message || 'Unknown error.'}`;
-      console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
-      toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
-      
-      try {
-        await updateDoc(sourceDocRef, {
-          indexingStatus: 'failed',
-          indexingError: errorMessage,
-        });
-      } catch (updateError) {
-        console.error("Critical: Failed to write final failure status to Firestore.", updateError);
-      }
+        const errorMessage = `Processing Failed: ${e.message || 'Unknown error.'}`;
+        console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
+        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+
+        // If the document was already created in Firestore, update its status to failed.
+        if (sourceDocRef) {
+            try {
+                await updateDoc(sourceDocRef, {
+                    indexingStatus: 'failed',
+                    indexingError: errorMessage,
+                });
+            } catch (updateError) {
+                console.error("Critical: Failed to write final failure status to Firestore.", updateError);
+            }
+        }
     } finally {
-      setIsCurrentlyUploading(false);
-      setOperationStatus(sourceId, false);
+        setIsCurrentlyUploading(false);
+        setOperationStatus(sourceId, false);
     }
   };
 
