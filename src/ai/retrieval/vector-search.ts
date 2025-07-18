@@ -35,12 +35,12 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
-  const embedding = await ai.embed({
+  const embeddingVector = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
   
-  if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+  if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
@@ -56,7 +56,7 @@ export async function searchKnowledgeBase({
         chunksQuery = chunksQuery.where('topic', '==', topic);
       }
       
-      const vectorQuery = chunksQuery.findNearest('embedding', embedding, {
+      const vectorQuery = chunksQuery.findNearest('embedding', embeddingVector, {
           limit: limit,
           distanceMeasure: 'COSINE'
       });
