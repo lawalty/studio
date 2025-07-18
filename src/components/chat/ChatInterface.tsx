@@ -49,20 +49,10 @@ const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 500;
-const ACKNOWLEDGEMENT_PHRASES = [
-  "Okay, good question. Let me gather that information for you.",
-  "Just a moment, I'm preparing your detailed response.",
-  "That's an interesting point! This might take me a few seconds to look into.",
-  "Let me check on that for you.",
-  "One moment while I find the best answer.",
-];
+const randomAckPhrase = "Let me check on that for you.";
 
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
-
-interface ChatInterfaceProps {
-  communicationMode: CommunicationMode;
-}
 
 interface ChatState {
     isSpeaking: boolean;
@@ -135,29 +125,6 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
   html += `</div>`;
   return html;
 }
-
-const getUserNameFromHistory = (history: Message[]): string | null => {
-  for (let i = history.length - 1; i >= 0; i--) {
-    const message = history[i];
-    if (message.sender === 'user') {
-      const text = message.text;
-      const namePatterns = [
-        /my name is\s+([A-Za-z]+)/i,
-        /i'm\s+([A-Za-z]+)/i,
-        /i am\s+([A-Za-z]+)/i,
-        /call me\s+([A-Za-z]+)/i,
-      ];
-      for (const pattern of namePatterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-          const name = match[1];
-          return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
-        }
-      }
-    }
-  }
-  return null;
-};
 
 const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
   if (allMessages.length === 0) {
@@ -249,8 +216,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-
+  
   const stateRef = useRef<ChatState>({
     isSpeaking: false,
     isListening: false,
@@ -260,7 +226,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     communicationMode,
     messages: [],
   });
-
+  
   useEffect(() => {
     stateRef.current = {
       isSpeaking,
@@ -272,12 +238,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       messages,
     };
   }, [isSpeaking, isListening, isSendingMessage, hasConversationEnded, communicationMode, messages]);
-
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   const currentAiMessageIdRef = useRef<string | null>(null);
   const speechRecognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -376,7 +336,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       currentAiMessageIdRef.current = messageIdForAnimationSync;
 
       const cleanupAndResolve = (duration: number) => {
-        // This inner function is defined within speakText's scope, so it doesn't need to be in its dependency array
         const wasSpeakingBeforeEnd = stateRef.current.isSpeaking;
         const endedMessageId = currentAiMessageIdRef.current;
     
@@ -400,26 +359,24 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             return;
         }
         if (stateRef.current.communicationMode === 'audio-only' && !stateRef.current.isEndingSession && !stateRef.current.hasConversationEnded) {
-          // It needs toggleListening, but toggleListening needs speakText. This is a circular dependency.
-          // The best way to handle this is to inline the needed part of toggleListening here.
-          if (!recognitionRef.current && (stateRef.current.communicationMode === 'audio-only' || stateRef.current.communicationMode === 'audio-text')) {
-              toast({ title: uiText.micNotReadyTitle, description: uiText.micNotReadyDesc, variant: "destructive" });
-              return;
-          }
-          if (stateRef.current.isListening) {
-             if (recognitionRef.current) { recognitionRef.current.stop(); }
-          } else {
-            if (stateRef.current.hasConversationEnded || stateRef.current.isSpeaking || stateRef.current.isSendingMessage) return;
-            try {
-              recognitionRef.current?.start();
-              setIsListening(true);
-            } catch (startError: any) {
-              if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
-                toast({ variant: 'destructive', title: uiText.micErrorTitle, description: uiText.micErrorDesc.replace('{error}', `${startError.name}: ${startError.message || 'Could not start microphone.'}`) });
-              }
-              setIsListening(false);
+            if (!recognitionRef.current && (stateRef.current.communicationMode === 'audio-only' || stateRef.current.communicationMode === 'audio-text')) {
+                toast({ title: uiText.micNotReadyTitle, description: uiText.micNotReadyDesc, variant: "destructive" });
+                return;
             }
-          }
+            if (stateRef.current.isListening) {
+               if (recognitionRef.current) { recognitionRef.current.stop(); }
+            } else {
+              if (stateRef.current.hasConversationEnded || stateRef.current.isSpeaking || stateRef.current.isSendingMessage) return;
+              try {
+                recognitionRef.current?.start();
+                setIsListening(true);
+              } catch (startError: any) {
+                if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
+                  toast({ variant: 'destructive', title: uiText.micErrorTitle, description: uiText.micErrorDesc.replace('{error}', `${startError.name}: ${startError.message || 'Could not start microphone.'}`) });
+                }
+                setIsListening(false);
+              }
+            }
         }
         resolveSpeakText(duration);
       };
@@ -512,16 +469,12 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         language: language,
       };
       
-      const translatedAckPhrases = [
-        uiText.goodQuestion, uiText.preparingResponse, uiText.interestingPoint, uiText.letMeCheck, uiText.oneMoment
-      ];
-
-      const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-      
-      if (stateRef.current.communicationMode !== 'text-only' && result.aiResponse.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
+      if (stateRef.current.communicationMode !== 'text-only' && text.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
         await speakText(randomAckPhrase, null, undefined, true);
       }
 
+      const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
+      
       let newAiMessageId: string | null = null;
       const onSpeechActuallyStarting = () => {
         setIsSendingMessage(false);
@@ -558,7 +511,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     if (!stateRef.current.isListening) return;
 
     if (recognitionRef.current) {
-      recognitionRef.current.stop(); // onend will handle logic
+      recognitionRef.current.stop();
     }
   }, []);
 
