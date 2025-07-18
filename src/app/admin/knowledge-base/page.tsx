@@ -235,13 +235,13 @@ export default function KnowledgeBasePage() {
   
     setIsCurrentlyUploading(true);
     setOperationStatus(sourceId, true);
+    toast({ title: `Processing "${fileToUpload.name}"...`, description: "This may take a minute. Please wait." });
   
     const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
     const sourceDocRef = doc(db, collectionName, sourceId);
   
     try {
       // Step 1: Create initial placeholder metadata in Firestore
-      toast({ title: "Step 1 of 4: Initializing...", description: `Preparing "${fileToUpload.name}".` });
       const newSourceData: Partial<KnowledgeSource> = {
         sourceName: fileToUpload.name, description, topic, level: targetLevel,
         createdAt: new Date().toISOString(),
@@ -260,21 +260,17 @@ export default function KnowledgeBasePage() {
       const fileRef = storageRef(storage, storagePath);
       await uploadBytes(fileRef, fileToUpload);
       const downloadURL = await getDownloadURL(fileRef);
-      toast({ title: "Step 2 of 4: Upload Complete", description: "File successfully saved to cloud storage." });
   
       // Update doc with download URL
       await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
   
       // Step 3: Extract text from the now-uploaded file
-      toast({ title: "Step 3 of 4: Extracting Text...", description: "AI is reading the document." });
       const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
       if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
         throw new Error(extractionResult.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
       }
-      toast({ title: "Step 3 of 4: Text Extracted", description: "Successfully extracted text content." });
   
       // Step 4: Call the indexing flow
-      toast({ title: "Step 4 of 4: Indexing Content...", description: "Generating vector embeddings for the RAG pipeline." });
       await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
       
       const indexInput: Parameters<typeof indexDocument>[0] = {
@@ -295,7 +291,7 @@ export default function KnowledgeBasePage() {
         throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
       }
       
-      // Final success toast
+      // Final success toast - ONLY show if everything worked
       toast({ title: "Processing Complete!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
   
       // Reset form on full success
@@ -648,5 +644,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
