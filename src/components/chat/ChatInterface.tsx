@@ -17,7 +17,6 @@ import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
 
 
@@ -150,8 +149,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
         personaTraits: DEFAULT_PERSONA_TRAITS,
         conversationalTopics: DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE,
-        elevenLabsApiKey: null as string | null,
-        elevenLabsVoiceId: null as string | null,
         useTtsApi: true,
         responsePauseTimeMs: DEFAULT_USER_SPEECH_PAUSE_TIME_MS,
         splashScreenWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE,
@@ -446,8 +443,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
             if (apiKeysSnap.exists()) {
               const keys = apiKeysSnap.data();
-              configRef.current.elevenLabsApiKey = keys.tts || null;
-              configRef.current.elevenLabsVoiceId = keys.voiceId || null;
               configRef.current.useTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
             }
             if (siteAssetsSnap.exists()) {
