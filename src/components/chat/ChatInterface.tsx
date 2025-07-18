@@ -9,13 +9,17 @@ import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
 import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
+import { indexDocument } from '@/ai/flows/index-document-flow';
+import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Label } from '@/components/ui/label';
 import { Mic, Square as SquareIcon, Power, DatabaseZap, AlertTriangle, Info, Loader2, Save, RotateCcw } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useLanguage } from '@/context/LanguageContext';
+import { v4 as uuidv4 } from 'uuid';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
 export interface Message {
@@ -612,6 +616,111 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     initializeSpeechRecognition();
   }, [language, responsePauseTimeMs, toast, handleSendMessage, stopListeningAndProcess, inputValue, uiText]);
 
+  const archiveAndIndexChat = useCallback(async () => {
+    if (messages.length === 0) return;
+
+    toast({
+        title: "Archiving Conversation...",
+        description: "This chat is being saved to the knowledge base.",
+    });
+
+    // 1. Generate PDF blob
+    const { default: jsPDF } = await import('jspdf');
+    const { default: html2canvas } = await import('html2canvas');
+
+    const tempContainer = document.createElement('div');
+    tempContainer.style.width = '700px';
+    tempContainer.style.position = 'absolute';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.top = '-9999px';
+    tempContainer.style.fontFamily = 'Inter, sans-serif';
+
+    const chatLogHtml = generateChatLogHtml(messages, avatarSrc, "Chat Transcript");
+    tempContainer.innerHTML = chatLogHtml;
+    document.body.appendChild(tempContainer);
+
+    try {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const canvas = await html2canvas(tempContainer, { scale: 2, useCORS: true, backgroundColor: '#FFFFFF', logging: false });
+        document.body.removeChild(tempContainer);
+
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+        const pageMargin = 20;
+        const contentWidth = pdf.internal.pageSize.getWidth() - (pageMargin * 2);
+        const imgHeight = (canvas.height * contentWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = pageMargin;
+
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
+        heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
+
+        while (heightLeft > 0) {
+            position = position - (pdf.internal.pageSize.getHeight() - (pageMargin * 2)) + pageMargin;
+            pdf.addPage();
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
+            heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
+        }
+
+        const pdfBlob = pdf.output('blob');
+        const sourceId = uuidv4();
+        const timestamp = new Date().toISOString().split('T')[0];
+        const fileName = `Chat-Transcript-${timestamp}-${sourceId.substring(0, 8)}.pdf`;
+
+        // 2. Upload to storage & run indexing flow
+        const sourceDocRef = doc(db, 'kb_chat_history_meta_v1', sourceId);
+        await setDoc(sourceDocRef, {
+            sourceName: fileName,
+            description: `Archived chat from ${new Date().toLocaleString()}`,
+            topic: 'Chat History',
+            level: 'Chat History',
+            createdAt: new Date().toISOString(),
+            indexingStatus: 'processing',
+            indexingError: 'Uploading chat history PDF...',
+            mimeType: 'application/pdf',
+        });
+
+        const storagePath = `chat_history_files/${sourceId}-${fileName}`;
+        const fileRef = storageRef(storage, storagePath);
+        await uploadBytes(fileRef, pdfBlob);
+        const downloadURL = await getDownloadURL(fileRef);
+
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text...' });
+
+        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+        if (extractionResult.error || !extractionResult.extractedText?.trim()) {
+            throw new Error(extractionResult.error || 'Text extraction failed.');
+        }
+
+        await updateDoc(sourceDocRef, { indexingError: 'Indexing content...' });
+        const indexingResult = await indexDocument({
+            sourceId,
+            sourceName: fileName,
+            text: extractionResult.extractedText,
+            level: 'Chat History',
+            topic: 'Chat History',
+            downloadURL,
+        });
+
+        if (!indexingResult.success) {
+            throw new Error(indexingResult.error || 'Indexing failed.');
+        }
+
+        toast({
+            title: "Conversation Archived",
+            description: "Successfully saved to the knowledge base.",
+        });
+
+    } catch (error: any) {
+        console.error("Failed to archive and index chat:", error);
+        toast({
+            title: "Archiving Failed",
+            description: `Could not save chat to knowledge base: ${error.message}`,
+            variant: "destructive",
+        });
+        if (tempContainer.parentElement) document.body.removeChild(tempContainer);
+    }
+  }, [messages, avatarSrc, toast]);
+
 
   const handleEndChatManually = () => {
     stateRef.current.isEndingSession = true;
@@ -622,6 +731,12 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     }
     setHasConversationEnded(true);
   };
+  
+  useEffect(() => {
+      if (hasConversationEnded) {
+          archiveAndIndexChat();
+      }
+  }, [hasConversationEnded, archiveAndIndexChat]);
 
   const handleSaveConversationAsPdf = async () => {
     toast({ title: "Generating PDF...", description: "This may take a moment for long conversations." });

@@ -4,7 +4,7 @@
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
  *
  * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It searches 'High' priority documents first,
- *   then 'Medium', then 'Low', returning the first set of relevant results it finds that meet a confidence threshold.
+ *   then 'Medium', then 'Low', then 'Chat History', returning the first set of relevant results it finds that meet a confidence threshold.
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
@@ -18,7 +18,7 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firesto
 // A lower value makes the search stricter, and a higher value makes it more lenient.
 const MAX_DISTANCE_THRESHOLD = 0.7; 
 
-const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low')[]> = ['High', 'Medium', 'Low'];
+const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
 
 interface SearchResult {
   text: string;

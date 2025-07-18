@@ -27,7 +27,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 
-export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Archive';
+export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Chat History' | 'Archive';
 
 interface KnowledgeSource {
   id: string;
@@ -48,12 +48,13 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'High': { collectionName: 'kb_high_meta_v1', title: 'High Priority', description: 'Manage high priority sources.' },
   'Medium': { collectionName: 'kb_medium_meta_v1', title: 'Medium Priority', description: 'Manage medium priority sources.' },
   'Low': { collectionName: 'kb_low_meta_v1', title: 'Low Priority', description: 'Manage low priority sources.' },
+  'Chat History': { collectionName: 'kb_chat_history_meta_v1', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
 export default function KnowledgeBasePage() {
-  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Archive': [] });
-  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Archive': true });
+  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Chat History': [], 'Archive': [] });
+  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Chat History': true, 'Archive': true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
@@ -341,7 +342,7 @@ export default function KnowledgeBasePage() {
     const levelIsLoading = isLoading[level];
     
     return (
-        <AccordionItem value={level.toLowerCase()} key={level}>
+        <AccordionItem value={level.toLowerCase().replace(' ', '-')} key={level}>
           <AccordionTrigger className="text-xl font-headline">
             {config.title} Knowledge Base ({levelSources.length})
           </AccordionTrigger>
@@ -575,6 +576,7 @@ export default function KnowledgeBasePage() {
             {renderKnowledgeBaseLevel('High')}
             {renderKnowledgeBaseLevel('Medium')}
             {renderKnowledgeBaseLevel('Low')}
+            {renderKnowledgeBaseLevel('Chat History')}
             {renderKnowledgeBaseLevel('Archive')}
           </Accordion>
         </div>
