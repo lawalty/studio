@@ -1,11 +1,11 @@
 
 'use client';
 
-import type { Message, CommunicationMode } from '@/components/chat/ChatInterface';
+import type { Message } from '@/components/chat/ChatInterface';
 import { cn } from "@/lib/utils";
 import { User, Bot, Download } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 // Helper function to parse basic markdown (**bold**) and newlines
 const renderTextWithMarkdown = (text: string): JSX.Element => {
@@ -32,28 +32,14 @@ const renderTextWithMarkdown = (text: string): JSX.Element => {
 interface ChatBubbleProps {
   message: Message;
   avatarSrc: string;
-  typingSpeedMs: number;
-  animationSyncFactor: number;
-  communicationMode: CommunicationMode;
-  isNewlyAddedAiMessage: boolean;
-  forceFinishAnimation: boolean;
 }
 
 export default function ChatBubble({
   message,
   avatarSrc,
-  typingSpeedMs,
-  animationSyncFactor,
-  communicationMode,
-  isNewlyAddedAiMessage,
-  forceFinishAnimation
 }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
   const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/40x40.png";
-
-  const [displayedContent, setDisplayedContent] = useState<React.ReactNode>(null);
-  const [isAnimationComplete, setIsAnimationComplete] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [formattedTime, setFormattedTime] = useState('');
 
   useEffect(() => {
@@ -66,102 +52,6 @@ export default function ChatBubble({
       })
     );
   }, [message.timestamp]);
-
-  useEffect(() => {
-    // If the animation is already complete for this bubble, do not restart it on re-render.
-    if (isAnimationComplete) {
-      return;
-    }
-
-    const shouldAnimate = message.sender === 'model' && isNewlyAddedAiMessage;
-
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    if (shouldAnimate) {
-      setDisplayedContent(<></>);
-
-      let effectiveTypingSpeed = typingSpeedMs;
-      if (
-        communicationMode === 'audio-text' &&
-        message.audioDurationMs &&
-        message.audioDurationMs > 0
-      ) {
-          const textLength = message.text.replace(/\s/g, '').length || 1;
-          const rawSpeed = message.audioDurationMs / textLength;
-          effectiveTypingSpeed = rawSpeed * animationSyncFactor;
-      }
-
-
-      const parts = message.text.split(/(\*\*.*?\*\*)/g).filter(p => p);
-      const characterQueue: { char: string; isBold: boolean; isNewline: boolean }[] = [];
-
-      parts.forEach(part => {
-        const isBoldPart = part.startsWith('**') && part.endsWith('**');
-        const textOfPart = isBoldPart ? part.slice(2, -2) : part;
-
-        for (const char of textOfPart) {
-          if (char === '\n') {
-            characterQueue.push({ char: '', isBold: false, isNewline: true });
-          } else {
-            characterQueue.push({ char: char, isBold: isBoldPart, isNewline: false });
-          }
-        }
-      });
-
-      let index = 0;
-      let fullContent: React.ReactNode[] = [];
-
-      const type = () => {
-        if (index < characterQueue.length) {
-          const { char, isBold, isNewline } = characterQueue[index];
-
-          if (isNewline) {
-            fullContent.push(<br key={`br-${index}`} />);
-          } else if (isBold) {
-            const lastElement = fullContent[fullContent.length - 1];
-            // This is the corrected, type-safe logic
-            if (lastElement && typeof lastElement === 'object' && (lastElement as React.ReactElement).type === 'strong') {
-              const element = lastElement as React.ReactElement;
-              const currentChildren = element.props.children;
-              fullContent[fullContent.length - 1] = <strong key={element.key}>{currentChildren + char}</strong>;
-            } else {
-              fullContent.push(<strong key={`str-${index}`}>{char}</strong>);
-            }
-          } else {
-             // Check if the last element is a plain string
-            if (fullContent.length > 0 && typeof fullContent[fullContent.length - 1] === 'string') {
-              fullContent[fullContent.length - 1] += char;
-            } else {
-              fullContent.push(char);
-            }
-          }
-          
-          setDisplayedContent(<>{fullContent}</>);
-          index++;
-
-          const randomDelay = effectiveTypingSpeed + (Math.random() - 0.5) * (effectiveTypingSpeed * 0.5);
-          timeoutRef.current = setTimeout(type, Math.max(10, randomDelay));
-        } else {
-          setIsAnimationComplete(true);
-        }
-      };
-
-      timeoutRef.current = setTimeout(type, effectiveTypingSpeed);
-    } else {
-      setDisplayedContent(renderTextWithMarkdown(message.text));
-      setIsAnimationComplete(true);
-    }
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [message.id, isNewlyAddedAiMessage]);
-
 
   const renderPdfLink = () => {
     if (message.sender === 'model' && message.pdfReference?.downloadURL) {
@@ -204,7 +94,7 @@ export default function ChatBubble({
         )}
       >
         <div className="text-sm whitespace-pre-wrap">
-          {isAnimationComplete || forceFinishAnimation ? finalContent : displayedContent}
+          {finalContent}
         </div>
         {renderPdfLink()}
         <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>

@@ -7,23 +7,15 @@ import { useLanguage } from '@/context/LanguageContext';
 interface ConversationLogProps {
   messages: Message[]; 
   avatarSrc: string;
-  typingSpeedMs: number;
-  animationSyncFactor: number;
   communicationMode: CommunicationMode;
-  newlyAddedAiMessageId: string | null; 
   hasConversationEnded: boolean;
-  forceFinishAnimationForMessageId: string | null;
 }
 
 export default function ConversationLog({ 
   messages, 
   avatarSrc,
-  typingSpeedMs,
-  animationSyncFactor,
   communicationMode,
-  newlyAddedAiMessageId,
   hasConversationEnded,
-  forceFinishAnimationForMessageId,
 }: ConversationLogProps) {
   const { translate } = useLanguage();
   const [emptyMessage, setEmptyMessage] = useState('Start the conversation by typing or using the microphone.');
@@ -43,11 +35,6 @@ export default function ConversationLog({
                 key={msg.id} 
                 message={msg} 
                 avatarSrc={avatarSrc}
-                typingSpeedMs={typingSpeedMs}
-                animationSyncFactor={animationSyncFactor}
-                communicationMode={communicationMode}
-                isNewlyAddedAiMessage={msg.id === newlyAddedAiMessageId && !hasConversationEnded}
-                forceFinishAnimation={forceFinishAnimationForMessageId === msg.id}
               />
             ))}
             {messages.length === 0 && (
