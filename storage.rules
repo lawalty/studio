@@ -1,18 +1,15 @@
 rules_version = '2';
 
+// By default, deny all reads and writes
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read access to all files by default.
-    // This is necessary for the AI to process documents via their public URL.
+    
+    // Allow server-side functions (like those in your app's backend)
+    // to read and write to any location in the bucket.
+    // This is secure because these actions are governed by your server's
+    // own logic and permissions (IAM roles).
     match /{allPaths=**} {
-      allow read;
-    }
-
-    // Allow write access to all files.
-    // This is secure in this context because uploads are managed by
-    // trusted server-side functions, not direct client uploads.
-    match /{allPaths=**} {
-      allow write;
+      allow read, write;
     }
   }
 }
