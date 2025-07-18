@@ -12,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AI Blair",
+  title: "IA Blair v2",
   description: "Your AI-powered conversational partner.",
 };
 

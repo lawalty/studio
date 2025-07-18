@@ -21,7 +21,7 @@ const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?te
 const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const DEFAULT_PERSONA_TRAITS_TEXT = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
@@ -141,7 +141,7 @@ export default function PersonaPage() {
     try {
       const flowInput: AdjustAiPersonaAndPersonalityInput = { personaTraits };
       const { updatedPersonaDescription } = await adjustAiPersonaAndPersonality(flowInput);
-      toast({ title: "AI Persona Updated", description: `AI Blair says: "${updatedPersonaDescription}"` });
+      toast({ title: "AI Persona Updated", description: `IA Blair v2 says: "${updatedPersonaDescription}"` });
       personaUpdatedSuccessfully = true;
     } catch (personaError: any) {
       console.error("[PersonaPage] Error calling AI to adjust persona:", personaError);
@@ -259,7 +259,7 @@ export default function PersonaPage() {
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><Bot /> AI Persona &amp; Main Settings</CardTitle>
           <CardDescription>
-            Define AI Blair&apos;s conversational style, traits, avatars, and other core interaction settings.
+            Define IA Blair v2&apos;s conversational style, traits, avatars, and other core interaction settings.
             All settings here are saved together in Firestore.
           </CardDescription>
         </CardHeader>
@@ -272,7 +272,7 @@ export default function PersonaPage() {
                   id="personaTraits"
                   value={personaTraits}
                   onChange={handlePersonaChange}
-                  placeholder="Describe AI Blair's personality, tone, knowledge areas, etc."
+                  placeholder="Describe IA Blair v2's personality, tone, knowledge areas, etc."
                   rows={8}
                   className="mt-1"
                   suppressHydrationWarning
@@ -303,7 +303,7 @@ export default function PersonaPage() {
                         Tailor Initial Greeting with High Priority Knowledge
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                        If ON, AI Blair may reference topics from its High Priority Knowledge Base in its initial greeting.
+                        If ON, IA Blair v2 may reference topics from its High Priority Knowledge Base in its initial greeting.
                         If OFF (or if a Custom Scripted Greeting below is provided), this setting is overridden or unused for the initial greeting.
                     </p>
                 </div>
@@ -324,7 +324,7 @@ export default function PersonaPage() {
                   id="customGreetingMessage"
                   value={customGreetingMessage}
                   onChange={(e) => setCustomGreetingMessage(e.target.value)}
-                  placeholder="Enter a specific greeting AI Blair should use. If empty, AI Blair will generate a greeting based on the toggle above."
+                  placeholder="Enter a specific greeting IA Blair v2 should use. If empty, IA Blair v2 will generate a greeting based on the toggle above."
                   rows={3}
                   className="mt-1"
                   suppressHydrationWarning
@@ -384,12 +384,12 @@ export default function PersonaPage() {
                 <div>
                   <Label className="font-medium text-base block mb-2">Static Avatar Image</Label>
                   <CardDescription className="mb-3">
-                    Default image for AI Blair. Optimal: Square (e.g., 300x300px).
+                    Default image for IA Blair v2. Optimal: Square (e.g., 300x300px).
                   </CardDescription>
                   <Card className="shadow-sm">
                     <CardContent className="pt-6 flex flex-col items-center space-y-3">
                         <Image
-                          src={avatarPreview} alt="AI Blair Static Avatar Preview" width={150} height={150}
+                          src={avatarPreview} alt="IA Blair v2 Static Avatar Preview" width={150} height={150}
                           className="rounded-full border-2 border-primary shadow-md object-cover"
                           data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
                           key={`static-avatar-${avatarPreview.substring(0,30)}`}
@@ -407,12 +407,12 @@ export default function PersonaPage() {
                 <div>
                   <Label className="font-medium text-base block mb-2 flex items-center gap-1.5"><Film /> Animated Speaking Avatar (GIF)</Label>
                   <CardDescription className="mb-3">
-                    Upload an animated GIF for when AI Blair is speaking in audio modes.
+                    Upload an animated GIF for when IA Blair v2 is speaking in audio modes.
                   </CardDescription>
                   <Card className="shadow-sm">
                     <CardContent className="pt-6 flex flex-col items-center space-y-3">
                         <Image
-                          src={animatedAvatarPreview} alt="AI Blair Animated Avatar Preview" width={150} height={150}
+                          src={animatedAvatarPreview} alt="IA Blair v2 Animated Avatar Preview" width={150} height={150}
                           className="rounded-full border-2 border-accent shadow-md object-cover"
                           data-ai-hint={animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER || animatedAvatarPreview.includes("placehold.co") ? "animated face" : undefined}
                           key={`animated-avatar-${animatedAvatarPreview.substring(0,30)}`}

@@ -36,7 +36,7 @@ export interface Message {
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
-const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const DEFAULT_PERSONA_TRAITS = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
 const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
@@ -217,8 +217,8 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     pleaseWait: "Please wait a moment...",
     preparingGreeting: "Preparing greeting...",
     listening: "Listening...",
-    isPreparing: "AI Blair is preparing...",
-    isTyping: "AI Blair is typing...",
+    isPreparing: "IA Blair v2 is preparing...",
+    isTyping: "IA Blair v2 is typing...",
     conversationEnded: "Conversation Ended",
     saveAsPdf: "Save as PDF",
     startNewChat: "Start New Chat",
@@ -226,7 +226,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     micNotReadyTitle: "Mic Not Ready",
     micNotReadyDesc: "Speech recognition not available. Try refreshing.",
     aiSpeakingTitle: "AI Speaking",
-    aiSpeakingDesc: "Please wait for AI Blair to finish speaking.",
+    aiSpeakingDesc: "Please wait for IA Blair v2 to finish speaking.",
     processingTitle: "Processing",
     processingDesc: "Please wait for the current message to process.",
     micErrorTitle: "Microphone Error",
@@ -242,7 +242,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     areYouThereUser: "{userName}, are you still there?",
     areYouThereGuest: "Hello? Is someone there?",
     errorEncountered: "Sorry, I encountered an error. Please try again.",
-    chatLogTitle: "Chat with AI Blair"
+    chatLogTitle: "Chat with IA Blair v2"
   });
 
   const elevenLabsAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -278,15 +278,15 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     const translateUi = async () => {
         const englishStrings = {
             loadingConfig: "Loading Chat Configuration", pleaseWait: "Please wait a moment...", preparingGreeting: "Preparing greeting...", listening: "Listening...",
-            isPreparing: "AI Blair is preparing...", isTyping: "AI Blair is typing...", conversationEnded: "Conversation Ended", saveAsPdf: "Save as PDF",
+            isPreparing: "IA Blair v2 is preparing...", isTyping: "IA Blair v2 is typing...", conversationEnded: "Conversation Ended", saveAsPdf: "Save as PDF",
             startNewChat: "Start New Chat", endChat: "End Chat", micNotReadyTitle: "Mic Not Ready", micNotReadyDesc: "Speech recognition not available. Try refreshing.",
-            aiSpeakingTitle: "AI Speaking", aiSpeakingDesc: "Please wait for AI Blair to finish speaking.", processingTitle: "Processing", processingDesc: "Please wait for the current message to process.",
+            aiSpeakingTitle: "AI Speaking", aiSpeakingDesc: "Please wait for IA Blair v2 to finish speaking.", processingTitle: "Processing", processingDesc: "Please wait for the current message to process.",
             micErrorTitle: "Microphone Error", micErrorDesc: "Mic error: {error}. Please check permissions.", micIssueTitle: "Microphone Issue",
             micIssueDesc: "No audio detected. Check mic & permissions.", goodQuestion: "Okay, good question. Let me gather that information for you.",
             preparingResponse: "Just a moment, I'm preparing your detailed response.", interestingPoint: "That's an interesting point! This might take me a few seconds to look into.",
             letMeCheck: "Let me check on that for you.", oneMoment: "One moment while I find the best answer.", endSessionMessage: "It looks like you might have stepped away. Let's end this chat.",
             areYouThereUser: "{userName}, are you still there?", areYouThereGuest: "Hello? Is someone there?", errorEncountered: "Sorry, I encountered an error. Please try again.",
-            chatLogTitle: "Chat with AI Blair"
+            chatLogTitle: "Chat with IA Blair v2"
         };
 
         if (language === 'English') {
@@ -807,7 +807,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
       }
 
-      pdf.save('AI-Blair-Conversation.pdf');
+      pdf.save('IA-Blair-v2-Conversation.pdf');
     } catch (error) {
       if (tempContainer.parentElement) document.body.removeChild(tempContainer);
       toast({ title: "PDF Generation Failed", description: "Could not save the conversation as PDF.", variant: "destructive" });
@@ -906,7 +906,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
   const imageProps: React.ComponentProps<typeof Image> = {
     src: currentAvatarToDisplay,
-    alt: "AI Blair Avatar",
+    alt: "IA Blair v2 Avatar",
     width: stateRef.current.communicationMode === 'audio-only' ? 200 : 120,
     height: stateRef.current.communicationMode === 'audio-only' ? 200 : 120,
     className: cn(
@@ -936,7 +936,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8">
-          {!hasConversationEnded && <Image {...imageProps} alt="AI Blair Avatar" />}
+          {!hasConversationEnded && <Image {...imageProps} alt="IA Blair v2 Avatar" />}
           {!hasConversationEnded && <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{splashScreenWelcomeMessage}</h2>}
            <div className={cn("mt-4 flex h-12 w-full items-center justify-center", hasConversationEnded && "hidden")}>
             {audioOnlyLiveIndicator()}
@@ -965,7 +965,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
           <Card className="w-full shadow-xl">
             <CardContent className="pt-6 flex flex-col items-center">
-              <Image {...imageProps} alt="AI Blair Avatar" />
+              <Image {...imageProps} alt="IA Blair v2 Avatar" />
               <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{splashScreenWelcomeMessage}</h2>
               {showPreparingGreeting && aiHasInitiatedConversation && !hasConversationEnded && (
                 <p className="mt-2 text-center text-sm font-semibold text-muted-foreground animate-pulse">{uiText.preparingGreeting}</p>

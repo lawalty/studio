@@ -266,7 +266,7 @@ export default function StartPageContent() {
           <CardContent className="p-0 space-y-6">
             <Image
               src={splashImageSrc}
-              alt="AI Blair welcome splash"
+              alt="IA Blair v2 welcome splash"
               width={400}
               height={267}
               className={cn(
