@@ -349,6 +349,121 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     setIsSpeaking(false);
   }, [dismissAllToasts]);
 
+  const speakText = useCallback((text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false): Promise<number> => {
+    return new Promise<number>((resolveSpeakText) => {
+      if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+      if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
+
+      currentAiMessageIdRef.current = messageIdForAnimationSync;
+
+      const cleanupAndResolve = (duration: number) => {
+        // This inner function is defined within speakText's scope, so it doesn't need to be in its dependency array
+        const wasSpeakingBeforeEnd = stateRef.current.isSpeaking;
+        const endedMessageId = currentAiMessageIdRef.current;
+    
+        setIsSpeaking(false);
+        setShowPreparingGreeting(false);
+    
+        if (endedMessageId && stateRef.current.communicationMode !== 'text-only') {
+            setForceFinishAnimationForMessageId(endedMessageId);
+            setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
+        }
+        currentAiMessageIdRef.current = null;
+    
+        if (elevenLabsAudioRef.current) {
+            if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
+                URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+            }
+            elevenLabsAudioRef.current.src = '';
+        }
+        if (stateRef.current.isEndingSession && wasSpeakingBeforeEnd) {
+            setHasConversationEnded(true);
+            return;
+        }
+        if (stateRef.current.communicationMode === 'audio-only' && !stateRef.current.isEndingSession && !stateRef.current.hasConversationEnded) {
+          // It needs toggleListening, but toggleListening needs speakText. This is a circular dependency.
+          // The best way to handle this is to inline the needed part of toggleListening here.
+          if (!recognitionRef.current && (stateRef.current.communicationMode === 'audio-only' || stateRef.current.communicationMode === 'audio-text')) {
+              toast({ title: uiText.micNotReadyTitle, description: uiText.micNotReadyDesc, variant: "destructive" });
+              return;
+          }
+          if (stateRef.current.isListening) {
+             if (recognitionRef.current) { recognitionRef.current.stop(); }
+          } else {
+            if (stateRef.current.hasConversationEnded || stateRef.current.isSpeaking || stateRef.current.isSendingMessage) return;
+            try {
+              recognitionRef.current?.start();
+              setIsListening(true);
+            } catch (startError: any) {
+              if (startError.name !== 'InvalidStateError' && startError.name !== 'AbortError') {
+                toast({ variant: 'destructive', title: uiText.micErrorTitle, description: uiText.micErrorDesc.replace('{error}', `${startError.name}: ${startError.message || 'Could not start microphone.'}`) });
+              }
+              setIsListening(false);
+            }
+          }
+        }
+        resolveSpeakText(duration);
+      };
+      
+      if (stateRef.current.communicationMode === 'text-only' || text.trim() === "" || (stateRef.current.hasConversationEnded && !stateRef.current.isEndingSession)) {
+        onSpeechStartCallback?.();
+        cleanupAndResolve(0);
+        if (stateRef.current.isEndingSession && (stateRef.current.communicationMode === 'text-only' || stateRef.current.hasConversationEnded)) {
+            setHasConversationEnded(true);
+        }
+        resolveSpeakText(0);
+        return;
+      }
+      
+      if (stateRef.current.isListening && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
+      setIsListening(false);
+      
+      if (!isAcknowledgement && stateRef.current.messages.length <= 1) {
+        setShowPreparingGreeting(true);
+      }
+
+      const tryBrowserFallback = () => {
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+          let startTime = 0;
+          const utterance = new SpeechSynthesisUtterance(text.replace(/EZCORP/gi, "easy corp"));
+          utterance.onstart = () => { 
+              startTime = Date.now();
+              onSpeechStartCallback?.(); 
+              setIsSpeaking(true);
+          };
+          utterance.onend = () => cleanupAndResolve(Date.now() - startTime);
+          utterance.onerror = () => cleanupAndResolve(0);
+          window.speechSynthesis.speak(utterance);
+        } else {
+          resolveSpeakText(0);
+        }
+      };
+
+      if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+        fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
+          method: "POST", 
+          headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
+          body: JSON.stringify({ text: text.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
+        })
+          .then(response => response.ok ? response.blob() : Promise.reject(new Error(`API Error ${response.status}`)))
+          .then(audioBlob => {
+            if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
+            const audio = elevenLabsAudioRef.current;
+            audio.src = URL.createObjectURL(audioBlob);
+            let durationMs = 0;
+            audio.onloadedmetadata = () => { durationMs = audio.duration * 1000; };
+            audio.onplay = () => { onSpeechStartCallback?.(); setIsSpeaking(true); };
+            audio.onended = () => cleanupAndResolve(durationMs);
+            audio.onerror = () => { console.warn("ElevenLabs audio error, using fallback."); tryBrowserFallback(); };
+            audio.play().catch(() => { console.warn("Autoplay blocked, using fallback."); tryBrowserFallback(); });
+          })
+          .catch(() => { console.warn("TTS API fetch failed, using fallback."); tryBrowserFallback(); });
+      } else {
+        tryBrowserFallback();
+      }
+    });
+  }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, uiText]);
+
   const handleSendMessage = useCallback(async (text: string, method: 'text' | 'voice') => {
     if (text.trim() === '' || stateRef.current.hasConversationEnded || stateRef.current.isSendingMessage) return;
 
@@ -418,7 +533,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       }
       setIsSendingMessage(false);
     }
-  }, [addMessage, updateMessageDuration, personaTraits, conversationalTopics, language, uiText]);
+  }, [addMessage, updateMessageDuration, personaTraits, conversationalTopics, language, uiText, speakText]);
 
 
  const stopListeningAndProcess = useCallback(() => {
@@ -450,106 +565,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
       }
     }
   }, [toast, stopListeningAndProcess, uiText]);
-
-  const handleAudioProcessEnd = useCallback(() => {
-    const wasSpeakingBeforeEnd = stateRef.current.isSpeaking;
-    const endedMessageId = currentAiMessageIdRef.current;
-
-    setIsSpeaking(false);
-    setShowPreparingGreeting(false);
-
-    if (endedMessageId && stateRef.current.communicationMode !== 'text-only') {
-        setForceFinishAnimationForMessageId(endedMessageId);
-        setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
-    }
-    currentAiMessageIdRef.current = null;
-
-
-    if (elevenLabsAudioRef.current) {
-        if (elevenLabsAudioRef.current.src && elevenLabsAudioRef.current.src.startsWith('blob:')) {
-            URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-        }
-        elevenLabsAudioRef.current.src = '';
-    }
-    if (stateRef.current.isEndingSession && wasSpeakingBeforeEnd) {
-        setHasConversationEnded(true);
-        return;
-    }
-    if (stateRef.current.communicationMode === 'audio-only' && !stateRef.current.isEndingSession && !stateRef.current.hasConversationEnded) {
-        toggleListening();
-    }
-  }, [toggleListening]);
-
-  const speakText = useCallback((text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void, isAcknowledgement: boolean = false): Promise<number> => {
-    return new Promise<number>((resolveSpeakText) => {
-      if (typeof window !== 'undefined') window.speechSynthesis.cancel();
-      if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
-
-      currentAiMessageIdRef.current = messageIdForAnimationSync;
-
-      const cleanupAndResolve = (duration: number) => {
-        handleAudioProcessEnd();
-        resolveSpeakText(duration);
-      };
-      
-      if (stateRef.current.communicationMode === 'text-only' || text.trim() === "" || (stateRef.current.hasConversationEnded && !stateRef.current.isEndingSession)) {
-        onSpeechStartCallback?.();
-        handleAudioProcessEnd();
-        if (stateRef.current.isEndingSession && (stateRef.current.communicationMode === 'text-only' || stateRef.current.hasConversationEnded)) {
-            setHasConversationEnded(true);
-        }
-        resolveSpeakText(0);
-        return;
-      }
-      
-      if (stateRef.current.isListening && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
-      setIsListening(false);
-      
-      if (!isAcknowledgement && stateRef.current.messages.length <= 1) {
-        setShowPreparingGreeting(true);
-      }
-
-      const tryBrowserFallback = () => {
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-          let startTime = 0;
-          const utterance = new SpeechSynthesisUtterance(text.replace(/EZCORP/gi, "easy corp"));
-          utterance.onstart = () => { 
-              startTime = Date.now();
-              onSpeechStartCallback?.(); 
-              setIsSpeaking(true);
-          };
-          utterance.onend = () => cleanupAndResolve(Date.now() - startTime);
-          utterance.onerror = () => cleanupAndResolve(0);
-          window.speechSynthesis.speak(utterance);
-        } else {
-          resolveSpeakText(0);
-        }
-      };
-
-      if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-        fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
-          method: "POST", 
-          headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
-          body: JSON.stringify({ text: text.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
-        })
-          .then(response => response.ok ? response.blob() : Promise.reject(new Error(`API Error ${response.status}`)))
-          .then(audioBlob => {
-            if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-            const audio = elevenLabsAudioRef.current;
-            audio.src = URL.createObjectURL(audioBlob);
-            let durationMs = 0;
-            audio.onloadedmetadata = () => { durationMs = audio.duration * 1000; };
-            audio.onplay = () => { onSpeechStartCallback?.(); setIsSpeaking(true); };
-            audio.onended = () => cleanupAndResolve(durationMs);
-            audio.onerror = () => { console.warn("ElevenLabs audio error, using fallback."); tryBrowserFallback(); };
-            audio.play().catch(() => { console.warn("Autoplay blocked, using fallback."); tryBrowserFallback(); });
-          })
-          .catch(() => { console.warn("TTS API fetch failed, using fallback."); tryBrowserFallback(); });
-      } else {
-        tryBrowserFallback();
-      }
-    });
-  }, [useTtsApi, elevenLabsApiKey, elevenLabsVoiceId, toast, handleAudioProcessEnd]);
 
   useEffect(() => {
     const initializeSpeechRecognition = () => {
@@ -614,7 +629,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         };
     };
     initializeSpeechRecognition();
-  }, [language, responsePauseTimeMs, toast, handleSendMessage, stopListeningAndProcess, inputValue, uiText]);
+  }, [language, responsePauseTimeMs, handleSendMessage, stopListeningAndProcess, inputValue, toast, uiText]);
 
   const archiveAndIndexChat = useCallback(async () => {
     if (messages.length === 0) return;
