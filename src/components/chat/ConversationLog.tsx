@@ -13,7 +13,6 @@ interface ConversationLogProps {
   lastOverallMessageId: string | null; 
   hasConversationEnded: boolean;
   forceFinishAnimationForMessageId: string | null;
-  scrollAreaRef: React.RefObject<HTMLDivElement>;
 }
 
 export default function ConversationLog({ 
@@ -25,7 +24,6 @@ export default function ConversationLog({
   lastOverallMessageId,
   hasConversationEnded,
   forceFinishAnimationForMessageId,
-  scrollAreaRef
 }: ConversationLogProps) {
   const { translate } = useLanguage();
   const [emptyMessage, setEmptyMessage] = useState('Start the conversation by typing or using the microphone.');
@@ -39,7 +37,7 @@ export default function ConversationLog({
       className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
       data-testid="conversation-log-scroll-area"
     >
-        <div ref={scrollAreaRef} className="h-full">
+        <div className="h-full">
             {messages.map((msg) => (
               <ChatBubble 
                 key={msg.id} 

@@ -257,7 +257,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     hasConversationEnded: false,
     isEndingSession: false,
     communicationMode,
-    messages,
+    messages: [],
   });
 
   useEffect(() => {
@@ -932,7 +932,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
     return null;
   };
 
-  const messagesForLog = (stateRef.current.communicationMode !== 'audio-only' && !hasConversationEnded)
+  const messagesForLog = (communicationMode !== 'audio-only' && !hasConversationEnded)
     ? getVisibleChatBubbles(messages)
     : messages;
 
@@ -952,7 +952,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
                  <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
                  <ConversationLog
-                    scrollAreaRef={scrollAreaRef}
                     messages={messages}
                     avatarSrc={avatarSrc}
                     typingSpeedMs={typingSpeedMs}
@@ -993,7 +992,6 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog
-            scrollAreaRef={scrollAreaRef}
             messages={messagesForLog}
             avatarSrc={avatarSrc}
             typingSpeedMs={typingSpeedMs}
