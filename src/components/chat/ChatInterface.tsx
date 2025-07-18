@@ -64,6 +64,16 @@ interface ChatInterfaceProps {
   communicationMode: CommunicationMode;
 }
 
+interface ChatState {
+    isSpeaking: boolean;
+    isListening: boolean;
+    isSendingMessage: boolean;
+    hasConversationEnded: boolean;
+    isEndingSession: boolean;
+    communicationMode: CommunicationMode;
+    messages: Message[];
+}
+
 const MAX_SILENCE_PROMPTS_AUDIO_ONLY = 2;
 
 
@@ -239,7 +249,7 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
   const recognitionRef = useRef<any | null>(null);
   const { toast, dismiss: dismissAllToasts } = useToast();
 
-  const stateRef = useRef({
+  const stateRef = useRef<ChatState>({
     isSpeaking: false,
     isListening: false,
     isSendingMessage: false,
@@ -251,11 +261,11 @@ export default function ChatInterface({ communicationMode: initialCommunicationM
 
   useEffect(() => {
     stateRef.current = {
-      ...stateRef.current,
       isSpeaking,
       isListening,
       isSendingMessage,
       hasConversationEnded,
+      isEndingSession: stateRef.current.isEndingSession,
       communicationMode,
       messages,
     };
