@@ -154,11 +154,12 @@ ${retrievedContext || 'NO_CONTEXT_FOUND'}
         },
       });
 
-      let output = response.output;
-
-      if (!output || typeof output.aiResponse !== 'string') {
-        throw new Error('Malformed AI output.');
+      const output = response.output;
+      
+      if (!output) {
+        throw new Error('Malformed AI output. The model returned an empty or non-JSON response. This could be due to a safety filter or an internal model error.');
       }
+      
 
       // Check for Spanish PDF override
       if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {

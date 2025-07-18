@@ -33,11 +33,6 @@ export interface Message {
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
-const DEFAULT_PERSONA_TRAITS = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
-const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
-const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
-const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
-
 
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
@@ -136,7 +131,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [isListening, setIsListening] = useState(false);
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+    const [isReady, setIsReady] = useState(false); // New state to control rendering
 
     const messagesRef = useRef<Message[]>([]);
     useEffect(() => {
@@ -147,11 +142,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const configRef = useRef({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
-        personaTraits: DEFAULT_PERSONA_TRAITS,
-        conversationalTopics: DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE,
+        personaTraits: "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.",
+        conversationalTopics: "",
         useTtsApi: true,
-        responsePauseTimeMs: DEFAULT_USER_SPEECH_PAUSE_TIME_MS,
-        splashScreenWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE,
+        responsePauseTimeMs: 750,
+        splashScreenWelcomeMessage: "Welcome to AI Chat",
         animationSyncFactor: 0.9,
     });
 
@@ -261,7 +256,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } finally {
             setIsSendingMessage(false);
         }
-    }, [addMessage, hasConversationEnded, isListening, isSendingMessage, uiText.errorEncountered, language, speakText]);
+    }, [addMessage, hasConversationEnded, isListening, isSendingMessage, language, speakText, uiText.errorEncountered]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0) return;
@@ -366,11 +361,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     // Effect for speech recognition setup
     useEffect(() => {
-        if (typeof window === 'undefined' || communicationMode === 'text-only') return;
+        if (typeof window === 'undefined' || communicationMode === 'text-only' || !isReady) return;
 
         const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognitionAPI) {
-            toast({ title: uiText.micNotReadyTitle, description: uiText.micNotReadyDesc, variant: "destructive" });
+            console.error("Speech Recognition API not supported in this browser.");
             return;
         }
         const recognition = new SpeechRecognitionAPI();
@@ -380,9 +375,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         recognition.interimResults = true;
         recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
-        recognition.onstart = () => {
-            setIsListening(true);
-        }
+        recognition.onstart = () => setIsListening(true);
         
         recognition.onresult = (event: any) => {
           let interimTranscript = '';
@@ -429,36 +422,37 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [communicationMode, language, toast, uiText.micNotReadyTitle, uiText.micNotReadyDesc, uiText.micErrorTitle]);
+    }, [isReady, communicationMode, language, handleSendMessage, toast, uiText.micErrorTitle]);
     
     // ONE-TIME Effect for initial data load
     useEffect(() => {
         const fetchAllData = async () => {
-          setIsLoadingConfig(true);
           try {
             const [apiKeysSnap, siteAssetsSnap] = await Promise.all([
                 getDoc(doc(db, FIRESTORE_API_KEYS_PATH)),
                 getDoc(doc(db, FIRESTORE_SITE_ASSETS_PATH))
             ]);
     
+            const newConfig = { ...configRef.current };
             if (apiKeysSnap.exists()) {
               const keys = apiKeysSnap.data();
-              configRef.current.useTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
+              newConfig.useTtsApi = typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : true;
             }
             if (siteAssetsSnap.exists()) {
               const assets = siteAssetsSnap.data();
-              configRef.current.avatarSrc = assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL;
-              configRef.current.animatedAvatarSrc = assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL;
-              configRef.current.personaTraits = assets.personaTraits || DEFAULT_PERSONA_TRAITS;
-              configRef.current.conversationalTopics = assets.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE;
-              configRef.current.splashScreenWelcomeMessage = assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE;
-              configRef.current.responsePauseTimeMs = assets.responsePauseTimeMs ?? DEFAULT_USER_SPEECH_PAUSE_TIME_MS;
-              configRef.current.animationSyncFactor = assets.animationSyncFactor ?? 0.9;
+              newConfig.avatarSrc = assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL;
+              newConfig.animatedAvatarSrc = assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL;
+              newConfig.personaTraits = assets.personaTraits;
+              newConfig.conversationalTopics = assets.conversationalTopics;
+              newConfig.splashScreenWelcomeMessage = assets.splashWelcomeMessage;
+              newConfig.responsePauseTimeMs = assets.responsePauseTimeMs;
+              newConfig.animationSyncFactor = assets.animationSyncFactor;
             }
+            configRef.current = newConfig;
           } catch (e) {
             toast({ title: "Config Error", description: `Could not load app settings. Using defaults.`, variant: "destructive" });
           } finally {
-            setIsLoadingConfig(false);
+            setIsReady(true);
           }
         };
         fetchAllData();
@@ -571,7 +565,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       : messages;
 
     const mainContent = () => {
-      if (isLoadingConfig) {
+      if (!isReady) {
           return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2> <p className="mt-2 text-muted-foreground">{uiText.pleaseWait}</p> </div> );
       }
 
