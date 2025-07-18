@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { searchKnowledgeBase } from '../retrieval/vector-search';
 import { translateText } from './translate-text-flow';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import { db } from '@/lib/firebase-admin';
 
 // Zod schema for the input of the generateChatResponse flow.
 export const GenerateChatResponseInputSchema = z.object({
@@ -36,6 +37,32 @@ const GenerateChatResponseOutputSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
+// Helper function to find the Spanish version of a document
+const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: string; downloadURL: string } | null> => {
+    try {
+        const spanishPdfQuery = db.collection('kb_spanish_pdfs_meta_v1')
+            .where('linkedEnglishSourceId', '==', englishSourceId)
+            .limit(1);
+        
+        const snapshot = await spanishPdfQuery.get();
+
+        if (!snapshot.empty) {
+            const doc = snapshot.docs[0];
+            const data = doc.data();
+            if (data.downloadURL && data.sourceName) {
+                return {
+                    fileName: data.sourceName,
+                    downloadURL: data.downloadURL,
+                };
+            }
+        }
+        return null;
+    } catch (error) {
+        console.error(`[findSpanishPdf] Error searching for Spanish version of ${englishSourceId}:`, error);
+        return null;
+    }
+};
+
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
@@ -55,14 +82,16 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
 
     // 2. Search the knowledge base.
     let retrievedContext = '';
+    let primarySearchResult = null; // Store the first search result to check for a Spanish version
     try {
       if (searchQuery) { // Only search if there's something to search for.
         const searchResults = await searchKnowledgeBase({ query: searchQuery, limit: 5 });
         
         if (searchResults && searchResults.length > 0) {
+            primarySearchResult = searchResults[0];
             retrievedContext = searchResults
               .map(r =>
-                `<document source="${r.sourceName}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}">
+                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}">
   <content>
     ${r.text}
   </content>
@@ -76,7 +105,6 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
       retrievedContext = 'CONTEXT_SEARCH_FAILED';
     }
     
-    // If no results were found after a search, set a clear indicator.
     if (searchQuery && !retrievedContext) {
       retrievedContext = 'NO_CONTEXT_FOUND';
     }
@@ -122,14 +150,22 @@ ${retrievedContext || 'NO_CONTEXT_FOUND'}
           schema: GenerateChatResponseOutputSchema,
         },
         config: {
-          temperature: 0.2, // Lowered temperature for more deterministic, fact-based responses
+          temperature: 0.2,
         },
       });
 
-      const output = response.output;
+      let output = response.output;
 
       if (!output || typeof output.aiResponse !== 'string') {
         throw new Error('Malformed AI output.');
+      }
+
+      // Check for Spanish PDF override
+      if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
+          const spanishPdf = await findSpanishPdf(primarySearchResult.sourceId);
+          if (spanishPdf) {
+              output.pdfReference = spanishPdf; // Override with the Spanish version
+          }
       }
       
       return output;
@@ -138,7 +174,6 @@ ${retrievedContext || 'NO_CONTEXT_FOUND'}
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
       let userFriendlyMessage = "I'm sorry, but I encountered an unexpected error. Please try again in a moment.";
       
-      // If the user's language is not English, translate the error message.
       if (language && language.toLowerCase() !== 'english') {
         try {
           userFriendlyMessage = (await translateText({ text: userFriendlyMessage, targetLanguage: language })).translatedText;
@@ -160,3 +195,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    

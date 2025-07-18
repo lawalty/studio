@@ -1,15 +1,19 @@
+
 rules_version = '2';
 
-// By default, deny all reads and writes
 service firebase.storage {
   match /b/{bucket}/o {
-    
-    // Allow server-side functions (like those in your app's backend)
-    // to read and write to any location in the bucket.
-    // This is secure because these actions are governed by your server's
-    // own logic and permissions (IAM roles).
     match /{allPaths=**} {
-      allow read, write;
+      // Allow public read access to all files. This is necessary for PDF
+      // download links in the chat to work for any user.
+      allow read;
+
+      // Only allow authenticated requests to write files. This covers
+      // server-side operations (like chat archiving and KB uploads)
+      // and can be adjusted for client-side uploads if needed.
+      allow write: if request.auth != null;
     }
   }
 }
+
+    

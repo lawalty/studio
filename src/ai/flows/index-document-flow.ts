@@ -19,6 +19,7 @@ const IndexDocumentInputSchema = z.object({
   level: z.string().describe('The priority level of the knowledge base (e.g., High, Medium).'),
   topic: z.string().describe('The topic category for the document.'),
   downloadURL: z.string().url().optional().describe('The public downloadURL for the source file.'),
+  linkedEnglishSourceId: z.string().optional().describe('If this is a Spanish PDF, the ID of the English source it corresponds to.'),
 });
 export type IndexDocumentInput = z.infer<typeof IndexDocumentInputSchema>;
 
@@ -85,9 +86,10 @@ export async function indexDocument({
     text, 
     level, 
     topic, 
-    downloadURL 
+    downloadURL,
+    linkedEnglishSourceId,
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
-      const collectionName = `kb_${level.toLowerCase()}_meta_v1`;
+      const collectionName = `kb_${level.toLowerCase().replace(/\s+/g, '_')}_meta_v1`;
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
 
       try {
@@ -111,8 +113,6 @@ export async function indexDocument({
           const batch = db.batch();
           const chunksCollection = db.collection('kb_chunks');
           
-          // Use Promise.all with the retry mechanism for each embedding call.
-          // This allows parallel execution with individual retry logic.
           const embeddingResponses = await Promise.all(
             chunks.map(chunkText => withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
@@ -127,7 +127,7 @@ export async function indexDocument({
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
             
-            batch.set(newChunkDocRef, {
+            const chunkData: Record<string, any> = {
               sourceId,
               sourceName,
               level,
@@ -137,19 +137,30 @@ export async function indexDocument({
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
               embedding: embeddingVector,
-            });
+            };
+
+            if (linkedEnglishSourceId) {
+                chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
+            }
+
+            batch.set(newChunkDocRef, chunkData);
           });
           
           await batch.commit();
         }
         
-        await sourceDocRef.set({
+        const finalMetadata: Record<string, any> = {
           indexingStatus: 'success',
           chunksWritten: chunks.length,
           indexedAt: new Date().toISOString(),
           indexingError: null,
           sourceName, level, topic, downloadURL: downloadURL || null,
-        }, { merge: true });
+        };
+        if (linkedEnglishSourceId) {
+            finalMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
+        }
+
+        await sourceDocRef.set(finalMetadata, { merge: true });
         
         return {
           chunksWritten: chunks.length,
@@ -177,7 +188,16 @@ export async function indexDocument({
         }
 
         try {
-          await sourceDocRef.set({ indexingStatus: 'failed', indexingError: detailedError, sourceName, level, topic, downloadURL: downloadURL || null }, { merge: true });
+          const failureMetadata: Record<string, any> = { 
+            indexingStatus: 'failed', 
+            indexingError: detailedError, 
+            sourceName, level, topic, 
+            downloadURL: downloadURL || null 
+          };
+          if (linkedEnglishSourceId) {
+            failureMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
+          }
+          await sourceDocRef.set(failureMetadata, { merge: true });
         } catch (updateError) {
           console.error(`[indexDocument] CRITICAL: Failed to write failure status back to Firestore for source '${sourceName}'.`, updateError);
         }
@@ -190,3 +210,5 @@ export async function indexDocument({
         };
       }
 }
+
+    

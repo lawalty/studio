@@ -8,19 +8,13 @@
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
-import type { QueryDocumentSnapshot, DocumentData } from 'firebase-admin/firestore';
 
-
-// The maximum distance for a search result to be considered relevant.
-// Firestore's vector search uses distance metrics (like Cosine distance), where a smaller
-// value indicates higher similarity. A distance of 0 means a perfect match.
-// We are setting this to 0.7, which is a good starting point for high-quality matches.
-// A lower value makes the search stricter, and a higher value makes it more lenient.
 const MAX_DISTANCE_THRESHOLD = 0.7; 
 
-const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
+const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Spanish PDFs', 'Chat History'];
 
 interface SearchResult {
+  sourceId: string;
   text: string;
   sourceName: string;
   level: string;
@@ -41,13 +35,10 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
-  const embeddingResponse = await ai.embed({
+  const embedding = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
-
-  // Correctly and safely extract the embedding vector.
-  const embedding = embeddingResponse?.[0]?.embedding;
   
   if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
@@ -57,18 +48,14 @@ export async function searchKnowledgeBase({
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
     try {
-      // Start building the query against the 'kb_chunks' collection
       let chunksQuery: FirebaseFirestore.Query = db.collection('kb_chunks');
       
-      // Apply the mandatory level filter
       chunksQuery = chunksQuery.where('level', '==', level);
 
-      // Apply the optional topic filter if provided
       if (topic) {
         chunksQuery = chunksQuery.where('topic', '==', topic);
       }
       
-      // Perform the vector search
       const vectorQuery = chunksQuery.findNearest('embedding', embedding, {
           limit: limit,
           distanceMeasure: 'COSINE'
@@ -77,15 +64,12 @@ export async function searchKnowledgeBase({
       const snapshot = await vectorQuery.get();
 
       if (snapshot.empty) {
-        console.log(`[searchKnowledgeBase] No results found in '${level}' priority knowledge base.`);
         continue; // Try the next level
       }
 
-      // Filter out results that don't meet our confidence threshold.
-      // We must iterate over the snapshot directly to get the `distance` property.
       const relevantResults: SearchResult[] = [];
       snapshot.forEach(doc => {
-        const distance = (doc as any).distance; // Cast to any to access distance, as it's not in the default TS type
+        const distance = (doc as any).distance; 
         if (distance < MAX_DISTANCE_THRESHOLD) {
           relevantResults.push({
             ...(doc.data() as Omit<SearchResult, 'distance'>),
@@ -95,17 +79,15 @@ export async function searchKnowledgeBase({
       });
 
       if (relevantResults.length > 0) {
-        console.log(`[searchKnowledgeBase] Found ${relevantResults.length} relevant results in '${level}' priority knowledge base.`);
-        return relevantResults; // Found results, so return immediately.
+        return relevantResults;
       }
 
     } catch (error: any) {
         console.error(`[searchKnowledgeBase] Error searching in '${level}' priority level:`, error);
-        // Don't re-throw; we want to allow the search to continue to the next priority level.
     }
   }
 
-  // If we get here, no relevant results were found in any priority level that met the threshold.
-  console.log('[searchKnowledgeBase] No relevant results found in any knowledge base meeting the threshold.');
   return [];
 }
+
+    

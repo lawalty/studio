@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -27,7 +27,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 
-export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Chat History' | 'Archive';
+export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
 interface KnowledgeSource {
   id: string;
@@ -42,25 +42,29 @@ interface KnowledgeSource {
   downloadURL?: string;
   chunksWritten?: number;
   mimeType?: string;
+  linkedEnglishSourceId?: string;
 }
 
 const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
   'High': { collectionName: 'kb_high_meta_v1', title: 'High Priority', description: 'Manage high priority sources.' },
   'Medium': { collectionName: 'kb_medium_meta_v1', title: 'Medium Priority', description: 'Manage medium priority sources.' },
   'Low': { collectionName: 'kb_low_meta_v1', title: 'Low Priority', description: 'Manage low priority sources.' },
+  'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta_v1', title: 'Spanish PDFs', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
   'Chat History': { collectionName: 'kb_chat_history_meta_v1', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
 export default function KnowledgeBasePage() {
-  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Chat History': [], 'Archive': [] });
-  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Chat History': true, 'Archive': true });
+  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
+  const [englishSources, setEnglishSources] = useState<KnowledgeSource[]>([]);
+  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Spanish PDFs': true, 'Chat History': true, 'Archive': true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
+  const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
@@ -115,9 +119,17 @@ export default function KnowledgeBasePage() {
             downloadURL: data.downloadURL,
             chunksWritten: data.chunksWritten,
             mimeType: data.mimeType,
+            linkedEnglishSourceId: data.linkedEnglishSourceId,
           });
         });
-        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime()) }));
+        const sortedSources = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
+        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: sortedSources }));
+        if (['High', 'Medium', 'Low'].includes(level)) {
+            setEnglishSources(prev => {
+                const otherSources = prev.filter(s => s.level !== level);
+                return [...otherSources, ...sortedSources].sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+            });
+        }
         setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       }, (error) => {
         console.error(`Error fetching ${level} priority sources:`, error);
@@ -172,14 +184,19 @@ export default function KnowledgeBasePage() {
         }
         
         await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
-        const indexingResult = await indexDocument({
+        const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId: source.id,
             sourceName: source.sourceName,
             text: extractionResult.extractedText,
             level: source.level,
             topic: source.topic,
             downloadURL: source.downloadURL,
-        });
+        };
+        if (source.linkedEnglishSourceId) {
+            indexInput.linkedEnglishSourceId = source.linkedEnglishSourceId;
+        }
+
+        const indexingResult = await indexDocument(indexInput);
         
         if (!indexingResult.success || indexingResult.chunksWritten === 0) {
             throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database.");
@@ -204,6 +221,10 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
+    if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
+      toast({ title: "Missing Information", description: "Please link the Spanish PDF to its English source document.", variant: "destructive" });
+      return;
+    }
   
     const fileToUpload = selectedFile;
     const targetLevel = selectedLevelForUpload;
@@ -221,13 +242,16 @@ export default function KnowledgeBasePage() {
     try {
       // Step 1: Create initial placeholder metadata in Firestore
       toast({ title: "Step 1 of 4: Initializing...", description: `Preparing "${fileToUpload.name}".` });
-      const newSourceData = {
+      const newSourceData: Partial<KnowledgeSource> = {
         sourceName: fileToUpload.name, description, topic, level: targetLevel,
         createdAt: new Date().toISOString(),
         indexingStatus: 'processing',
         indexingError: 'Initializing upload...',
         mimeType,
       };
+      if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
+        newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+      }
       await setDoc(sourceDocRef, newSourceData);
   
       // Step 2: Upload file to Cloud Storage
@@ -252,14 +276,19 @@ export default function KnowledgeBasePage() {
       // Step 4: Call the indexing flow
       toast({ title: "Step 4 of 4: Indexing Content...", description: "Generating vector embeddings for the RAG pipeline." });
       await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
-      const indexingResult = await indexDocument({
+      
+      const indexInput: Parameters<typeof indexDocument>[0] = {
         sourceId,
         sourceName: fileToUpload.name,
         text: extractionResult.extractedText,
         level: targetLevel,
         topic,
         downloadURL
-      });
+      };
+      if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
+        indexInput.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+      }
+      const indexingResult = await indexDocument(indexInput);
   
       // Step 5: Final Validation
       if (!indexingResult.success || indexingResult.chunksWritten === 0) {
@@ -272,6 +301,7 @@ export default function KnowledgeBasePage() {
       // Reset form on full success
       setSelectedFile(null);
       setUploadDescription('');
+      setLinkedEnglishSourceIdForUpload('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -282,7 +312,6 @@ export default function KnowledgeBasePage() {
       toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
       
       try {
-        // Update Firestore with the specific failure message
         await updateDoc(sourceDocRef, {
           indexingStatus: 'failed',
           indexingError: errorMessage,
@@ -310,7 +339,11 @@ export default function KnowledgeBasePage() {
           }
           const sourceData = docSnap.data();
 
-          const newDocData = { ...sourceData, level: newLevel };
+          const newDocData: Record<string, any> = { ...sourceData, level: newLevel };
+          // If moving out of Spanish PDFs, remove the link.
+          if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
+            delete newDocData.linkedEnglishSourceId;
+          }
           const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
           
           const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
@@ -345,7 +378,7 @@ export default function KnowledgeBasePage() {
     const levelIsLoading = isLoading[level];
     
     return (
-        <AccordionItem value={level.toLowerCase().replace(' ', '-')} key={level}>
+        <AccordionItem value={level.toLowerCase().replace(/\s+/g, '-')} key={level}>
           <AccordionTrigger className="text-xl font-headline">
             {config.title} Knowledge Base ({levelSources.length})
           </AccordionTrigger>
@@ -556,9 +589,25 @@ export default function KnowledgeBasePage() {
                          <SelectItem value="High">High Priority</SelectItem>
                          <SelectItem value="Medium">Medium Priority</SelectItem>
                          <SelectItem value="Low">Low Priority</SelectItem>
+                         <SelectItem value="Spanish PDFs">Spanish PDFs</SelectItem>
                       </SelectContent>
                   </Select>
                </div>
+              {selectedLevelForUpload === 'Spanish PDFs' && (
+                <div className="space-y-2">
+                    <Label className="flex items-center gap-2"><LinkIcon className="h-4 w-4" /> Link to English Source</Label>
+                    <Select value={linkedEnglishSourceIdForUpload} onValueChange={setLinkedEnglishSourceIdForUpload}>
+                        <SelectTrigger><SelectValue placeholder="Select the English version..." /></SelectTrigger>
+                        <SelectContent>
+                            {englishSources.length > 0 ? (
+                                englishSources.map(source => <SelectItem key={source.id} value={source.id}>{source.sourceName}</SelectItem>)
+                            ) : (
+                                <SelectItem value="" disabled>No English PDFs found</SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="upload-description">Description</Label>
                 <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." suppressHydrationWarning />
@@ -590,6 +639,7 @@ export default function KnowledgeBasePage() {
             {renderKnowledgeBaseLevel('High')}
             {renderKnowledgeBaseLevel('Medium')}
             {renderKnowledgeBaseLevel('Low')}
+            {renderKnowledgeBaseLevel('Spanish PDFs')}
             {renderKnowledgeBaseLevel('Chat History')}
             {renderKnowledgeBaseLevel('Archive')}
           </Accordion>
@@ -598,3 +648,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
