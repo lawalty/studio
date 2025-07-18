@@ -159,21 +159,20 @@ export default function KnowledgeBasePage() {
     await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Starting re-processing...", chunksWritten: 0 });
 
     try {
-        let textToProcess: string | undefined = undefined;
-
         if (!source.downloadURL) {
             throw new Error("Source is missing a download URL, cannot re-process.");
         }
         
-        await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType}...` });
+        await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType || 'file'}...` });
         const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
-        if (extractionResult.error || !extractionResult.extractedText) {
-            throw new Error(extractionResult.error || 'Text extraction failed to produce content.');
-        }
-        textToProcess = extractionResult.extractedText;
 
-        await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
-        await indexDocument({
+        if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+            throw new Error(extractionResult.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
+        }
+        const textToProcess = extractionResult.extractedText;
+
+        await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
+        const indexingResult = await indexDocument({
             sourceId: source.id,
             sourceName: source.sourceName,
             text: textToProcess,
@@ -181,6 +180,10 @@ export default function KnowledgeBasePage() {
             topic: source.topic,
             downloadURL: source.downloadURL,
         });
+        
+        if (!indexingResult.success) {
+            throw new Error(indexingResult.error || "Indexing process failed server-side.");
+        }
 
     } catch (error: any) {
         const errorMessage = error.message || "An unknown error occurred during re-indexing.";
