@@ -204,50 +204,53 @@ export default function KnowledgeBasePage() {
       toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
       return;
     }
-
+  
     const fileToUpload = selectedFile;
     const targetLevel = selectedLevelForUpload;
     const topic = selectedTopicForUpload;
     const description = uploadDescription;
     const sourceId = uuidv4();
     const mimeType = fileToUpload.type || 'application/octet-stream';
-
+  
     setIsCurrentlyUploading(true);
     setOperationStatus(sourceId, true);
-
+  
     const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
     const sourceDocRef = doc(db, collectionName, sourceId);
-
+  
     try {
-      toast({ title: "Uploading File...", description: `Preparing "${fileToUpload.name}".` });
-
       // Step 1: Create initial placeholder metadata in Firestore
+      toast({ title: "Step 1 of 4: Initializing...", description: `Preparing "${fileToUpload.name}".` });
       const newSourceData = {
         sourceName: fileToUpload.name, description, topic, level: targetLevel,
         createdAt: new Date().toISOString(),
         indexingStatus: 'processing',
-        indexingError: 'Waiting for upload...',
+        indexingError: 'Initializing upload...',
         mimeType,
       };
       await setDoc(sourceDocRef, newSourceData);
-
+  
       // Step 2: Upload file to Cloud Storage
       await updateDoc(sourceDocRef, { indexingError: 'Uploading to cloud storage...' });
       const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
       const fileRef = storageRef(storage, storagePath);
       await uploadBytes(fileRef, fileToUpload);
       const downloadURL = await getDownloadURL(fileRef);
-
+      toast({ title: "Step 2 of 4: Upload Complete", description: "File successfully saved to cloud storage." });
+  
       // Update doc with download URL
       await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
-
+  
       // Step 3: Extract text from the now-uploaded file
+      toast({ title: "Step 3 of 4: Extracting Text...", description: "AI is reading the document." });
       const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
       if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
         throw new Error(extractionResult.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
       }
-
+      toast({ title: "Step 3 of 4: Text Extracted", description: "Successfully extracted text content." });
+  
       // Step 4: Call the indexing flow
+      toast({ title: "Step 4 of 4: Indexing Content...", description: "Generating vector embeddings for the RAG pipeline." });
       await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
       const indexingResult = await indexDocument({
         sourceId,
@@ -257,22 +260,22 @@ export default function KnowledgeBasePage() {
         topic,
         downloadURL
       });
-
+  
       // Step 5: Final Validation
       if (!indexingResult.success || indexingResult.chunksWritten === 0) {
         throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
       }
       
       // Final success toast
-      toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed.` });
-
+      toast({ title: "Processing Complete!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
+  
       // Reset form on full success
       setSelectedFile(null);
       setUploadDescription('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-
+  
     } catch (e: any) {
       const errorMessage = `Processing Failed: ${e.message || 'Unknown error.'}`;
       console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
