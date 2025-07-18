@@ -34,18 +34,9 @@ export default function ConversationLog({
   }, [translate]);
 
   useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const scrollToBottom = () => {
-      viewport.scrollTop = viewport.scrollHeight; 
-    };
-    
-    const animationFrameId = requestAnimationFrame(scrollToBottom);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-    };
+    if (viewportRef.current) {
+      viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+    }
   }, [messages]); 
 
   return (
