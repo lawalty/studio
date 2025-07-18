@@ -28,6 +28,8 @@ const LEVEL_CONFIG_SERVER: Record<string, { collectionName: string }> = {
     'High': { collectionName: 'kb_high_meta_v1' },
     'Medium': { collectionName: 'kb_medium_meta_v1' },
     'Low': { collectionName: 'kb_low_meta_v1' },
+    'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta_v1' },
+    'Chat History': { collectionName: 'kb_chat_history_meta_v1' },
     'Archive': { collectionName: 'kb_archive_meta_v1' },
   };
 
@@ -44,7 +46,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
         throw new Error("CRITICAL: Firebase Storage bucket name is not configured in environment variables.");
       }
       const bucket = admin.storage().bucket(bucketName);
-      // CORRECTED: The path must include the level.
+      // CORRECTED: The path construction now matches the upload path logic exactly.
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
       const file = bucket.file(storagePath);
 
