@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Extracts clean, readable text from a document's public URL using Genkit and Vertex AI.
@@ -93,3 +94,5 @@ CRITICAL INSTRUCTIONS:
       return { error: detailedError };
     }
 }
+
+    

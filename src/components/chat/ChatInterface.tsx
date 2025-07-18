@@ -10,7 +10,6 @@ import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
 import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
 import { indexDocument } from '@/ai/flows/index-document-flow';
-import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mic, Power, DatabaseZap, Loader2, Save, RotateCcw } from 'lucide-react';
@@ -46,7 +45,6 @@ const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 500;
 const randomAckPhrase = "Let me check on that for you.";
-
 
 export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
@@ -131,7 +129,6 @@ const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
   }
 };
 
-
 interface ChatInterfaceProps {
     communicationMode: CommunicationMode;
 }
@@ -146,6 +143,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [showPreparingGreeting, setShowPreparingGreeting] = useState(false);
+
+    // Ref to hold messages to break dependency cycle
+    const messagesRef = useRef<Message[]>([]);
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
 
     // Configuration State
     const [isLoadingConfig, setIsLoadingConfig] = useState(true);
@@ -244,12 +247,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const downloadURL = await getDownloadURL(fileRef);
 
             await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text...' });
-
-            const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-            if (extractionResult.error || !extractionResult.extractedText?.trim()) { throw new Error(extractionResult.error || 'Text extraction failed.'); }
+            
+            // Re-enable text extraction. It is no longer handled by a separate flow.
+            const textContentForIndexing = msgs.map(m => `${m.sender === 'user' ? 'User' : 'AI Blair'}: ${m.text}`).join('\n\n');
 
             await updateDoc(sourceDocRef, { indexingError: 'Indexing content...' });
-            const indexingResult = await indexDocument({ sourceId, sourceName: fileName, text: extractionResult.extractedText, level: 'Chat History', topic: 'Chat History', downloadURL });
+            const indexingResult = await indexDocument({ sourceId, sourceName: fileName, text: textContentForIndexing, level: 'Chat History', topic: 'Chat History', downloadURL });
             if (!indexingResult.success) { throw new Error(indexingResult.error || 'Indexing failed.'); }
 
             toast({ title: "Conversation Archived", description: "Successfully saved to the knowledge base." });
@@ -270,7 +273,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setInputValue('');
         setIsSendingMessage(true);
         
-        const historyForGenkit = [...messages, {id: 'temp', text, sender: 'user', timestamp: Date.now()}].map(msg => ({ 
+        const historyForGenkit = [...messagesRef.current, {id: 'temp', text, sender: 'user', timestamp: Date.now()}].map(msg => ({ 
             role: msg.sender, 
             parts: [{ text: msg.text }] 
         }));
@@ -354,7 +357,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } finally {
             setIsSendingMessage(false);
         }
-    }, [messages, hasConversationEnded, isSendingMessage, isListening, addMessage, communicationMode, language, uiText.errorEncountered]);
+    }, [hasConversationEnded, isSendingMessage, isListening, addMessage, communicationMode, language, uiText.errorEncountered]);
     
     // Effect for ending chat and archiving
     useEffect(() => {
@@ -761,3 +764,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
