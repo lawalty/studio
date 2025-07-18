@@ -11,19 +11,19 @@ import { Alert } from '../ui/alert';
 
 
 const topTopicsData = [
-  { topic: "Valuation", chats: 120 },
-  { topic: "Regulations", chats: 98 },
-  { topic: "Customer Service", chats: 75 },
-  { topic: "Security", chats: 50 },
-  { topic: "Training", chats: 32 },
+  { topic: "General Inquiry", chats: 120 },
+  { topic: "Product Help", chats: 98 },
+  { topic: "Sales Question", chats: 75 },
+  { topic: "Support", chats: 50 },
+  { topic: "Feedback", chats: 32 },
 ];
 
 const topDocumentsData = [
-    { name: "Pawn_Act_2023.pdf", references: 89, lastAccessed: "1h ago" },
-    { name: "Diamond_Valuation_Guide.pdf", references: 72, lastAccessed: "3h ago" },
-    { name: "Customer_Complaint_Policy.docx", references: 45, lastAccessed: "2d ago" },
-    { name: "Store_Opening_Procedures.pdf", references: 31, lastAccessed: "5h ago" },
-    { name: "Employee_Handbook_v3.pdf", references: 15, lastAccessed: "1w ago" },
+    { name: "Welcome_Guide.pdf", references: 89, lastAccessed: "1h ago" },
+    { name: "FAQ_v2.pdf", references: 72, lastAccessed: "3h ago" },
+    { name: "Company_Policy.docx", references: 45, lastAccessed: "2d ago" },
+    { name: "Onboarding_Process.pdf", references: 31, lastAccessed: "5h ago" },
+    { name: "Product_Catalog.pdf", references: 15, lastAccessed: "1w ago" },
 ];
 
 export default function AdminDashboard() {
@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     <div className="space-y-8">
       {/* Quick Nav Links */}
       <section>
-         <h2 className="text-2xl font-semibold tracking-tight mb-4">Admin Controls</h2>
+         <h2 className="text-2xl font-semibold tracking-tight mb-4">Admin Controls for IA Blair v2</h2>
          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <AdminNavLinkCard href="/admin/persona" title="AI Persona" description="Define conversational style and traits." Icon={Bot}/>
             <AdminNavLinkCard href="/admin/knowledge-base" title="Knowledge Base" description="Manage documents for the AI." Icon={Database}/>
