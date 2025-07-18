@@ -276,90 +276,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (tempContainer.parentElement) document.body.removeChild(tempContainer);
         }
     }, [toast]);
-
-    const speakText = useCallback(async (text: string, messageIdForAnimationSync: string | null, onSpeechStartCallback?: () => void): Promise<void> => {
-        return new Promise((resolve) => {
-            if (typeof window !== 'undefined') window.speechSynthesis.cancel();
-            if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
     
-            currentAiMessageIdRef.current = messageIdForAnimationSync;
-    
-            const cleanupAndResolve = () => {
-                const endedMessageId = currentAiMessageIdRef.current;
-                setIsSpeaking(false);
-                setShowPreparingGreeting(false);
-
-                if (endedMessageId && communicationMode !== 'text-only') {
-                    setForceFinishAnimationForMessageId(endedMessageId);
-                    setTimeout(() => setForceFinishAnimationForMessageId(null), 50);
-                }
-                currentAiMessageIdRef.current = null;
-    
-                if (elevenLabsAudioRef.current?.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(elevenLabsAudioRef.current.src);
-                }
-                if (elevenLabsAudioRef.current) {
-                    elevenLabsAudioRef.current.src = '';
-                }
-
-                resolve();
-            };
-
-            if (communicationMode === 'text-only' || text.trim() === "") {
-                onSpeechStartCallback?.();
-                cleanupAndResolve();
-                return;
-            }
-    
-            if (isListening && recognitionRef.current) { try { recognitionRef.current.abort(); } catch (e) { } }
-            setIsListening(false);
-            
-            setShowPreparingGreeting(true);
-
-            const { useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
-            const tryBrowserFallback = () => {
-                if (typeof window !== 'undefined' && window.speechSynthesis) {
-                  const utterance = new SpeechSynthesisUtterance(text.replace(/EZCORP/gi, "easy corp"));
-                  utterance.onstart = () => { 
-                      onSpeechStartCallback?.(); 
-                      setIsSpeaking(true);
-                  };
-                  utterance.onend = cleanupAndResolve;
-                  utterance.onerror = cleanupAndResolve;
-                  window.speechSynthesis.speak(utterance);
-                } else {
-                  cleanupAndResolve();
-                }
-            };
-
-            if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
-                fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
-                    method: "POST", 
-                    headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
-                    body: JSON.stringify({ text: text.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
-                })
-                .then(response => response.ok ? response.blob() : Promise.reject(new Error(`API Error ${response.status}`)))
-                .then(audioBlob => {
-                    if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
-                    const audio = elevenLabsAudioRef.current;
-                    audio.src = URL.createObjectURL(audioBlob);
-                    audio.onloadedmetadata = () => {
-                        if (messageIdForAnimationSync) {
-                            updateMessageDuration(messageIdForAnimationSync, audio.duration * 1000);
-                        }
-                    };
-                    audio.onplay = () => { onSpeechStartCallback?.(); setIsSpeaking(true); };
-                    audio.onended = cleanupAndResolve;
-                    audio.onerror = () => { console.warn("ElevenLabs audio error, using fallback."); tryBrowserFallback(); };
-                    audio.play().catch(() => { console.warn("Autoplay blocked, using fallback."); tryBrowserFallback(); });
-                })
-                .catch(() => { console.warn("TTS API fetch failed, using fallback."); tryBrowserFallback(); });
-            } else {
-                tryBrowserFallback();
-            }
-        });
-    }, [isListening, communicationMode, updateMessageDuration]);
-
     const handleSendMessage = useCallback(async (text: string) => {
         if (text.trim() === '' || hasConversationEnded || isSendingMessage) return;
 
@@ -375,10 +292,76 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             parts: [{ text: msg.text }] 
         }));
 
+        const speakTextAndAddMessage = async (textToSpeak: string, pdfRef?: Message['pdfReference']) => {
+            let newAiMessageId: string | null = null;
+            const onSpeechStart = () => {
+                newAiMessageId = addMessage(textToSpeak, 'model', pdfRef);
+            };
+
+            if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+            if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
+
+            currentAiMessageIdRef.current = newAiMessageId;
+
+            const cleanupAndResolve = () => {
+                const endedMessageId = currentAiMessageIdRef.current;
+                setIsSpeaking(false);
+                if (endedMessageId && communicationMode !== 'text-only') {
+                    setForceFinishAnimationForMessageId(endedMessageId);
+                }
+                currentAiMessageIdRef.current = null;
+                if (elevenLabsAudioRef.current?.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+                }
+                if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
+            };
+
+            if (communicationMode === 'text-only' || textToSpeak.trim() === "") {
+                onSpeechStart();
+                cleanupAndResolve();
+                return;
+            }
+
+            const { useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
+            const tryBrowserFallback = () => {
+                if (typeof window !== 'undefined' && window.speechSynthesis) {
+                  const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
+                  utterance.onstart = () => { onSpeechStart(); setIsSpeaking(true); };
+                  utterance.onend = cleanupAndResolve;
+                  utterance.onerror = cleanupAndResolve;
+                  window.speechSynthesis.speak(utterance);
+                } else {
+                  cleanupAndResolve();
+                }
+            };
+            
+            if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+                fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
+                    method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
+                    body: JSON.stringify({ text: textToSpeak.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
+                })
+                .then(response => response.ok ? response.blob() : Promise.reject(new Error(`API Error ${response.status}`)))
+                .then(audioBlob => {
+                    if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
+                    const audio = elevenLabsAudioRef.current;
+                    audio.src = URL.createObjectURL(audioBlob);
+                    audio.onloadedmetadata = () => { if (newAiMessageId) { updateMessageDuration(newAiMessageId, audio.duration * 1000); }};
+                    audio.onplay = () => { onSpeechStart(); setIsSpeaking(true); };
+                    audio.onended = cleanupAndResolve;
+                    audio.onerror = () => tryBrowserFallback();
+                    audio.play().catch(() => tryBrowserFallback());
+                })
+                .catch(() => tryBrowserFallback());
+            } else {
+                tryBrowserFallback();
+            }
+        };
+
         try {
             const { personaTraits, conversationalTopics } = configRef.current;
+            
             if (communicationMode !== 'text-only' && text.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
-                await speakText(randomAckPhrase, null);
+                await speakTextAndAddMessage(randomAckPhrase);
             }
             
             const result: GenerateChatResponseOutput = await generateChatResponse({
@@ -387,27 +370,20 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 language: language,
             });
 
-            let newAiMessageId: string | null = null;
-            const onSpeechStart = () => {
-                newAiMessageId = addMessage(result.aiResponse, 'model', result.pdfReference);
-                setIsSendingMessage(false);
-            };
-            
-            await speakText(result.aiResponse, newAiMessageId, onSpeechStart);
+            await speakTextAndAddMessage(result.aiResponse, result.pdfReference);
 
             if (result.shouldEndConversation) {
                 setHasConversationEnded(true);
             }
             
         } catch (error) {
-            console.error("Error in generateChatResponse or speakText:", error);
+            console.error("Error in generateChatResponse:", error);
             const errorMessage = uiText.errorEncountered;
-            const errorAiMessageId = addMessage(errorMessage, 'model');
-            await speakText(errorMessage, errorAiMessageId);
+            await speakTextAndAddMessage(errorMessage);
         } finally {
             setIsSendingMessage(false);
         }
-    }, [messages, hasConversationEnded, isSendingMessage, isListening, addMessage, communicationMode, speakText, language, uiText.errorEncountered]);
+    }, [messages, hasConversationEnded, isSendingMessage, isListening, addMessage, communicationMode, language, uiText.errorEncountered, updateMessageDuration]);
     
     // Effect for ending chat and archiving
     useEffect(() => {
@@ -555,10 +531,79 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             return;
         }
 
-        setAiHasInitiatedConversation(true);
-        setShowPreparingGreeting(true);
+        const speakText = async (textToSpeak: string) => {
+            let newAiMessageId: string | null = null;
+            const onSpeechStart = () => {
+              newAiMessageId = addMessage(textToSpeak, 'model');
+            };
+    
+            return new Promise<void>((resolve) => {
+              if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+              if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.pause();
+      
+              currentAiMessageIdRef.current = newAiMessageId;
+      
+              const cleanupAndResolve = () => {
+                  const endedMessageId = currentAiMessageIdRef.current;
+                  setIsSpeaking(false);
+                  setShowPreparingGreeting(false);
+                  if (endedMessageId && communicationMode !== 'text-only') {
+                      setForceFinishAnimationForMessageId(endedMessageId);
+                  }
+                  currentAiMessageIdRef.current = null;
+                  if (elevenLabsAudioRef.current?.src.startsWith('blob:')) {
+                      URL.revokeObjectURL(elevenLabsAudioRef.current.src);
+                  }
+                  if (elevenLabsAudioRef.current) elevenLabsAudioRef.current.src = '';
+                  resolve();
+              };
+    
+              if (communicationMode === 'text-only' || textToSpeak.trim() === "") {
+                  onSpeechStart();
+                  cleanupAndResolve();
+                  return;
+              }
+      
+              const { useTtsApi, elevenLabsApiKey, elevenLabsVoiceId } = configRef.current;
+              const tryBrowserFallback = () => {
+                  if (typeof window !== 'undefined' && window.speechSynthesis) {
+                    const utterance = new SpeechSynthesisUtterance(textToSpeak.replace(/EZCORP/gi, "easy corp"));
+                    utterance.onstart = () => { onSpeechStart(); setIsSpeaking(true); };
+                    utterance.onend = cleanupAndResolve;
+                    utterance.onerror = cleanupAndResolve;
+                    window.speechSynthesis.speak(utterance);
+                  } else {
+                    cleanupAndResolve();
+                  }
+              };
+      
+              if (useTtsApi && elevenLabsApiKey && elevenLabsVoiceId) {
+                  fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, { 
+                      method: "POST", headers: { 'Accept': 'audio/mpeg', 'Content-Type': 'application/json', 'xi-api-key': elevenLabsApiKey }, 
+                      body: JSON.stringify({ text: textToSpeak.replace(/EZCORP/gi, "easy corp"), model_id: 'eleven_multilingual_v2', voice_settings: { stability: 0.5, similarity_boost: 0.75 } })
+                  })
+                  .then(response => response.ok ? response.blob() : Promise.reject(new Error(`API Error ${response.status}`)))
+                  .then(audioBlob => {
+                      if (!elevenLabsAudioRef.current) elevenLabsAudioRef.current = new Audio();
+                      const audio = elevenLabsAudioRef.current;
+                      audio.src = URL.createObjectURL(audioBlob);
+                      audio.onloadedmetadata = () => { if (newAiMessageId) { updateMessageDuration(newAiMessageId, audio.duration * 1000); }};
+                      audio.onplay = () => { onSpeechStart(); setIsSpeaking(true); };
+                      audio.onended = cleanupAndResolve;
+                      audio.onerror = () => tryBrowserFallback();
+                      audio.play().catch(() => tryBrowserFallback());
+                  })
+                  .catch(() => tryBrowserFallback());
+              } else {
+                  tryBrowserFallback();
+              }
+            });
+        };
         
         const initConversation = async () => {
+            setAiHasInitiatedConversation(true);
+            setShowPreparingGreeting(true);
+
             let greetingToUse = configRef.current.customGreeting?.trim() ? configRef.current.customGreeting.trim() : "";
             if (!greetingToUse) {
                 try {
@@ -575,17 +620,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (language !== 'English' && configRef.current.customGreeting) {
               greetingToUse = await translate(greetingToUse);
             }
-            
-            let greetingMessageId: string | null = null;
-            const onGreetingSpeechStart = () => {
-              greetingMessageId = addMessage(greetingToUse, 'model');
-            };
-    
-            await speakText(greetingToUse, greetingMessageId, onGreetingSpeechStart);
+            await speakText(greetingToUse);
         };
         
         initConversation();
-    }, [isLoadingConfig, aiHasInitiatedConversation, hasConversationEnded, messages.length, language, translate, addMessage, speakText]);
+    }, [isLoadingConfig, aiHasInitiatedConversation, hasConversationEnded, messages.length, language, translate, addMessage, communicationMode, updateMessageDuration]);
 
 
     // Component lifecycle cleanup
