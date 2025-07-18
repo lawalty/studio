@@ -35,7 +35,6 @@ const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
 const DEFAULT_PERSONA_TRAITS = "You are AI Blair, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE = "Welcome to AI Chat";
-const DEFAULT_CUSTOM_GREETING_MAIN_PAGE = "";
 const DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE = "";
 const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 
@@ -43,10 +42,6 @@ const DEFAULT_USER_SPEECH_PAUSE_TIME_MS = 750;
 const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
-const ACKNOWLEDGEMENT_THRESHOLD_LENGTH = 500;
-const randomAckPhrase = "Let me check on that for you.";
-
-export type CommunicationMode = 'audio-text' | 'text-only' | 'audio-only';
 
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
   const primaryBg = 'hsl(210 13% 50%)';
@@ -141,6 +136,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [isListening, setIsListening] = useState(false);
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [inputValue, setInputValue] = useState('');
+    const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
     const messagesRef = useRef<Message[]>([]);
     useEffect(() => {
@@ -148,7 +144,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [messages]);
 
     // Configuration State
-    const [isLoadingConfig, setIsLoadingConfig] = useState(true);
     const configRef = useRef({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
@@ -157,7 +152,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         elevenLabsApiKey: null as string | null,
         elevenLabsVoiceId: null as string | null,
         useTtsApi: true,
-        customGreeting: DEFAULT_CUSTOM_GREETING_MAIN_PAGE,
         responsePauseTimeMs: DEFAULT_USER_SPEECH_PAUSE_TIME_MS,
         splashScreenWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE,
     });
@@ -267,11 +261,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 } else {
                     tryBrowserFallback();
                 }
-            }
-            
-            if (communicationMode !== 'text-only' && text.length > ACKNOWLEDGEMENT_THRESHOLD_LENGTH) {
-                speak(randomAckPhrase);
-                addMessage(randomAckPhrase, 'model');
             }
             
             const result: GenerateChatResponseOutput = await generateChatResponse({
@@ -463,9 +452,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             handleSendMessage(finalTranscriptRef.current.trim());
             finalTranscriptRef.current = ''; // Clear the ref after sending
         }
-    }, [isListening, handleSendMessage]); // Only depends on isListening
-
-    // Effect for initial data load
+    }, [isListening, handleSendMessage]);
+    
+    // Effect for initial data load - NOW RUNS ONLY ONCE
     useEffect(() => {
         const fetchAllData = async () => {
           setIsLoadingConfig(true);
@@ -488,7 +477,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               configRef.current.personaTraits = assets.personaTraits || DEFAULT_PERSONA_TRAITS;
               configRef.current.conversationalTopics = assets.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS_MAIN_PAGE;
               configRef.current.splashScreenWelcomeMessage = assets.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE_MAIN_PAGE;
-              configRef.current.customGreeting = assets.customGreetingMessage || DEFAULT_CUSTOM_GREETING_MAIN_PAGE;
               configRef.current.responsePauseTimeMs = assets.responsePauseTimeMs ?? DEFAULT_USER_SPEECH_PAUSE_TIME_MS;
             }
           } catch (e) {
@@ -498,7 +486,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           }
         };
         fetchAllData();
-    }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Empty dependency array ensures this runs only ONCE.
     
     // Component lifecycle cleanup
     useEffect(() => {
@@ -572,7 +561,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
     
     // UI Rendering Logic
-    let currentAvatarToDisplay = configRef.current.avatarSrc || DEFAULT_AVATAR_PLACEHOLDER_URL;
+    let currentAvatarToDisplay = configRef.current.avatarSrc;
     let isDisplayingAnimatedAvatar = false;
 
     const animatedAvatarSrc = configRef.current.animatedAvatarSrc;
