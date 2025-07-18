@@ -1,5 +1,5 @@
 import type { Message, CommunicationMode } from '@/components/chat/ChatInterface';
-import { ScrollArea, ScrollBar, ScrollAreaPrimitive } from "@/components/ui/scroll-area";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";
 import React, { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '@/context/LanguageContext';
@@ -25,7 +25,7 @@ export default function ConversationLog({
   hasConversationEnded,
   forceFinishAnimationForMessageId 
 }: ConversationLogProps) {
-  const viewportRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { translate } = useLanguage();
   const [emptyMessage, setEmptyMessage] = useState('Start the conversation by typing or using the microphone.');
 
@@ -34,20 +34,20 @@ export default function ConversationLog({
   }, [translate]);
 
   useEffect(() => {
-    if (viewportRef.current) {
-      viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+    if (scrollAreaRef.current) {
+        const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+        if (viewport) {
+            viewport.scrollTop = viewport.scrollHeight;
+        }
     }
-  }, [messages]); 
+  }, [messages]);
 
   return (
     <ScrollArea
+      ref={scrollAreaRef}
       className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
+      data-testid="conversation-log-scroll-area"
     >
-      <ScrollAreaPrimitive.Viewport
-        className="h-full w-full rounded-[inherit]" 
-        ref={viewportRef}
-        data-testid="conversation-log-viewport"
-      >
         {messages.map((msg) => (
           <ChatBubble 
             key={msg.id} 
@@ -65,8 +65,6 @@ export default function ConversationLog({
             <p className="text-muted-foreground">{emptyMessage}</p>
           </div>
         )}
-      </ScrollAreaPrimitive.Viewport>
-      <ScrollBar orientation="vertical" />
     </ScrollArea>
   );
 }
