@@ -198,11 +198,10 @@ export default function KnowledgeBasePage() {
     }
   }, [toast]);
 
-  
   const handleFileUpload = async () => {
     if (!selectedFile || !selectedTopicForUpload) {
-        toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
-        return;
+      toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
+      return;
     }
 
     const fileToUpload = selectedFile;
@@ -219,77 +218,77 @@ export default function KnowledgeBasePage() {
     const sourceDocRef = doc(db, collectionName, sourceId);
 
     try {
-        toast({ title: "Uploading File...", description: `Preparing "${fileToUpload.name}".` });
+      toast({ title: "Uploading File...", description: `Preparing "${fileToUpload.name}".` });
 
-        // Step 1: Create initial placeholder metadata in Firestore
-        const newSourceData = {
-            sourceName: fileToUpload.name, description, topic, level: targetLevel,
-            createdAt: new Date().toISOString(),
-            indexingStatus: 'processing',
-            indexingError: 'Waiting for upload...',
-            mimeType,
-        };
-        await setDoc(sourceDocRef, newSourceData);
+      // Step 1: Create initial placeholder metadata in Firestore
+      const newSourceData = {
+        sourceName: fileToUpload.name, description, topic, level: targetLevel,
+        createdAt: new Date().toISOString(),
+        indexingStatus: 'processing',
+        indexingError: 'Waiting for upload...',
+        mimeType,
+      };
+      await setDoc(sourceDocRef, newSourceData);
 
-        // Step 2: Upload file to Cloud Storage
-        await updateDoc(sourceDocRef, { indexingError: 'Uploading to cloud storage...' });
-        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-        const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload);
-        const downloadURL = await getDownloadURL(fileRef);
+      // Step 2: Upload file to Cloud Storage
+      await updateDoc(sourceDocRef, { indexingError: 'Uploading to cloud storage...' });
+      const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+      const fileRef = storageRef(storage, storagePath);
+      await uploadBytes(fileRef, fileToUpload);
+      const downloadURL = await getDownloadURL(fileRef);
 
-        // Update doc with download URL
-        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
+      // Update doc with download URL
+      await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
 
-        // Step 3: Extract text from the now-uploaded file
-        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-        if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-            throw new Error(extractionResult.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
-        }
+      // Step 3: Extract text from the now-uploaded file
+      const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+      if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+        throw new Error(extractionResult.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
+      }
 
-        // Step 4: Call the indexing flow
-        await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
-        const indexingResult = await indexDocument({
-            sourceId,
-            sourceName: fileToUpload.name,
-            text: extractionResult.extractedText,
-            level: targetLevel,
-            topic,
-            downloadURL
-        });
+      // Step 4: Call the indexing flow
+      await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
+      const indexingResult = await indexDocument({
+        sourceId,
+        sourceName: fileToUpload.name,
+        text: extractionResult.extractedText,
+        level: targetLevel,
+        topic,
+        downloadURL
+      });
 
-        // Step 5: Final Validation
-        if (!indexingResult.success || indexingResult.chunksWritten === 0) {
-            throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
-        }
-        
-        // Final success toast
-        toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed.` });
+      // Step 5: Final Validation
+      if (!indexingResult.success || indexingResult.chunksWritten === 0) {
+        throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
+      }
+      
+      // Final success toast
+      toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed.` });
 
-        // Reset form on full success
-        setSelectedFile(null);
-        setUploadDescription('');
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+      // Reset form on full success
+      setSelectedFile(null);
+      setUploadDescription('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
 
     } catch (e: any) {
-        const errorMessage = `Processing Failed: ${e.message || 'Unknown error.'}`;
-        console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
-        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
-        
-        try {
-            // Update Firestore with the specific failure message
-            await updateDoc(sourceDocRef, {
-                indexingStatus: 'failed',
-                indexingError: errorMessage,
-            });
-        } catch (updateError) {
-            console.error("Critical: Failed to write final failure status to Firestore.", updateError);
-        }
+      const errorMessage = `Processing Failed: ${e.message || 'Unknown error.'}`;
+      console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
+      toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+      
+      try {
+        // Update Firestore with the specific failure message
+        await updateDoc(sourceDocRef, {
+          indexingStatus: 'failed',
+          indexingError: errorMessage,
+        });
+      } catch (updateError) {
+        console.error("Critical: Failed to write final failure status to Firestore.", updateError);
+      }
     } finally {
-        setIsCurrentlyUploading(false);
-        setOperationStatus(sourceId, false);
+      setIsCurrentlyUploading(false);
+      setOperationStatus(sourceId, false);
     }
   };
 
@@ -583,3 +582,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
