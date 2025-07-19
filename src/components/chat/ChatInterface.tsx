@@ -159,7 +159,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const { language } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
     
-    // UI Text (static)
+    // UI Text (static) - THIS IS THE CRITICAL FIX
     const uiText = {
         loadingConfig: "Loading Chat Configuration...",
         listening: "Listening...",
