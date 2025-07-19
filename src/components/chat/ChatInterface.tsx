@@ -200,7 +200,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     audioPlayerRef.current.onended = () => {
                         setIsSpeaking(false);
                         if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-                        if (communicationMode !== 'audio-only') {
+                        if (communicationMode === 'audio-text') {
                             setAnimatedResponse(null);
                             addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                         }
@@ -232,7 +232,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setIsSpeaking(true);
         }
     
-        if (communicationMode === 'audio-text' || communicationMode === 'text-only') {
+        if (communicationMode !== 'audio-only') {
             const textLength = fullText.length;
             const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
             let currentIndex = 0;
