@@ -32,7 +32,6 @@ export interface Message {
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
-const FIRESTORE_API_KEYS_PATH = "configurations/api_keys_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
@@ -120,6 +119,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [isListening, setIsListening] = useState(false);
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [inputValue, setInputValue] = useState('');
+    const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
     
     // State to control initialization and readiness
     const [isReady, setIsReady] = useState(false);
@@ -135,6 +135,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         conversationalTopics: "",
         splashScreenWelcomeMessage: "Welcome to AI Chat",
         responsePauseTimeMs: 750,
+        customGreetingMessage: "",
+        useKnowledgeInGreeting: true,
     });
     
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -288,6 +290,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     conversationalTopics: assets.conversationalTopics || "",
                     splashScreenWelcomeMessage: assets.splashWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
                     responsePauseTimeMs: assets.responsePauseTimeMs || configRef.current.responsePauseTimeMs,
+                    customGreetingMessage: assets.customGreetingMessage || "",
+                    useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                 };
             }
           } catch (e) {
@@ -310,6 +314,35 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Effect to send initial greeting
+    useEffect(() => {
+        const sendInitialGreeting = async () => {
+            setIsSendingMessage(true);
+            try {
+                let greeting = configRef.current.splashScreenWelcomeMessage;
+                if (configRef.current.customGreetingMessage) {
+                    greeting = configRef.current.customGreetingMessage;
+                }
+                
+                addMessage(greeting, 'model');
+                await speakText(greeting);
+                
+            } catch (error) {
+                console.error("Error sending initial greeting:", error);
+                const fallbackGreeting = "Hello! How can I help you today?";
+                addMessage(fallbackGreeting, 'model');
+                await speakText(fallbackGreeting);
+            } finally {
+                setIsSendingMessage(false);
+                setAiHasInitiatedConversation(true);
+            }
+        };
+
+        if (isReady && !aiHasInitiatedConversation && messages.length === 0) {
+            sendInitialGreeting();
+        }
+    }, [isReady, aiHasInitiatedConversation, messages.length, addMessage, speakText]);
     
     // Effect for speech recognition setup
     useEffect(() => {
@@ -423,10 +456,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           {!hasConversationEnded ? (
             <>
               <Image {...imageProps} alt="AI Blair Avatar" />
-              <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{configRef.current.splashScreenWelcomeMessage}</h2>
               <div className="mt-4 flex h-12 w-full items-center justify-center">
-                {isListening ? <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div> : null}
-                {isSendingMessage && !isSpeaking ? <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div> : null}
+                {messages.length > 0 ? (
+                  <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{messages[messages.length - 1].text}</h2>
+                ) : (
+                  isSendingMessage && !isSpeaking ? <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div> : null
+                )}
+                {isListening && <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>}
               </div>
               <Button onClick={toggleListening} variant="default" size="lg" className="mt-8 h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}> <Mic className="h-8 w-8" /> </Button>
             </>
@@ -476,5 +512,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
