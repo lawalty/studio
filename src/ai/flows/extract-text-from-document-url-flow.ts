@@ -61,12 +61,12 @@ CRITICAL INSTRUCTIONS:
         },
       });
 
-      const extractedText = response.text?.trim();
-
       if (response.finishReason === 'SAFETY') {
-        const errorMessage = `Text extraction failed because the document content was flagged by the AI's safety filter. This can sometimes happen with documents discussing policies, codes of conduct, or other sensitive topics. Please review the document and try again.`;
+        const errorMessage = `Text extraction failed because the document content was flagged by the AI's safety filter. This can sometimes happen with documents discussing policies or codes of conduct. Please review the document and try again.`;
         return { error: errorMessage };
       }
+
+      const extractedText = response.text?.trim();
 
       if (extractedText) {
         let cleanedText = extractedText.replace(/```[a-z]*/g, '').replace(/```/g, '');

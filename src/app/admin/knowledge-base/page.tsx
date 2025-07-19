@@ -209,8 +209,8 @@ export default function KnowledgeBasePage() {
         await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType || 'file'}...` });
         const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
 
-        if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-            throw new Error(extractionResult.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
+        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+            throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
         }
         
         await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
@@ -295,8 +295,8 @@ export default function KnowledgeBasePage() {
 
         // Step 3: Extract text from the now-uploaded file.
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-        if (extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-            throw new Error(extractionResult.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
+        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+            throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
 
         // Step 4: Call the indexing flow.
@@ -579,7 +579,7 @@ export default function KnowledgeBasePage() {
       <div>
         <h1 className="text-3xl font-bold font-headline text-primary">Knowledge Base Management</h1>
         <p className="text-muted-foreground">
-          Manage the documents and sources that form the AI&apos;s knowledge. Upload new content, move sources between priority levels, or remove them entirely.
+          Manage the documents and sources that form the AI's knowledge. Upload new content, move sources between priority levels, or remove them entirely.
         </p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
