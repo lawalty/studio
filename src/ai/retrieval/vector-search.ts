@@ -25,15 +25,15 @@ interface SearchParams {
   query: string;
   topic?: string;
   limit?: number;
-  distanceThreshold?: number; // This is kept for the test harness but not used for filtering here.
+  distanceThreshold?: number; // Kept for testing flexibility, but the main flow will fetch dynamically.
 }
 
 // Fetches the dynamic distance threshold from Firestore.
 async function getDistanceThreshold(): Promise<number> {
-    const DEFAULT_THRESHOLD = 0.85;
+    const DEFAULT_THRESHOLD = 0.85; // A reasonable default
     try {
-        const configDocRef = db.collection('configurations').doc('site_display_assets');
-        const docSnap = await configDocRef.get();
+        const configDocRef = doc(db, 'configurations/site_display_assets');
+        const docSnap = await getDoc(configDocRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
             // Ensure the value is a number and within a reasonable range (0 to 1.5)
@@ -54,7 +54,7 @@ export async function searchKnowledgeBase({
   query,
   topic,
   limit = 5,
-  distanceThreshold, // No longer used for filtering, but kept for API consistency.
+  distanceThreshold, 
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
@@ -68,6 +68,9 @@ export async function searchKnowledgeBase({
   }
   const embeddingVector = embeddingResponse[0].embedding;
 
+  // If a distance threshold isn't passed in (like from the diagnostic test), fetch it dynamically.
+  const finalDistanceThreshold = distanceThreshold ?? await getDistanceThreshold();
+
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
     try {
@@ -79,8 +82,6 @@ export async function searchKnowledgeBase({
         chunksQuery = chunksQuery.where('topic', '==', topic);
       }
       
-      // Let Firestore do the work of finding the closest matches.
-      // We are removing the manual distance check, as findNearest already returns the top N results.
       const vectorQuery = chunksQuery.findNearest('embedding', embeddingVector, {
           limit: limit,
           distanceMeasure: 'COSINE'
@@ -92,20 +93,20 @@ export async function searchKnowledgeBase({
         continue; // Try the next level
       }
 
-      // If we get here, it means Firestore found at least one result in this priority level.
-      // We will return these results immediately without further filtering.
       const relevantResults: SearchResult[] = [];
       snapshot.forEach(doc => {
-        // We still capture the distance for logging or potential future use, but we don't filter by it.
         const distance = (doc as any).distance; 
-        relevantResults.push({
-          ...(doc.data() as Omit<SearchResult, 'distance'>),
-          distance: distance,
-        });
+        // A lower distance means a better match. We keep results where the distance is LESS than the threshold.
+        if (distance < finalDistanceThreshold) {
+            relevantResults.push({
+                ...(doc.data() as Omit<SearchResult, 'distance'>),
+                distance: distance,
+            });
+        }
       });
 
       if (relevantResults.length > 0) {
-        return relevantResults; // Return the first set of relevant results found.
+        return relevantResults;
       }
 
     } catch (error: any) {
@@ -113,6 +114,7 @@ export async function searchKnowledgeBase({
     }
   }
 
-  // If the loop completes without finding any results in any priority level.
+  // If the loop completes without finding any results that meet the threshold.
   return [];
 }
+

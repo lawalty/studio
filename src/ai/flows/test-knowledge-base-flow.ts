@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow for testing the knowledge base retrieval.
@@ -45,3 +46,4 @@ export async function testKnowledgeBase(
 ): Promise<TestKnowledgeBaseOutput> {
   return testKnowledgeBaseFlow(input);
 }
+

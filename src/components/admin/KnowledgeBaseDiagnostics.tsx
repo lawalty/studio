@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -94,7 +95,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
     setKbTestError(null);
     toast({
       title: "Starting Knowledge Base Test",
-      description: "Sending query to the retrieval pipeline...",
+      description: `Sending query with threshold ${currentThreshold}...`,
     });
     try {
       const input: TestKnowledgeBaseInput = { 
@@ -182,3 +183,4 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
     </div>
   );
 }
+
