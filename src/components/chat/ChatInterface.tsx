@@ -220,8 +220,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 await audioPromise;
                 
                 setIsSpeaking(true);
-                if (communicationMode === 'audio-text') setAnimatedResponse({ ...fullMessage, text: '' });
-                if (communicationMode === 'audio-only') setAiResponseText(fullText);
+                
+                if (communicationMode === 'audio-text') {
+                  setAnimatedResponse({ ...fullMessage, text: '' });
+                } else if (communicationMode === 'audio-only') {
+                  setAiResponseText(fullText);
+                }
                 
                 await audioPlayerRef.current.play();
     
@@ -367,7 +371,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
                     personaTraits: assets.personaTraits || configRef.current.personaTraits,
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
+                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
                     responsePauseTimeMs: assets.responsePauseTimeMs || configRef.current.responsePauseTimeMs,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
@@ -526,7 +530,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       alt: "AI Blair Avatar",
       width: communicationMode === 'audio-only' ? 200 : 120,
       height: communicationMode === 'audio-only' ? 200 : 120,
-      className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", isSpeaking && communicationMode !== 'text-only' && "animate-pulse-speak"),
+      className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", 
+        (isSpeaking && communicationMode !== 'text-only') && "animate-pulse-speak"
+      ),
       priority: true,
       unoptimized: true
     };
@@ -537,18 +543,25 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     if (communicationMode === 'audio-only') {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-center py-8">
+        <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-6">
           {!hasConversationEnded ? (
             <>
               <Image {...imageProps} alt="AI Blair Avatar" />
-              <div className="mt-4 flex h-12 w-full items-center justify-center">
+              <h2 className="text-2xl font-bold font-headline text-primary">
+                {configRef.current.splashScreenWelcomeMessage}
+              </h2>
+              <div className="flex h-12 w-full items-center justify-center">
                  {isSendingMessage && !isSpeaking ? (
                     <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>
                  ) : isListening ? (
-                    <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>
-                 ) : null}
+                    <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>
+                 ) : (
+                   <Button onClick={toggleListening} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}> <Mic className="h-8 w-8" /> </Button>
+                 )}
               </div>
-              <Button onClick={toggleListening} variant="default" size="lg" className="mt-8 h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}> <Mic className="h-8 w-8" /> </Button>
+               <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
+                 <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
+               </Button>
             </>
           ) : (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
