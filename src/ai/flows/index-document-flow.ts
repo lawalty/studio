@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text, generating an
@@ -117,13 +116,13 @@ export async function indexDocument({
             const chunkText = chunks[index];
             
             // Generate the embedding for the chunk. The result is the vector array.
-            const embeddingVector = await withRetry(() => ai.embed({
+            const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
 
             // Validate that the result is a non-empty array of numbers.
-            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
+            if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected result.`);
             }
             
@@ -137,7 +136,7 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding: embeddingVector, // Save the validated vector array directly.
+              embedding: embeddingResponse, // Save the validated vector array directly.
             };
 
             if (linkedEnglishSourceId) {
