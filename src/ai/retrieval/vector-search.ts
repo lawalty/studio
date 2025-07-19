@@ -24,7 +24,7 @@ interface SearchParams {
   query: string;
   topic?: string;
   limit?: number;
-  distanceThreshold?: number;
+  distanceThreshold?: number; // This is kept for the test harness but not used for filtering here.
 }
 
 // Fetches the dynamic distance threshold from Firestore.
@@ -53,7 +53,7 @@ export async function searchKnowledgeBase({
   query,
   topic,
   limit = 5,
-  distanceThreshold,
+  distanceThreshold, // No longer used for filtering, but kept for API consistency.
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
@@ -67,10 +67,7 @@ export async function searchKnowledgeBase({
   }
   const embeddingVector = embeddingResponse[0].embedding;
 
-  // 2. Fetch the dynamic distance threshold.
-  const maxDistanceThreshold = distanceThreshold === undefined ? await getDistanceThreshold() : distanceThreshold;
-
-  // 3. Perform prioritized, sequential search through Firestore.
+  // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
     try {
       let chunksQuery: FirebaseFirestore.Query = db.collection('kb_chunks');
@@ -81,6 +78,8 @@ export async function searchKnowledgeBase({
         chunksQuery = chunksQuery.where('topic', '==', topic);
       }
       
+      // Let Firestore do the work of finding the closest matches.
+      // We are removing the manual distance check, as findNearest already returns the top N results.
       const vectorQuery = chunksQuery.findNearest('embedding', embeddingVector, {
           limit: limit,
           distanceMeasure: 'COSINE'
@@ -92,19 +91,20 @@ export async function searchKnowledgeBase({
         continue; // Try the next level
       }
 
+      // If we get here, it means Firestore found at least one result in this priority level.
+      // We will return these results immediately without further filtering.
       const relevantResults: SearchResult[] = [];
       snapshot.forEach(doc => {
+        // We still capture the distance for logging or potential future use, but we don't filter by it.
         const distance = (doc as any).distance; 
-        if (distance < maxDistanceThreshold) {
-          relevantResults.push({
-            ...(doc.data() as Omit<SearchResult, 'distance'>),
-            distance: distance,
-          });
-        }
+        relevantResults.push({
+          ...(doc.data() as Omit<SearchResult, 'distance'>),
+          distance: distance,
+        });
       });
 
       if (relevantResults.length > 0) {
-        return relevantResults;
+        return relevantResults; // Return the first set of relevant results found.
       }
 
     } catch (error: any) {
@@ -112,5 +112,6 @@ export async function searchKnowledgeBase({
     }
   }
 
+  // If the loop completes without finding any results in any priority level.
   return [];
 }
