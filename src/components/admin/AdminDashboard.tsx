@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     <div className="space-y-8">
       {/* Quick Nav Links */}
       <section>
-         <h2 className="text-2xl font-semibold tracking-tight mb-4">Admin Controls for IA Blair v2</h2>
+         <h2 className="text-2xl font-semibold tracking-tight mb-4">Admin Controls</h2>
          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <AdminNavLinkCard href="/admin/persona" title="AI Persona" description="Define conversational style and traits." Icon={Bot}/>
             <AdminNavLinkCard href="/admin/knowledge-base" title="Knowledge Base" description="Manage documents for the AI." Icon={Database}/>
