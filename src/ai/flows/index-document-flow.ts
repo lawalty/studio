@@ -116,13 +116,13 @@ export async function indexDocument({
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
             
-            // Generate the embedding for the chunk. The result is the vector array.
-            const embeddingVector = await withRetry(() => ai.embed({
+            const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
 
-            // Validate that the result is a non-empty array of numbers.
+            const embeddingVector = embeddingResponse;
+
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected result.`);
             }
