@@ -10,8 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2 } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2 } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
+import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
+import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -43,8 +45,10 @@ export default function PersonaPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isTestingGreeting, setIsTestingGreeting] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const animatedAvatarInputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -131,6 +135,38 @@ export default function PersonaPage() {
   
   const handleAnimationSyncFactorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAnimationSyncFactor(e.target.value);
+  };
+  
+  const handleTestGreeting = async () => {
+    setIsTestingGreeting(true);
+    toast({ title: 'Generating Greeting Audio...', description: 'Please wait a moment.' });
+    try {
+      let greetingText = customGreetingMessage.trim();
+      
+      if (!greetingText) {
+        const result = await generateInitialGreeting({
+          personaTraits,
+          conversationalTopics,
+          useKnowledgeInGreeting,
+          language: 'English', // Admin panel test is always in English
+        });
+        greetingText = result.greeting;
+      }
+      
+      const { media } = await textToSpeech(greetingText);
+      
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+      audioRef.current.src = media;
+      await audioRef.current.play();
+      
+    } catch (error: any) {
+      console.error('Error testing greeting:', error);
+      toast({ title: 'Error', description: `Could not play greeting. ${error.message}`, variant: 'destructive' });
+    } finally {
+      setIsTestingGreeting(false);
+    }
   };
 
 
@@ -333,6 +369,11 @@ export default function PersonaPage() {
                   If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
                 </p>
               </div>
+              <Button onClick={handleTestGreeting} disabled={isSaving || isLoadingData || isTestingGreeting} variant="outline" size="sm">
+                {isTestingGreeting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
+                Test Initial Greeting
+              </Button>
+
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
