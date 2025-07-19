@@ -33,12 +33,13 @@ const generateInitialGreetingFlow = async ({
     const promptTemplate = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
 Your goal is to provide a single, warm, and inviting opening greeting to start a conversation with a user.
 The greeting must be in ${language}.
+It should be friendly and welcoming. Sometimes, but not always, you can ask for the user's name as part of the greeting to make it more personal.
 
 {{#if useKnowledgeInGreeting}}
 You are an expert in the following topics: "${conversationalTopics}".
-Your greeting should be welcoming and also subtly hint at one of these areas of expertise without being too direct. Keep it brief and natural.
+Your greeting should also subtly hint at one of these areas of expertise without being too direct. Keep it brief and natural.
 {{else}}
-Your greeting should be friendly and welcoming. Do not reference any specific knowledge or topics. Just say hello and invite the user to chat.
+Your greeting should be a generic, warm welcome. Do NOT reference any specific knowledge or topics. Just say hello and invite the user to chat.
 {{/if}}
 
 Generate the greeting now. Do not include any preamble or extra text.
