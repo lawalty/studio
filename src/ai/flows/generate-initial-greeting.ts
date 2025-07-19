@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a warm, inviting initial greeting.
@@ -6,8 +7,8 @@
 import { z } from 'zod';
 import { ai } from '@/ai/genkit';
 
-// Zod schema for the input.
-export const GenerateInitialGreetingInputSchema = z.object({
+// Zod schema for the input. This is now internal to the file.
+const GenerateInitialGreetingInputSchema = z.object({
   personaTraits: z.string().describe("A summary of the AI's personality and character traits."),
   conversationalTopics: z.string().describe("A comma-separated list of topics the AI is an expert in. This may be used to tailor the greeting."),
   useKnowledgeInGreeting: z.boolean().describe("If true, the AI should try to subtly reference one of its knowledge topics. If false, it should provide a more generic, warm welcome."),
@@ -15,11 +16,11 @@ export const GenerateInitialGreetingInputSchema = z.object({
 });
 export type GenerateInitialGreetingInput = z.infer<typeof GenerateInitialGreetingInputSchema>;
 
-// Zod schema for the output.
+// Zod schema for the output. This is now internal to the file.
 const GenerateInitialGreetingOutputSchema = z.object({
   greeting: z.string().describe("The AI's generated greeting message."),
 });
-export type GenerateInitialGreetingOutput = z.infer<typeof GenerateInitialGreetingOutputSchema>;
+type GenerateInitialGreetingOutput = z.infer<typeof GenerateInitialGreetingOutputSchema>;
 
 
 const generateInitialGreetingFlow = async ({
