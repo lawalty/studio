@@ -25,7 +25,7 @@ interface SearchParams {
   query: string;
   topic?: string;
   limit?: number;
-  distanceThreshold?: number; // Kept for testing flexibility, but the main flow will fetch dynamically.
+  distanceThreshold?: number; 
 }
 
 // Fetches the dynamic distance threshold from Firestore.
