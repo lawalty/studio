@@ -116,14 +116,18 @@ export async function indexDocument({
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
             
-            const embeddingVector = await withRetry(() => ai.embed({
+            const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
 
-            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
-              throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected result.`);
+            // Defensive coding: ensure the structure is what we now expect, which is an array containing an object with an 'embedding' property.
+            if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding)) {
+              throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected structure.`);
             }
+
+            // Extract the actual numerical vector from the nested structure.
+            const actualEmbeddingVector = embeddingResponse[0].embedding;
             
             const newChunkDocRef = chunksCollection.doc();
             const chunkData: Record<string, any> = {
@@ -133,7 +137,7 @@ export async function indexDocument({
               topic,
               text: chunkText,
               chunkNumber: index + 1,
-              embedding: { embedding: embeddingVector }, // Correctly wrap the vector in a map
+              embedding: actualEmbeddingVector, // Assign the unwrapped vector directly.
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
             };
