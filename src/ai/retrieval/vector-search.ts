@@ -40,11 +40,13 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
+  // The new, correct validation logic for the embedding response.
   if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding)) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   const embeddingVector = embeddingResponse[0].embedding;
+
 
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
