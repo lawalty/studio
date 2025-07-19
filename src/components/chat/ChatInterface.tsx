@@ -191,7 +191,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
         
         if (communicationMode === 'audio-only') {
-            setAnimatedResponse({ ...fullMessage, text: fullText });
+            setAnimatedResponse({ ...fullMessage, text: '' });
         } else {
             setAnimatedResponse({ ...fullMessage, text: '' });
         }
@@ -252,7 +252,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             typeCharacter();
         }
 
-    }, [communicationMode, addMessage]);
+    }, [communicationMode, addMessage, configRef]);
 
 
     const handleSendMessage = useCallback(async (text: string) => {
@@ -517,7 +517,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
     
     const imageProps: React.ComponentProps<typeof Image> = {
-      src: (isSpeaking && communicationMode !== 'text-only' && configRef.current.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? configRef.current.animatedAvatarSrc : configRef.current.avatarSrc,
+      src: (isSpeaking && configRef.current.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? configRef.current.animatedAvatarSrc : configRef.current.avatarSrc,
       alt: "AI Blair Avatar",
       width: communicationMode === 'audio-only' ? 200 : 120,
       height: communicationMode === 'audio-only' ? 200 : 120,
@@ -537,9 +537,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             <>
               <Image {...imageProps} alt="AI Blair Avatar" />
               <div className="mt-4 flex h-12 w-full items-center justify-center">
-                 {animatedResponse ? (
-                    <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{animatedResponse.text}</h2>
-                 ) : isSendingMessage && !isSpeaking ? (
+                 {isSendingMessage && !isSpeaking ? (
                     <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>
                  ) : null}
                 {isListening && <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>}
