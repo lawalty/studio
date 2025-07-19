@@ -9,7 +9,7 @@
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
-const MAX_DISTANCE_THRESHOLD = 0.85; 
+const MAX_DISTANCE_THRESHOLD = 1.0; 
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
 
@@ -73,6 +73,7 @@ export async function searchKnowledgeBase({
       const relevantResults: SearchResult[] = [];
       snapshot.forEach(doc => {
         const distance = (doc as any).distance; 
+        console.log(`[searchKnowledgeBase] Found chunk from "${doc.data().sourceName}" with distance: ${distance}`); // Diagnostic log
         if (distance < MAX_DISTANCE_THRESHOLD) {
           relevantResults.push({
             ...(doc.data() as Omit<SearchResult, 'distance'>),
