@@ -116,12 +116,10 @@ export async function indexDocument({
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
             
-            const embeddingResponse = await withRetry(() => ai.embed({
+            const embeddingVector = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
-
-            const embeddingVector = embeddingResponse;
 
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected result.`);
@@ -135,7 +133,7 @@ export async function indexDocument({
               topic,
               text: chunkText,
               chunkNumber: index + 1,
-              embedding: embeddingVector,
+              embedding: { embedding: embeddingVector }, // Correctly wrap the vector in a map
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
             };
