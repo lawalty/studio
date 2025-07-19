@@ -66,7 +66,7 @@ export default function KnowledgeBasePage() {
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high');
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
