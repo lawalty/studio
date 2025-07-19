@@ -130,7 +130,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
-    const [aiResponseText, setAiResponseText] = useState<string>('');
     
     // Refs for stable storage across renders
     const messagesRef = useRef<Message[]>([]);
@@ -185,27 +184,30 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         if (!fullText.trim()) return;
     
         const useAudio = communicationMode !== 'text-only';
+    
         if (useAudio) {
             if (typeof window !== 'undefined') window.speechSynthesis.cancel();
             if (audioPlayerRef.current) audioPlayerRef.current.pause();
         }
-        
+    
         let audioDuration = fullText.length * configRef.current.typingSpeedMs;
     
         if (useAudio) {
             try {
                 const { media } = await textToSpeech(fullText);
                 if (!audioPlayerRef.current) {
-                  audioPlayerRef.current = new Audio();
-                  audioPlayerRef.current.onended = () => {
-                    setIsSpeaking(false);
-                    if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-                    setAnimatedResponse(null);
-                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                  };
+                    audioPlayerRef.current = new Audio();
+                    audioPlayerRef.current.onended = () => {
+                        setIsSpeaking(false);
+                        if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+                        if (communicationMode !== 'audio-only') {
+                            setAnimatedResponse(null);
+                            addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                        }
+                    };
                 }
                 audioPlayerRef.current.src = media;
-                
+    
                 const audioPromise = new Promise<void>(resolve => {
                     audioPlayerRef.current!.onloadedmetadata = () => {
                         const duration = audioPlayerRef.current!.duration;
@@ -216,43 +218,35 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     };
                     audioPlayerRef.current!.onerror = () => resolve();
                 });
-                
+    
                 await audioPromise;
-                
                 setIsSpeaking(true);
-                
-                if (communicationMode === 'audio-text') {
-                  setAnimatedResponse({ ...fullMessage, text: '' });
-                } else if (communicationMode === 'audio-only') {
-                  setAiResponseText(fullText);
-                }
-                
                 await audioPlayerRef.current.play();
     
             } catch (e) {
                 console.error("TTS API Error:", e);
                 setIsSpeaking(false);
             }
+        } else {
+            // If not using audio, set speaking state for typing animation
+            setIsSpeaking(true);
         }
-        
+    
         if (communicationMode === 'audio-text' || communicationMode === 'text-only') {
             const textLength = fullText.length;
             const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
             let currentIndex = 0;
             
-            if (!useAudio) {
-                setIsSpeaking(true);
-                setAnimatedResponse({ ...fullMessage, text: '' });
-            }
-
+            setAnimatedResponse({ ...fullMessage, text: '' });
+    
             const typeCharacter = () => {
                 if (currentIndex < textLength) {
                     setAnimatedResponse(prev => prev ? { ...prev, text: fullText.substring(0, currentIndex + 1) } : null);
                     currentIndex++;
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                 } else {
-                     if (!useAudio) {
-                        setIsSpeaking(false);
+                    setIsSpeaking(false);
+                    if (communicationMode !== 'audio-only') {
                         setAnimatedResponse(null);
                         addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                     }
@@ -291,7 +285,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 timestamp: Date.now(),
                 pdfReference: result.pdfReference
             };
-
+            
+            setIsSendingMessage(false);
             await speakText(result.aiResponse, aiMessage);
 
             if (result.shouldEndConversation) setHasConversationEnded(true);
@@ -299,7 +294,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } catch (error) {
             console.error("Error in generateChatResponse:", error);
             addMessage(uiText.errorEncountered, 'model');
-        } finally {
             setIsSendingMessage(false);
         }
     }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered]);
@@ -418,15 +412,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         sender: 'model',
                         timestamp: Date.now()
                     };
-
+                    setIsSendingMessage(false);
                     await speakText(greeting, greetingMessage);
                 } catch (error) {
                     console.error("Error sending initial greeting:", error);
                     const fallbackGreeting = "Hello! How can I help you today?";
                     addMessage(fallbackGreeting, 'model');
-                    await speakText(fallbackGreeting, { id: uuidv4(), text: fallbackGreeting, sender: 'model', timestamp: Date.now() });
-                } finally {
                     setIsSendingMessage(false);
+                    await speakText(fallbackGreeting, { id: uuidv4(), text: fallbackGreeting, sender: 'model', timestamp: Date.now() });
                 }
             };
             sendInitialGreeting();
@@ -551,13 +544,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 {configRef.current.splashScreenWelcomeMessage}
               </h2>
               <div className="flex h-12 w-full items-center justify-center">
-                 {isSendingMessage && !isSpeaking ? (
+                 {isSendingMessage ? (
                     <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>
                  ) : isListening ? (
                     <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>
-                 ) : (
+                 ) : !isSpeaking ? (
                    <Button onClick={toggleListening} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}> <Mic className="h-8 w-8" /> </Button>
-                 )}
+                 ) : null}
               </div>
                <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
                  <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
