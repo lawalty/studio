@@ -115,13 +115,17 @@ export async function indexDocument({
           
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
+            
+            // Step 1: Get the embedding response object
             const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
             
+            // Step 2: Extract the embedding vector from the response
             const embeddingVector = embeddingResponse.embedding;
 
+            // Step 3: Validate the extracted vector
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
@@ -136,7 +140,7 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding: embeddingVector,
+              embedding: embeddingVector, // Step 4: Save the validated vector
             };
 
             if (linkedEnglishSourceId) {
