@@ -210,5 +210,3 @@ export async function indexDocument({
         };
       }
 }
-
-    
