@@ -9,7 +9,7 @@
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
-const MAX_DISTANCE_THRESHOLD = 0.7; 
+const MAX_DISTANCE_THRESHOLD = 0.85; 
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
 
