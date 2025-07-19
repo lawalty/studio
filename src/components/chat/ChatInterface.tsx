@@ -190,7 +190,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setIsSpeaking(true);
         }
         
-        setAnimatedResponse({ ...fullMessage, text: '' });
+        if (communicationMode === 'audio-only') {
+            setAnimatedResponse({ ...fullMessage, text: fullText });
+        } else {
+            setAnimatedResponse({ ...fullMessage, text: '' });
+        }
         
         let audioDuration = fullText.length * configRef.current.typingSpeedMs;
 
@@ -201,9 +205,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                   audioPlayerRef.current = new Audio();
                   audioPlayerRef.current.onended = () => {
                     setIsSpeaking(false);
-                    // Ensure the animation is also stopped/completed
                     if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-                    // Final state update after audio ends
                     setAnimatedResponse(null);
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                   };
@@ -218,7 +220,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         }
                         resolve();
                     };
-                    audioPlayerRef.current!.onerror = () => resolve(); // Don't block animation on audio error
+                    audioPlayerRef.current!.onerror = () => resolve();
                 });
                 
                 await audioPromise;
@@ -230,24 +232,25 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
         }
         
-        // Typing animation logic
-        const textLength = fullText.length;
-        const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
-        let currentIndex = 0;
-        
-        const typeCharacter = () => {
-            if (currentIndex < textLength) {
-                setAnimatedResponse(prev => prev ? { ...prev, text: fullText.substring(0, currentIndex + 1) } : null);
-                currentIndex++;
-                animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-            } else {
-                 if (!useAudio) { // If not using audio, we need to manually commit the message
-                    setAnimatedResponse(null);
-                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+        if (communicationMode !== 'audio-only') {
+            const textLength = fullText.length;
+            const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
+            let currentIndex = 0;
+            
+            const typeCharacter = () => {
+                if (currentIndex < textLength) {
+                    setAnimatedResponse(prev => prev ? { ...prev, text: fullText.substring(0, currentIndex + 1) } : null);
+                    currentIndex++;
+                    animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
+                } else {
+                     if (!useAudio) {
+                        setAnimatedResponse(null);
+                        addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                    }
                 }
-            }
-        };
-        typeCharacter();
+            };
+            typeCharacter();
+        }
 
     }, [communicationMode, addMessage]);
 
