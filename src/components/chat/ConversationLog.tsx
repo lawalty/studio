@@ -38,21 +38,20 @@ export default function ConversationLog({
       viewportRef={scrollAreaRef}
     >
         <div className="h-full">
-            {messages.map((msg) => (
-              <ChatBubble 
-                key={msg.id} 
-                message={msg} 
-                avatarSrc={avatarSrc}
-              />
-            ))}
-            {messages.length === 0 && (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-muted-foreground">{emptyMessage}</p>
-              </div>
+            {messages.length > 0 ? (
+                messages.map((msg) => (
+                    <ChatBubble 
+                        key={msg.id} 
+                        message={msg} 
+                        avatarSrc={avatarSrc}
+                    />
+                ))
+            ) : (
+                <div className="flex items-center justify-center h-full">
+                    <p className="text-muted-foreground">{emptyMessage}</p>
+                </div>
             )}
         </div>
     </ScrollArea>
   );
 }
-
-    

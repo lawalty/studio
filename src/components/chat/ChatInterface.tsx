@@ -33,6 +33,8 @@ export interface Message {
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const DEFAULT_TYPING_SPEED_MS = 40;
+const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
   const primaryBg = 'hsl(210 13% 50%)';
@@ -93,25 +95,33 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
   return html;
 }
 
-const getVisibleChatBubbles = (allMessages: Message[]): Message[] => {
-  if (allMessages.length === 0) return [];
-  if (allMessages.length === 1) return [allMessages[0]];
-
-  const lastMessage = allMessages[allMessages.length - 1];
-  const secondLastMessage = allMessages[allMessages.length - 2];
-
-  if (lastMessage.sender === 'model') {
-    if (secondLastMessage.sender === 'user') return [secondLastMessage, lastMessage];
+const getVisibleChatBubbles = (allMessages: Message[], animatedMessage?: Message): Message[] => {
+    if (animatedMessage) {
+        // If there's an animated message, we need to show the previous user message and the animating AI message.
+        const userMessages = allMessages.filter(m => m.sender === 'user');
+        const lastUserMessage = userMessages[userMessages.length - 1];
+        return lastUserMessage ? [lastUserMessage, animatedMessage] : [animatedMessage];
+    }
+    
+    // Default logic for showing the last turn
+    if (allMessages.length < 2) return allMessages;
+    const lastMessage = allMessages[allMessages.length - 1];
+    const secondLastMessage = allMessages[allMessages.length - 2];
+    if (lastMessage.sender === 'model' && secondLastMessage.sender === 'user') {
+        return [secondLastMessage, lastMessage];
+    }
     return [lastMessage];
-  }
-  return [lastMessage];
 };
+
 
 interface ChatInterfaceProps {
     communicationMode: 'audio-only' | 'audio-text' | 'text-only';
 }
 
 export default function ChatInterface({ communicationMode }: ChatInterfaceProps) {
+    // Component readiness state
+    const [isReady, setIsReady] = useState(false);
+    
     // Dynamic conversational state
     const [messages, setMessages] = useState<Message[]>([]);
     const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -119,10 +129,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [isListening, setIsListening] = useState(false);
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const [aiHasInitiatedConversation, setAiHasInitiatedConversation] = useState(false);
-    
-    // State to control initialization and readiness
-    const [isReady, setIsReady] = useState(false);
+    const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
     
     // Refs for stable storage across renders
     const messagesRef = useRef<Message[]>([]);
@@ -137,12 +144,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         responsePauseTimeMs: 750,
         customGreetingMessage: "",
         useKnowledgeInGreeting: true,
+        typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
+        animationSyncFactor: DEFAULT_ANIMATION_SYNC_FACTOR,
     });
     
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const recognitionRef = useRef<any | null>(null);
     const speechRecognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
     const finalTranscriptRef = useRef<string>('');
+    const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Hooks
     const router = useRouter();
@@ -170,24 +180,77 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setMessages(prev => [...prev, newMessage]);
     }, []);
     
-    const speakText = useCallback(async (textToSpeak: string) => {
-        if (communicationMode === 'text-only' || !textToSpeak.trim()) return;
+    const speakText = useCallback(async (fullText: string, fullMessage: Message) => {
+        if (!fullText.trim()) return;
 
-        if (typeof window !== 'undefined') window.speechSynthesis.cancel();
-        if (audioPlayerRef.current) audioPlayerRef.current.pause();
-        setIsSpeaking(true);
-
-        try {
-            const { media } = await textToSpeech(textToSpeak);
-            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-            audioPlayerRef.current.src = media;
-            await audioPlayerRef.current.play();
-        } catch (e) {
-            console.error("TTS API Error:", e);
-        } finally {
-            setIsSpeaking(false);
+        const useAudio = communicationMode !== 'text-only';
+        if (useAudio) {
+            if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+            if (audioPlayerRef.current) audioPlayerRef.current.pause();
+            setIsSpeaking(true);
         }
-    }, [communicationMode]);
+        
+        setAnimatedResponse({ ...fullMessage, text: '' });
+        
+        let audioDuration = fullText.length * configRef.current.typingSpeedMs;
+
+        if (useAudio) {
+            try {
+                const { media } = await textToSpeech(fullText);
+                if (!audioPlayerRef.current) {
+                  audioPlayerRef.current = new Audio();
+                  audioPlayerRef.current.onended = () => {
+                    setIsSpeaking(false);
+                    // Ensure the animation is also stopped/completed
+                    if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+                    // Final state update after audio ends
+                    setAnimatedResponse(null);
+                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                  };
+                }
+                audioPlayerRef.current.src = media;
+                
+                const audioPromise = new Promise<void>(resolve => {
+                    audioPlayerRef.current!.onloadedmetadata = () => {
+                        const duration = audioPlayerRef.current!.duration;
+                        if (isFinite(duration)) {
+                            audioDuration = duration * 1000 * configRef.current.animationSyncFactor;
+                        }
+                        resolve();
+                    };
+                    audioPlayerRef.current!.onerror = () => resolve(); // Don't block animation on audio error
+                });
+                
+                await audioPromise;
+                await audioPlayerRef.current.play();
+
+            } catch (e) {
+                console.error("TTS API Error:", e);
+                setIsSpeaking(false);
+            }
+        }
+        
+        // Typing animation logic
+        const textLength = fullText.length;
+        const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
+        let currentIndex = 0;
+        
+        const typeCharacter = () => {
+            if (currentIndex < textLength) {
+                setAnimatedResponse(prev => prev ? { ...prev, text: fullText.substring(0, currentIndex + 1) } : null);
+                currentIndex++;
+                animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
+            } else {
+                 if (!useAudio) { // If not using audio, we need to manually commit the message
+                    setAnimatedResponse(null);
+                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                }
+            }
+        };
+        typeCharacter();
+
+    }, [communicationMode, addMessage]);
+
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isSendingMessage) return;
@@ -208,9 +271,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 chatHistory: historyForGenkit,
                 language: language,
             });
+            
+            const aiMessage: Message = {
+                id: uuidv4(),
+                text: result.aiResponse,
+                sender: 'model',
+                timestamp: Date.now(),
+                pdfReference: result.pdfReference
+            };
 
-            addMessage(result.aiResponse, 'model', result.pdfReference);
-            await speakText(result.aiResponse);
+            await speakText(result.aiResponse, aiMessage);
+
             if (result.shouldEndConversation) setHasConversationEnded(true);
             
         } catch (error) {
@@ -271,17 +342,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [toast]);
     
-    // Effect for handling end of conversation
     useEffect(() => {
         if (hasConversationEnded) archiveAndIndexChat(messages);
     }, [hasConversationEnded, messages, archiveAndIndexChat]);
     
     // ONE-TIME Effect for initial data load and setup.
     useEffect(() => {
+        let isMounted = true;
         const fetchAllData = async () => {
           try {
             const siteAssetsSnap = await getDoc(doc(db, FIRESTORE_SITE_ASSETS_PATH));
-            if (siteAssetsSnap.exists()) {
+            if (isMounted && siteAssetsSnap.exists()) {
                 const assets = siteAssetsSnap.data();
                 configRef.current = {
                     avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
@@ -292,19 +363,25 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     responsePauseTimeMs: assets.responsePauseTimeMs || configRef.current.responsePauseTimeMs,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
+                    typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
+                    animationSyncFactor: assets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR,
                 };
             }
           } catch (e) {
             toast({ title: "Config Error", description: `Could not load app settings. Using defaults.`, variant: "destructive" });
           } finally {
-            setIsReady(true);
+            if (isMounted) {
+                setIsReady(true);
+            }
           }
         };
         fetchAllData();
 
         return () => { // Cleanup on unmount
+            isMounted = false;
             dismissAllToasts();
             if (speechRecognitionTimerRef.current) clearTimeout(speechRecognitionTimerRef.current);
+            if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             if (recognitionRef.current) try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
             if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) window.speechSynthesis.cancel();
             if (audioPlayerRef.current) {
@@ -317,32 +394,32 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     // Effect to send initial greeting
     useEffect(() => {
-        const sendInitialGreeting = async () => {
-            setIsSendingMessage(true);
-            try {
-                let greeting = configRef.current.splashScreenWelcomeMessage;
-                if (configRef.current.customGreetingMessage) {
-                    greeting = configRef.current.customGreetingMessage;
-                }
-                
-                addMessage(greeting, 'model');
-                await speakText(greeting);
-                
-            } catch (error) {
-                console.error("Error sending initial greeting:", error);
-                const fallbackGreeting = "Hello! How can I help you today?";
-                addMessage(fallbackGreeting, 'model');
-                await speakText(fallbackGreeting);
-            } finally {
-                setIsSendingMessage(false);
-                setAiHasInitiatedConversation(true);
-            }
-        };
+        if (isReady && messages.length === 0) {
+            const sendInitialGreeting = async () => {
+                setIsSendingMessage(true);
+                try {
+                    let greeting = configRef.current.customGreetingMessage || configRef.current.splashScreenWelcomeMessage;
+                    
+                    const greetingMessage: Message = {
+                        id: uuidv4(),
+                        text: greeting,
+                        sender: 'model',
+                        timestamp: Date.now()
+                    };
 
-        if (isReady && !aiHasInitiatedConversation && messages.length === 0) {
+                    await speakText(greeting, greetingMessage);
+                } catch (error) {
+                    console.error("Error sending initial greeting:", error);
+                    const fallbackGreeting = "Hello! How can I help you today?";
+                    addMessage(fallbackGreeting, 'model');
+                    await speakText(fallbackGreeting, { id: uuidv4(), text: fallbackGreeting, sender: 'model', timestamp: Date.now() });
+                } finally {
+                    setIsSendingMessage(false);
+                }
+            };
             sendInitialGreeting();
         }
-    }, [isReady, aiHasInitiatedConversation, messages.length, addMessage, speakText]);
+    }, [isReady, messages.length, addMessage, speakText]);
     
     // Effect for speech recognition setup
     useEffect(() => {
@@ -457,11 +534,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             <>
               <Image {...imageProps} alt="AI Blair Avatar" />
               <div className="mt-4 flex h-12 w-full items-center justify-center">
-                {messages.length > 0 ? (
-                  <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{messages[messages.length - 1].text}</h2>
-                ) : (
-                  isSendingMessage && !isSpeaking ? <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div> : null
-                )}
+                 {animatedResponse ? (
+                    <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{animatedResponse.text}</h2>
+                 ) : isSendingMessage && !isSpeaking ? (
+                    <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>
+                 ) : null}
                 {isListening && <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>}
               </div>
               <Button onClick={toggleListening} variant="default" size="lg" className="mt-8 h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}> <Mic className="h-8 w-8" /> </Button>
@@ -487,12 +564,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             <CardContent className="pt-6 flex flex-col items-center">
               <Image {...imageProps} alt="AI Blair Avatar" />
               <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{configRef.current.splashScreenWelcomeMessage}</h2>
-              {isSendingMessage && !isSpeaking && <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">{uiText.isTyping}</p>}
+              {(isSendingMessage || animatedResponse) && !isSpeaking && <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">{uiText.isTyping}</p>}
             </CardContent>
           </Card>
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
-          <ConversationLog messages={getVisibleChatBubbles(messages)} avatarSrc={configRef.current.avatarSrc} />
+          <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={configRef.current.avatarSrc} />
           <MessageInput
             onSendMessage={handleSendMessage} isSending={isSendingMessage} isSpeaking={isSpeaking}
             showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
