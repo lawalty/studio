@@ -28,7 +28,7 @@ interface SearchParams {
   distanceThreshold?: number; 
 }
 
-// Fetches the dynamic distance threshold from Firestore.
+// Fetches the dynamic distance threshold from Firestore using the Admin SDK.
 async function getDistanceThreshold(): Promise<number> {
     const DEFAULT_THRESHOLD = 0.85; // A reasonable default
     try {
@@ -36,7 +36,6 @@ async function getDistanceThreshold(): Promise<number> {
         const docSnap = await configDocRef.get();
         if (docSnap.exists) {
             const data = docSnap.data();
-            // Ensure the value is a number and within a reasonable range (0 to 1.5)
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
                 const threshold = data.vectorSearchDistanceThreshold;
                 return Math.max(0, Math.min(1.5, threshold));
