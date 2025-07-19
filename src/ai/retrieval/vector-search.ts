@@ -40,12 +40,12 @@ export async function searchKnowledgeBase({
     content: query,
   });
   
-  if (!embeddingResult || !Array.isArray(embeddingResult) || embeddingResult.length === 0 || !embeddingResult[0].embedding) {
+  if (!embeddingResult || !Array.isArray(embeddingResult.embedding) || embeddingResult.embedding.length === 0) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   
-  const embeddingVector = embeddingResult[0].embedding;
+  const embeddingVector = embeddingResult.embedding;
 
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
