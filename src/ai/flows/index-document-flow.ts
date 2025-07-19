@@ -120,9 +120,9 @@ export async function indexDocument({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
-
-            // CORRECTED: Extract the vector and then validate it.
-            const embeddingVector = embeddingResponse.embedding;
+            
+            // The response itself is the vector array.
+            const embeddingVector = embeddingResponse;
 
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
@@ -138,7 +138,7 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding: embeddingVector, // CORRECTED: Save the validated vector array.
+              embedding: embeddingVector, // Save the validated vector array.
             };
 
             if (linkedEnglishSourceId) {
