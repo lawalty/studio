@@ -130,6 +130,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
+    const [aiResponseText, setAiResponseText] = useState<string>('');
     
     // Refs for stable storage across renders
     const messagesRef = useRef<Message[]>([]);
@@ -182,22 +183,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     const speakText = useCallback(async (fullText: string, fullMessage: Message) => {
         if (!fullText.trim()) return;
-
+    
         const useAudio = communicationMode !== 'text-only';
         if (useAudio) {
             if (typeof window !== 'undefined') window.speechSynthesis.cancel();
             if (audioPlayerRef.current) audioPlayerRef.current.pause();
-            setIsSpeaking(true);
-        }
-        
-        if (communicationMode === 'audio-only') {
-            setAnimatedResponse({ ...fullMessage, text: '' });
-        } else {
-            setAnimatedResponse({ ...fullMessage, text: '' });
         }
         
         let audioDuration = fullText.length * configRef.current.typingSpeedMs;
-
+    
         if (useAudio) {
             try {
                 const { media } = await textToSpeech(fullText);
@@ -205,6 +199,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                   audioPlayerRef.current = new Audio();
                   audioPlayerRef.current.onended = () => {
                     setIsSpeaking(false);
+                    setAiResponseText('');
                     if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
                     setAnimatedResponse(null);
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
@@ -220,23 +215,37 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         }
                         resolve();
                     };
-                    audioPlayerRef.current!.onerror = () => resolve();
+                    audioPlayerRef.current!.onerror = () => resolve(); // Resolve even on error to not block flow
                 });
                 
                 await audioPromise;
-                await audioPlayerRef.current.play();
+                
+                // Moved state updates to here to sync with audio start
+                setIsSpeaking(true);
+                setAnimatedResponse({ ...fullMessage, text: '' });
+                if (communicationMode === 'audio-only') {
+                    setAiResponseText(fullText);
+                }
 
+                await audioPlayerRef.current.play();
+    
             } catch (e) {
                 console.error("TTS API Error:", e);
                 setIsSpeaking(false);
             }
         }
         
-        if (communicationMode !== 'audio-only') {
+        if (communicationMode === 'audio-text' || communicationMode === 'text-only') {
             const textLength = fullText.length;
             const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
             let currentIndex = 0;
             
+            // This needs to start only after audio is ready, so we place it here
+            if (!useAudio) {
+                setIsSpeaking(true); // For text-only, this controls the "typing" visual state
+                setAnimatedResponse({ ...fullMessage, text: '' });
+            }
+
             const typeCharacter = () => {
                 if (currentIndex < textLength) {
                     setAnimatedResponse(prev => prev ? { ...prev, text: fullText.substring(0, currentIndex + 1) } : null);
@@ -244,6 +253,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                 } else {
                      if (!useAudio) {
+                        setIsSpeaking(false);
                         setAnimatedResponse(null);
                         addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                     }
@@ -251,7 +261,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             };
             typeCharacter();
         }
-
+    
     }, [communicationMode, addMessage, configRef]);
 
 
@@ -539,8 +549,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               <div className="mt-4 flex h-12 w-full items-center justify-center">
                  {isSendingMessage && !isSpeaking ? (
                     <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>
+                 ) : isListening ? (
+                    <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>
                  ) : null}
-                {isListening && <div className="flex items-center justify-center rounded-lg bg-accent p-3 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>}
               </div>
               <Button onClick={toggleListening} variant="default" size="lg" className="mt-8 h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}> <Mic className="h-8 w-8" /> </Button>
             </>
@@ -565,7 +576,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             <CardContent className="pt-6 flex flex-col items-center">
               <Image {...imageProps} alt="AI Blair Avatar" />
               <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{configRef.current.splashScreenWelcomeMessage}</h2>
-              {(isSendingMessage || animatedResponse) && !isSpeaking && <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">{uiText.isTyping}</p>}
+              {(isSpeaking || (isSendingMessage && !isSpeaking)) && <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">{uiText.isTyping}</p>}
             </CardContent>
           </Card>
         </div>
