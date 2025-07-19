@@ -116,14 +116,14 @@ export async function indexDocument({
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
             
-            // CORRECTED LOGIC:
-            // 1. Await the embedding directly. The result is the vector itself.
-            const embeddingVector = await withRetry(() => ai.embed({
+            const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
 
-            // 2. Validate the result.
+            // CORRECTED: Extract the vector and then validate it.
+            const embeddingVector = embeddingResponse.embedding;
+
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
@@ -138,7 +138,7 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding: embeddingVector, // 3. Save the validated vector.
+              embedding: embeddingVector, // CORRECTED: Save the validated vector array.
             };
 
             if (linkedEnglishSourceId) {
