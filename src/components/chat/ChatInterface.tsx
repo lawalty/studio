@@ -12,7 +12,7 @@ import { generateChatResponse, type GenerateChatResponseInput, type GenerateChat
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Mic, Power, DatabaseZap, Save, RotateCcw } from 'lucide-react';
+import { Mic, Power, DatabaseZap, Save, RotateCcw, Square } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useLanguage } from '@/context/LanguageContext';
@@ -187,8 +187,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setMessages(prev => [...prev, newMessage]);
     }, []);
     
-    const speakText = useCallback(async (fullText: string, fullMessage: Message) => {
-        if (!fullText.trim()) return;
+    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message) => {
+        if (!textToSpeak.trim()) return;
+
+        // Pre-process text for correct pronunciation before sending to any API.
+        const processedText = textToSpeak
+          .replace(/\bCOO\b/gi, 'Chief Operating Officer')
+          .replace(/\bEZCORP\b/gi, 'easy corp');
     
         const useAudio = communicationMode !== 'text-only';
     
@@ -197,24 +202,23 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (audioPlayerRef.current) audioPlayerRef.current.pause();
         }
     
-        let audioDuration = fullText.length * configRef.current.typingSpeedMs;
+        let audioDuration = fullMessage.text.length * configRef.current.typingSpeedMs;
         let audioDataUri = '';
 
         if (useAudio) {
             try {
                 const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
                 if (useCustomTts && ttsApiKey && ttsVoiceId) {
-                    const result = await elevenLabsTextToSpeech({ text: fullText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
+                    const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
                     if (result.error || !result.media) {
                         toast({ title: "Custom TTS Error", description: result.error, variant: 'destructive' });
-                        // Fallback to Google TTS
-                        const googleResult = await googleTextToSpeech(fullText);
+                        const googleResult = await googleTextToSpeech(processedText);
                         audioDataUri = googleResult.media;
                     } else {
                         audioDataUri = result.media;
                     }
                 } else {
-                    const result = await googleTextToSpeech(fullText);
+                    const result = await googleTextToSpeech(processedText);
                     audioDataUri = result.media;
                 }
 
@@ -255,7 +259,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     
         if (communicationMode !== 'audio-only') {
-            const textLength = fullText.length;
+            const textLength = fullMessage.text.length;
             const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
             let currentIndex = 0;
             
@@ -263,7 +267,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
             const typeCharacter = () => {
                 if (currentIndex < textLength) {
-                    setAnimatedResponse(prev => prev ? { ...prev, text: fullText.substring(0, currentIndex + 1) } : null);
+                    setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
                     currentIndex++;
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                 } else {
@@ -608,11 +612,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse">
                         <Mic size={20} className="mr-2" /> {uiText.listening}
                     </div>
-                 ) : !isSpeaking ? (
-                   <Button onClick={toggleListening} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}>
+                 ) : isSpeaking ? null : (
+                   <Button onClick={toggleListening} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
                      <Mic className="h-8 w-8" />
                    </Button>
-                 ) : null}
+                 )}
               </div>
                <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
                  <Power className="mr-2 h-4 w-4" /> {uiText.endChat}

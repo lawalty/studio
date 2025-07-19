@@ -160,13 +160,18 @@ export default function PersonaPage() {
         greetingText = result.greeting;
       }
       
+      // Pre-process text for correct pronunciation before sending to any API.
+      const processedGreetingText = greetingText
+        .replace(/\bCOO\b/gi, 'Chief Operating Officer')
+        .replace(/\bEZCORP\b/gi, 'easy corp');
+
       let audioDataUri = '';
       if (useCustomTts && apiKey && voiceId) {
-          const result = await elevenLabsTextToSpeech({ text: greetingText, apiKey, voiceId });
+          const result = await elevenLabsTextToSpeech({ text: processedGreetingText, apiKey, voiceId });
           if(result.error) throw new Error(result.error);
           audioDataUri = result.media;
       } else {
-          const result = await googleTextToSpeech(greetingText);
+          const result = await googleTextToSpeech(processedGreetingText);
           audioDataUri = result.media;
       }
 
