@@ -122,6 +122,7 @@ export async function indexDocument({
 
           embeddingResponses.forEach((embeddingResponse, index) => {
             const newChunkDocRef = chunksCollection.doc();
+            // CORRECTED LOGIC: Extract the vector first, then validate it.
             const embeddingVector = embeddingResponse.embedding;
             
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
@@ -137,7 +138,7 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding: embeddingVector, // CORRECTED: Use the vector directly
+              embedding: embeddingVector,
             };
 
             if (linkedEnglishSourceId) {
