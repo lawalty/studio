@@ -35,7 +35,7 @@ CRITICAL INSTRUCTIONS:
 5.  Do NOT wrap the output in code blocks or any other formatting.
 6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
 
-      const {text} = await ai.generate({
+      const response = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
         prompt: [{ text: prompt }, { media: { url: documentUrl } }],
         config: {
@@ -61,7 +61,12 @@ CRITICAL INSTRUCTIONS:
         },
       });
 
-      const extractedText = text?.trim();
+      const extractedText = response.text?.trim();
+
+      if (response.finishReason === 'SAFETY') {
+        const errorMessage = `Text extraction failed because the document content was flagged by the AI's safety filter. This can sometimes happen with documents discussing policies, codes of conduct, or other sensitive topics. Please review the document and try again.`;
+        return { error: errorMessage };
+      }
 
       if (extractedText) {
         let cleanedText = extractedText.replace(/```[a-z]*/g, '').replace(/```/g, '');
@@ -94,5 +99,3 @@ CRITICAL INSTRUCTIONS:
       return { error: detailedError };
     }
 }
-
-    
