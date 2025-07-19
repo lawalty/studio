@@ -17,8 +17,9 @@ import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
-import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
+import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
+import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 
 
 export interface Message {
@@ -35,6 +36,7 @@ export interface Message {
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 
@@ -148,6 +150,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
         animationSyncFactor: DEFAULT_ANIMATION_SYNC_FACTOR,
+        ttsApiKey: '',
+        ttsVoiceId: '',
+        useCustomTts: false,
     });
     
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -193,10 +198,26 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     
         let audioDuration = fullText.length * configRef.current.typingSpeedMs;
-    
+        let audioDataUri = '';
+
         if (useAudio) {
             try {
-                const { media } = await textToSpeech(fullText);
+                const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
+                if (useCustomTts && ttsApiKey && ttsVoiceId) {
+                    const result = await elevenLabsTextToSpeech({ text: fullText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
+                    if (result.error || !result.media) {
+                        toast({ title: "Custom TTS Error", description: result.error, variant: 'destructive' });
+                        // Fallback to Google TTS
+                        const googleResult = await googleTextToSpeech(fullText);
+                        audioDataUri = googleResult.media;
+                    } else {
+                        audioDataUri = result.media;
+                    }
+                } else {
+                    const result = await googleTextToSpeech(fullText);
+                    audioDataUri = result.media;
+                }
+
                 if (!audioPlayerRef.current) {
                     audioPlayerRef.current = new Audio();
                     audioPlayerRef.current.onended = () => {
@@ -208,7 +229,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         }
                     };
                 }
-                audioPlayerRef.current.src = media;
+                audioPlayerRef.current.src = audioDataUri;
     
                 const audioPromise = new Promise<void>(resolve => {
                     audioPlayerRef.current!.onloadedmetadata = () => {
@@ -230,7 +251,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setIsSpeaking(false);
             }
         } else {
-            // If not using audio, set speaking state for typing animation
             setIsSpeaking(true);
         }
     
@@ -256,11 +276,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             };
             typeCharacter();
         } else {
-             // For audio-only, just add the message to the log immediately but don't show it.
              addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
         }
     
-    }, [communicationMode, addMessage, configRef]);
+    }, [communicationMode, addMessage, configRef, toast]);
 
 
     const handleSendMessage = useCallback(async (text: string) => {
@@ -363,8 +382,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         const fetchAllData = async () => {
           try {
             const siteAssetsSnap = await getDoc(doc(db, FIRESTORE_SITE_ASSETS_PATH));
-            if (isMounted && siteAssetsSnap.exists()) {
-                const assets = siteAssetsSnap.data();
+            const keysSnap = await getDoc(doc(db, FIRESTORE_KEYS_PATH));
+
+            if (isMounted) {
+                const assets = siteAssetsSnap.exists() ? siteAssetsSnap.data() : {};
+                const keys = keysSnap.exists() ? keysSnap.data() : {};
+
                 configRef.current = {
                     avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
                     animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
@@ -376,6 +399,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
                     animationSyncFactor: assets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR,
+                    ttsApiKey: keys.tts || '',
+                    ttsVoiceId: keys.voiceId || '',
+                    useCustomTts: typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : false,
                 };
             }
           } catch (e) {

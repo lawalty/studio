@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2 } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
-import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
+import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
+import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -23,6 +24,7 @@ const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?te
 const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
@@ -141,6 +143,11 @@ export default function PersonaPage() {
     setIsTestingGreeting(true);
     toast({ title: 'Generating Greeting Audio...', description: 'Please wait a moment.' });
     try {
+      // Fetch custom TTS settings
+      const keysDocRef = doc(db, FIRESTORE_KEYS_PATH);
+      const keysDocSnap = await getDoc(keysDocRef);
+      const { tts: apiKey, voiceId, useTtsApi: useCustomTts } = keysDocSnap.exists() ? keysDocSnap.data() : { tts: '', voiceId: '', useTtsApi: false };
+
       let greetingText = customGreetingMessage.trim();
       
       if (!greetingText) {
@@ -153,12 +160,20 @@ export default function PersonaPage() {
         greetingText = result.greeting;
       }
       
-      const { media } = await textToSpeech(greetingText);
-      
+      let audioDataUri = '';
+      if (useCustomTts && apiKey && voiceId) {
+          const result = await elevenLabsTextToSpeech({ text: greetingText, apiKey, voiceId });
+          if(result.error) throw new Error(result.error);
+          audioDataUri = result.media;
+      } else {
+          const result = await googleTextToSpeech(greetingText);
+          audioDataUri = result.media;
+      }
+
       if (!audioRef.current) {
         audioRef.current = new Audio();
       }
-      audioRef.current.src = media;
+      audioRef.current.src = audioDataUri;
       await audioRef.current.play();
       
     } catch (error: any) {
