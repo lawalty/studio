@@ -137,7 +137,7 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding: embeddingVector,
+              embedding: embeddingVector, // CORRECTED: Use the vector directly
             };
 
             if (linkedEnglishSourceId) {
