@@ -113,28 +113,26 @@ export async function indexDocument({
           const batch = db.batch();
           const chunksCollection = db.collection('kb_chunks');
           
-          const embeddingResponses = await Promise.all(
-            chunks.map(chunkText => withRetry(() => ai.embed({
+          for (let index = 0; index < chunks.length; index++) {
+            const chunkText = chunks[index];
+            const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
-            })))
-          );
-
-          embeddingResponses.forEach((embeddingResponse, index) => {
-            const newChunkDocRef = chunksCollection.doc();
-            // CORRECTED LOGIC: Extract the vector first, then validate it.
-            const embeddingVector = embeddingResponse.embedding;
+            }));
             
+            const embeddingVector = embeddingResponse.embedding;
+
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
             
+            const newChunkDocRef = chunksCollection.doc();
             const chunkData: Record<string, any> = {
               sourceId,
               sourceName,
               level,
               topic,
-              text: chunks[index],
+              text: chunkText,
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
@@ -146,7 +144,7 @@ export async function indexDocument({
             }
 
             batch.set(newChunkDocRef, chunkData);
-          });
+          }
           
           await batch.commit();
         }
