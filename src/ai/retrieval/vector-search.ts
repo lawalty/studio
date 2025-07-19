@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
@@ -25,6 +24,7 @@ interface SearchParams {
   query: string;
   topic?: string;
   limit?: number;
+  distanceThreshold?: number;
 }
 
 // Fetches the dynamic distance threshold from Firestore.
@@ -53,6 +53,7 @@ export async function searchKnowledgeBase({
   query,
   topic,
   limit = 5,
+  distanceThreshold,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
@@ -67,7 +68,7 @@ export async function searchKnowledgeBase({
   const embeddingVector = embeddingResponse[0].embedding;
 
   // 2. Fetch the dynamic distance threshold.
-  const maxDistanceThreshold = await getDistanceThreshold();
+  const maxDistanceThreshold = distanceThreshold === undefined ? await getDistanceThreshold() : distanceThreshold;
 
   // 3. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {

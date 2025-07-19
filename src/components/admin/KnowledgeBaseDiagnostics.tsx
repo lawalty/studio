@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -74,7 +73,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
   // State for retrieval test
   const [isTestingKb, setIsTestingKb] = useState(false);
   const [kbTestResult, setKbTestResult] = useState<TestKnowledgeBaseOutput | null>(null);
-  const [kbTestQuery, setKbTestQuery] = useState('What is the return policy?');
+  const [kbTestQuery, setKbTestQuery] = useState('When did you join EZCORP?');
   const [kbTestError, setKbTestError] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -100,6 +99,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
     try {
       const input: TestKnowledgeBaseInput = { 
         query: kbTestQuery,
+        distanceThreshold: currentThreshold
       };
       const result = await testKnowledgeBase(input);
       setKbTestResult(result);

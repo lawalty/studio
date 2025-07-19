@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow for testing the knowledge base retrieval.
@@ -14,6 +13,7 @@ import '@/ai/genkit'; // Ensures Genkit is configured
 
 const TestKnowledgeBaseInputSchema = z.object({
   query: z.string().describe('The test query to search for in the knowledge base.'),
+  distanceThreshold: z.number().optional().describe('The cosine distance threshold for the search.'),
 });
 export type TestKnowledgeBaseInput = z.infer<typeof TestKnowledgeBaseInputSchema>;
 
@@ -24,9 +24,9 @@ const TestKnowledgeBaseOutputSchema = z.object({
 export type TestKnowledgeBaseOutput = z.infer<typeof TestKnowledgeBaseOutputSchema>;
 
 
-const testKnowledgeBaseFlow = async ({ query }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
+const testKnowledgeBaseFlow = async ({ query, distanceThreshold }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
     // Perform the prioritized, sequential search.
-    const searchResult = await searchKnowledgeBase({ query }); 
+    const searchResult = await searchKnowledgeBase({ query, distanceThreshold }); 
     const contextString = `Here is some context I found that might be relevant to the user's question. Use this information to form your answer.
 ---
 ${searchResult.map(r =>
