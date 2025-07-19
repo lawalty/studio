@@ -199,7 +199,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                   audioPlayerRef.current = new Audio();
                   audioPlayerRef.current.onended = () => {
                     setIsSpeaking(false);
-                    setAiResponseText('');
                     if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
                     setAnimatedResponse(null);
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
@@ -215,18 +214,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         }
                         resolve();
                     };
-                    audioPlayerRef.current!.onerror = () => resolve(); // Resolve even on error to not block flow
+                    audioPlayerRef.current!.onerror = () => resolve();
                 });
                 
                 await audioPromise;
                 
-                // Moved state updates to here to sync with audio start
                 setIsSpeaking(true);
-                setAnimatedResponse({ ...fullMessage, text: '' });
-                if (communicationMode === 'audio-only') {
-                    setAiResponseText(fullText);
-                }
-
+                if (communicationMode === 'audio-text') setAnimatedResponse({ ...fullMessage, text: '' });
+                if (communicationMode === 'audio-only') setAiResponseText(fullText);
+                
                 await audioPlayerRef.current.play();
     
             } catch (e) {
@@ -240,9 +236,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
             let currentIndex = 0;
             
-            // This needs to start only after audio is ready, so we place it here
             if (!useAudio) {
-                setIsSpeaking(true); // For text-only, this controls the "typing" visual state
+                setIsSpeaking(true);
                 setAnimatedResponse({ ...fullMessage, text: '' });
             }
 
@@ -527,11 +522,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
     
     const imageProps: React.ComponentProps<typeof Image> = {
-      src: (isSpeaking && configRef.current.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? configRef.current.animatedAvatarSrc : configRef.current.avatarSrc,
+      src: (isSpeaking && communicationMode !== 'text-only' && configRef.current.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? configRef.current.animatedAvatarSrc : configRef.current.avatarSrc,
       alt: "AI Blair Avatar",
       width: communicationMode === 'audio-only' ? 200 : 120,
       height: communicationMode === 'audio-only' ? 200 : 120,
-      className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", isSpeaking && "animate-pulse-speak"),
+      className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", isSpeaking && communicationMode !== 'text-only' && "animate-pulse-speak"),
       priority: true,
       unoptimized: true
     };
