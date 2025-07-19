@@ -9,8 +9,6 @@
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
-const MAX_DISTANCE_THRESHOLD = 1.0; 
-
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
 
 interface SearchResult {
@@ -29,6 +27,28 @@ interface SearchParams {
   limit?: number;
 }
 
+// Fetches the dynamic distance threshold from Firestore.
+async function getDistanceThreshold(): Promise<number> {
+    const DEFAULT_THRESHOLD = 0.85;
+    try {
+        const configDocRef = db.collection('configurations').doc('site_display_assets');
+        const docSnap = await configDocRef.get();
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            // Ensure the value is a number and within a reasonable range (0 to 1.5)
+            if (typeof data?.vectorSearchDistanceThreshold === 'number') {
+                const threshold = data.vectorSearchDistanceThreshold;
+                return Math.max(0, Math.min(1.5, threshold));
+            }
+        }
+        return DEFAULT_THRESHOLD;
+    } catch (error) {
+        console.error("[getDistanceThreshold] Could not fetch from Firestore, using default.", error);
+        return DEFAULT_THRESHOLD;
+    }
+}
+
+
 export async function searchKnowledgeBase({
   query,
   topic,
@@ -40,15 +60,16 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  // The new, correct validation logic for the embedding response.
   if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding)) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   const embeddingVector = embeddingResponse[0].embedding;
 
+  // 2. Fetch the dynamic distance threshold.
+  const maxDistanceThreshold = await getDistanceThreshold();
 
-  // 2. Perform prioritized, sequential search through Firestore.
+  // 3. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
     try {
       let chunksQuery: FirebaseFirestore.Query = db.collection('kb_chunks');
@@ -73,8 +94,7 @@ export async function searchKnowledgeBase({
       const relevantResults: SearchResult[] = [];
       snapshot.forEach(doc => {
         const distance = (doc as any).distance; 
-        console.log(`[searchKnowledgeBase] Found chunk from "${doc.data().sourceName}" with distance: ${distance}`); // Diagnostic log
-        if (distance < MAX_DISTANCE_THRESHOLD) {
+        if (distance < maxDistanceThreshold) {
           relevantResults.push({
             ...(doc.data() as Omit<SearchResult, 'distance'>),
             distance: distance,

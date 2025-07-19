@@ -65,9 +65,10 @@ const TEST_CASES: TestCase[] = [
 
 interface KnowledgeBaseDiagnosticsProps {
   isAnyOperationInProgress: boolean;
+  currentThreshold: number;
 }
 
-export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress }: KnowledgeBaseDiagnosticsProps) {
+export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, currentThreshold }: KnowledgeBaseDiagnosticsProps) {
   const [ingestionTestResults, setIngestionTestResults] = useState<Record<string, { status: 'running' | 'success' | 'failure'; message: string } | null>>({});
   
   // State for retrieval test
@@ -150,7 +151,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress }: K
             )}
             {kbTestResult && (
                 <div className="mt-4 space-y-2">
-                    <h4 className="font-semibold">Test Results:</h4>
+                    <h4 className="font-semibold">Test Results (Threshold: {currentThreshold}):</h4>
                     {Array.isArray(kbTestResult.searchResult) && kbTestResult.searchResult.length > 0 ? (
                         <Alert variant="default" className="max-h-96 overflow-y-auto">
                             <CheckCircle className="h-4 w-4" />
@@ -170,7 +171,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress }: K
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>No Relevant Chunks Found</AlertTitle>
                             <AlertDescription>
-                                The vector search ran successfully but did not find any results in the knowledge base for your query that met the relevance threshold. Try a different query or check if relevant documents have been indexed.
+                                The vector search ran successfully but did not find any results in the knowledge base for your query that met the relevance threshold of {currentThreshold}. Try a different query or increase the threshold using the slider above.
                             </AlertDescription>
                         </Alert>
                     )}

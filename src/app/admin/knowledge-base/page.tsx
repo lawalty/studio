@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -25,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Slider } from '@/components/ui/slider';
 
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
@@ -54,6 +55,8 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
+const DEFAULT_DISTANCE_THRESHOLD = 0.85;
+
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
   const [englishSources, setEnglishSources] = useState<KnowledgeSource[]>([]);
@@ -68,6 +71,8 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
+  const [distanceThreshold, setDistanceThreshold] = useState([DEFAULT_DISTANCE_THRESHOLD]);
+  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const { toast } = useToast();
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
@@ -77,24 +82,29 @@ export default function KnowledgeBasePage() {
   };
 
   useEffect(() => {
-    const fetchTopics = async () => {
+    const fetchSettings = async () => {
       const docRef = doc(db, 'configurations/site_display_assets');
       try {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
+          // Fetch topics
           const topicsString = data.conversationalTopics || '';
           let topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
           setAvailableTopics(topicsArray);
           if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
             setSelectedTopicForUpload(topicsArray[0]);
           }
+          // Fetch distance threshold
+          if (typeof data.vectorSearchDistanceThreshold === 'number') {
+            setDistanceThreshold([data.vectorSearchDistanceThreshold]);
+          }
         }
       } catch (error) {
-        console.error("Error fetching topics:", error);
+        console.error("Error fetching initial settings:", error);
       }
     };
-    fetchTopics();
+    fetchSettings();
   }, [selectedTopicForUpload]);
   
   // This effect will listen for real-time updates on all knowledge base levels
@@ -139,6 +149,26 @@ export default function KnowledgeBasePage() {
 
     return () => unsubscribers.forEach(unsub => unsub());
   }, []);
+
+  const handleSaveThreshold = async () => {
+    setIsSavingThreshold(true);
+    try {
+        const docRef = doc(db, 'configurations/site_display_assets');
+        await setDoc(docRef, { vectorSearchDistanceThreshold: distanceThreshold[0] }, { merge: true });
+        toast({
+            title: "Threshold Saved",
+            description: `Relevance threshold set to ${distanceThreshold[0]}.`,
+        });
+    } catch (error: any) {
+        toast({
+            title: "Error Saving Threshold",
+            description: "Could not save the setting to Firestore.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSavingThreshold(false);
+    }
+  };
 
   const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
@@ -618,6 +648,38 @@ export default function KnowledgeBasePage() {
               </Button>
             </CardFooter>
           </Card>
+
+          <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><SlidersHorizontal /> RAG Tuning</CardTitle>
+                <CardDescription>
+                    Adjust the sensitivity of the Retrieval-Augmented Generation (RAG) system.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="distance-threshold">Relevance Threshold: {distanceThreshold[0]}</Label>
+                    <Slider
+                        id="distance-threshold"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={distanceThreshold}
+                        onValueChange={setDistanceThreshold}
+                        className="my-4"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Lower values (e.g., 0.2) require a very strong match. Higher values (e.g., 0.9) allow for more loosely related results. Default is 0.85.
+                    </p>
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button onClick={handleSaveThreshold} disabled={isSavingThreshold}>
+                    {isSavingThreshold ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save Threshold
+                </Button>
+            </CardFooter>
+          </Card>
           
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="diagnostics">
@@ -627,6 +689,7 @@ export default function KnowledgeBasePage() {
               <AccordionContent>
                 <KnowledgeBaseDiagnostics
                   isAnyOperationInProgress={anyOperationGloballyInProgress}
+                  currentThreshold={distanceThreshold[0]}
                 />
               </AccordionContent>
             </AccordionItem>
