@@ -365,7 +365,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
                     personaTraits: assets.personaTraits || configRef.current.personaTraits,
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
+                    splashScreenWelcomeMessage: assets.splashWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
                     responsePauseTimeMs: assets.responsePauseTimeMs || configRef.current.responsePauseTimeMs,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
@@ -543,13 +543,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               <h2 className="text-2xl font-bold font-headline text-primary">
                 {configRef.current.splashScreenWelcomeMessage}
               </h2>
-              <div className="flex h-12 w-full items-center justify-center">
+              <div className="flex h-16 w-full items-center justify-center">
                  {isSendingMessage ? (
                     <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>
                  ) : isListening ? (
-                    <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse"> <Mic size={20} className="mr-2" /> {uiText.listening} </div>
+                    <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse">
+                        <Mic size={20} className="mr-2" /> {uiText.listening}
+                    </div>
                  ) : !isSpeaking ? (
-                   <Button onClick={toggleListening} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}> <Mic className="h-8 w-8" /> </Button>
+                   <Button onClick={toggleListening} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse" disabled={isSpeaking || isSendingMessage}>
+                     <Mic className="h-8 w-8" />
+                   </Button>
                  ) : null}
               </div>
                <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
