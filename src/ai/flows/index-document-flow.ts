@@ -120,10 +120,10 @@ export async function indexDocument({
             })))
           );
 
-          embeddingResponses.forEach((embeddingVector, index) => {
+          embeddingResponses.forEach((embeddingResponse, index) => {
             const newChunkDocRef = chunksCollection.doc();
             
-            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
+            if (!embeddingResponse.embedding || !Array.isArray(embeddingResponse.embedding) || embeddingResponse.embedding.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}.`);
             }
             
@@ -136,7 +136,7 @@ export async function indexDocument({
               chunkNumber: index + 1,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
-              embedding: embeddingVector,
+              embedding: embeddingResponse.embedding,
             };
 
             if (linkedEnglishSourceId) {
