@@ -18,6 +18,8 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
 import { textToSpeech } from '@/ai/flows/text-to-speech-flow';
+import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
+
 
 export interface Message {
   id: string;
@@ -159,7 +161,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const { language } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
     
-    // UI Text (static) - THIS IS THE CRITICAL FIX
+    // UI Text (static)
     const uiText = {
         loadingConfig: "Loading Chat Configuration...",
         listening: "Listening...",
@@ -253,6 +255,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             };
             typeCharacter();
+        } else {
+             // For audio-only, just add the message to the log immediately but don't show it.
+             addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
         }
     
     }, [communicationMode, addMessage, configRef]);
@@ -403,28 +408,55 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         if (isReady && messages.length === 0) {
             const sendInitialGreeting = async () => {
                 setIsSendingMessage(true);
+                let greetingText = "Hello! How can I help you today?"; // Default fallback
+
                 try {
-                    let greeting = configRef.current.customGreetingMessage || configRef.current.splashScreenWelcomeMessage;
+                    const { 
+                        customGreetingMessage, 
+                        useKnowledgeInGreeting, 
+                        personaTraits, 
+                        conversationalTopics 
+                    } = configRef.current;
+
+                    if (customGreetingMessage) {
+                        greetingText = customGreetingMessage;
+                    } else {
+                        // Call the AI to generate a greeting
+                        const result = await generateInitialGreeting({
+                            personaTraits,
+                            conversationalTopics,
+                            useKnowledgeInGreeting,
+                            language,
+                        });
+                        greetingText = result.greeting;
+                    }
                     
                     const greetingMessage: Message = {
                         id: uuidv4(),
-                        text: greeting,
+                        text: greetingText,
+                        sender: 'model',
+                        timestamp: Date.now()
+                    };
+
+                    setIsSendingMessage(false);
+                    await speakText(greetingText, greetingMessage);
+
+                } catch (error) {
+                    console.error("Error generating or sending initial greeting:", error);
+                    // Use the default fallback greeting on error
+                    const fallbackMessage: Message = {
+                        id: uuidv4(),
+                        text: greetingText,
                         sender: 'model',
                         timestamp: Date.now()
                     };
                     setIsSendingMessage(false);
-                    await speakText(greeting, greetingMessage);
-                } catch (error) {
-                    console.error("Error sending initial greeting:", error);
-                    const fallbackGreeting = "Hello! How can I help you today?";
-                    addMessage(fallbackGreeting, 'model');
-                    setIsSendingMessage(false);
-                    await speakText(fallbackGreeting, { id: uuidv4(), text: fallbackGreeting, sender: 'model', timestamp: Date.now() });
+                    await speakText(greetingText, fallbackMessage);
                 }
             };
             sendInitialGreeting();
         }
-    }, [isReady, messages.length, addMessage, speakText]);
+    }, [isReady, messages.length, language, speakText]);
     
     // Effect for speech recognition setup
     useEffect(() => {
