@@ -32,9 +32,9 @@ interface SearchParams {
 async function getDistanceThreshold(): Promise<number> {
     const DEFAULT_THRESHOLD = 0.85; // A reasonable default
     try {
-        const configDocRef = doc(db, 'configurations/site_display_assets');
-        const docSnap = await getDoc(configDocRef);
-        if (docSnap.exists()) {
+        const configDocRef = db.doc('configurations/site_display_assets');
+        const docSnap = await configDocRef.get();
+        if (docSnap.exists) {
             const data = docSnap.data();
             // Ensure the value is a number and within a reasonable range (0 to 1.5)
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
@@ -117,4 +117,3 @@ export async function searchKnowledgeBase({
   // If the loop completes without finding any results that meet the threshold.
   return [];
 }
-
