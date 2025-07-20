@@ -38,6 +38,7 @@ async function getDistanceThreshold(): Promise<number> {
             const data = docSnap.data();
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
                 const threshold = data.vectorSearchDistanceThreshold;
+                // Ensure the threshold is within a reasonable range (e.g., 0 to 1.5 for COSINE)
                 return Math.max(0, Math.min(1.5, threshold));
             }
         }
@@ -56,16 +57,15 @@ export async function searchKnowledgeBase({
   distanceThreshold, 
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
-  const embeddingResponse = await ai.embed({
+  const embeddingVector = await ai.embed({
     embedder: 'googleai/embedding-001',
     content: query,
   });
 
-  if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding)) {
+  if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
-  const embeddingVector = embeddingResponse[0].embedding;
 
   // If a distance threshold isn't passed in (like from the diagnostic test), fetch it dynamically.
   const finalDistanceThreshold = distanceThreshold ?? await getDistanceThreshold();
@@ -105,10 +105,12 @@ export async function searchKnowledgeBase({
       });
 
       if (relevantResults.length > 0) {
+        // We found results at this priority level, so we return them and stop searching lower levels.
         return relevantResults;
       }
 
     } catch (error: any) {
+        // Log the error but continue to the next priority level.
         console.error(`[searchKnowledgeBase] Error searching in '${level}' priority level:`, error);
     }
   }

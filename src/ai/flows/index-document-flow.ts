@@ -121,11 +121,9 @@ export async function indexDocument({
                 content: chunkText,
             }));
 
-            if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding)) {
+            if (!embeddingResponse || embeddingResponse.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected structure.`);
             }
-
-            const actualEmbeddingVector = embeddingResponse[0].embedding;
             
             const newChunkDocRef = chunksCollection.doc();
             const chunkData: Record<string, any> = {
@@ -135,7 +133,7 @@ export async function indexDocument({
               topic,
               text: chunkText,
               chunkNumber: index + 1,
-              embedding: actualEmbeddingVector, 
+              embedding: embeddingResponse, 
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
             };
