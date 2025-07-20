@@ -1,11 +1,12 @@
+
 {
   "indexes": [
     {
       "collectionGroup": "kb_chunks",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "topic", "order": "ASCENDING" },
         { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "topic", "order": "ASCENDING" },
         {
           "fieldPath": "embedding",
           "vectorConfig": {
