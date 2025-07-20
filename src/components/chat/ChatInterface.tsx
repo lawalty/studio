@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { Mic, Power, DatabaseZap, Save, RotateCcw, Square } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -227,10 +228,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     audioPlayerRef.current.onended = () => {
                         setIsSpeaking(false);
                         if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-                        if (communicationMode === 'audio-text') {
-                            setAnimatedResponse(null);
-                            addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                        }
+                        setAnimatedResponse(null);
+                        addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                     };
                 }
                 audioPlayerRef.current.src = audioDataUri;
@@ -272,7 +271,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                 } else {
                     setIsSpeaking(false);
-                    // This block is only for text-based modes, so the check is safe.
                     setAnimatedResponse(null);
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                 }
@@ -667,3 +665,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
