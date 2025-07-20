@@ -6,7 +6,7 @@
  * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It searches 'High' priority documents first,
  *   then 'Medium', then 'Low', then 'Chat History', returning the first set of relevant results it finds that meet a confidence threshold.
  */
-import { db } from '@/lib/firebase-admin';
+import { db, admin } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
@@ -57,7 +57,7 @@ export async function searchKnowledgeBase({
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
-    embedder: 'googleai/text-embedding-preview-0409',
+    embedder: 'googleai/gemini-pro',
     content: query,
   });
 

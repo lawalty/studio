@@ -21,7 +21,7 @@ export type TestEmbeddingOutput = z.infer<typeof TestEmbeddingOutputSchema>;
 const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
     try {
       const embedding = await ai.embed({
-        embedder: 'googleai/text-embedding-preview-0409',
+        embedder: 'googleai/gemini-pro',
         content: 'This is a simple test sentence.',
       });
       
