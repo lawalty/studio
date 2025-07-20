@@ -6,10 +6,13 @@
  * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It searches 'High' priority documents first,
  *   then 'Medium', then 'Low', then 'Chat History', returning the first set of relevant results it finds that meet a confidence threshold.
  */
-import { db, admin } from '@/lib/firebase-admin';
+import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
+
+// A reasonable default threshold. Lower is a better match.
+const DEFAULT_DISTANCE_THRESHOLD = 0.7;
 
 interface SearchResult {
   sourceId: string;
@@ -25,30 +28,8 @@ interface SearchParams {
   query: string;
   topic?: string;
   limit?: number;
-  distanceThreshold?: number; 
+  distanceThreshold?: number;
 }
-
-// Fetches the dynamic distance threshold from Firestore using the Admin SDK.
-async function getDistanceThreshold(): Promise<number> {
-    const DEFAULT_THRESHOLD = 0.85; // A reasonable default
-    try {
-        const configDocRef = db.doc('configurations/site_display_assets');
-        const docSnap = await configDocRef.get();
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (typeof data?.vectorSearchDistanceThreshold === 'number') {
-                const threshold = data.vectorSearchDistanceThreshold;
-                // Ensure the threshold is within a reasonable range (e.g., 0 to 1.5 for COSINE)
-                return Math.max(0, Math.min(1.5, threshold));
-            }
-        }
-        return DEFAULT_THRESHOLD;
-    } catch (error) {
-        console.error("[getDistanceThreshold] Could not fetch from Firestore, using default.", error);
-        return DEFAULT_THRESHOLD;
-    }
-}
-
 
 export async function searchKnowledgeBase({
   query,
@@ -68,9 +49,8 @@ export async function searchKnowledgeBase({
   }
   const embeddingVector = embeddingResponse[0].embedding;
 
-
-  // If a distance threshold isn't passed in (like from the diagnostic test), fetch it dynamically.
-  const finalDistanceThreshold = distanceThreshold ?? await getDistanceThreshold();
+  // If a distance threshold is passed in (like from the diagnostic test), use it. Otherwise, use the reliable default.
+  const finalDistanceThreshold = distanceThreshold ?? DEFAULT_DISTANCE_THRESHOLD;
 
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
