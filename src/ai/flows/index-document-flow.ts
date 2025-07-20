@@ -117,7 +117,7 @@ export async function indexDocument({
             const chunkText = chunks[index];
             
             const embeddingResponse = await withRetry(() => ai.embed({
-                embedder: 'googleai/text-embedding-004',
+                embedder: 'googleai/text-embedding-preview-0409',
                 content: chunkText,
             }));
 

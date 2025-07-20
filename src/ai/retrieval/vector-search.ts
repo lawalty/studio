@@ -57,7 +57,7 @@ export async function searchKnowledgeBase({
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
-    embedder: 'googleai/text-embedding-004',
+    embedder: 'googleai/text-embedding-preview-0409',
     content: query,
   });
 
