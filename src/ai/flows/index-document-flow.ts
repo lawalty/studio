@@ -133,7 +133,7 @@ export async function indexDocument({
               topic,
               text: chunkText,
               chunkNumber: index + 1,
-              embedding: new Float32Array(embeddingResponse), 
+              embedding: embeddingResponse, 
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
             };
