@@ -4,15 +4,12 @@
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
  *
  * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It searches 'High' priority documents first,
- *   then 'Medium', then 'Low', then 'Chat History', returning the first set of relevant results it finds that meet a confidence threshold.
+ *   then 'Medium', then 'Low', then 'Chat History', returning the first set of relevant results it finds.
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
-
-// A reasonable default threshold. Lower is a better match.
-const DEFAULT_DISTANCE_THRESHOLD = 0.7;
 
 interface SearchResult {
   sourceId: string;
@@ -28,14 +25,13 @@ interface SearchParams {
   query: string;
   topic?: string;
   limit?: number;
-  distanceThreshold?: number;
+  distanceThreshold?: number; // This is kept for the function signature but will be ignored internally for this test.
 }
 
 export async function searchKnowledgeBase({
   query,
   topic,
   limit = 5,
-  distanceThreshold, 
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
   const embeddingResponse = await ai.embed({
@@ -48,9 +44,6 @@ export async function searchKnowledgeBase({
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   const embeddingVector = embeddingResponse[0].embedding;
-
-  // If a distance threshold is passed in (like from the diagnostic test), use it. Otherwise, use the reliable default.
-  const finalDistanceThreshold = distanceThreshold ?? DEFAULT_DISTANCE_THRESHOLD;
 
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
@@ -74,21 +67,18 @@ export async function searchKnowledgeBase({
         continue; // Try the next level
       }
 
-      const relevantResults: SearchResult[] = [];
+      const results: SearchResult[] = [];
       snapshot.forEach(doc => {
-        const distance = (doc as any).distance; 
-        // A lower distance means a better match. We keep results where the distance is LESS than the threshold.
-        if (distance < finalDistanceThreshold) {
-            relevantResults.push({
-                ...(doc.data() as Omit<SearchResult, 'distance'>),
-                distance: distance,
-            });
-        }
+        // We are now ignoring the distance threshold and returning whatever is found.
+        results.push({
+            ...(doc.data() as Omit<SearchResult, 'distance'>),
+            distance: (doc as any).distance, // Still include the distance for debugging.
+        });
       });
 
-      if (relevantResults.length > 0) {
-        // We found results at this priority level, so we return them and stop searching lower levels.
-        return relevantResults;
+      // If we found any results at this priority level, return them immediately.
+      if (results.length > 0) {
+        return results;
       }
 
     } catch (error: any) {
@@ -97,6 +87,6 @@ export async function searchKnowledgeBase({
     }
   }
 
-  // If the loop completes without finding any results that meet the threshold.
+  // If the loop completes without finding anything.
   return [];
 }
