@@ -25,12 +25,11 @@ interface SearchParams {
   query: string;
   topic?: string;
   limit?: number;
-  distanceThreshold?: number; // This is kept for the function signature but will be ignored internally for this test.
+  distanceThreshold?: number;
 }
 
 export async function searchKnowledgeBase({
   query,
-  topic,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
@@ -50,11 +49,8 @@ export async function searchKnowledgeBase({
     try {
       let chunksQuery: FirebaseFirestore.Query = db.collection('kb_chunks');
       
+      // We only filter by level for this diagnostic version of the search.
       chunksQuery = chunksQuery.where('level', '==', level);
-
-      if (topic) {
-        chunksQuery = chunksQuery.where('topic', '==', topic);
-      }
       
       const vectorQuery = chunksQuery.findNearest('embedding', embeddingVector, {
           limit: limit,
@@ -69,7 +65,7 @@ export async function searchKnowledgeBase({
 
       const results: SearchResult[] = [];
       snapshot.forEach(doc => {
-        // We are now ignoring the distance threshold and returning whatever is found.
+        // We are ignoring the distance threshold and returning whatever is found.
         results.push({
             ...(doc.data() as Omit<SearchResult, 'distance'>),
             distance: (doc as any).distance, // Still include the distance for debugging.
