@@ -9,7 +9,7 @@
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 
-const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
+const PRIORITY_LEVELS: Readonly<('High')[]> = ['High'];
 
 interface SearchResult {
   sourceId: string;
