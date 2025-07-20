@@ -6,7 +6,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "level", "order": "ASCENDING" },
-        { "fieldPath": "topic", "order": "ASCENDING" },
         {
           "fieldPath": "embedding",
           "vectorConfig": {
