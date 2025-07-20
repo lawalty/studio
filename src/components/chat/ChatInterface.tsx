@@ -272,10 +272,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                 } else {
                     setIsSpeaking(false);
-                    if (communicationMode !== 'audio-only') {
-                        setAnimatedResponse(null);
-                        addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                    }
+                    // This block is only for text-based modes, so the check is safe.
+                    setAnimatedResponse(null);
+                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                 }
             };
             typeCharacter();
@@ -397,7 +396,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
                     personaTraits: assets.personaTraits || configRef.current.personaTraits,
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
+                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
                     responsePauseTimeMs: assets.responsePauseTimeMs || configRef.current.responsePauseTimeMs,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
