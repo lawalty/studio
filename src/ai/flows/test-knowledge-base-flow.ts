@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow for testing the knowledge base retrieval.
@@ -14,31 +13,27 @@ import '@/ai/genkit'; // Ensures Genkit is configured
 
 const TestKnowledgeBaseInputSchema = z.object({
   query: z.string().describe('The test query to search for in the knowledge base.'),
-  distanceThreshold: z.number().optional().describe('The cosine distance threshold for the search.'),
 });
 export type TestKnowledgeBaseInput = z.infer<typeof TestKnowledgeBaseInputSchema>;
 
-const TestKnowledgeBaseOutputSchema = z.object({
-  retrievedContext: z.string().describe('The raw context string retrieved from the vector search, including source names and text chunks.'),
-  searchResult: z.any().describe('The raw search result object from the vector search.'),
-});
+// The output is now simply the raw search result array.
+const TestKnowledgeBaseOutputSchema = z.array(z.object({
+    sourceId: z.string(),
+    text: z.string(),
+    sourceName: z.string(),
+    level: z.string(),
+    topic: z.string(),
+    downloadURL: z.string().optional(),
+    distance: z.number(),
+}));
 export type TestKnowledgeBaseOutput = z.infer<typeof TestKnowledgeBaseOutputSchema>;
 
 
-const testKnowledgeBaseFlow = async ({ query, distanceThreshold }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
-    // Perform the prioritized, sequential search.
-    const searchResult = await searchKnowledgeBase({ query, distanceThreshold }); 
-    const contextString = `Here is some context I found that might be relevant to the user's question. Use this information to form your answer.
----
-${searchResult.map(r =>
-    `Context from document "${r.sourceName}" (Topic: ${r.topic}, Priority: ${r.level}):
-${r.text}
-${(r.sourceName && r.sourceName.toLowerCase().endsWith('.pdf') && r.downloadURL) ? `(Reference URL for this chunk's source PDF: ${r.downloadURL})` : ''}`
-  ).join('\n---\n')}
----
-Based on this context, please answer the user's question.
-`;
-    return { retrievedContext: contextString, searchResult };
+const testKnowledgeBaseFlow = async ({ query }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
+    // Directly call the search function and return its raw result.
+    // This removes all legacy formatting and logic.
+    const searchResult = await searchKnowledgeBase({ query }); 
+    return searchResult;
   };
 
 export async function testKnowledgeBase(
@@ -46,4 +41,3 @@ export async function testKnowledgeBase(
 ): Promise<TestKnowledgeBaseOutput> {
   return testKnowledgeBaseFlow(input);
 }
-

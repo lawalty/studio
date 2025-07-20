@@ -95,12 +95,11 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
     setKbTestError(null);
     toast({
       title: "Starting Knowledge Base Test",
-      description: `Sending query with threshold ${currentThreshold}...`,
+      description: `Sending query...`,
     });
     try {
       const input: TestKnowledgeBaseInput = { 
         query: kbTestQuery,
-        distanceThreshold: currentThreshold
       };
       const result = await testKnowledgeBase(input);
       setKbTestResult(result);
@@ -125,7 +124,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
           <CardHeader>
               <CardTitle className="font-headline">Retrieval Pipeline Diagnostics</CardTitle>
               <CardDescription>
-                Test the retrieval (RAG) part of the pipeline by sending a query to the vector search backend. This does not use the conversational AI, it only shows the raw context that would be sent to the AI.
+                Test the retrieval (RAG) part of the pipeline by sending a query to the vector search backend. This does not use the conversational AI, it only shows the raw context that would be sent to the AI. The RAG Tuning slider above will affect the results.
               </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -153,12 +152,12 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
             {kbTestResult && (
                 <div className="mt-4 space-y-2">
                     <h4 className="font-semibold">Test Results (Threshold: {currentThreshold}):</h4>
-                    {Array.isArray(kbTestResult.searchResult) && kbTestResult.searchResult.length > 0 ? (
+                    {Array.isArray(kbTestResult) && kbTestResult.length > 0 ? (
                         <Alert variant="default" className="max-h-96 overflow-y-auto">
                             <CheckCircle className="h-4 w-4" />
-                            <AlertTitle>Found {kbTestResult.searchResult.length} Relevant Chunks</AlertTitle>
+                            <AlertTitle>Found {kbTestResult.length} Relevant Chunks</AlertTitle>
                             <AlertDescription>
-                                {kbTestResult.searchResult.map((result: any, index: number) => (
+                                {kbTestResult.map((result, index) => (
                                     <div key={index} className="mt-2 p-2 border rounded-md text-xs bg-muted/50">
                                         <p><strong>Source:</strong> {result.sourceName} (L: {result.level}, T: {result.topic})</p>
                                         <p><strong>Text:</strong> &quot;{result.text}&quot;</p>
@@ -172,7 +171,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>No Relevant Chunks Found</AlertTitle>
                             <AlertDescription>
-                                The vector search ran successfully but did not find any results in the knowledge base for your query that met the relevance threshold of {currentThreshold}. Try a different query or increase the threshold using the slider above.
+                                The vector search ran successfully but did not find any results in the knowledge base for your query that met the relevance threshold of {currentThreshold}. Try a different query or adjust the RAG Tuning slider above.
                             </AlertDescription>
                         </Alert>
                     )}
@@ -183,4 +182,3 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
     </div>
   );
 }
-
