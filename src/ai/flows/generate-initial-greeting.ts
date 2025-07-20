@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import { ai } from '@/ai/genkit';
+import Handlebars from 'handlebars';
 
 // Zod schema for the input. This is now internal to the file.
 const GenerateInitialGreetingInputSchema = z.object({
@@ -31,7 +32,7 @@ const generateInitialGreetingFlow = async ({
 }: GenerateInitialGreetingInput): Promise<GenerateInitialGreetingOutput> => {
     
     // Define the prompt with handlebars for conditional logic.
-    const promptTemplate = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
+    const promptTemplateText = `You are a conversational AI. Your persona is defined by these traits: "${personaTraits}".
 Your goal is to provide a single, warm, and inviting opening greeting to start a conversation with a user.
 The greeting must be in ${language}.
 It should be friendly and welcoming. Sometimes, but not always, you can ask for the user's name as part of the greeting to make it more personal.
@@ -46,14 +47,19 @@ Your greeting should be a generic, warm welcome. Do NOT reference any specific k
 Generate the greeting now. Do not include any preamble or extra text.
 `;
 
+    // Compile and execute the Handlebars template
+    const template = Handlebars.compile(promptTemplateText);
+    const finalPrompt = template({
+        useKnowledgeInGreeting: useKnowledgeInGreeting,
+        conversationalTopics: conversationalTopics,
+    });
+
+
     const response = await ai.generate({
         model: 'googleai/gemini-1.5-flash',
-        prompt: promptTemplate,
+        prompt: finalPrompt,
         config: {
           temperature: 0.9, // Higher temperature for more creative/varied greetings
-        },
-        input: {
-            useKnowledgeInGreeting,
         },
     });
 
