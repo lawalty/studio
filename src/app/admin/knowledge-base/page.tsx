@@ -579,7 +579,7 @@ export default function KnowledgeBasePage() {
       <div>
         <h1 className="text-3xl font-bold font-headline text-primary">Knowledge Base Management</h1>
         <p className="text-muted-foreground">
-          Manage the documents and sources that form the AI's knowledge. Upload new content, move sources between priority levels, or remove them entirely.
+          Manage the documents and sources that form the AI&apos;s knowledge. Upload new content, move sources between priority levels, or remove them entirely.
         </p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
