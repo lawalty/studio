@@ -61,7 +61,7 @@ CRITICAL INSTRUCTIONS:
         },
       });
 
-      if (response.finishReason === 'SAFETY') {
+      if (response.finishReason === 'blocked') {
         const errorMessage = `Text extraction failed because the document content was flagged by the AI's safety filter. This can sometimes happen with documents discussing policies or codes of conduct. Please review the document and try again.`;
         return { error: errorMessage };
       }
