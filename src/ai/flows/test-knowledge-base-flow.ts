@@ -13,7 +13,6 @@ import '@/ai/genkit'; // Ensures Genkit is configured
 
 const TestKnowledgeBaseInputSchema = z.object({
   query: z.string().describe('The test query to search for in the knowledge base.'),
-  distanceThreshold: z.number().optional().describe('The relevance threshold for the test.'),
 });
 export type TestKnowledgeBaseInput = z.infer<typeof TestKnowledgeBaseInputSchema>;
 
@@ -30,10 +29,10 @@ const TestKnowledgeBaseOutputSchema = z.array(z.object({
 export type TestKnowledgeBaseOutput = z.infer<typeof TestKnowledgeBaseOutputSchema>;
 
 
-const testKnowledgeBaseFlow = async ({ query, distanceThreshold }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
+const testKnowledgeBaseFlow = async ({ query }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
     // Directly call the search function and return its raw result.
-    // Pass the optional threshold from the diagnostic UI.
-    const searchResult = await searchKnowledgeBase({ query, distanceThreshold }); 
+    // The search function now has the correct logic internally and does not need a threshold passed from here.
+    const searchResult = await searchKnowledgeBase({ query }); 
     return searchResult;
   };
 

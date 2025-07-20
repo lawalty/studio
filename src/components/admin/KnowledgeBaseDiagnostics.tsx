@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -59,7 +58,7 @@ const TEST_CASES: TestCase[] = [
     description: 'Tests PDF processing and smart text extraction from a common document type.',
     fileName: 'test_simple.pdf',
     mimeType: 'application/pdf',
-    base64Data: 'data:application/pdf;base64,JVBERi0xLjQKJdPr6eEKMSAwIG9iago8PC9UeXBlIC9DYXRhbG9nL1BhZ2VzIDIgMCBSPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZSAvUGFnZXMvQ291bnQgMS9LaWRzIFszIDAgUl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlIC9QYWdlL1BhcmVudCAyIDAgUi9SZXNvdXJjZXMgPDwvRm9udCA8PC9GMSA0IDAgUj4+L1Byb2NTZXQgWy9QREYgL1RleHRdPj4vTWVkaWFCb3ggWzAgMCA2MTIgNzkyXS9Db250ZW50cyA1IDAgUj4+CmVuZG9iago0IDAgb2JqCjw8L1R5cGUgL0ZvbnQvU3VidHlwZSAvVHlwZTEvQmFzZUZvbnQgL0hlbHZldGljYT4+CmVuZG9iago1IDAgb2JqCjw8L0xlbmd0aCA0ND4+CnN0cmVhbQpCVCAvRjEgMTIgVGYgNzAgNzAwIFRkIChUaGlzIGlzIGEgc2ltcGxlIHRlc3QgUERGLikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgNjU1MzUgZiAKMDAwMDAwMDA2MyA2NTUzNSBmIAowMDAwMDAwMTA5IDY1NTUzNSBmIAowMDAwMDAwMjM0IDY1NTMzNSBmIAowMDAwMDAwMzAzIDY1NTM1IGYgCnRyYWlsZXIKPDwvU2l6ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKMzg4CiUlRU9GCg==',
+    base64Data: 'data:application/pdf;base64,JVBERi0xLjQKJdPr6eEKMSAwIG9iago8PC9UeXBlIC9DYXRhbG9nL1BhZ2VzIDIgMCBSPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZSAvUGFnZXMvQ291bnQgMS9LaWRzIFszIDAgUl0+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlIC9QYWdlL1BhcmVudCAyIDAgUi9SZXNvdXJjZXMgPDwvRm9udCA8PC9GMSA0IDAgUj4+L1Byb2NTZXQgWy9QREYgL1RleHRdPj4vTWVkaWFCb3ggWzAgMCA2MTIgNzkyXS9Db250ZW50cyA1IDAgUj4+CmVuZG9iago0IDAgb2JqCjw8L1R5cGUgL0ZvbnQvU3VidHlwZSAvVHlwZTEvQmFzZUZvbnQgL0hlbHZldGljYT4+CmVuZG9iago1IDAgb2JqCjw8L0xlbmd0aCA0ND4+CnN0cmVhbQpCVCAvRjEgMTIgVGYgNzAgNzAwIFRkIChUaGlzIGlzIGEgc2ltcGxlIHRlc3QgUERGLikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgNjU1MzUgZiAKMDAwMDAwMDA2MyA2NTUzNSBmIAowMDAwMDAwMTA5IDY1NTUzNSBmIAowMDAwMDAwMjM0IDY1NTMzNSBmIAowMDAwMDAwMzAzIDY1NTUzNSBmIAplbmR0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPi4KZW5kb2JqCnN0YXJ0eHJlZgozODgKJSUyNVJPRgo=',
   },
 ];
 
@@ -98,9 +97,9 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
       description: `Sending query...`,
     });
     try {
+      // The `distanceThreshold` is no longer needed here, as the search logic is self-contained.
       const input: TestKnowledgeBaseInput = { 
         query: kbTestQuery,
-        distanceThreshold: currentThreshold, // Pass the slider's value here
       };
       const result = await testKnowledgeBase(input);
       setKbTestResult(result);
@@ -125,7 +124,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
           <CardHeader>
               <CardTitle className="font-headline">Retrieval Pipeline Diagnostics</CardTitle>
               <CardDescription>
-                Test the retrieval (RAG) part of the pipeline by sending a query to the vector search backend. This does not use the conversational AI, it only shows the raw context that would be sent to the AI. The RAG Tuning slider above will affect the results.
+                Test the retrieval (RAG) part of the pipeline by sending a query to the vector search backend. This does not use the conversational AI, it only shows the raw context that would be sent to the AI.
               </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -152,7 +151,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
             )}
             {kbTestResult && (
                 <div className="mt-4 space-y-2">
-                    <h4 className="font-semibold">Test Results (Threshold: {currentThreshold}):</h4>
+                    <h4 className="font-semibold">Test Results:</h4>
                     {Array.isArray(kbTestResult) && kbTestResult.length > 0 ? (
                         <Alert variant="default" className="max-h-96 overflow-y-auto">
                             <CheckCircle className="h-4 w-4" />
@@ -172,7 +171,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>No Relevant Chunks Found</AlertTitle>
                             <AlertDescription>
-                                The vector search ran successfully but did not find any results in the knowledge base for your query that met the relevance threshold of {currentThreshold}. Try a different query or adjust the RAG Tuning slider above.
+                                The vector search ran successfully but did not find any results in the knowledge base for your query. This could mean the indexed content is not relevant to your query, or there might be an issue with the indexed data itself.
                             </AlertDescription>
                         </Alert>
                     )}
