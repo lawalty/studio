@@ -35,15 +35,17 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
-  const { embedding } = await ai.embed({
+  const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
   
-  if (!embedding || !Array.isArray(embedding) || embedding.length === 0) {
+  // CORRECTED: Validate the response structure and extract the vector.
+  if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
+  const embeddingVector = embeddingResponse[0].embedding;
   
   // 2. Perform prioritized, sequential search through Firestore.
   for (const level of PRIORITY_LEVELS) {
@@ -56,7 +58,7 @@ export async function searchKnowledgeBase({
         chunksQuery = chunksQuery.where('topic', '==', topic);
       }
       
-      const vectorQuery = chunksQuery.findNearest('embedding', embedding, {
+      const vectorQuery = chunksQuery.findNearest('embedding', embeddingVector, {
           limit: limit,
           distanceMeasure: 'COSINE'
       });
