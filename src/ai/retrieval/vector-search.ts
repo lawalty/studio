@@ -57,15 +57,17 @@ export async function searchKnowledgeBase({
   distanceThreshold, 
 }: SearchParams): Promise<SearchResult[]> {
   // 1. Generate an embedding for the user's query.
-  const embeddingVector = await ai.embed({
-    embedder: 'googleai/embedding-001',
+  const embeddingResponse = await ai.embed({
+    embedder: 'googleai/text-embedding-004',
     content: query,
   });
 
-  if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
+  if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
+  const embeddingVector = embeddingResponse[0].embedding;
+
 
   // If a distance threshold isn't passed in (like from the diagnostic test), fetch it dynamically.
   const finalDistanceThreshold = distanceThreshold ?? await getDistanceThreshold();

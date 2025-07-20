@@ -117,14 +117,18 @@ export async function indexDocument({
             const chunkText = chunks[index];
             
             const embeddingResponse = await withRetry(() => ai.embed({
-                embedder: 'googleai/embedding-001',
+                embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
 
-            if (!embeddingResponse || embeddingResponse.length === 0) {
+            // Validate the complex structure returned by the embedding service.
+            if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding) || embeddingResponse[0].embedding.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected structure.`);
             }
             
+            // Extract the actual numerical vector from the nested structure.
+            const embeddingVector = embeddingResponse[0].embedding;
+
             const newChunkDocRef = chunksCollection.doc();
             const chunkData: Record<string, any> = {
               sourceId,
@@ -133,7 +137,7 @@ export async function indexDocument({
               topic,
               text: chunkText,
               chunkNumber: index + 1,
-              embedding: embeddingResponse, 
+              embedding: embeddingVector, // Save the final, correct vector.
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
             };

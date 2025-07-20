@@ -21,21 +21,24 @@ export type TestEmbeddingOutput = z.infer<typeof TestEmbeddingOutputSchema>;
 const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
     try {
       const embedding = await ai.embed({
-        embedder: 'googleai/embedding-001',
+        embedder: 'googleai/text-embedding-004',
         content: 'This is a simple test sentence.',
       });
       
       if (embedding && Array.isArray(embedding) && embedding.length > 0) {
-        return {
-          success: true,
-          embeddingVectorLength: embedding.length,
-        };
-      } else {
-        return { 
-          success: false, 
-          error: `The embedding service returned an empty or invalid embedding.` 
-        };
-      }
+        const vectorLength = embedding[0]?.embedding?.length || 0;
+        if (vectorLength > 0) {
+            return {
+              success: true,
+              embeddingVectorLength: vectorLength,
+            };
+        }
+      } 
+      
+      return { 
+        success: false, 
+        error: `The embedding service returned an empty or invalid embedding structure.` 
+      };
 
     } catch (e: any) {
         console.error('[testEmbeddingFlow] Exception caught:', e);
