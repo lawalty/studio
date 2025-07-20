@@ -34,7 +34,7 @@ async function getDistanceThreshold(): Promise<number> {
     try {
         const configDocRef = db.doc('configurations/site_display_assets');
         const docSnap = await configDocRef.get();
-        if (docSnap.exists) {
+        if (docSnap.exists()) {
             const data = docSnap.data();
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
                 const threshold = data.vectorSearchDistanceThreshold;

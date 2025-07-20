@@ -100,6 +100,7 @@ export default function KnowledgeBaseDiagnostics({ isAnyOperationInProgress, cur
     try {
       const input: TestKnowledgeBaseInput = { 
         query: kbTestQuery,
+        distanceThreshold: currentThreshold, // Pass the slider's value here
       };
       const result = await testKnowledgeBase(input);
       setKbTestResult(result);
