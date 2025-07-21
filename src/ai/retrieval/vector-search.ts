@@ -8,7 +8,6 @@
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
-import { doc, getDoc } from 'firebase/firestore';
 
 const DEFAULT_DISTANCE_THRESHOLD = 0.85;
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
@@ -33,8 +32,8 @@ interface SearchParams {
 async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
             const data = docSnap.data();
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
                 return data.vectorSearchDistanceThreshold;
@@ -43,6 +42,8 @@ async function getDistanceThreshold(): Promise<number> {
     } catch (error) {
         console.error("Error fetching distance threshold, using default:", error);
     }
+    // This default is a safe fallback ONLY if the Firestore document/field is missing.
+    // The main search logic relies on this function to provide the authoritative value.
     return DEFAULT_DISTANCE_THRESHOLD;
 }
 
@@ -63,6 +64,7 @@ export async function searchKnowledgeBase({
   }
   const embeddingVector = embeddingResponse[0].embedding;
   
+  // The threshold is now always fetched from the database via the helper function.
   const distanceThreshold = await getDistanceThreshold();
 
   for (const level of PRIORITY_LEVELS) {
