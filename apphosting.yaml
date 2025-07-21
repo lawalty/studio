@@ -5,19 +5,19 @@ runConfig:
   env:
     # Public Firebase config, safe to be here.
     - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-      value: AIzaSyA8Y7y6w4R_zF1XoB7yN6cK9L8gJ3H4o5E
+      value: AIzaSyBOQWkvEwBkcweTvz2nFBpEzt7UjBawFPo
     - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-      value: ia-blair-v2.firebaseapp.com
+      value: ai-blair-v2.firebaseapp.com
     - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-      value: ia-blair-v2
+      value: ai-blair-v2
     - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-      value: ia-blair-v2.appspot.com
+      value: ai-blair-v2.appspot.com
     - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-      value: '987654321098'
+      value: '737697039654'
     - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-      value: 1:987654321098:web:a1b2c3d4e5f6g7h8i9j0k1
+      value: 1:737697039654:web:3c2d65e531a0e272be2de7
     - variable: GCLOUD_PROJECT
-      value: ia-blair-v2
+      value: ai-blair-v2
     - variable: LOCATION
       value: us-central1
       
