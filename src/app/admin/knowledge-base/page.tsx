@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -272,7 +271,15 @@ export default function KnowledgeBasePage() {
         // Step 1: Upload file to Cloud Storage FIRST.
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload);
+        
+        // This is where the error was happening. We add a .catch() here to handle it.
+        await uploadBytes(fileRef, fileToUpload).catch(storageError => {
+            if (storageError.code === 'storage/unauthorized') {
+                throw new Error(`Storage Error: Permission denied. Check your Storage rules in the Firebase console and ensure the bucket name is correct in your config.`);
+            }
+            throw new Error(`Storage Error: ${storageError.message}`);
+        });
+
         const downloadURL = await getDownloadURL(fileRef);
 
         // Step 2: Now that upload is successful, create the Firestore document.
@@ -331,7 +338,7 @@ export default function KnowledgeBasePage() {
         }
 
     } catch (e: any) {
-        const errorMessage = `Processing Failed: ${e.message || 'Unknown error.'}`;
+        const errorMessage = `${e.message || 'Unknown error.'}`;
         console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
 
