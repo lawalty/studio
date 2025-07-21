@@ -12,7 +12,8 @@
     }
   },
   "storage": {
-    "rules": "storage.rules"
+    "rules": "storage.rules",
+    "cors": "storage.cors.json"
   },
   "firestore": {
     "rules": "firestore.rules",

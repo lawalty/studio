@@ -1,19 +1,28 @@
 
 rules_version = '2';
 
+// By default, deny all reads and writes
 service firebase.storage {
   match /b/{bucket}/o {
+    // Deny all reads and writes by default
     match /{allPaths=**} {
-      // Allow public read access to all files. This is necessary for PDF
-      // download links in the chat to work for any user.
-      allow read;
+      allow read, write: if false;
+    }
 
-      // Only allow authenticated requests to write files. This covers
-      // server-side operations (like chat archiving and KB uploads)
-      // and can be adjusted for client-side uploads if needed.
-      allow write: if request.auth != null;
+    // Allow public read on site assets (avatars, backgrounds, etc.)
+    match /site_assets/{allPaths=**} {
+      allow get: if true;
+      allow write: if request.auth != null; // Only authenticated users can write
+    }
+
+    // Allow authenticated users to upload to knowledge base folders
+    match /knowledge_base_files/{level}/{fileId} {
+       allow read, write: if request.auth != null;
+    }
+
+    // Allow authenticated users to upload to chat history
+    match /chat_history_files/{fileId} {
+       allow read, write: if request.auth != null;
     }
   }
 }
-
-    
