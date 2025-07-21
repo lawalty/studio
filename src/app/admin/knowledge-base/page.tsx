@@ -20,7 +20,6 @@ import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, His
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
-import KnowledgeBaseDiagnostics from '@/components/admin/KnowledgeBaseDiagnostics';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -681,19 +680,6 @@ export default function KnowledgeBasePage() {
             </CardFooter>
           </Card>
           
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="diagnostics">
-              <AccordionTrigger className="text-xl font-headline flex items-center gap-2">
-                <Wrench /> Diagnostics
-              </AccordionTrigger>
-              <AccordionContent>
-                <KnowledgeBaseDiagnostics
-                  isAnyOperationInProgress={anyOperationGloballyInProgress}
-                  currentThreshold={distanceThreshold[0]}
-                />
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
