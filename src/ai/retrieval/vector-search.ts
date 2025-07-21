@@ -11,7 +11,6 @@ import { ai } from '@/ai/genkit';
 import { Embedding } from '@genkit-ai/ai/embedding';
 
 const DEFAULT_DISTANCE_THRESHOLD = 0.85;
-const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
 
 interface SearchResult {
   sourceId: string;
@@ -43,15 +42,12 @@ async function getDistanceThreshold(): Promise<number> {
     } catch (error) {
         console.error("Error fetching distance threshold, using default:", error);
     }
-    // This default is a safe fallback ONLY if the Firestore document/field is missing.
-    // The main search logic relies on this function to provide the authoritative value.
     return DEFAULT_DISTANCE_THRESHOLD;
 }
 
 
 export async function searchKnowledgeBase({
   query,
-  topic,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
   const embeddingResponse = await ai.embed({
@@ -59,58 +55,41 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  // When a single string is passed to ai.embed, it returns a single Embedding object, not an array.
-  // We must handle this object directly.
   if (!embeddingResponse || !embeddingResponse.embedding || !Array.isArray(embeddingResponse.embedding)) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   const embeddingVector = embeddingResponse.embedding;
-
-  // The threshold is now always fetched from the database via the helper function.
   const distanceThreshold = await getDistanceThreshold();
 
-  for (const level of PRIORITY_LEVELS) {
-    try {
-      let chunksQuery: FirebaseFirestore.Query = db.collection('kb_chunks');
-      
-      chunksQuery = chunksQuery.where('level', '==', level);
+  try {
+    const vectorQuery = db.collection('kb_chunks').findNearest('embedding', embeddingVector, {
+        limit: limit,
+        distanceMeasure: 'COSINE'
+    });
 
-      if (topic) {
-        chunksQuery = chunksQuery.where('topic', '==', topic);
-      }
-      
-      const vectorQuery = chunksQuery.findNearest('embedding', embeddingVector, {
-          limit: limit,
-          distanceMeasure: 'COSINE'
-      });
+    const snapshot = await vectorQuery.get();
 
-      const snapshot = await vectorQuery.get();
-
-      if (snapshot.empty) {
-        continue;
-      }
-
-      const relevantResults: SearchResult[] = [];
-      snapshot.forEach(doc => {
-        const distance = (doc as any).distance; 
-        // A lower distance is better in COSINE similarity. We check if distance is LESS than threshold.
-        if (distance < distanceThreshold) {
-          relevantResults.push({
-            ...(doc.data() as Omit<SearchResult, 'distance'>),
-            distance: distance,
-          });
-        }
-      });
-
-      if (relevantResults.length > 0) {
-        return relevantResults;
-      }
-
-    } catch (error: any) {
-        console.error(`[searchKnowledgeBase] Error searching in '${level}' priority level:`, error);
+    if (snapshot.empty) {
+      return [];
     }
-  }
 
-  return [];
+    const relevantResults: SearchResult[] = [];
+    snapshot.forEach(doc => {
+      const distance = (doc as any).distance; 
+      if (distance < distanceThreshold) {
+        relevantResults.push({
+          ...(doc.data() as Omit<SearchResult, 'distance'>),
+          distance: distance,
+        });
+      }
+    });
+
+    return relevantResults;
+
+  } catch (error: any) {
+      console.error(`[searchKnowledgeBase] Error performing simplified vector search:`, error);
+      // Return empty array on error to prevent chat flow from breaking
+      return [];
+  }
 }
