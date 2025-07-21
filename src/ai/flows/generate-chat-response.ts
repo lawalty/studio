@@ -114,7 +114,7 @@ Here is the context retrieved from the knowledge base to answer the user's lates
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
-    const historyForRAG = JSON.parse(JSON.stringify(chatHistory || []));
+    const historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
 
     // 1. Translate the user's query if needed for the search.
