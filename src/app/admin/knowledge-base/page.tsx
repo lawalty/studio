@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -245,8 +246,8 @@ export default function KnowledgeBasePage() {
   }, [toast]);
 
   const handleFileUpload = async () => {
-    if (!selectedFile || !selectedTopicForUpload) {
-        toast({ title: "Missing Information", description: "Please select a file and a topic.", variant: "destructive" });
+    if (!selectedFile || !selectedTopicForUpload || !uploadDescription || !selectedLevelForUpload) {
+        toast({ title: "Missing Information", description: "Please select a file, topic, priority level, and provide a description.", variant: "destructive" });
         return;
     }
     if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
@@ -268,11 +269,25 @@ export default function KnowledgeBasePage() {
     let sourceDocRef: ReturnType<typeof doc> | null = null;
 
     try {
-        // Step 1: Upload file to Cloud Storage FIRST.
+        // Step 1: Create the Firestore document FIRST to make it appear in the UI.
+        const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
+        sourceDocRef = doc(db, collectionName, sourceId);
+        
+        const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
+            sourceName: fileToUpload.name, description, topic, level: targetLevel,
+            createdAt: new Date().toISOString(),
+            indexingStatus: 'processing',
+            indexingError: 'Uploading file to storage...',
+            mimeType,
+        };
+        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
+            newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+        }
+        await setDoc(sourceDocRef, newSourceData);
+
+        // Step 2: Upload file to Cloud Storage.
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
-        
-        // This is where the error was happening. We add a .catch() here to handle it.
         await uploadBytes(fileRef, fileToUpload).catch(storageError => {
             if (storageError.code === 'storage/unauthorized') {
                 throw new Error(`Storage Error: Permission denied. Check your Storage rules in the Firebase console and ensure the bucket name is correct in your config.`);
@@ -281,24 +296,8 @@ export default function KnowledgeBasePage() {
         });
 
         const downloadURL = await getDownloadURL(fileRef);
-
-        // Step 2: Now that upload is successful, create the Firestore document.
-        const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
-        sourceDocRef = doc(db, collectionName, sourceId);
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
         
-        const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
-            sourceName: fileToUpload.name, description, topic, level: targetLevel,
-            createdAt: new Date().toISOString(),
-            indexingStatus: 'processing',
-            indexingError: 'Upload complete. Starting text extraction...',
-            mimeType,
-            downloadURL,
-        };
-        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
-            newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
-        }
-        await setDoc(sourceDocRef, newSourceData);
-
         // Step 3: Extract text from the now-uploaded file.
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
@@ -326,7 +325,6 @@ export default function KnowledgeBasePage() {
             throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
         }
 
-        // The ONE final success toast.
         toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
 
         // Reset form on full success.
@@ -342,7 +340,6 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
 
-        // If the document was already created in Firestore, update its status to failed.
         if (sourceDocRef) {
             try {
                 await updateDoc(sourceDocRef, {

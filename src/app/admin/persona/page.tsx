@@ -331,7 +331,6 @@ export default function PersonaPage() {
                   placeholder="Describe IA Blair v2's personality, tone, knowledge areas, etc."
                   rows={8}
                   className="mt-1"
-                  suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
               </div>
@@ -345,7 +344,6 @@ export default function PersonaPage() {
                   placeholder="Enter topics separated by commas (e.g., Topic 1, Topic 2, Topic 3)"
                   rows={5}
                   className="mt-1"
-                  suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   Enter a comma-separated list (e.g., Topic 1, Topic 2). The space after the comma is optional but recommended for readability. This list will be used to categorize documents in the Knowledge Base.
@@ -383,7 +381,6 @@ export default function PersonaPage() {
                   placeholder="Enter a specific greeting IA Blair v2 should use. If empty, IA Blair v2 will generate a greeting based on the toggle above."
                   rows={3}
                   className="mt-1"
-                  suppressHydrationWarning
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   If you provide a greeting here, it will be used exactly as written, overriding the dynamic greeting generation.
@@ -410,7 +407,6 @@ export default function PersonaPage() {
                       min="0"
                       step="50"
                       className="mt-1"
-                      suppressHydrationWarning
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                       Pause after user stops speaking before AI processes input (Audio Only mode). Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
@@ -432,7 +428,6 @@ export default function PersonaPage() {
                         max="2.0"
                         step="0.05"
                         className="mt-1"
-                        suppressHydrationWarning
                     />
                     <p className="text-xs text-muted-foreground mt-1">
                         Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, &gt;1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
