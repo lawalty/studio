@@ -593,7 +593,7 @@ export default function KnowledgeBasePage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="file-upload">File</Label>
-                <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} suppressHydrationWarning />
+                <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} />
               </div>
                <div className="space-y-2">
                   <Label>Topic</Label>
@@ -637,7 +637,7 @@ export default function KnowledgeBasePage() {
               )}
               <div className="space-y-2">
                 <Label htmlFor="upload-description">Description</Label>
-                <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." suppressHydrationWarning />
+                <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." />
               </div>
             </CardContent>
             <CardFooter>
