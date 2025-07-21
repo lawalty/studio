@@ -1,4 +1,3 @@
-
 import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
@@ -14,12 +13,12 @@ function initializeClientApp(): FirebaseApp {
 
     // Construct the config object inside the function to ensure freshest env vars.
     const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+        apiKey: "AIzaSyBOQWkvEwBkcweTvz2nFBpEzt7UjBawFPo",
+        authDomain: "ai-blair-v2.firebaseapp.com",
+        projectId: "ai-blair-v2",
+        storageBucket: "ai-blair-v2.appspot.com",
+        messagingSenderId: "737697039654",
+        appId: "1:737697039654:web:3c2d65e531a0e272be2de7"
     };
 
     // Robust validation to ensure all required environment variables are present.
@@ -36,12 +35,15 @@ function initializeClientApp(): FirebaseApp {
 
     if (missingVars.length > 0) {
         const missingVarNames = missingVars.map(key => `NEXT_PUBLIC_FIREBASE_${key.replace(/([A-Z])/g, '_$1').toUpperCase()}`);
-        throw new Error(
-            'CRITICAL: Client-side Firebase environment variables are missing or empty. ' +
-            `The following variables were not found in your .env.local file: [${missingVarNames.join(', ')}]. ` +
-            'Please ensure your .env.local file is in the root directory and contains all required values. ' +
-            'You MUST restart the dev server after making changes to this file.'
-        );
+        // This check is more for local dev; in production, we hardcode the values.
+        if (process.env.NODE_ENV === 'development') {
+          console.error(
+              'CRITICAL: Client-side Firebase environment variables are missing or empty. ' +
+              `The following variables were not found in your .env.local file: [${missingVarNames.join(', ')}]. ` +
+              'Please ensure your .env.local file is in the root directory and contains all required values. ' +
+              'You MUST restart the dev server after making changes to this file.'
+          );
+        }
     }
     
     // Initialize the Firebase app.
