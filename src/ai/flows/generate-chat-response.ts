@@ -7,7 +7,7 @@
  * questions and only use its persona for conversational filler.
  */
 import { z } from 'zod';
-import { searchKnowledgeBase } from '../retrieval/vector-search';
+import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import { translateText } from './translate-text-flow';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 import { db } from '@/lib/firebase-admin';

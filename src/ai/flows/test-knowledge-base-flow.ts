@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { searchKnowledgeBase } from '../retrieval/vector-search';
+import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import '@/ai/genkit'; // Ensures Genkit is configured
 
 const TestKnowledgeBaseInputSchema = z.object({
@@ -31,7 +31,6 @@ export type TestKnowledgeBaseOutput = z.infer<typeof TestKnowledgeBaseOutputSche
 
 const testKnowledgeBaseFlow = async ({ query }: TestKnowledgeBaseInput): Promise<TestKnowledgeBaseOutput> => {
     // Directly call the search function and return its raw result.
-    // The search function now has the correct logic internally and does not need a threshold passed from here.
     const searchResult = await searchKnowledgeBase({ query }); 
     return searchResult;
   };
