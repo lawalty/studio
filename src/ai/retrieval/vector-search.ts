@@ -55,41 +55,49 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  if (!embeddingResponse || !embeddingResponse.embedding || !Array.isArray(embeddingResponse.embedding)) {
+  if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding) || embeddingResponse[0].embedding.length === 0) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
-  const embeddingVector = embeddingResponse.embedding;
+  
+  const embeddingVector = embeddingResponse[0].embedding;
   const distanceThreshold = await getDistanceThreshold();
+  const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
 
-  try {
-    const vectorQuery = db.collection('kb_chunks').findNearest('embedding', embeddingVector, {
-        limit: limit,
-        distanceMeasure: 'COSINE'
-    });
-
-    const snapshot = await vectorQuery.get();
-
-    if (snapshot.empty) {
-      return [];
-    }
-
-    const relevantResults: SearchResult[] = [];
-    snapshot.forEach(doc => {
-      const distance = (doc as any).distance; 
-      if (distance < distanceThreshold) {
-        relevantResults.push({
-          ...(doc.data() as Omit<SearchResult, 'distance'>),
-          distance: distance,
+  for (const level of searchLevels) {
+    try {
+      const vectorQuery = db.collection('kb_chunks')
+          .where('level', '==', level)
+          .findNearest('embedding', embeddingVector, {
+              limit: limit,
+              distanceMeasure: 'COSINE'
+          });
+          
+      const snapshot = await vectorQuery.get();
+      
+      if (!snapshot.empty) {
+        const relevantResults: SearchResult[] = [];
+        snapshot.forEach(doc => {
+          const distance = (doc as any).distance; 
+          if (distance < distanceThreshold) {
+            relevantResults.push({
+              ...(doc.data() as Omit<SearchResult, 'distance'>),
+              distance: distance,
+            });
+          }
         });
+        
+        // If we found relevant results at this level, return them immediately.
+        if (relevantResults.length > 0) {
+          return relevantResults;
+        }
       }
-    });
-
-    return relevantResults;
-
-  } catch (error: any) {
-      console.error(`[searchKnowledgeBase] Error performing simplified vector search:`, error);
-      // Return empty array on error to prevent chat flow from breaking
-      return [];
+    } catch (error: any) {
+        // Log the error for the specific level but continue to the next
+        console.error(`[searchKnowledgeBase] Error during vector search for level '${level}':`, error);
+    }
   }
+
+  // If no results are found after trying all levels, return an empty array.
+  return [];
 }

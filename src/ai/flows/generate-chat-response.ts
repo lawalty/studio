@@ -187,20 +187,11 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
 
     } catch (error: any) {
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
-      let userFriendlyMessage = "I'm sorry, but I encountered an unexpected error. Please try again in a moment.";
-      
-      if (language && language.toLowerCase() !== 'english') {
-        try {
-          userFriendlyMessage = (await translateText({ text: userFriendlyMessage, targetLanguage: language })).translatedText;
-        } catch (e) {
-            // Ignore translation error for the error message itself.
-        }
-      }
-
       // Return a structured error response that matches the expected output schema.
+      // THIS IS FOR DEBUGGING - IT WILL SHOW THE RAW ERROR TO THE USER.
       return {
-        aiResponse: userFriendlyMessage,
-        shouldEndConversation: false,
+        aiResponse: `DEBUG: An error occurred in the AI flow. Technical details: ${error.message || 'Unknown error'}`,
+        shouldEndConversation: true,
       };
     }
   };
