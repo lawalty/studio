@@ -78,9 +78,10 @@ const chatPrompt = ai.definePrompt({
             retrievedContext: z.string(),
         })
     },
-    // The prompt now expects a string, which should be a stringified JSON object.
+    // The prompt now expects a JSON object that matches the AiResponseJsonSchema.
     output: {
-        format: 'text',
+        format: 'json',
+        schema: AiResponseJsonSchema,
     },
     system: `You are a helpful and professional conversational AI.
 Your persona is defined by these traits: "{{personaTraits}}".
@@ -96,7 +97,7 @@ Your primary goal is to answer user questions based on retrieved documents.
 5.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally according to your persona.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-6.  **Output Format:** Your response MUST be a single, valid JSON object as a string, without any wrapping characters like \`\`\`json. The JSON object must strictly follow this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+6.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
 
     prompt: `The user is conversing in {{language}}.
 Here is the full conversation history:
@@ -168,20 +169,11 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
     };
     
     try {
-      const response = await chatPrompt(promptInput, { model: 'googleai/gemini-1.5-flash' });
-      const rawTextOutput = response.text;
+      // With format: 'json', Genkit will handle the parsing and schema validation.
+      const { output } = await chatPrompt(promptInput, { model: 'googleai/gemini-1.5-flash' });
 
-      if (!rawTextOutput) {
-        throw new Error('The AI model returned an empty response. This may be due to a safety filter or an internal model error.');
-      }
-      
-      // The output from the model is a string, which we need to parse into a JSON object.
-      let output: GenerateChatResponseOutput;
-      try {
-        output = JSON.parse(rawTextOutput);
-      } catch (jsonError) {
-        console.error('[generateChatResponseFlow] Failed to parse JSON from AI response. Raw text:', rawTextOutput, 'Error:', jsonError);
-        throw new Error('The AI model returned a malformed, non-JSON response. Please check the prompt instructions.');
+      if (!output) {
+        throw new Error('AI model returned an empty or invalid response.');
       }
       
       // Check for Spanish PDF override
@@ -206,9 +198,7 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
         }
       }
 
-      // Re-throw the error with a user-friendly message so the client-side can catch it.
-      // This is better than returning a successful response with an error message inside it.
-      // However, for robustness, we will return a structured error response.
+      // Return a structured error response that matches the expected output schema.
       return {
         aiResponse: userFriendlyMessage,
         shouldEndConversation: false,
