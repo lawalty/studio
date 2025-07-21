@@ -20,12 +20,15 @@ if (admin.apps.length === 0) {
     // uses Application Default Credentials. In local development, this
     // uses the credentials from 'gcloud auth application-default login'.
     // In a deployed App Hosting environment, it uses the app's service account.
-    admin.initializeApp();
+    admin.initializeApp({
+      projectId: process.env.GCLOUD_PROJECT || 'ai-blair-v2',
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ai-blair-v2.appspot.com',
+    });
   } catch (error: any) {
     // This enhanced error handling provides specific, actionable advice
     // if the Admin SDK fails to initialize, which is almost always a
     // credentialing problem in local development.
-    if (!isGcp() && error.message.includes('Could not find')) {
+    if (!isGcp() && (error.message.includes('Could not find') || error.message.includes('ADC'))) {
          console.error(`
         ================================================================================
         CRITICAL: FIREBASE ADMIN SDK INITIALIZATION FAILED
