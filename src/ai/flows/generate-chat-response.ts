@@ -116,7 +116,7 @@ Here is the context retrieved from the knowledge base to answer the user's lates
 const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const historyForRAG = JSON.parse(JSON.stringify(chatHistory || []));
-    const lastUserMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1].parts[0].text : '';
+    const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
 
     // 1. Translate the user's query if needed for the search.
     let searchQuery = lastUserMessage;
@@ -140,7 +140,11 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
             primarySearchResult = searchResults[0];
             retrievedContext = searchResults
               .map(r =>
-                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}">\n  <content>\n    ${r.text}\n  </content>\n</document>`
+                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}">
+  <content>
+    ${r.text}
+  </content>
+</document>`
               )
               .join('\n\n');
         }
@@ -159,7 +163,7 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
         personaTraits,
         conversationalTopics,
         language: language || 'English',
-        chatHistory: historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts[0].text}`).join('\n'),
+        chatHistory: historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n'),
         retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND'
     };
     
@@ -218,5 +222,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    
