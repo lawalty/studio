@@ -9,7 +9,7 @@
 import { z } from 'zod';
 import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import { translateText } from './translate-text-flow';
-import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
 
 // Zod schema for the input of the generateChatResponse flow.
@@ -37,6 +37,7 @@ const GenerateChatResponseOutputSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
+
 // Helper function to find the Spanish version of a document
 const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: string; downloadURL: string } | null> => {
     try {
@@ -63,6 +64,51 @@ const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: stri
     }
 };
 
+// Define the prompt using the stable ai.definePrompt pattern
+const chatPrompt = ai.definePrompt({
+    name: 'chatRAGPrompt',
+    input: {
+        schema: z.object({
+            personaTraits: z.string(),
+            conversationalTopics: z.string(),
+            language: z.string(),
+            chatHistory: z.string(),
+            retrievedContext: z.string(),
+        })
+    },
+    output: {
+        schema: GenerateChatResponseOutputSchema,
+    },
+    system: `You are a helpful and professional conversational AI.
+Your persona is defined by these traits: "{{personaTraits}}".
+You are an expert in: "{{conversationalTopics}}".
+
+Your primary goal is to answer user questions based on retrieved documents.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Strictly Adhere to Provided Context:** You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge unless the context is empty or irrelevant.
+2.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge.
+3.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
+4.  **Citations:** If, and only if, your answer is based on information from a document, you MUST populate the 'pdfReference' object. Use the 'source' for 'fileName' and 'downloadURL' from the document tag in the context.
+5.  **Conversation Flow:**
+    - If the user provides a greeting or engages in simple small talk, respond naturally according to your persona.
+    - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
+6.  **Output Format:** Your response MUST be a valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+
+    prompt: `The user is conversing in {{language}}.
+Here is the full conversation history:
+<history>
+{{{chatHistory}}}
+</history>
+
+Here is the context retrieved from the knowledge base to answer the user's latest message.
+<retrieved_context>
+{{{retrievedContext}}}
+</retrieved_context>
+`
+});
+
+
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
@@ -82,20 +128,16 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
 
     // 2. Search the knowledge base.
     let retrievedContext = '';
-    let primarySearchResult = null; // Store the first search result to check for a Spanish version
+    let primarySearchResult = null;
     try {
-      if (searchQuery) { // Only search if there's something to search for.
+      if (searchQuery) {
         const searchResults = await searchKnowledgeBase({ query: searchQuery, limit: 5 });
         
         if (searchResults && searchResults.length > 0) {
             primarySearchResult = searchResults[0];
             retrievedContext = searchResults
               .map(r =>
-                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}">
-  <content>
-    ${r.text}
-  </content>
-</document>`
+                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}">\n  <content>\n    ${r.text}\n  </content>\n</document>`
               )
               .join('\n\n');
         }
@@ -109,58 +151,23 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
       retrievedContext = 'NO_CONTEXT_FOUND';
     }
 
-    // 3. Define the new, more direct system prompt.
-    const systemPrompt = `You are a helpful and professional conversational AI.
-Your persona is defined by these traits: "${personaTraits}".
-You are an expert in: "${conversationalTopics}".
-
-Your primary goal is to answer user questions based on retrieved documents.
-
-**CRITICAL INSTRUCTIONS:**
-1.  **Strictly Adhere to Provided Context:** You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge unless the context is empty or irrelevant.
-2.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge.
-3.  **Language:** You MUST respond in ${language}. All of your output, including chit-chat and error messages, must be in this language.
-4.  **Citations:** If, and only if, your answer is based on information from a document, you MUST populate the 'pdfReference' object. Use the 'source' for 'fileName' and 'downloadURL' from the document tag in the context.
-5.  **Conversation Flow:**
-    - If the user provides a greeting or engages in simple small talk, respond naturally according to your persona.
-    - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-6.  **Output Format:** Your response MUST be a valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
-`;
-    
-    // 4. Construct the final prompt for the LLM.
-    const finalPrompt = `The user is conversing in ${language}.
-Here is the full conversation history:
-<history>
-${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts[0].text}`).join('\n')}
-</history>
-
-Here is the context retrieved from the knowledge base to answer the user's latest message.
-<retrieved_context>
-${retrievedContext || 'NO_CONTEXT_FOUND'}
-</retrieved_context>
-`;
+    // 4. Construct the prompt for the LLM.
+    const promptInput = {
+        personaTraits,
+        conversationalTopics,
+        language: language || 'English',
+        chatHistory: historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts[0].text}`).join('\n'),
+        retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND'
+    };
     
     try {
-      const response = await ai.generate({
-        model: 'googleai/gemini-1.5-flash',
-        system: systemPrompt,
-        prompt: finalPrompt,
-        output: {
-          format: 'json',
-          schema: GenerateChatResponseOutputSchema,
-        },
-        config: {
-          temperature: 0.2,
-        },
-      });
-
+      const response = await chatPrompt(promptInput, { model: 'googleai/gemini-1.5-flash' });
       const output = response.output;
       
       if (!output) {
         throw new Error('Malformed AI output. The model returned an empty or non-JSON response. This could be due to a safety filter or an internal model error.');
       }
       
-
       // Check for Spanish PDF override
       if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
           const spanishPdf = await findSpanishPdf(primarySearchResult.sourceId);
