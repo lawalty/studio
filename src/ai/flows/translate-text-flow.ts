@@ -20,7 +20,6 @@ export type TranslateTextOutput = z.infer<typeof TranslateTextOutputSchema>;
 const translateTextFlow = async ({ text, targetLanguage }: TranslateTextInput): Promise<TranslateTextOutput> => {
     try {
       const prompt = `You are an expert translator. Translate the following English text to ${targetLanguage}.
-      - The target dialect is for Mexico City.
       - Provide only the translated text.
       - Do not add any commentary, preamble, explanation, or summary.
       - Do not wrap the output in code blocks or JSON formatting.
@@ -36,6 +35,10 @@ const translateTextFlow = async ({ text, targetLanguage }: TranslateTextInput): 
         },
       });
 
+      if (!translatedText) {
+        throw new Error("The translation model returned an empty response.");
+      }
+
       return { translatedText: translatedText.trim() };
       
     } catch (e: any) {
@@ -47,6 +50,8 @@ const translateTextFlow = async ({ text, targetLanguage }: TranslateTextInput): 
           detailedError = `Translation failed due to a local authentication error. The server running on your machine could not authenticate with Google Cloud services. Please run 'gcloud auth application-default login' in your terminal and restart the dev server. See README.md for details.`;
       } else if (rawError.includes("API key not valid")) {
           detailedError = "Translation failed: The provided Google AI API Key is invalid. Please verify it in your .env.local file or hosting provider's secret manager.";
+      } else if (rawError.includes("API key is missing")) {
+          detailedError = "Translation failed: The GEMINI_API_KEY environment variable is not set. Please add it to your .env.local file or hosting provider's secret manager.";
       } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
           detailedError = `Translation failed due to a permissions issue. Ensure the 'Vertex AI API' is enabled in your Google Cloud project and your account has the correct permissions.`;
       } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
