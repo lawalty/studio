@@ -316,9 +316,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
             if (result.shouldEndConversation) setHasConversationEnded(true);
             
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error in generateChatResponse:", error);
-            addMessage(uiText.errorEncountered, 'model');
+            const errorMessage = error.message || uiText.errorEncountered;
+            addMessage(errorMessage, 'model');
             setIsSendingMessage(false);
         }
     }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered]);
