@@ -11,6 +11,7 @@ import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import { translateText } from './translate-text-flow';
 import { ai } from '@/ai/genkit';
 import { db } from '@/lib/firebase-admin';
+import { withRetry } from './index-document-flow';
 
 // Zod schema for the input of the generateChatResponse flow.
 export const GenerateChatResponseInputSchema = z.object({
@@ -168,10 +169,10 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
     
     try {
       // With format: 'json', Genkit will handle the parsing and schema validation.
-      const { output } = await chatPrompt(promptInput, { model: 'googleai/gemini-1.5-flash' });
+      const { output } = await withRetry(() => chatPrompt(promptInput, { model: 'googleai/gemini-1.5-flash' }));
 
       if (!output) {
-        throw new Error('AI model returned an empty or invalid response.');
+        throw new Error('AI model returned an empty or invalid response after multiple retries.');
       }
       
       // Check for Spanish PDF override

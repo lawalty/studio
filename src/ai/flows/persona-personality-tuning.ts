@@ -11,6 +11,7 @@
 
 import {z} from 'zod';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import { withRetry } from './index-document-flow';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
   personaTraits: z
@@ -48,7 +49,7 @@ Confirmation:`,
     });
 
     try {
-      const response = await prompt(flowInput, { model: 'googleai/gemini-1.5-flash' });
+      const response = await withRetry(() => prompt(flowInput, { model: 'googleai/gemini-1.5-flash' }));
       const output = response.output;
 
       if (!output || typeof output.updatedPersonaDescription !== 'string') {

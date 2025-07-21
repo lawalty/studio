@@ -9,6 +9,7 @@
  */
 import { z } from 'zod';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import { withRetry } from './index-document-flow';
 
 
 const TestTextGenerationOutputSchema = z.object({
@@ -20,10 +21,10 @@ export type TestTextGenerationOutput = z.infer<typeof TestTextGenerationOutputSc
 
 const testTextGenerationFlow = async (): Promise<TestTextGenerationOutput> => {
     try {
-      const { text } = await ai.generate({
+      const { text } = await withRetry(() => ai.generate({
           model: 'googleai/gemini-1.5-flash',
           prompt: 'Tell me a one-sentence joke.',
-      });
+      }));
 
       if (text) {
         return {
@@ -49,6 +50,8 @@ const testTextGenerationFlow = async (): Promise<TestTextGenerationOutput> => {
             detailedError = `A permissions issue occurred. Please check that the 'Vertex AI API' is enabled in your Google Cloud project and that your account has the correct IAM permissions.`;
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: The text generation feature failed because billing is not enabled for your Google Cloud project. Please link a billing account in the Google Cloud Console.`;
+        } else if (rawError.toLowerCase().includes('service unavailable') || rawError.includes('503')) {
+            detailedError = `The model is currently overloaded or unavailable (503 Service Unavailable). The retry mechanism failed after several attempts. Please try again later. Full error: ${rawError}`;
         } else {
             detailedError = `The text generation test failed. This is most often caused by a missing/invalid GEMINI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
         }

@@ -1,9 +1,11 @@
+
 'use server';
 /**
  * @fileOverview A flow to translate text from English to a specified target language.
  */
 import { z } from 'zod';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import { withRetry } from './index-document-flow';
 
 const TranslateTextInputSchema = z.object({
   text: z.string().describe('The English text to be translated.'),
@@ -27,13 +29,13 @@ const translateTextFlow = async ({ text, targetLanguage }: TranslateTextInput): 
       
       Text to translate: "${text}"`;
 
-      const { text: translatedText } = await ai.generate({
+      const { text: translatedText } = await withRetry(() => ai.generate({
         model: 'googleai/gemini-1.5-flash',
         prompt: prompt,
         config: {
           temperature: 0.2,
         },
-      });
+      }));
 
       if (!translatedText) {
         throw new Error("The translation model returned an empty response.");
@@ -56,6 +58,8 @@ const translateTextFlow = async ({ text, targetLanguage }: TranslateTextInput): 
           detailedError = `Translation failed due to a permissions issue. Ensure the 'Vertex AI API' is enabled in your Google Cloud project and your account has the correct permissions.`;
       } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
           detailedError = `Translation failed because billing is not enabled for your Google Cloud project. Please enable it in the Google Cloud Console.`;
+      } else if (rawError.toLowerCase().includes('service unavailable') || rawError.includes('503')) {
+          detailedError = `Translation failed because the AI model is temporarily overloaded. Please try again in a moment. Full error: ${rawError}`;
       } else {
           detailedError = `Translation failed for an unexpected reason. This is often caused by a configuration issue. Full error: ${rawError}`;
       }

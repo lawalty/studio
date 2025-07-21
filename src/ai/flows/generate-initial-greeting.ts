@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import { ai } from '@/ai/genkit';
 import Handlebars from 'handlebars';
+import { withRetry } from './index-document-flow';
 
 // Zod schema for the input. This is now internal to the file.
 const GenerateInitialGreetingInputSchema = z.object({
@@ -55,13 +56,13 @@ Generate the greeting now. Do not include any preamble or extra text.
     });
 
 
-    const response = await ai.generate({
+    const response = await withRetry(() => ai.generate({
         model: 'googleai/gemini-1.5-flash',
         prompt: finalPrompt,
         config: {
           temperature: 0.9, // Higher temperature for more creative/varied greetings
         },
-    });
+    }));
 
     const greeting = response.text?.trim() ?? "Hello! How can I assist you today?";
     

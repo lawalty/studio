@@ -53,20 +53,20 @@ function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: 
     return chunks;
   }
 
-// Helper function for retrying API calls with exponential backoff
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDelay = 1000): Promise<T> {
+// Exportable helper function for retrying API calls with exponential backoff
+export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDelay = 1000): Promise<T> {
     let lastError: any;
     for (let i = 0; i < retries; i++) {
         try {
             return await fn();
         } catch (error: any) {
             lastError = error;
-            // Check for quota-related errors specifically
             const errorMessage = (error.message || '').toLowerCase();
-            if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || (error.status && error.status === 429)) {
+            // Check for common transient errors (quota, rate limit, service unavailable)
+            if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('service unavailable') || (error.status && [429, 503].includes(error.status))) {
                 if (i < retries - 1) { // Don't wait on the last attempt
                     const delay = initialDelay * Math.pow(2, i) + Math.random() * 1000;
-                    console.log(`[withRetry] Rate limit hit. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${i + 1}/${retries})`);
+                    console.log(`[withRetry] Retriable error detected. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${i + 1}/${retries})`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
             } else {
@@ -176,8 +176,8 @@ export async function indexDocument({
         const rawError = e instanceof Error ? e.message : (e.message || JSON.stringify(e));
         let detailedError: string;
 
-        if (rawError.toLowerCase().includes('quota') || rawError.includes('429')) {
-            detailedError = `Indexing failed after multiple retries due to API rate limits (quota exceeded). Please wait a few minutes before trying again or request a quota increase in your Google Cloud project.`;
+        if (rawError.toLowerCase().includes('quota') || rawError.includes('429') || rawError.toLowerCase().includes('service unavailable') || rawError.includes('503')) {
+            detailedError = `Indexing failed after multiple retries due to API rate limits or temporary service unavailability. Please wait a few minutes before trying again or request a quota increase in your Google Cloud project.`;
         } else if (rawError.includes("Could not refresh access token")) {
             detailedError = `Indexing failed due to a local authentication error. Please run 'gcloud auth application-default login' and restart the dev server. See README.md.`;
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
@@ -213,5 +213,3 @@ export async function indexDocument({
         };
       }
 }
-
-    

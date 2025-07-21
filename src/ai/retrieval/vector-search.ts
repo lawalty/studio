@@ -8,6 +8,7 @@
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
+import { Embedding } from '@genkit-ai/ai/embedding';
 
 const DEFAULT_DISTANCE_THRESHOLD = 0.85;
 const PRIORITY_LEVELS: Readonly<('High' | 'Medium' | 'Low' | 'Chat History')[]> = ['High', 'Medium', 'Low', 'Chat History'];
@@ -57,13 +58,15 @@ export async function searchKnowledgeBase({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
-  
-  if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding) {
+
+  // When a single string is passed to ai.embed, it returns a single Embedding object, not an array.
+  // We must handle this object directly.
+  if (!embeddingResponse || !embeddingResponse.embedding || !Array.isArray(embeddingResponse.embedding)) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
-  const embeddingVector = embeddingResponse[0].embedding;
-  
+  const embeddingVector = embeddingResponse.embedding;
+
   // The threshold is now always fetched from the database via the helper function.
   const distanceThreshold = await getDistanceThreshold();
 
