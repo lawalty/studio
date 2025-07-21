@@ -18,7 +18,7 @@ For running the app on your local machine (`npm run dev`).
 *   `NEXT_PUBLIC_FIREBASE_API_KEY`="AIzaSyBOQWkvEwBkcweTvz2nFBpEzt7UjBawFPo"
 *   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`="ai-blair-v2.firebaseapp.com"
 *   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`="ai-blair-v2"
-*   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-v2.appspot.com"
+*   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-v2.firebasestorage.app"
 *   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`="737697039654"
 *   `NEXT_PUBLIC_FIREBASE_APP_ID`="1:737697039654:web:3c2d65e531a0e272be2de7"
 *   `GEMINI_API_KEY` (Get from [Google AI Studio](https://aistudio.google.com/app/apikey))

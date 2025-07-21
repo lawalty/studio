@@ -16,7 +16,7 @@ function initializeClientApp(): FirebaseApp {
         apiKey: "AIzaSyBOQWkvEwBkcweTvz2nFBpEzt7UjBawFPo",
         authDomain: "ai-blair-v2.firebaseapp.com",
         projectId: "ai-blair-v2",
-        storageBucket: "ai-blair-v2.appspot.com",
+        storageBucket: "ai-blair-v2.firebasestorage.app",
         messagingSenderId: "737697039654",
         appId: "1:737697039654:web:3c2d65e531a0e272be2de7"
     };
