@@ -21,7 +21,7 @@ For running the app on your local machine (`npm run dev`).
 *   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-v2.appspot.com"
 *   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`="737697039654"
 *   `NEXT_PUBLIC_FIREBASE_APP_ID`="1:737697039654:web:3c2d65e531a0e272be2de7"
-*   `GOOGLE_AI_API_KEY` (Get from [Google AI Studio](https://aistudio.google.com/app/apikey))
+*   `GEMINI_API_KEY` (Get from [Google AI Studio](https://aistudio.google.com/app/apikey))
 *   `GCLOUD_PROJECT`="ai-blair-v2"
 *   `LOCATION` (e.g., `us-central1`)
 *   `VERTEX_AI_INDEX_ID`
@@ -46,11 +46,11 @@ For the live version of your app hosted on Firebase App Hosting.
 *   When you deploy, Firebase uses this file to configure your live app. **The storage bucket has been corrected in this file.**
 
 **Private Secrets (Secret Manager):**
-*   Sensitive keys (`GOOGLE_AI_API_KEY`, `ADMIN_PASSWORD`, Vertex AI IDs, etc.) are referenced in `apphosting.yaml` but their actual values must be stored in Google Secret Manager for security.
+*   Sensitive keys (`GEMINI_API_KEY`, `ADMIN_PASSWORD`, Vertex AI IDs, etc.) are referenced in `apphosting.yaml` but their actual values must be stored in Google Secret Manager for security.
 *   **Action Required:**
     1.  Go to the [Google Cloud Secret Manager](https://console.cloud.google.com/security/secret-manager) for your project (`ai-blair-v2`).
-    2.  For each secret variable listed in `apphosting.yaml` (like `GOOGLE_AI_API_KEY`), click **"Create Secret"**.
-    3.  Enter the **Secret name** exactly as it appears in `apphosting.yaml` (e.g., `GOOGLE_AI_API_KEY`).
+    2.  For each secret variable listed in `apphosting.yaml` (like `GEMINI_API_KEY`), click **"Create Secret"**.
+    3.  Enter the **Secret name** exactly as it appears in `apphosting.yaml` (e.g., `GEMINI_API_KEY`).
     4.  Enter the corresponding key/ID as the **Secret value**.
     5.  Leave the other settings as default and click **"Create secret"**.
     6.  **Crucially**, after creating the secret, you must grant your App Hosting service account access to it. Your service account will be named `PROJECT_NUMBER-compute@developer.gserviceaccount.com`. Grant it the **"Secret Manager Secret Accessor"** role.

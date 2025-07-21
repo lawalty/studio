@@ -44,13 +44,13 @@ const testTextGenerationFlow = async (): Promise<TestTextGenerationOutput> => {
         if (rawError.includes("API key not valid")) {
             detailedError = "The provided Google AI API Key is invalid. Please verify it in your .env.local file or hosting provider's secret manager.";
         } else if (rawError.includes("API key is missing")) {
-            detailedError = "The GOOGLE_AI_API_KEY environment variable is not set. Please add it to your .env.local file or hosting provider's secret manager.";
+            detailedError = "The GEMINI_API_KEY environment variable is not set. Please add it to your .env.local file or hosting provider's secret manager.";
         } else if (rawError.includes("permission denied") || rawError.includes('IAM')) {
             detailedError = `A permissions issue occurred. Please check that the 'Vertex AI API' is enabled in your Google Cloud project and that your account has the correct IAM permissions.`;
         } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
             detailedError = `CRITICAL: The text generation feature failed because billing is not enabled for your Google Cloud project. Please link a billing account in the Google Cloud Console.`;
         } else {
-            detailedError = `The text generation test failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
+            detailedError = `The text generation test failed. This is most often caused by a missing/invalid GEMINI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
         }
         
         return { success: false, error: detailedError };

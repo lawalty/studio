@@ -24,8 +24,8 @@ runConfig:
     # Server-side secrets. These MUST be created in the Google Secret Manager
     # and referenced here. The names of the secrets must match these values.
     # See the README for instructions.
-    - variable: GOOGLE_AI_API_KEY
-      secret: GOOGLE_AI_API_KEY
+    - variable: GEMINI_API_KEY
+      secret: GEMINI_API_KEY
     - variable: VERTEX_AI_INDEX_ID
       secret: VERTEX_AI_INDEX_ID
     - variable: VERTEX_AI_INDEX_ENDPOINT_ID

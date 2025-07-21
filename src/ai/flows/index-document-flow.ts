@@ -185,7 +185,7 @@ export async function indexDocument({
         } else if (e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM')))) {
             detailedError = `CRITICAL: The server failed to write to Firestore due to a permissions error. Please check IAM roles for your service account. It needs "Firebase Admin" or "Cloud Datastore User".`;
         } else if (rawError.includes("API key not valid") || rawError.includes("API key is missing")) {
-            detailedError = `CRITICAL: Indexing failed due to an invalid or missing GOOGLE_AI_API_KEY. Please verify it in your .env.local file or hosting provider's secret manager.`;
+            detailedError = `CRITICAL: Indexing failed due to an invalid or missing GEMINI_API_KEY. Please verify it in your .env.local file or hosting provider's secret manager.`;
         } else {
             detailedError = `Indexing failed for an unexpected reason. Full technical error: ${rawError}`;
         }

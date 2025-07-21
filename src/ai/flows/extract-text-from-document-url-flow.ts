@@ -87,13 +87,13 @@ CRITICAL INSTRUCTIONS:
       } else if (rawError.includes("API key not valid")) {
           detailedError = "Text extraction failed: The provided Google AI API Key is invalid. Please verify it in your .env.local file or hosting provider's secret manager.";
       } else if (rawError.includes("API key is missing")) {
-          detailedError = "Text extraction failed: The GOOGLE_AI_API_KEY environment variable is not set. Please add it to your .env.local file or hosting provider's secret manager.";
+          detailedError = "Text extraction failed: The GEMINI_API_KEY environment variable is not set. Please add it to your .env.local file or hosting provider's secret manager.";
       } else if (rawError.includes("permission denied") || rawError.includes('IAM')) {
           detailedError = `Text extraction failed due to a permissions issue. Please check that the 'Vertex AI API' is enabled in your Google Cloud project and that your account has the correct IAM permissions.`;
       } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
           detailedError = `CRITICAL: Text extraction failed because billing is not enabled for your Google Cloud project. Please go to your Google Cloud Console, select the correct project, and ensure that a billing account is linked.`;
       } else {
-          detailedError = `Text extraction failed. This is most often caused by a missing/invalid GOOGLE_AI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
+          detailedError = `Text extraction failed. This is most often caused by a missing/invalid GEMINI_API_KEY or a Google Cloud project configuration issue (e.g., Vertex AI API or billing not enabled). Full error: ${rawError}`;
       }
       
       return { error: detailedError };
