@@ -246,8 +246,8 @@ export default function KnowledgeBasePage() {
   }, [toast]);
 
   const handleFileUpload = async () => {
-    if (!selectedFile || !selectedTopicForUpload || !uploadDescription || !selectedLevelForUpload) {
-        toast({ title: "Missing Information", description: "Please select a file, topic, priority level, and provide a description.", variant: "destructive" });
+    if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
+        toast({ title: "Missing Information", description: "Please select a file, topic, and priority level.", variant: "destructive" });
         return;
     }
     if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
@@ -640,7 +640,7 @@ export default function KnowledgeBasePage() {
                 </div>
               )}
               <div className="space-y-2">
-                <Label htmlFor="upload-description">Description</Label>
+                <Label htmlFor="upload-description">Description (Optional)</Label>
                 <Textarea id="uploadDescription" value={uploadDescription} onChange={(e) => setUploadDescription(e.target.value)} placeholder="Briefly describe the source content..." />
               </div>
             </CardContent>
