@@ -25,7 +25,7 @@ export async function extractTextFromDocument(
   { documentUrl }: ExtractTextFromDocumentInput
 ): Promise<ExtractTextFromDocumentOutput> {
     try {
-      const prompt = `Your task is to extract all human-readable text from the provided document.
+      const systemPrompt = `Your task is to extract all human-readable text from the provided document.
 
 CRITICAL INSTRUCTIONS:
 1.  Focus exclusively on textual content. Ignore text that is part of an image or complex graphic.
@@ -36,8 +36,9 @@ CRITICAL INSTRUCTIONS:
 6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
 
       const response = await ai.generate({
-        model: 'googleai/gemini-1.5-flash',
-        prompt: [{ text: prompt }, { media: { url: documentUrl } }],
+        model: 'googleai/gemini-1.5-pro',
+        system: systemPrompt,
+        prompt: [{ media: { url: documentUrl } }],
         config: {
           temperature: 0.1,
           safetySettings: [
