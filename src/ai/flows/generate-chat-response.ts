@@ -101,9 +101,7 @@ Your primary goal is to answer user questions based on retrieved documents.
 
     prompt: `The user is conversing in {{language}}.
 Here is the full conversation history:
-<history>
 {{{chatHistory}}}
-</history>
 
 Here is the context retrieved from the knowledge base to answer the user's latest message.
 <retrieved_context>
@@ -164,7 +162,7 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
         personaTraits,
         conversationalTopics,
         language: language || 'English',
-        chatHistory: historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n'),
+        chatHistory: `<history>\n${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}\n</history>`,
         retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND'
     };
     
