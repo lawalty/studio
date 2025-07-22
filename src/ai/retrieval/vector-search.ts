@@ -68,6 +68,7 @@ export async function searchKnowledgeBase({
   const embeddingVector = embeddingResponse[0].embedding;
   const distanceThreshold = 1; // Hardcoded to 1 for testing.
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
+  let allRelevantResults: SearchResult[] = [];
 
   for (const level of searchLevels) {
     try {
@@ -81,20 +82,20 @@ export async function searchKnowledgeBase({
       const snapshot = await vectorQuery.get();
       
       if (!snapshot.empty) {
-        const relevantResults: SearchResult[] = [];
         snapshot.forEach(doc => {
           const distance = (doc as any).distance; 
           // A smaller distance is a better match. We accept any result where the distance is LESS THAN OR EQUAL to the threshold.
           if (distance <= distanceThreshold) {
-            relevantResults.push({
+            allRelevantResults.push({
               ...(doc.data() as Omit<SearchResult, 'distance'>),
               distance: distance,
             });
           }
         });
         
-        if (relevantResults.length > 0) {
-          return relevantResults;
+        // If we found any results in a higher-priority level, return them immediately.
+        if (allRelevantResults.length > 0) {
+          return allRelevantResults;
         }
       }
     } catch (error: any) {
@@ -103,7 +104,6 @@ export async function searchKnowledgeBase({
     }
   }
 
-  // If no results are found in any level, return an empty array.
-  return [];
+  // If no results are found in any level after checking all of them, return the (empty) array.
+  return allRelevantResults;
 }
-
