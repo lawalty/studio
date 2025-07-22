@@ -220,7 +220,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     setIsSpeaking(false);
                     if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
                     setAnimatedResponse(null);
-                    // Only add the message here, after audio finishes, to prevent duplicates.
+                    // This is now the ONLY place the message is added for audio modes.
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                 };
                 
@@ -296,9 +296,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }));
 
         try {
-            const { personaTraits, conversationalTopics } = configRef.current;
+            const { conversationalTopics } = configRef.current;
             const flowInput: GenerateChatResponseInput = {
-                personaTraits, conversationalTopics,
+                conversationalTopics,
                 chatHistory: historyForGenkit,
                 language: language,
             };

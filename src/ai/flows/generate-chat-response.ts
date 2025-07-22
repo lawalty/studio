@@ -15,7 +15,6 @@ import { withRetry } from './index-document-flow';
 
 // Zod schema for the input of the generateChatResponse flow.
 const GenerateChatResponseInputSchema = z.object({
-  personaTraits: z.string().describe("A summary of the AI's personality and character traits."),
   conversationalTopics: z.string().describe("A comma-separated list of topics the AI is an expert in."),
   language: z.string().optional().default('English').describe('The language the user is speaking in and expects a response in.'),
   chatHistory: z.array(z.object({
@@ -114,7 +113,7 @@ const preprocessText = (text: string): string => {
 
 
 // Define the flow at the top level.
-const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
+const generateChatResponseFlow = async ({ conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
