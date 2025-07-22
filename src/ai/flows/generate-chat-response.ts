@@ -71,35 +71,31 @@ const chatPrompt = ai.definePrompt({
     name: 'chatRAGPrompt',
     input: {
         schema: z.object({
-            personaTraits: z.string(),
             conversationalTopics: z.string(),
             language: z.string(),
             chatHistory: z.string(),
             retrievedContext: z.string(),
         })
     },
-    // The prompt now expects a JSON object that matches the AiResponseJsonSchema.
     output: {
         format: 'json',
         schema: AiResponseJsonSchema,
     },
-    system: `You are a helpful and professional conversational AI.
-Your persona is defined by these traits: "{{personaTraits}}".
-You are an expert in: "{{conversationalTopics}}".
-
-Your primary goal is to answer user questions based on retrieved documents.
+    system: `You are a helpful and professional conversational AI. Your primary goal is to answer user questions based on the retrieved documents about specific people or topics.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Strictly Adhere to Provided Context:** You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge unless the context is empty or irrelevant.
-2.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge.
-3.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-4.  **Citations:** If, and only if, your answer is based on information from a document, you MUST populate the 'pdfReference' object. Use the 'source' for 'fileName' and 'downloadURL' from the document tag in the context.
-5.  **Conversation Flow:**
-    - If the user provides a greeting or engages in simple small talk, respond naturally according to your persona.
+1.  **Adopt Persona from Context**: You MUST answer questions from the perspective of the person or entity described in the <retrieved_context>. When the user asks "you" a question (e.g., "When did you join?"), you must answer as if you are that person, using "I". For example, if the context says "He joined in 1989," your answer should be "I joined in 1989."
+2.  **Strictly Adhere to Provided Context**: You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge.
+3.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge.
+4.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
+5.  **Citations:** If, and only if, your answer is based on information from a document, you MUST populate the 'pdfReference' object. Use the 'source' for 'fileName' and 'downloadURL' from the document tag in the context.
+6.  **Conversation Flow:**
+    - If the user provides a greeting or engages in simple small talk, respond naturally.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-6.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+7.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
 
-    prompt: `The user is conversing in {{language}}.
+    prompt: `You are an expert in: "{{conversationalTopics}}".
+The user is conversing in {{language}}.
 Here is the full conversation history:
 {{{chatHistory}}}
 
@@ -168,7 +164,6 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
 
     // 4. Construct the prompt for the LLM.
     const promptInput = {
-        personaTraits,
         conversationalTopics,
         language: language || 'English',
         chatHistory: `<history>\n${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}\n</history>`,
@@ -176,18 +171,16 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
     };
     
     try {
-      // With format: 'json', Genkit will handle the parsing and schema validation.
       const { output } = await withRetry(() => chatPrompt(promptInput, { model: 'googleai/gemini-1.5-flash' }));
 
       if (!output) {
         throw new Error('AI model returned an empty or invalid response after multiple retries.');
       }
       
-      // Check for Spanish PDF override
       if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
           const spanishPdf = await findSpanishPdf(primarySearchResult.sourceId);
           if (spanishPdf) {
-              output.pdfReference = spanishPdf; // Override with the Spanish version
+              output.pdfReference = spanishPdf;
           }
       }
       
@@ -195,8 +188,6 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
 
     } catch (error: any) {
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
-      // Return a structured error response that matches the expected output schema.
-      // THIS IS FOR DEBUGGING - IT WILL SHOW THE RAW ERROR TO THE USER.
       return {
         aiResponse: `DEBUG: An error occurred in the AI flow. Technical details: ${error.message || 'Unknown error'}`,
         shouldEndConversation: true,
