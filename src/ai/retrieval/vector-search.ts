@@ -8,9 +8,8 @@
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
-import { Embedding } from '@genkit-ai/ai/embedding';
 
-const DEFAULT_DISTANCE_THRESHOLD = 0.85;
+const DEFAULT_SIMILARITY_THRESHOLD = 0.4; // Corresponds to a cosine distance of 0.6
 
 interface SearchResult {
   sourceId: string;
@@ -28,8 +27,8 @@ interface SearchParams {
   limit?: number;
 }
 
-// Helper to get the distance threshold from Firestore
-async function getDistanceThreshold(): Promise<number> {
+// Helper to get the relevance threshold from Firestore
+async function getRelevanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
         const docSnap = await docRef.get();
@@ -40,9 +39,9 @@ async function getDistanceThreshold(): Promise<number> {
             }
         }
     } catch (error) {
-        console.error("Error fetching distance threshold, using default:", error);
+        console.error("Error fetching relevance threshold, using default:", error);
     }
-    return DEFAULT_DISTANCE_THRESHOLD;
+    return DEFAULT_SIMILARITY_THRESHOLD;
 }
 
 
@@ -61,7 +60,9 @@ export async function searchKnowledgeBase({
   }
   
   const embeddingVector = embeddingResponse[0].embedding;
-  const distanceThreshold = await getDistanceThreshold();
+  const relevanceThreshold = await getRelevanceThreshold();
+  // We invert the slider's value. A higher "relevance" score from the user (e.g., 0.8) means we need a smaller "distance" (e.g., < 0.2).
+  const distanceThreshold = 1 - relevanceThreshold;
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
 
   for (const level of searchLevels) {
@@ -78,9 +79,8 @@ export async function searchKnowledgeBase({
       if (!snapshot.empty) {
         const relevantResults: SearchResult[] = [];
         snapshot.forEach(doc => {
-          // distance is a value from 0 (identical) to 2 (opposite) for COSINE.
-          // A smaller distance means a better match.
           const distance = (doc as any).distance; 
+          // A smaller distance means a better match. We compare it to our calculated threshold.
           if (distance < distanceThreshold) {
             relevantResults.push({
               ...(doc.data() as Omit<SearchResult, 'distance'>),
@@ -89,17 +89,14 @@ export async function searchKnowledgeBase({
           }
         });
         
-        // If we found relevant results at this level, return them immediately.
         if (relevantResults.length > 0) {
           return relevantResults;
         }
       }
     } catch (error: any) {
-        // Log the error for the specific level but continue to the next
         console.error(`[searchKnowledgeBase] Error during vector search for level '${level}':`, error);
     }
   }
 
-  // If no results are found after trying all levels, return an empty array.
   return [];
 }

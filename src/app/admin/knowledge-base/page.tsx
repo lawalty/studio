@@ -54,7 +54,7 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
-const DEFAULT_DISTANCE_THRESHOLD = 0.85;
+const DEFAULT_DISTANCE_THRESHOLD = 0.4;
 
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
@@ -661,10 +661,10 @@ export default function KnowledgeBasePage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="distance-threshold">Relevance Threshold: {distanceThreshold[0]}</Label>
+                    <Label htmlFor="distance-threshold">Relevance Score: {distanceThreshold[0]}</Label>
                     <Slider
                         id="distance-threshold"
-                        min={0}
+                        min={0.1}
                         max={1}
                         step={0.01}
                         value={distanceThreshold}
@@ -672,7 +672,7 @@ export default function KnowledgeBasePage() {
                         className="my-4"
                     />
                     <p className="text-xs text-muted-foreground">
-                        Lower values (e.g., 0.2) require a very strong match. Higher values (e.g., 0.9) allow for more loosely related results. Default is 0.85.
+                        Higher values (e.g., 0.8+) require a very strong, specific match. Lower values (e.g., 0.2) allow for more broad, loosely related results. Default is 0.4.
                     </p>
                 </div>
             </CardContent>
