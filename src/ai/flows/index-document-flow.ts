@@ -20,6 +20,9 @@ const IndexDocumentInputSchema = z.object({
   topic: z.string().describe('The topic category for the document.'),
   downloadURL: z.string().url().optional().describe('The public downloadURL for the source file.'),
   linkedEnglishSourceId: z.string().optional().describe('If this is a Spanish PDF, the ID of the English source it corresponds to.'),
+  pageNumber: z.number().optional().describe('The page number of the document chunk.'),
+  title: z.string().optional().describe('The title of the document.'),
+  header: z.string().optional().describe('The header of the document section.'),
 });
 export type IndexDocumentInput = z.infer<typeof IndexDocumentInputSchema>;
 
@@ -94,6 +97,9 @@ export async function indexDocument({
     topic, 
     downloadURL,
     linkedEnglishSourceId,
+    pageNumber,
+    title,
+    header,
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
       const collectionName = `kb_${level.toLowerCase().replace(/\s+/g, '_')}_meta_v1`;
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
@@ -146,6 +152,9 @@ export async function indexDocument({
               embedding: embeddingVector, // Save the final, correct vector.
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
+              pageNumber: pageNumber || null,
+              title: title || null,
+              header: header || null,
             };
 
             if (linkedEnglishSourceId) {

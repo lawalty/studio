@@ -19,6 +19,9 @@ interface SearchResult {
   topic: string;
   downloadURL?: string;
   distance: number;
+  pageNumber?: number;
+  title?: string;
+  header?: string;
 }
 
 interface SearchParams {
@@ -66,7 +69,7 @@ export async function searchKnowledgeBase({
   }
   
   const embeddingVector = embeddingResponse[0].embedding;
-  const distanceThreshold = 1; // Hardcoded to 1 for testing.
+  const distanceThreshold = await getDistanceThreshold();
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
   let allRelevantResults: SearchResult[] = [];
 
