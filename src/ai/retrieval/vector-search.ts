@@ -33,9 +33,13 @@ async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
         const docSnap = await docRef.get();
-        if (docSnap.exists) {
+        if (docSnap.exists()) {
             const data = docSnap.data();
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
+                // The distance from Firestore is 0 to 1, but Cosine distance is 0 to 2.
+                // We need to invert it for a "similarity" score where higher is better.
+                // The query uses '<' so a higher threshold from UI (e.g. 0.9) means we accept larger distances (less similarity).
+                // Example: UI threshold 0.85 -> distance < 0.85. Correct.
                 return data.vectorSearchDistanceThreshold;
             }
         }
@@ -78,6 +82,8 @@ export async function searchKnowledgeBase({
       if (!snapshot.empty) {
         const relevantResults: SearchResult[] = [];
         snapshot.forEach(doc => {
+          // distance is a value from 0 (identical) to 2 (opposite) for COSINE.
+          // A smaller distance means a better match.
           const distance = (doc as any).distance; 
           if (distance < distanceThreshold) {
             relevantResults.push({
