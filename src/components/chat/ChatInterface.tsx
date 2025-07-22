@@ -297,11 +297,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         try {
             const { personaTraits, conversationalTopics } = configRef.current;
-            const result = await generateChatResponse({
+            const flowInput: GenerateChatResponseInput = {
                 personaTraits, conversationalTopics,
                 chatHistory: historyForGenkit,
                 language: language,
-            });
+            };
+            const result = await generateChatResponse(flowInput);
             
             const aiMessage: Message = {
                 id: uuidv4(),

@@ -37,8 +37,7 @@ const AiResponseJsonSchema = z.object({
   }).optional().describe('A reference to a PDF document if the AI response is based on one.'),
 });
 // This is the final output schema for the flow.
-const GenerateChatResponseOutputSchema = AiResponseJsonSchema;
-export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
+export type GenerateChatResponseOutput = z.infer<typeof AiResponseJsonSchema>;
 
 
 // Helper function to find the Spanish version of a document
@@ -111,6 +110,12 @@ Here is the context retrieved from the knowledge base to answer the user's lates
 `
 });
 
+// Function to pre-process text for better embedding and search quality.
+const preprocessText = (text: string): string => {
+  if (!text) return '';
+  return text.toLowerCase().replace(/\bezcorp\b/gi, 'the company');
+};
+
 
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
@@ -118,15 +123,18 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
     const historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
 
-    // 1. Translate the user's query if needed for the search.
+    // 1. Translate the user's query if needed for the search and preprocess it.
     let searchQuery = lastUserMessage;
-    if (language && language.toLowerCase() !== 'english' && searchQuery) {
-      try {
-        const { translatedText } = await translateText({ text: searchQuery, targetLanguage: 'English' });
-        searchQuery = translatedText;
-      } catch (e) {
-        console.error("[generateChatResponseFlow] Failed to translate user query for RAG, proceeding with original text.", e);
-      }
+    if (searchQuery) {
+        if (language && language.toLowerCase() !== 'english') {
+          try {
+            const { translatedText } = await translateText({ text: searchQuery, targetLanguage: 'English' });
+            searchQuery = translatedText;
+          } catch (e) {
+            console.error("[generateChatResponseFlow] Failed to translate user query for RAG, proceeding with original text.", e);
+          }
+        }
+        searchQuery = preprocessText(searchQuery);
     }
 
     // 2. Search the knowledge base.

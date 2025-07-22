@@ -79,6 +79,12 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
     throw lastError;
 }
 
+// Function to pre-process text for better embedding and search quality.
+const preprocessText = (text: string): string => {
+  if (!text) return '';
+  return text.toLowerCase().replace(/\bezcorp\b/gi, 'the company');
+};
+
 
 export async function indexDocument({ 
     sourceId, 
@@ -93,9 +99,9 @@ export async function indexDocument({
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
 
       try {
-        const cleanText = text.trim();
-        if (!cleanText) {
-            const errorMessage = "No readable text content found after extraction. The file may be empty or incompatible. Please try re-processing or use a different file.";
+        const processedText = preprocessText(text);
+        if (!processedText.trim()) {
+            const errorMessage = "No readable text content found after extraction and processing. The file may be empty or incompatible. Please try re-processing or use a different file.";
             await sourceDocRef.set({
               indexingStatus: 'failed',
               indexingError: errorMessage,
@@ -104,7 +110,7 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
-        const chunks = simpleSplitter(cleanText, {
+        const chunks = simpleSplitter(processedText, {
           chunkSize: 1000, 
           chunkOverlap: 100,
         });
