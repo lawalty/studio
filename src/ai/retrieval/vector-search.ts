@@ -36,10 +36,6 @@ async function getDistanceThreshold(): Promise<number> {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
-                // The distance from Firestore is 0 to 1, but Cosine distance is 0 to 2.
-                // We need to invert it for a "similarity" score where higher is better.
-                // The query uses '<' so a higher threshold from UI (e.g. 0.9) means we accept larger distances (less similarity).
-                // Example: UI threshold 0.85 -> distance < 0.85. Correct.
                 return data.vectorSearchDistanceThreshold;
             }
         }
