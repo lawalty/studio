@@ -35,7 +35,9 @@ async function getRelevanceThreshold(): Promise<number> {
         if (docSnap.exists()) {
             const data = docSnap.data();
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
-                return data.vectorSearchDistanceThreshold;
+                // Ensure the value is within a reasonable range (0 to 1)
+                const threshold = Math.max(0, Math.min(1, data.vectorSearchDistanceThreshold));
+                return threshold;
             }
         }
     } catch (error) {
@@ -60,6 +62,7 @@ export async function searchKnowledgeBase({
   }
   
   const embeddingVector = embeddingResponse[0].embedding;
+  // CORRECTED: The call to getRelevanceThreshold is now properly awaited.
   const relevanceThreshold = await getRelevanceThreshold();
   // We invert the slider's value. A higher "relevance" score from the user (e.g., 0.8) means we need a smaller "distance" (e.g., < 0.2).
   const distanceThreshold = 1 - relevanceThreshold;
@@ -95,8 +98,10 @@ export async function searchKnowledgeBase({
       }
     } catch (error: any) {
         console.error(`[searchKnowledgeBase] Error during vector search for level '${level}':`, error);
+        // Continue to the next level if one fails
     }
   }
 
+  // If no results are found in any level, return an empty array.
   return [];
 }

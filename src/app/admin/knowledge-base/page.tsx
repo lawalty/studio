@@ -156,7 +156,7 @@ export default function KnowledgeBasePage() {
         await setDoc(docRef, { vectorSearchDistanceThreshold: distanceThreshold[0] }, { merge: true });
         toast({
             title: "Threshold Saved",
-            description: `Relevance threshold set to ${distanceThreshold[0]}.`,
+            description: `Relevance score set to ${distanceThreshold[0]}.`,
         });
     } catch (error: any) {
         toast({
@@ -672,7 +672,7 @@ export default function KnowledgeBasePage() {
                         className="my-4"
                     />
                     <p className="text-xs text-muted-foreground">
-                        Higher values (e.g., 0.8+) require a very strong, specific match. Lower values (e.g., 0.2) allow for more broad, loosely related results. Default is 0.4.
+                        Adjusts the search strictness. Higher values (e.g., 0.8+) require a very strong match. Lower values (e.g., 0.2) allow for more broad, loosely related results. Default is 0.4.
                     </p>
                 </div>
             </CardContent>
