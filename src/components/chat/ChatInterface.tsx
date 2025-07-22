@@ -100,22 +100,12 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
   return html;
 }
 
+// CORRECTED: This function now returns the full conversation history plus the animating message.
 const getVisibleChatBubbles = (allMessages: Message[], animatedMessage?: Message): Message[] => {
     if (animatedMessage) {
-        // If there's an animated message, we need to show the previous user message and the animating AI message.
-        const userMessages = allMessages.filter(m => m.sender === 'user');
-        const lastUserMessage = userMessages[userMessages.length - 1];
-        return lastUserMessage ? [lastUserMessage, animatedMessage] : [animatedMessage];
+        return [...allMessages, animatedMessage];
     }
-    
-    // Default logic for showing the last turn
-    if (allMessages.length < 2) return allMessages;
-    const lastMessage = allMessages[allMessages.length - 1];
-    const secondLastMessage = allMessages[allMessages.length - 2];
-    if (lastMessage.sender === 'model' && secondLastMessage.sender === 'user') {
-        return [secondLastMessage, lastMessage];
-    }
-    return [lastMessage];
+    return allMessages;
 };
 
 

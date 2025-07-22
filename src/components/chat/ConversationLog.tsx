@@ -1,3 +1,4 @@
+
 import type { Message } from '@/components/chat/ChatInterface';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";
@@ -22,9 +23,12 @@ export default function ConversationLog({
   }, [translate]);
 
   useEffect(() => {
-    // Correctly access the viewport element within the ScrollArea component
-    if (scrollAreaRef.current) {
-      const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+    // This effect ensures the scroll area automatically scrolls to the bottom
+    // whenever the messages array changes, keeping the latest message in view.
+    const scrollArea = scrollAreaRef.current;
+    if (scrollArea) {
+      // The viewport is the actual scrollable element within the ScrollArea component
+      const viewport = scrollArea.querySelector('div[data-radix-scroll-area-viewport]');
       if (viewport) {
         viewport.scrollTo({
           top: viewport.scrollHeight,
