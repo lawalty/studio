@@ -9,7 +9,7 @@
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
 
-const DEFAULT_SIMILARITY_THRESHOLD = 0.4; // Corresponds to a cosine distance of 0.6
+const DEFAULT_DISTANCE_THRESHOLD = 0.6; // Default distance, allows for reasonably similar results.
 
 interface SearchResult {
   sourceId: string;
@@ -27,23 +27,23 @@ interface SearchParams {
   limit?: number;
 }
 
-// Helper to get the relevance threshold from Firestore
-async function getRelevanceThreshold(): Promise<number> {
+// Helper to get the distance threshold from Firestore. This is now the maximum allowed distance.
+async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
         const docSnap = await docRef.get();
         if (docSnap.exists()) {
             const data = docSnap.data();
+            // The value is used directly as the max distance.
             if (typeof data?.vectorSearchDistanceThreshold === 'number') {
-                // Ensure the value is within a reasonable range (0 to 1)
-                const threshold = Math.max(0, Math.min(1, data.vectorSearchDistanceThreshold));
+                const threshold = Math.max(0, Math.min(2, data.vectorSearchDistanceThreshold)); // Cosine distance can be up to 2
                 return threshold;
             }
         }
     } catch (error) {
-        console.error("Error fetching relevance threshold, using default:", error);
+        console.error("Error fetching distance threshold, using default:", error);
     }
-    return DEFAULT_SIMILARITY_THRESHOLD;
+    return DEFAULT_DISTANCE_THRESHOLD;
 }
 
 
@@ -62,10 +62,7 @@ export async function searchKnowledgeBase({
   }
   
   const embeddingVector = embeddingResponse[0].embedding;
-  // CORRECTED: The call to getRelevanceThreshold is now properly awaited.
-  const relevanceThreshold = await getRelevanceThreshold();
-  // We invert the slider's value. A higher "relevance" score from the user (e.g., 0.8) means we need a smaller "distance" (e.g., < 0.2).
-  const distanceThreshold = 1 - relevanceThreshold;
+  const distanceThreshold = await getDistanceThreshold();
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
 
   for (const level of searchLevels) {
@@ -83,7 +80,7 @@ export async function searchKnowledgeBase({
         const relevantResults: SearchResult[] = [];
         snapshot.forEach(doc => {
           const distance = (doc as any).distance; 
-          // A smaller distance means a better match. We compare it to our calculated threshold.
+          // A smaller distance is a better match. We accept any result where the distance is LESS THAN the threshold.
           if (distance < distanceThreshold) {
             relevantResults.push({
               ...(doc.data() as Omit<SearchResult, 'distance'>),

@@ -54,7 +54,7 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
-const DEFAULT_DISTANCE_THRESHOLD = 0.4;
+const DEFAULT_DISTANCE_THRESHOLD = 0.6;
 
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
@@ -156,7 +156,7 @@ export default function KnowledgeBasePage() {
         await setDoc(docRef, { vectorSearchDistanceThreshold: distanceThreshold[0] }, { merge: true });
         toast({
             title: "Threshold Saved",
-            description: `Relevance score set to ${distanceThreshold[0]}.`,
+            description: `Distance threshold set to ${distanceThreshold[0]}.`,
         });
     } catch (error: any) {
         toast({
@@ -661,7 +661,7 @@ export default function KnowledgeBasePage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="distance-threshold">Relevance Score: {distanceThreshold[0]}</Label>
+                    <Label htmlFor="distance-threshold">Distance Threshold: {distanceThreshold[0]}</Label>
                     <Slider
                         id="distance-threshold"
                         min={0.1}
@@ -672,7 +672,7 @@ export default function KnowledgeBasePage() {
                         className="my-4"
                     />
                     <p className="text-xs text-muted-foreground">
-                        Adjusts the search strictness. Higher values (e.g., 0.8+) require a very strong match. Lower values (e.g., 0.2) allow for more broad, loosely related results. Default is 0.4.
+                        Controls search strictness. A lower value (e.g., 0.2) requires a very close match. A higher value (e.g., 0.7) allows for more loosely related results. Default is 0.6.
                     </p>
                 </div>
             </CardContent>
