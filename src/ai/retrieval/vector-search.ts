@@ -80,8 +80,8 @@ export async function searchKnowledgeBase({
         const relevantResults: SearchResult[] = [];
         snapshot.forEach(doc => {
           const distance = (doc as any).distance; 
-          // A smaller distance is a better match. We accept any result where the distance is LESS THAN the threshold.
-          if (distance < distanceThreshold) {
+          // A smaller distance is a better match. We accept any result where the distance is LESS THAN OR EQUAL to the threshold.
+          if (distance <= distanceThreshold) {
             relevantResults.push({
               ...(doc.data() as Omit<SearchResult, 'distance'>),
               distance: distance,

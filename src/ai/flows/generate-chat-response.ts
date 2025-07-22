@@ -88,7 +88,7 @@ const chatPrompt = ai.definePrompt({
 2.  **Strictly Adhere to Provided Context**: You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge.
 3.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge.
 4.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-5.  **Citations:** If, and only if, your answer is based on information from a document, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+5.  **Citations:** If, and only if, your answer is based on a document, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
 6.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
@@ -109,7 +109,7 @@ Here is the context retrieved from the knowledge base to answer the user's lates
 // Function to pre-process text for better embedding and search quality.
 const preprocessText = (text: string): string => {
   if (!text) return '';
-  return text.toLowerCase().replace(/\bezcorp\b/gi, 'the company');
+  return text.toLowerCase();
 };
 
 
@@ -166,7 +166,9 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
     const promptInput = {
         conversationalTopics,
         language: language || 'English',
-        chatHistory: `<history>\n${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}\n</history>`,
+        chatHistory: `<history>
+${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}
+</history>`,
         retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND'
     };
     
