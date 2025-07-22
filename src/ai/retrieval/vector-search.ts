@@ -34,10 +34,14 @@ async function getDistanceThreshold(): Promise<number> {
         const docSnap = await docRef.get();
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // The value is used directly as the max distance.
-            if (typeof data?.vectorSearchDistanceThreshold === 'number') {
-                const threshold = Math.max(0, Math.min(2, data.vectorSearchDistanceThreshold)); // Cosine distance can be up to 2
-                return threshold;
+            const storedThreshold = data?.vectorSearchDistanceThreshold;
+
+            // Handle both array (from slider) and number (direct) data types for robustness.
+            if (Array.isArray(storedThreshold) && typeof storedThreshold[0] === 'number') {
+                return Math.max(0, Math.min(2, storedThreshold[0]));
+            }
+            if (typeof storedThreshold === 'number') {
+                return Math.max(0, Math.min(2, storedThreshold));
             }
         }
     } catch (error) {

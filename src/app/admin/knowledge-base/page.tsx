@@ -94,9 +94,12 @@ export default function KnowledgeBasePage() {
           if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
             setSelectedTopicForUpload(topicsArray[0]);
           }
-          // Fetch distance threshold
-          if (typeof data.vectorSearchDistanceThreshold === 'number') {
-            setDistanceThreshold([data.vectorSearchDistanceThreshold]);
+          // Fetch distance threshold, handling both array and number for robustness
+          const storedThreshold = data.vectorSearchDistanceThreshold;
+          if (typeof storedThreshold === 'number') {
+            setDistanceThreshold([storedThreshold]);
+          } else if (Array.isArray(storedThreshold) && typeof storedThreshold[0] === 'number') {
+            setDistanceThreshold([storedThreshold[0]]);
           }
         }
       } catch (error) {
@@ -153,6 +156,7 @@ export default function KnowledgeBasePage() {
     setIsSavingThreshold(true);
     try {
         const docRef = doc(db, 'configurations/site_display_assets');
+        // Correctly save only the number, not the array.
         await setDoc(docRef, { vectorSearchDistanceThreshold: distanceThreshold[0] }, { merge: true });
         toast({
             title: "Threshold Saved",

@@ -82,7 +82,7 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
 // Function to pre-process text for better embedding and search quality.
 const preprocessText = (text: string): string => {
   if (!text) return '';
-  return text.toLowerCase().replace(/\bezcorp\b/gi, 'the company');
+  return text.toLowerCase();
 };
 
 
