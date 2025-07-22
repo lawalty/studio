@@ -100,7 +100,6 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
   return html;
 }
 
-// CORRECTED: This function now returns the full conversation history plus the animating message.
 const getVisibleChatBubbles = (allMessages: Message[], animatedMessage?: Message): Message[] => {
     if (animatedMessage) {
         return [...allMessages, animatedMessage];
@@ -215,13 +214,16 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
                 if (!audioPlayerRef.current) {
                     audioPlayerRef.current = new Audio();
-                    audioPlayerRef.current.onended = () => {
-                        setIsSpeaking(false);
-                        if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-                        setAnimatedResponse(null);
-                        addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                    };
                 }
+                
+                audioPlayerRef.current.onended = () => {
+                    setIsSpeaking(false);
+                    if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+                    setAnimatedResponse(null);
+                    // Only add the message here, after audio finishes, to prevent duplicates.
+                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                };
+                
                 audioPlayerRef.current.src = audioDataUri;
     
                 const audioPromise = new Promise<void>(resolve => {
@@ -242,8 +244,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } catch (e) {
                 console.error("TTS API Error:", e);
                 setIsSpeaking(false);
+                 // If audio fails, still add the message directly
+                addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
             }
         } else {
+            // Text-only mode
             setIsSpeaking(true);
         }
     
@@ -260,14 +265,19 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     currentIndex++;
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                 } else {
-                    setIsSpeaking(false);
-                    setAnimatedResponse(null);
-                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                    // Animation finished. If in text-only mode, this is where we update state.
+                    if (!useAudio) {
+                        setIsSpeaking(false);
+                        setAnimatedResponse(null);
+                        addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                    }
+                    // For audio modes, the audio.onended event handles the final state update.
                 }
             };
             typeCharacter();
         } else {
-             addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+             // In audio-only mode, if TTS is successful, the onended handler will add the message.
+             // If TTS fails, the catch block already added it. No action needed here.
         }
     
     }, [communicationMode, addMessage, configRef, toast]);
@@ -657,5 +667,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
 
     
