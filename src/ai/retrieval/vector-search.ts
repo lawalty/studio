@@ -66,7 +66,7 @@ export async function searchKnowledgeBase({
   }
   
   const embeddingVector = embeddingResponse[0].embedding;
-  const distanceThreshold = await getDistanceThreshold();
+  const distanceThreshold = 1; // Hardcoded to 1 for testing.
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
 
   for (const level of searchLevels) {
@@ -106,3 +106,4 @@ export async function searchKnowledgeBase({
   // If no results are found in any level, return an empty array.
   return [];
 }
+
