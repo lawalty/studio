@@ -14,7 +14,7 @@ import { db } from '@/lib/firebase-admin';
 import { withRetry } from './index-document-flow';
 
 // Zod schema for the input of the generateChatResponse flow.
-export const GenerateChatResponseInputSchema = z.object({
+const GenerateChatResponseInputSchema = z.object({
   personaTraits: z.string().describe("A summary of the AI's personality and character traits."),
   conversationalTopics: z.string().describe("A comma-separated list of topics the AI is an expert in."),
   language: z.string().optional().default('English').describe('The language the user is speaking in and expects a response in.'),
@@ -37,7 +37,7 @@ const AiResponseJsonSchema = z.object({
   }).optional().describe('A reference to a PDF document if the AI response is based on one.'),
 });
 // This is the final output schema for the flow.
-export const GenerateChatResponseOutputSchema = AiResponseJsonSchema;
+const GenerateChatResponseOutputSchema = AiResponseJsonSchema;
 export type GenerateChatResponseOutput = z.infer<typeof GenerateChatResponseOutputSchema>;
 
 
