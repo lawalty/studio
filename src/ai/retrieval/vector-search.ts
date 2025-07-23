@@ -2,8 +2,8 @@
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
  *
- * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It searches 'High' priority documents first,
- *   then 'Medium', then 'Low', then 'Chat History', returning the first set of relevant results it finds that meet a confidence threshold.
+ * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It fetches a broad set of results
+ *   and then filters and prioritizes them in code ('High' -> 'Medium' -> 'Low') to ensure the most important results are returned first.
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
@@ -51,7 +51,6 @@ async function getDistanceThreshold(): Promise<number> {
     return DEFAULT_DISTANCE_THRESHOLD;
 }
 
-
 export async function searchKnowledgeBase({
   query,
   limit = 5,
@@ -68,43 +67,45 @@ export async function searchKnowledgeBase({
   
   const embeddingVector = embeddingResponse[0].embedding;
   const distanceThreshold = await getDistanceThreshold();
-  const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
-
-  for (const level of searchLevels) {
-    try {
-      const vectorQuery = db.collection('kb_chunks')
-          .where('level', '==', level)
-          .findNearest('embedding', embeddingVector, {
-              limit: limit,
-              distanceMeasure: 'COSINE'
-          });
-          
-      const snapshot = await vectorQuery.get();
+  
+  // 1. Query for a larger set of neighbors from the entire collection first.
+  const vectorQuery = db.collection('kb_chunks')
+      .findNearest('embedding', embeddingVector, {
+          limit: 20, // Fetch more results to allow for filtering/prioritization
+          distanceMeasure: 'COSINE'
+      });
       
-      const levelResults: SearchResult[] = [];
-      if (!snapshot.empty) {
-        snapshot.forEach(doc => {
-          const distance = (doc as any).distance; 
-          // A smaller distance is a better match. We accept any result where the distance is LESS THAN OR EQUAL to the threshold.
-          if (distance <= distanceThreshold) {
-            levelResults.push({
-              ...(doc.data() as Omit<SearchResult, 'distance'>),
-              distance: distance,
-            });
-          }
-        });
-        
-        // If we found any valid results in this higher-priority level, return them immediately.
-        if (levelResults.length > 0) {
-          return levelResults;
-        }
-      }
-    } catch (error: any) {
-        console.error(`[searchKnowledgeBase] Error during vector search for level '${level}':`, error);
-        // Continue to the next level if one fails
-    }
+  const snapshot = await vectorQuery.get();
+  
+  if (snapshot.empty) {
+    return [];
   }
 
-  // If no results are found in any level after checking all of them, return an empty array.
-  return [];
+  // 2. Filter these results by the distance threshold in code.
+  const allValidResults: SearchResult[] = [];
+  snapshot.forEach(doc => {
+    const distance = (doc as any).distance; 
+    // A smaller distance is a better match. We accept any result where the distance is LESS THAN OR EQUAL to the threshold.
+    if (distance <= distanceThreshold) {
+      allValidResults.push({
+        ...(doc.data() as Omit<SearchResult, 'distance'>),
+        distance: distance,
+      });
+    }
+  });
+
+  // 3. Sort the filtered results by priority level.
+  const priorityOrder: Record<string, number> = { 'High': 1, 'Medium': 2, 'Low': 3, 'Chat History': 4, 'Spanish PDFs': 5, 'Archive': 6 };
+  allValidResults.sort((a, b) => {
+      const priorityA = priorityOrder[a.level] || 99;
+      const priorityB = priorityOrder[b.level] || 99;
+      if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+      }
+      // If priorities are the same, sort by distance (closer is better)
+      return a.distance - b.distance;
+  });
+
+  // 4. Return the top N results based on the original limit.
+  return allValidResults.slice(0, limit);
 }
