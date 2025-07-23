@@ -70,7 +70,6 @@ export async function searchKnowledgeBase({
   const embeddingVector = embeddingResponse[0].embedding;
   const distanceThreshold = 1; // Hardcoded for testing.
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
-  let allRelevantResults: SearchResult[] = [];
 
   for (const level of searchLevels) {
     try {
@@ -107,6 +106,6 @@ export async function searchKnowledgeBase({
     }
   }
 
-  // If no results are found in any level after checking all of them, return the (empty) array.
-  return allRelevantResults;
+  // If no results are found in any level after checking all of them, return an empty array.
+  return [];
 }
