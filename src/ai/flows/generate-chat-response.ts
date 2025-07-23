@@ -25,7 +25,7 @@ const GenerateChatResponseInputSchema = z.object({
     })),
   })).optional().describe('The history of the conversation so far, including the latest user message.'),
 });
-type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
+export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
 // This is the schema for the *stringified JSON object* we expect from the model.
 const AiResponseJsonSchema = z.object({
