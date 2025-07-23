@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -37,6 +38,7 @@ export default function SiteSettingsPage() {
   const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
+  const [archiveChatHistoryEnabled, setArchiveChatHistoryEnabled] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -61,6 +63,7 @@ export default function SiteSettingsPage() {
           setMaintenanceModeEnabled(data.maintenanceModeEnabled === undefined ? false : data.maintenanceModeEnabled);
           setMaintenanceModeMessage(data.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE);
           setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
+          setArchiveChatHistoryEnabled(data.archiveChatHistoryEnabled === undefined ? true : data.archiveChatHistoryEnabled);
         } else {
           // On first run, create the doc with defaults
           const defaultSettings = {
@@ -71,6 +74,7 @@ export default function SiteSettingsPage() {
             maintenanceModeEnabled: false,
             maintenanceModeMessage: DEFAULT_MAINTENANCE_MESSAGE,
             showLanguageSelector: true,
+            archiveChatHistoryEnabled: true,
           };
           await setDoc(docRef, defaultSettings, { merge: true });
           // Set state to defaults
@@ -81,6 +85,7 @@ export default function SiteSettingsPage() {
           setMaintenanceModeEnabled(false);
           setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
           setShowLanguageSelector(true);
+          setArchiveChatHistoryEnabled(true);
           toast({ title: "Initial Settings Created", description: "Default site settings have been saved." });
         }
       } catch (error: any) {
@@ -210,6 +215,11 @@ Please check your environment variables and Google Cloud Console settings.`;
         changesMade = true;
       }
 
+      if (archiveChatHistoryEnabled !== (currentData.archiveChatHistoryEnabled === undefined ? true : currentData.archiveChatHistoryEnabled)) {
+        dataToUpdate.archiveChatHistoryEnabled = archiveChatHistoryEnabled;
+        changesMade = true;
+      }
+
       if (changesMade) {
         await updateDoc(siteAssetsDocRef, dataToUpdate);
         
@@ -273,6 +283,11 @@ Please check your environment variables and Google Cloud Console settings.`;
   const handleResetLanguageSelector = () => {
     setShowLanguageSelector(true);
     toast({ title: "Language Selector Reset", description: "Click 'Save Site Settings' to make it permanent." });
+  };
+
+  const handleResetChatArchiving = () => {
+    setArchiveChatHistoryEnabled(true);
+    toast({ title: "Chat Archiving Reset", description: "Click 'Save Site Settings' to make it permanent." });
   };
 
   return (
@@ -490,6 +505,40 @@ Please check your environment variables and Google Cloud Console settings.`;
                 </Button>
             </CardFooter>
           </Card>
+
+          <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><Archive /> Chat History Archiving</CardTitle>
+                <CardDescription>
+                  Control whether conversations are automatically saved to the Knowledge Base.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
+                    <div className="flex-1 space-y-1">
+                        <Label htmlFor="archiveChatHistoryEnabled" className="font-medium">
+                            Enable Chat History Archiving
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            If ON, conversations will be saved to the &quot;Chat History&quot; KB for future reference by the AI.
+                        </p>
+                    </div>
+                    <Switch
+                        id="archiveChatHistoryEnabled"
+                        checked={archiveChatHistoryEnabled}
+                        onCheckedChange={setArchiveChatHistoryEnabled}
+                        disabled={isLoadingData}
+                        aria-label="Toggle chat history archiving"
+                    />
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button variant="outline" onClick={handleResetChatArchiving} disabled={isLoadingData}>
+                <RotateCcw className="mr-2 h-4 w-4" /> Reset Chat Archiving
+                </Button>
+            </CardFooter>
+          </Card>
+
 
           <Card>
             <CardHeader>

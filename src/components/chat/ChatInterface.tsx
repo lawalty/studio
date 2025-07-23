@@ -143,6 +143,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         ttsApiKey: '',
         ttsVoiceId: '',
         useCustomTts: false,
+        archiveChatHistoryEnabled: true,
     });
     
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -327,7 +328,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
-        if (msgs.length === 0) return;
+        if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
         toast({ title: "Archiving Conversation..." });
         
         try {
@@ -406,6 +407,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     ttsApiKey: keys.tts || '',
                     ttsVoiceId: keys.voiceId || '',
                     useCustomTts: typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : false,
+                    archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
                 };
             }
           } catch (e) {
@@ -668,8 +670,4 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
-
-    
 
