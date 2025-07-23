@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
@@ -33,7 +34,7 @@ async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
         const docSnap = await docRef.get();
-        if (docSnap.exists()) {
+        if (docSnap.exists) {
             const data = docSnap.data();
             const storedThreshold = data?.vectorSearchDistanceThreshold;
 
