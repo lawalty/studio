@@ -16,7 +16,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save } from 'lucide-react';
+import { testSearch, type SearchResult } from '@/ai/flows/test-search-flow';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -73,6 +74,12 @@ export default function KnowledgeBasePage() {
   const [distanceThreshold, setDistanceThreshold] = useState([DEFAULT_DISTANCE_THRESHOLD]);
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const { toast } = useToast();
+
+  // RAG Test State
+  const [ragTestQuery, setRagTestQuery] = useState('');
+  const [isTestingRag, setIsTestingRag] = useState(false);
+  const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
+  const [ragTestError, setRagTestError] = useState<string | null>(null);
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
@@ -156,7 +163,6 @@ export default function KnowledgeBasePage() {
     setIsSavingThreshold(true);
     try {
         const docRef = doc(db, 'configurations/site_display_assets');
-        // Correctly save only the number, not the array.
         await setDoc(docRef, { vectorSearchDistanceThreshold: distanceThreshold[0] }, { merge: true });
         toast({
             title: "Threshold Saved",
@@ -171,6 +177,28 @@ export default function KnowledgeBasePage() {
     } finally {
         setIsSavingThreshold(false);
     }
+  };
+
+  const handleRunRagTest = async () => {
+      if (!ragTestQuery.trim()) {
+          toast({ title: 'Query is empty', description: 'Please enter a search query to test.', variant: 'destructive' });
+          return;
+      }
+      setIsTestingRag(true);
+      setRagTestResults(null);
+      setRagTestError(null);
+      try {
+          const { results, error } = await testSearch({ query: ragTestQuery });
+          if (error) {
+              setRagTestError(error);
+          } else {
+              setRagTestResults(results);
+          }
+      } catch (e: any) {
+          setRagTestError(`An unexpected error occurred: ${e.message}`);
+      } finally {
+          setIsTestingRag(false);
+      }
   };
 
   const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
@@ -224,6 +252,9 @@ export default function KnowledgeBasePage() {
             level: source.level,
             topic: source.topic,
             downloadURL: source.downloadURL,
+            pageNumber: source.pageNumber,
+            title: source.title,
+            header: source.header,
         };
         if (source.linkedEnglishSourceId) {
             indexInput.linkedEnglishSourceId = source.linkedEnglishSourceId;
@@ -688,6 +719,59 @@ export default function KnowledgeBasePage() {
             </CardFooter>
           </Card>
           
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><Wrench /> RAG Test</CardTitle>
+              <CardDescription>
+                Directly test the vector search to see what context the AI would receive for a given query.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="rag-test-query">Test Query</Label>
+                <Input
+                  id="rag-test-query"
+                  placeholder="Enter a question to test..."
+                  value={ragTestQuery}
+                  onChange={(e) => setRagTestQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleRunRagTest()}
+                />
+              </div>
+              <Button onClick={handleRunRagTest} disabled={isTestingRag}>
+                {isTestingRag ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                Test RAG
+              </Button>
+              {isTestingRag && <p className="text-sm text-muted-foreground">Searching knowledge base...</p>}
+              {ragTestError && (
+                <div className="mt-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 p-3 rounded-md">
+                  <p className="font-bold">Test Failed</p>
+                  <p>{ragTestError}</p>
+                </div>
+              )}
+              {ragTestResults && (
+                <div className="mt-4 space-y-4">
+                  <h4 className="font-semibold">{ragTestResults.length} Result(s) Found</h4>
+                  {ragTestResults.length > 0 ? (
+                    <ScrollArea className="h-64 w-full rounded-md border p-4">
+                      {ragTestResults.map((result, index) => (
+                        <div key={index} className="mb-4 pb-4 border-b last:border-b-0">
+                          <p className="text-xs text-muted-foreground">
+                            <strong>Source:</strong> {result.sourceName} | <strong>Level:</strong> {result.level} | <strong>Distance:</strong> {result.distance.toFixed(4)}
+                          </p>
+                          <blockquote className="mt-2 border-l-2 pl-4 italic text-sm">
+                            {result.text}
+                          </blockquote>
+                        </div>
+                      ))}
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No relevant chunks found in the knowledge base for this query and the current distance threshold.</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
@@ -703,3 +787,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    

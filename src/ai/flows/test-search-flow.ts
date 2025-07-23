@@ -1,26 +1,51 @@
 
 'use server';
 /**
- * @fileOverview A Genkit flow for testing the vector search functionality.
+ * @fileOverview A Genkit flow for testing the vector search functionality from the client.
+ *
+ * - testSearch - The main function to trigger the search test.
+ * - SearchResult - The type for a single search result.
+ * - TestSearchInput - The input type for the function.
+ * - TestSearchOutput - The return type for the function.
  */
-import { defineFlow, runFlow } from '@genkit-ai/flow';
-import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import { z } from 'zod';
+import { ai } from '@/ai/genkit';
+import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 
-export const testSearchFlow = defineFlow(
-  {
-    name: 'testSearchFlow',
-    inputSchema: z.object({ query: z.string() }),
-    outputSchema: z.any(),
-  },
-  async ({ query }) => {
-    console.log(`Running search for query: "${query}"`);
+// This is the same interface as in vector-search, but exported for the client.
+export type SearchResult = {
+  sourceId: string;
+  text: string;
+  sourceName: string;
+  level: string;
+  topic: string;
+  downloadURL?: string;
+  distance: number;
+  pageNumber?: number;
+  title?: string;
+  header?: string;
+};
 
-    const searchResults = await searchKnowledgeBase({ query });
+const TestSearchInputSchema = z.object({
+  query: z.string().min(1, "Query cannot be empty."),
+});
+export type TestSearchInput = z.infer<typeof TestSearchInputSchema>;
 
-    console.log('Search results:');
-    console.log(JSON.stringify(searchResults, null, 2));
+const TestSearchOutputSchema = z.object({
+  results: z.array(z.custom<SearchResult>()).describe('The array of search results.'),
+  error: z.string().optional().describe('An error message if the operation failed.'),
+});
+export type TestSearchOutput = z.infer<typeof TestSearchOutputSchema>;
 
-    return searchResults;
+export async function testSearch(input: TestSearchInput): Promise<TestSearchOutput> {
+  try {
+    const searchResults = await searchKnowledgeBase({ query: input.query });
+    return { results: searchResults };
+  } catch (e: any) {
+    console.error('[testSearchFlow] Search test failed:', e);
+    const errorMessage = e.message || "An unknown error occurred during the search test.";
+    return { results: [], error: errorMessage };
   }
-);
+}
+
+    
