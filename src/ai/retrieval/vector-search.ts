@@ -25,7 +25,6 @@ interface SearchResult {
 
 interface SearchParams {
   query: string;
-  topic?: string;
   limit?: number;
 }
 
@@ -68,7 +67,7 @@ export async function searchKnowledgeBase({
   }
   
   const embeddingVector = embeddingResponse[0].embedding;
-  const distanceThreshold = 1; // Hardcoded for testing.
+  const distanceThreshold = await getDistanceThreshold();
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
 
   for (const level of searchLevels) {
