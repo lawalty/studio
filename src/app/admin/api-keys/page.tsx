@@ -268,7 +268,7 @@ export default function ApiKeysPage() {
                 <CardContent>
                     <Button onClick={handleRunFirestoreTest} disabled={isTesting.firestore}>
                         {isTesting.firestore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Run Auth Test
+                        Run Test
                     </Button>
                     {firestoreResult && (
                         <Alert className="mt-4" variant={firestoreResult.success ? "default" : "destructive"}>
@@ -286,3 +286,5 @@ export default function ApiKeysPage() {
     </Card>
   );
 }
+
+    
