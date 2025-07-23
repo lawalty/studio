@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
@@ -69,7 +68,7 @@ export async function searchKnowledgeBase({
   }
   
   const embeddingVector = embeddingResponse[0].embedding;
-  const distanceThreshold = await getDistanceThreshold();
+  const distanceThreshold = 1; // Hardcoded for testing.
   const searchLevels: string[] = ['High', 'Medium', 'Low', 'Chat History'];
   let allRelevantResults: SearchResult[] = [];
 
@@ -84,21 +83,22 @@ export async function searchKnowledgeBase({
           
       const snapshot = await vectorQuery.get();
       
+      const levelResults: SearchResult[] = [];
       if (!snapshot.empty) {
         snapshot.forEach(doc => {
           const distance = (doc as any).distance; 
           // A smaller distance is a better match. We accept any result where the distance is LESS THAN OR EQUAL to the threshold.
           if (distance <= distanceThreshold) {
-            allRelevantResults.push({
+            levelResults.push({
               ...(doc.data() as Omit<SearchResult, 'distance'>),
               distance: distance,
             });
           }
         });
         
-        // If we found any results in a higher-priority level, return them immediately.
-        if (allRelevantResults.length > 0) {
-          return allRelevantResults;
+        // If we found any valid results in this higher-priority level, return them immediately.
+        if (levelResults.length > 0) {
+          return levelResults;
         }
       }
     } catch (error: any) {
