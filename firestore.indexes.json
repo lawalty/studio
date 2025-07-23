@@ -5,7 +5,6 @@
       "collectionGroup": "kb_chunks",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "level", "order": "ASCENDING" },
         {
           "fieldPath": "embedding",
           "vectorConfig": {
