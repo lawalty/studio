@@ -1,12 +1,25 @@
 
 {
-  "indexes": [
+  "indexes": [],
+  "fieldOverrides": [
     {
       "collectionGroup": "kb_chunks",
-      "queryScope": "COLLECTION",
-      "fields": [
+      "fieldPath": "embedding",
+      "indexes": [
         {
-          "fieldPath": "embedding",
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "queryScope": "COLLECTION_GROUP",
           "vectorConfig": {
             "dimension": 768,
             "flat": {}
@@ -14,6 +27,5 @@
         }
       ]
     }
-  ],
-  "fieldOverrides": []
+  ]
 }
