@@ -44,6 +44,9 @@ interface KnowledgeSource {
   chunksWritten?: number;
   mimeType?: string;
   linkedEnglishSourceId?: string;
+  pageNumber?: number;
+  title?: string;
+  header?: string;
 }
 
 const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
@@ -139,6 +142,9 @@ export default function KnowledgeBasePage() {
             chunksWritten: data.chunksWritten,
             mimeType: data.mimeType,
             linkedEnglishSourceId: data.linkedEnglishSourceId,
+            pageNumber: data.pageNumber,
+            title: data.title,
+            header: data.header,
           });
         });
         const sortedSources = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
@@ -788,4 +794,3 @@ export default function KnowledgeBasePage() {
   );
 }
 
-    
