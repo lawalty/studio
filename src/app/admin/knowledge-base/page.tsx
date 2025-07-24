@@ -215,6 +215,10 @@ export default function KnowledgeBasePage() {
         id: source.id,
         level: source.level,
         sourceName: source.sourceName,
+        // Pass optional fields to satisfy the updated schema
+        pageNumber: source.pageNumber,
+        title: source.title,
+        header: source.header,
       });
 
       if (result.success) {
