@@ -1,33 +1,36 @@
 rules_version = '2';
 
+// Quick Reference for Match Paths:
+// - /b/{bucket}/o: Matches all objects in the bucket.
+// - site_assets/{allPaths=**}: Matches all files within the site_assets folder.
+// - knowledge_base_files/{allPaths=**}: Matches all files in the knowledge_base_files folder.
+// - chat_history_files/{allPaths=**}: Matches files in the chat_history_files folder.
+
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Allow public read access on all files by default.
-    // This is useful for assets like avatars, site images, and PDF downloads
-    // which need to be accessible from the client-side.
-    // Write access is restricted by the more specific rules below.
-    match /{allPaths=**} {
-      allow read;
-    }
-
-    // Secure the knowledge base folders.
-    // Only authenticated users (admins) can upload/modify knowledge base files.
-    match /knowledge_base_files/{level}/{allPaths=**} {
-      allow write: if request.auth != null;
-    }
-    
-    // Secure the site assets folder.
-    // Only authenticated users (admins) can upload/modify site assets.
+    // PUBLIC READ-ONLY: Site assets (logos, backgrounds) and knowledge base files (PDFs for download)
+    // Anyone should be able to read these files. Only authenticated users (admins) can write/delete them.
     match /site_assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /knowledge_base_files/{allPaths=**} {
+      allow read: if true;
       allow write: if request.auth != null;
     }
 
-    // Allow ANY user (even unauthenticated) to write to the chat history path.
-    // This is necessary because the chat transcript is uploaded from the client
-    // at the end of a session, where the user may not be an authenticated admin.
+    // ANONYMOUS WRITE: Chat history transcripts
+    // The client-side application needs to be able to upload chat transcripts (as PDFs)
+    // without requiring the end-user to be logged in. This path is write-only for clients.
     match /chat_history_files/{allPaths=**} {
-      allow write;
+      allow read: if request.auth != null; // Only admins can read back history files
+      allow write: if true; // Anyone can write
     }
+
+    // DEFAULT RULE: Deny all other read/write operations by default.
+    // This is a security best practice. Any path not explicitly matched above will be denied.
+    // Note: This rule is implicitly active if no other rule matches. The explicit matches above
+    // provide all the necessary permissions.
   }
 }
