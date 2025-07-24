@@ -16,6 +16,11 @@ const DeleteSourceInputSchema = z.object({
   id: z.string().describe('The unique ID of the source document to delete.'),
   level: z.string().describe('The priority level of the source (e.g., High, Medium, Low, Archive).'),
   sourceName: z.string().describe('The original filename of the source document.'),
+  // These optional fields are now included to match the client-side data structure.
+  // Their absence was causing a silent validation failure.
+  pageNumber: z.number().optional(),
+  title: z.string().optional(),
+  header: z.string().optional(),
 });
 export type DeleteSourceInput = z.infer<typeof DeleteSourceInputSchema>;
 
@@ -38,6 +43,12 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     const levelConfig = LEVEL_CONFIG_SERVER[level];
     if (!levelConfig) {
       const errorMsg = `Invalid level '${level}' provided. Cannot determine Firestore collection.`;
+      console.error(`[deleteSource] ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
+    
+    if (!sourceName) {
+      const errorMsg = `sourceName was not provided for ID ${id}. Cannot delete from storage without it.`;
       console.error(`[deleteSource] ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
@@ -77,11 +88,14 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     // Step 3: Delete the file from Cloud Storage.
     try {
         const bucket = admin.storage().bucket();
+        // The storage path MUST be constructed correctly to find the file.
         const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
         const file = bucket.file(storagePath);
         const [exists] = await file.exists();
         if (exists) {
             await file.delete();
+        } else {
+          console.warn(`[deleteSource] Storage file not found at path '${storagePath}', but proceeding as cleanup may not be needed.`);
         }
     } catch (storageError: any) {
         // This is a non-critical error as the primary data has been deleted. Log it.
