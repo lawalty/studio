@@ -141,7 +141,7 @@ export default function ApiKeysPage() {
                     To fix a persistent framework bug, the Google AI API Key is now managed exclusively via an environment variable.
                   </p>
                   <ul className="list-disc pl-5 text-xs space-y-1">
-                      <li>For local development, add <code className="font-mono bg-sky-100 p-1 rounded">GOOGLE_AI_API_KEY=your_key_here</code> to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
+                      <li>For local development, add <code className="font-mono bg-sky-100 p-1 rounded">GEMINI_API_KEY=your_key_here</code> to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
                       <li>For production, set this as a secret in your hosting provider&apos;s dashboard (e.g., Firebase App Hosting Secrets).</li>
                   </ul>
                   <p className="text-xs">
