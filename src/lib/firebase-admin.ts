@@ -22,7 +22,7 @@ if (admin.apps.length === 0) {
     // In a deployed App Hosting environment, it uses the app's service account.
     admin.initializeApp({
       projectId: process.env.GCLOUD_PROJECT || 'ai-blair-7fb8o',
-      storageBucket: 'ai-blair-7fb8o.firebasestorage.app',
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ai-blair-7fb8o.appspot.com',
     });
   } catch (error: any) {
     // This enhanced error handling provides specific, actionable advice
