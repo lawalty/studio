@@ -39,57 +39,52 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
       return { success: false, error: `Invalid level '${level}' provided.` };
     }
     
+    // 1. Attempt to delete the file from Cloud Storage.
+    // We will log errors but not stop the process, as the goal is to clear the metadata.
     try {
-      // 1. Attempt to delete the file from Cloud Storage but do not fail if it's already gone.
       const bucketName = admin.storage().bucket().name; 
-      if (!bucketName) {
-        throw new Error("CRITICAL: Firebase Storage bucket name could not be determined from the Admin SDK.");
-      }
-      const bucket = admin.storage().bucket(bucketName);
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
-      const file = bucket.file(storagePath);
-
-      try {
-        const [exists] = await file.exists();
-        if (exists) {
-          await file.delete();
-        } else {
-          console.warn(`[deleteSource] Storage file not found at path ${storagePath}, proceeding with Firestore cleanup anyway.`);
-        }
-      } catch (storageError: any) {
-        // Log the storage error but continue to ensure Firestore cleanup happens.
-        console.error(`[deleteSource] Non-critical error deleting storage file ${storagePath}:`, storageError);
+      const file = admin.storage().bucket(bucketName).file(storagePath);
+      const [exists] = await file.exists();
+      if (exists) {
+        await file.delete();
+      } else {
+        console.warn(`[deleteSource] Storage file not found, but proceeding with Firestore cleanup: ${storagePath}`);
       }
+    } catch (storageError: any) {
+      console.error(`[deleteSource] Non-critical error deleting storage file, proceeding with Firestore cleanup. Error:`, storageError);
+    }
 
-
-      // 2. Delete all associated chunks from Firestore's 'kb_chunks' collection.
-      const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
-      const chunksSnapshot = await chunksQuery.get();
-      
+    // 2. Attempt to delete all Firestore documents. This is the critical part.
+    try {
       const batch = db.batch();
 
+      // Delete all associated chunks from 'kb_chunks'
+      const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
+      const chunksSnapshot = await chunksQuery.get();
       if (!chunksSnapshot.empty) {
         chunksSnapshot.docs.forEach(doc => {
           batch.delete(doc.ref);
         });
       }
 
-      // 3. Delete the source metadata document itself. This is the most critical step for the UI.
+      // Delete the main source metadata document itself.
       const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
       batch.delete(sourceDocRef);
 
-      // 4. Commit all Firestore deletions at once.
+      // Commit all Firestore deletions at once.
       await batch.commit();
 
       // Only return success after the Firestore batch has committed successfully.
       return { success: true };
 
-    } catch (error: any) {
-      console.error(`[deleteSource] CRITICAL error during Firestore cleanup for source ${id}:`, error);
-      let errorMessage = error.message || 'An unknown server error occurred during deletion.';
+    } catch (firestoreError: any) {
+      console.error(`[deleteSource] CRITICAL Firestore error during cleanup for source ${id}:`, firestoreError);
       
-      if (error.code === 7 || (error.message && error.message.includes('permission denied'))) {
-          errorMessage = `Deletion failed due to a permissions error. The server's service account needs the correct Firestore permissions (e.g., "Cloud Datastore User" or "Firebase Admin") to delete documents. Please check IAM settings.`
+      let errorMessage = firestoreError.message || 'An unknown server error occurred during Firestore deletion.';
+      
+      if (firestoreError.code === 7 || (firestoreError.message && (firestoreError.message.includes('permission denied') || firestoreError.message.includes('IAM')))) {
+          errorMessage = `Deletion failed due to a permissions error. The server's service account needs the correct Firestore permissions (e.g., "Cloud Datastore User" or "Firebase Admin") to delete documents. Please check IAM settings in the Google Cloud Console.`
       }
 
       return { success: false, error: errorMessage };
