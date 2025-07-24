@@ -39,13 +39,13 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     }
     
     try {
-      // 1. Delete the file from Cloud Storage first. This is the most likely step to fail due to permissions.
-      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+      // 1. Delete the file from Cloud Storage first.
+      const bucketName = admin.storage().bucket().name; // Get the correctly configured bucket name
       if (!bucketName) {
-        throw new Error("CRITICAL: Firebase Storage bucket name is not configured in environment variables.");
+        throw new Error("CRITICAL: Firebase Storage bucket name could not be determined from the Admin SDK.");
       }
       const bucket = admin.storage().bucket(bucketName);
-      // CORRECTED: The path construction now matches the upload path logic exactly.
+      // The path construction now matches the upload path logic exactly.
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
       const file = bucket.file(storagePath);
 
@@ -54,6 +54,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
         await file.delete();
       } else {
         // If file doesn't exist, we can still proceed to clean up Firestore.
+        // This handles "zombie" metadata where the file was already deleted.
         console.warn(`[deleteSource] Storage file not found at path ${storagePath}, proceeding with Firestore cleanup.`);
       }
 
