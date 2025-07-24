@@ -42,28 +42,37 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
       return { success: false, error: errorMsg };
     }
     
-    const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
-
+    // Use a transaction to ensure atomicity for Firestore deletions
     try {
-      // Step 1: Prioritize deleting all Firestore documents in a single batch.
-      const batch = db.batch();
-
-      // Add the main metadata document to the batch for deletion.
-      batch.delete(sourceDocRef);
-
-      // Query for all associated chunks and add their deletions to the batch.
-      const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
-      const chunksSnapshot = await chunksQuery.get();
-      if (!chunksSnapshot.empty) {
-        chunksSnapshot.docs.forEach(doc => {
-          batch.delete(doc.ref);
-        });
-      }
-
-      // Step 2: Commit the Firestore batch. This is the most critical operation.
-      // If this fails, the function will immediately jump to the catch block.
-      await batch.commit();
-
+      await db.runTransaction(async (transaction) => {
+        const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
+        const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
+  
+        // Step 1: Perform all reads first, using the transaction object.
+        // This is critical for transaction integrity.
+        const sourceDoc = await transaction.get(sourceDocRef);
+        const chunksSnapshot = await transaction.get(chunksQuery);
+  
+        if (!sourceDoc.exists) {
+          // Throw a specific error if the document is not found, which will fail the transaction.
+          const error = new Error(`Source document with ID ${id} not found.`);
+          // @ts-ignore
+          error.code = 5; // Firestore error code for NOT_FOUND
+          throw error;
+        }
+        
+        // Step 2: After all reads are complete, perform all writes.
+        // First, delete all associated chunks.
+        if (!chunksSnapshot.empty) {
+          chunksSnapshot.forEach(chunkDoc => {
+            transaction.delete(chunkDoc.ref);
+          });
+        }
+        
+        // Finally, delete the main source document.
+        transaction.delete(sourceDocRef);
+      }); // The transaction is committed here if all operations succeed.
+  
       // Step 3: AFTER successful Firestore deletion, attempt to delete from storage.
       // This is a non-critical cleanup. We will log errors but not fail the whole operation.
       try {
@@ -78,12 +87,12 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
         // This is a non-critical error. The UI entry is already gone.
         console.warn(`[deleteSource] Firestore metadata for source ${id} deleted successfully, but encountered a non-critical error cleaning up the storage file. Error:`, storageError.message);
       }
-
-      // Only return success after the Firestore batch has committed successfully.
+  
+      // Only return success after the Firestore transaction has committed successfully.
       return { success: true };
-
+  
     } catch (error: any) {
-      // This block will ONLY be entered if the Firestore batch.commit() fails.
+      // This block will ONLY be entered if the Firestore transaction fails.
       console.error(`[deleteSource] CRITICAL Firestore error during deletion for source ${id}:`, error);
       
       let errorMessage = 'An unknown server error occurred during Firestore deletion.';
@@ -94,7 +103,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
       } else {
           errorMessage = `A server-side Firestore error occurred: ${error.message}`;
       }
-
+  
       return { success: false, error: errorMessage };
     }
 }
