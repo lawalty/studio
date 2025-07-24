@@ -34,7 +34,7 @@ async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
         const docSnap = await docRef.get();
-        if (docSnap.exists) {
+        if (docSnap.exists()) {
             const data = docSnap.data();
             const storedThreshold = data?.vectorSearchDistanceThreshold;
 
@@ -56,17 +56,16 @@ export async function searchKnowledgeBase({
   query,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
-  const embeddingResponse = await ai.embed({
+  const embeddingVector = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
 
-  if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding) || embeddingResponse[0].embedding.length === 0) {
+  if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   
-  const embeddingVector = embeddingResponse[0].embedding;
   const distanceThreshold = await getDistanceThreshold();
   
   // 1. Query for a larger set of neighbors from the entire collection first.

@@ -128,18 +128,15 @@ export async function indexDocument({
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
             
-            const embeddingResponse = await withRetry(() => ai.embed({
+            const embeddingVector = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
 
-            // Validate the embedding response. It should be a single-element array containing the vector.
-            if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !Array.isArray(embeddingResponse[0]) || embeddingResponse[0].length === 0) {
+            // Validate the embedding response.
+            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected structure.`);
             }
-            
-            // CORRECTED: The embedding vector is the first element of the response array.
-            const embeddingVector = embeddingResponse[0];
 
             const newChunkDocRef = chunksCollection.doc();
             const chunkData: Record<string, any> = {
