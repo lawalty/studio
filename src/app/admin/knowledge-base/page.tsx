@@ -569,16 +569,14 @@ export default function KnowledgeBasePage() {
                                                       </DropdownMenuContent>
                                                     </DropdownMenu>
                                                     
-                                                    {(source.indexingStatus === 'failed' || source.indexingStatus === 'success' ) && (
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Button variant="ghost" size="icon" onClick={() => handleReindexSource(source)} disabled={anyOperationGloballyInProgress}>
-                                                                    <RotateCcw size={16} className="text-primary" />
-                                                                </Button>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent><p>Re-process Source</p></TooltipContent>
-                                                        </Tooltip>
-                                                    )}
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button variant="ghost" size="icon" onClick={() => handleReindexSource(source)} disabled={anyOperationGloballyInProgress}>
+                                                                <RotateCcw size={16} className="text-primary" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>Re-process Source</p></TooltipContent>
+                                                    </Tooltip>
                                                     
                                                     <AlertDialog>
                                                         <Tooltip>
