@@ -133,13 +133,13 @@ export async function indexDocument({
                 content: chunkText,
             }));
 
-            // Validate the complex structure returned by the embedding service.
-            if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !embeddingResponse[0].embedding || !Array.isArray(embeddingResponse[0].embedding) || embeddingResponse[0].embedding.length === 0) {
+            // Validate the embedding response. It should be a single-element array containing the vector.
+            if (!embeddingResponse || !Array.isArray(embeddingResponse) || embeddingResponse.length === 0 || !Array.isArray(embeddingResponse[0]) || embeddingResponse[0].length === 0) {
               throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected structure.`);
             }
             
-            // Extract the actual numerical vector from the nested structure.
-            const embeddingVector = embeddingResponse[0].embedding;
+            // CORRECTED: The embedding vector is the first element of the response array.
+            const embeddingVector = embeddingResponse[0];
 
             const newChunkDocRef = chunksCollection.doc();
             const chunkData: Record<string, any> = {
