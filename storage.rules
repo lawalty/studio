@@ -1,28 +1,12 @@
-
 rules_version = '2';
 
-// By default, deny all reads and writes
 service firebase.storage {
   match /b/{bucket}/o {
-    // Deny all reads and writes by default
+    // Allow read and write access for all paths to any authenticated user.
+    // This is a common setup for apps where users manage their own content.
+    // For more granular control, you can add path-specific rules.
     match /{allPaths=**} {
-      allow read, write: if false;
-    }
-
-    // Allow public read on site assets (avatars, backgrounds, etc.)
-    match /site_assets/{allPaths=**} {
-      allow get: if true;
-      allow write: if request.auth != null; // Only authenticated users can write
-    }
-
-    // Allow authenticated users to upload to knowledge base folders
-    match /knowledge_base_files/{level}/{fileId} {
-       allow read, write: if request.auth != null;
-    }
-
-    // Allow authenticated users to upload to chat history
-    match /chat_history_files/{fileId} {
-       allow read, write: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
   }
 }
