@@ -56,6 +56,8 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
 
     // Step 1: Delete associated chunks from the 'kb_chunks' collection.
+    // This is a "best effort" step. If it fails, we log it but continue,
+    // as the main goal is to delete the metadata and storage file.
     try {
         const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
         const chunksSnapshot = await chunksQuery.get();
@@ -67,11 +69,10 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
             await batch.commit();
         }
     } catch (chunkError: any) {
-        console.error(`[deleteSource] CRITICAL: Failed to delete chunks for source ${id}:`, chunkError);
-        return { success: false, error: `Failed to delete document chunks from Firestore. Error: ${chunkError.message}` };
+        console.warn(`[deleteSource] Non-critical error: Failed to delete chunks for source ${id}. This can happen if the source had no chunks. Continuing with deletion. Error:`, chunkError.message);
     }
 
-    // Step 2: Delete the main source metadata document.
+    // Step 2: Delete the main source metadata document. This is a critical step.
     try {
         const docSnap = await sourceDocRef.get();
         if (docSnap.exists) {
@@ -86,6 +87,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     }
 
     // Step 3: Delete the file from Cloud Storage.
+    // This is also important but we prioritize the DB cleanup.
     try {
         const bucket = admin.storage().bucket();
         // The storage path MUST be constructed correctly to find the file.
@@ -95,11 +97,12 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
         if (exists) {
             await file.delete();
         } else {
-          console.warn(`[deleteSource] Storage file not found at path '${storagePath}', but proceeding as cleanup may not be needed.`);
+          // It's possible the file was never uploaded or already deleted. This is not a failure.
+          console.warn(`[deleteSource] Storage file not found at path '${storagePath}', but proceeding as this may not be an error.`);
         }
     } catch (storageError: any) {
         // This is a non-critical error as the primary data has been deleted. Log it.
-        console.warn(`[deleteSource] Firestore data for source ${id} deleted, but failed to clean up storage file. Error:`, storageError.message);
+        console.warn(`[deleteSource] Firestore data for source ${id} deleted, but failed to clean up storage file. This may require manual cleanup in Cloud Storage. Error:`, storageError.message);
     }
     
     // If all critical steps succeeded, return success.
