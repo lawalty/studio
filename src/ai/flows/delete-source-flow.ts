@@ -2,8 +2,8 @@
 /**
  * @fileOverview A server function to completely delete a knowledge base source, including
  * its metadata, indexed chunks, and the original file from Cloud Storage. This version
- * prioritizes deleting Firestore data first and has robust error handling to prevent
- * false success reports.
+ * uses a sequential, multi-step deletion process with explicit error handling for
+ * each step to ensure accuracy and prevent false success reports.
  *
  * - deleteSource - The main function to trigger the deletion process.
  * - DeleteSourceInput - The input type for the function.
@@ -41,69 +41,53 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
       console.error(`[deleteSource] ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
-    
-    // Use a transaction to ensure atomicity for Firestore deletions
+
+    const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
+
+    // Step 1: Delete associated chunks from the 'kb_chunks' collection.
     try {
-      await db.runTransaction(async (transaction) => {
-        const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
         const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
-  
-        // Step 1: Perform all reads first, using the transaction object.
-        // This is critical for transaction integrity.
-        const sourceDoc = await transaction.get(sourceDocRef);
-        const chunksSnapshot = await transaction.get(chunksQuery);
-  
-        if (!sourceDoc.exists) {
-          // Throw a specific error if the document is not found, which will fail the transaction.
-          const error = new Error(`Source document with ID ${id} not found.`);
-          // @ts-ignore
-          error.code = 5; // Firestore error code for NOT_FOUND
-          throw error;
-        }
-        
-        // Step 2: After all reads are complete, perform all writes.
-        // First, delete all associated chunks.
+        const chunksSnapshot = await chunksQuery.get();
         if (!chunksSnapshot.empty) {
-          chunksSnapshot.forEach(chunkDoc => {
-            transaction.delete(chunkDoc.ref);
-          });
+            const batch = db.batch();
+            chunksSnapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
         }
-        
-        // Finally, delete the main source document.
-        transaction.delete(sourceDocRef);
-      }); // The transaction is committed here if all operations succeed.
-  
-      // Step 3: AFTER successful Firestore deletion, attempt to delete from storage.
-      // This is a non-critical cleanup. We will log errors but not fail the whole operation.
-      try {
-        const bucket = admin.storage().bucket(); 
+    } catch (chunkError: any) {
+        console.error(`[deleteSource] CRITICAL: Failed to delete chunks for source ${id}:`, chunkError);
+        return { success: false, error: `Failed to delete document chunks from Firestore. Error: ${chunkError.message}` };
+    }
+
+    // Step 2: Delete the main source metadata document.
+    try {
+        const docSnap = await sourceDocRef.get();
+        if (docSnap.exists) {
+            await sourceDocRef.delete();
+        } else {
+           // If the doc is already gone, we can consider this step a success.
+           console.log(`[deleteSource] Source metadata for ${id} was already deleted. Continuing cleanup.`);
+        }
+    } catch (metaError: any) {
+        console.error(`[deleteSource] CRITICAL: Failed to delete source metadata for ${id}:`, metaError);
+        return { success: false, error: `Failed to delete the main source document from Firestore. Error: ${metaError.message}` };
+    }
+
+    // Step 3: Delete the file from Cloud Storage.
+    try {
+        const bucket = admin.storage().bucket();
         const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
         const file = bucket.file(storagePath);
         const [exists] = await file.exists();
         if (exists) {
-          await file.delete();
+            await file.delete();
         }
-      } catch (storageError: any) {
-        // This is a non-critical error. The UI entry is already gone.
-        console.warn(`[deleteSource] Firestore metadata for source ${id} deleted successfully, but encountered a non-critical error cleaning up the storage file. Error:`, storageError.message);
-      }
-  
-      // Only return success after the Firestore transaction has committed successfully.
-      return { success: true };
-  
-    } catch (error: any) {
-      // This block will ONLY be entered if the Firestore transaction fails.
-      console.error(`[deleteSource] CRITICAL Firestore error during deletion for source ${id}:`, error);
-      
-      let errorMessage = 'An unknown server error occurred during Firestore deletion.';
-      if (error.code === 5) { // NOT_FOUND
-          errorMessage = `Deletion failed because the source document could not be found in the '${levelConfig.collectionName}' collection. It might have been already deleted. Please refresh the page.`;
-      } else if (error.code === 7) { // PERMISSION_DENIED
-          errorMessage = `Deletion failed due to a permissions error. The server needs the correct IAM permissions (e.g., "Cloud Datastore User" or "Firebase Admin") to delete documents. Please verify IAM settings in the Google Cloud Console.`;
-      } else {
-          errorMessage = `A server-side Firestore error occurred: ${error.message}`;
-      }
-  
-      return { success: false, error: errorMessage };
+    } catch (storageError: any) {
+        // This is a non-critical error as the primary data has been deleted. Log it.
+        console.warn(`[deleteSource] Firestore data for source ${id} deleted, but failed to clean up storage file. Error:`, storageError.message);
     }
+    
+    // If all critical steps succeeded, return success.
+    return { success: true };
 }
