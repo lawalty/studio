@@ -41,13 +41,11 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     
     try {
       // 1. Delete the file from Cloud Storage first.
-      // This is the robust way to get the server's default bucket name, ignoring environment variables.
       const bucketName = admin.storage().bucket().name; 
       if (!bucketName) {
         throw new Error("CRITICAL: Firebase Storage bucket name could not be determined from the Admin SDK.");
       }
       const bucket = admin.storage().bucket(bucketName);
-      // The path construction now matches the upload path logic exactly.
       const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
       const file = bucket.file(storagePath);
 
@@ -55,15 +53,13 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
       if (exists) {
         await file.delete();
       } else {
-        // If file doesn't exist, we can still proceed to clean up Firestore.
-        // This handles "zombie" metadata where the file was already deleted.
         console.warn(`[deleteSource] Storage file not found at path ${storagePath}, proceeding with Firestore cleanup.`);
       }
 
       // 2. Delete all associated chunks from Firestore's 'kb_chunks' collection.
       const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
       const chunksSnapshot = await chunksQuery.get();
-      const batch = db.batch(); // Use a single batch for all Firestore deletions.
+      const batch = db.batch();
       if (!chunksSnapshot.empty) {
         chunksSnapshot.docs.forEach(doc => {
           batch.delete(doc.ref);
@@ -83,7 +79,6 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
       console.error(`[deleteSource] Failed to delete source ${id}:`, error);
       let errorMessage = error.message || 'An unknown server error occurred during deletion.';
       
-      // Provide more specific feedback for common permission errors.
       if (error.code === 403 || (error.message && error.message.includes('permission denied'))) {
           errorMessage = `Deletion failed due to a permissions error. The server's service account needs the "Storage Object Admin" role to delete files from Cloud Storage. Please check IAM settings.`
       }
