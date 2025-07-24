@@ -40,7 +40,8 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     
     try {
       // 1. Delete the file from Cloud Storage first.
-      const bucketName = admin.storage().bucket().name; // Get the correctly configured bucket name
+      // This is the robust way to get the server's default bucket name, ignoring environment variables.
+      const bucketName = admin.storage().bucket().name; 
       if (!bucketName) {
         throw new Error("CRITICAL: Firebase Storage bucket name could not be determined from the Admin SDK.");
       }

@@ -18,7 +18,7 @@ For running the app on your local machine (`npm run dev`).
 *   `NEXT_PUBLIC_FIREBASE_API_KEY`="AIzaSyBz0edyk760wi-cssGZ7l0ipTpeDr9G9eQ"
 *   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`="ai-blair-7fb8o.firebaseapp.com"
 *   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`="ai-blair-7fb8o"
-*   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-7fb8o.appspot.com"
+*   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-7fb8o.firebasestorage.app"
 *   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`="513112805900"
 *   `NEXT_PUBLIC_FIREBASE_APP_ID`="1:513112805900:web:9a6f209b3f3ab00fb31429"
 *   `GEMINI_API_KEY` (Get from [Google AI Studio](https://aistudio.google.com/app/apikey))
@@ -58,4 +58,4 @@ For the live version of your app hosted on Firebase App Hosting.
 ### 3. Restart / Redeploy
 
 *   **Local:** After changing `.env.local`, restart your development server (`npm run dev`).
-*   **Production:** After changing `apphosting.yaml` or secrets, redeploy the app by clicking "Publish" in Firebase Studio.
+*   **Production:** After changing `apphosting.yaml
