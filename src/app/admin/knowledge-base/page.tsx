@@ -220,12 +220,15 @@ export default function KnowledgeBasePage() {
       if (result.success) {
         toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
       } else {
+        // Log the detailed error to the console for debugging.
+        console.error("[handleDeleteSource] Server returned an error:", result.error);
         throw new Error(result.error || "An unknown error occurred during deletion.");
       }
 
     } catch (error: any) {
-      console.error("Error deleting source:", error);
-      toast({ title: "Deletion Failed", description: `Could not delete ${source.sourceName}. ${error.message}`, variant: "destructive", duration: 10000 });
+      // This catch block now handles both network errors and server-reported errors.
+      console.error("[handleDeleteSource] Caught exception:", error);
+      toast({ title: "Deletion Failed", description: `${error.message}`, variant: "destructive", duration: 10000 });
     } finally {
       setOperationStatus(source.id, false);
     }
