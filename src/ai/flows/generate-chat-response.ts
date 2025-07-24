@@ -107,11 +107,23 @@ Here is the context retrieved from the knowledge base to answer the user's lates
 `
 });
 
-// Function to pre-process text for better embedding and search quality.
-const preprocessText = (text: string): string => {
-  if (!text) return '';
-  return text.toLowerCase();
-};
+// NLP Pre-processing prompt to refine the user's query for better search results.
+const queryRefinementPrompt = ai.definePrompt({
+    name: 'queryRefinementPrompt',
+    input: { schema: z.string().describe('The raw user query.') },
+    output: { schema: z.string().describe('A refined, keyword-focused query for vector search.') },
+    prompt: `You are an expert at refining user questions into effective search queries for a vector database.
+Analyze the user's query below. Identify the core intent and key entities.
+- Do NOT answer the question.
+- Do NOT add any preamble or explanation.
+- Your entire output should be a concise, rephrased query containing only the essential keywords and concepts.
+
+**User Query:**
+"{{{prompt}}}"
+
+**Refined Search Query:**
+`,
+});
 
 
 // Define the flow at the top level.
@@ -120,21 +132,34 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
     const historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
 
-    // 1. Translate the user's query if needed for the search and preprocess it.
     let searchQuery = lastUserMessage;
-    if (searchQuery) {
-        if (language && language.toLowerCase() !== 'english') {
-          try {
-            const { translatedText } = await translateText({ text: searchQuery, targetLanguage: 'English' });
-            searchQuery = translatedText;
-          } catch (e) {
-            console.error("[generateChatResponseFlow] Failed to translate user query for RAG, proceeding with original text.", e);
-          }
-        }
-        searchQuery = preprocessText(searchQuery);
+    if (!searchQuery) {
+        // Handle cases where there's no user message (e.g., initial greeting)
+        return { aiResponse: "Hello! How can I help you today?", shouldEndConversation: false };
     }
 
-    // 2. Search the knowledge base.
+    // 1. (Optional) Translate the last user message to English if it's in another language.
+    let queryForNlp = lastUserMessage;
+    if (language && language.toLowerCase() !== 'english') {
+      try {
+        const { translatedText } = await translateText({ text: queryForNlp, targetLanguage: 'English' });
+        queryForNlp = translatedText;
+      } catch (e) {
+        console.error("[generateChatResponseFlow] Failed to translate user query, proceeding with original text.", e);
+      }
+    }
+    
+    // 2. NLP Pre-processing: Refine the query for better search accuracy.
+    try {
+        const refinedQuery = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-flash' });
+        searchQuery = refinedQuery.output || queryForNlp; // Fallback to original if refinement fails
+    } catch (e) {
+        console.error('[generateChatResponseFlow] NLP query refinement failed:', e);
+        // On failure, we still proceed with the translated (or original) query.
+        searchQuery = queryForNlp;
+    }
+
+    // 3. Search the knowledge base with the refined query.
     let retrievedContext = '';
     let primarySearchResult = null;
     try {
@@ -205,3 +230,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    
