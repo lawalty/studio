@@ -17,7 +17,8 @@ import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-u
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { testSearch, type SearchResult } from '@/ai/flows/test-search-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search } from 'lucide-react';
+import { uploadTestFile, deleteTestFile } from '@/ai/flows/temporary-delete-test-flow';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, TestTube } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -83,6 +84,12 @@ export default function KnowledgeBasePage() {
   const [isTestingRag, setIsTestingRag] = useState(false);
   const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
   const [ragTestError, setRagTestError] = useState<string | null>(null);
+
+  // Temporary Delete Test State
+  const [isTestingDelete, setIsTestingDelete] = useState(false);
+  const [lastTestFileId, setLastTestFileId] = useState<string | null>(null);
+  const [testOperationStatus, setTestOperationStatus] = useState<string>('Ready.');
+
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
@@ -222,7 +229,7 @@ export default function KnowledgeBasePage() {
       } else {
         // Log the detailed error to the console for debugging.
         console.error("[handleDeleteSource] Server returned an error:", result.error);
-        throw new Error(result.error || "An unknown error occurred during deletion.");
+        toast({ title: "Deletion Failed", description: `${result.error}`, variant: "destructive", duration: 10000 });
       }
 
     } catch (error: any) {
@@ -442,6 +449,36 @@ export default function KnowledgeBasePage() {
           setOperationStatus(source.id, false);
       }
   }, [toast]);
+
+  const handleUploadTestFile = async () => {
+    setIsTestingDelete(true);
+    setTestOperationStatus('Uploading test file...');
+    const result = await uploadTestFile();
+    if (result.error) {
+      setTestOperationStatus(`Upload Failed: ${result.error}`);
+    } else {
+      setTestOperationStatus(result.message);
+      setLastTestFileId(result.id);
+    }
+    setIsTestingDelete(false);
+  };
+
+  const handleDeleteTestFile = async () => {
+    if (!lastTestFileId) {
+      setTestOperationStatus('Cannot delete: No test file has been uploaded yet.');
+      return;
+    }
+    setIsTestingDelete(true);
+    setTestOperationStatus(`Deleting test file ID: ${lastTestFileId}...`);
+    const result = await deleteTestFile({ id: lastTestFileId });
+    if (result.error) {
+        setTestOperationStatus(`Deletion Failed: ${result.error}`);
+    } else {
+        setTestOperationStatus(result.message);
+        setLastTestFileId(null); // Clear the ID on successful deletion
+    }
+    setIsTestingDelete(false);
+  };
 
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
@@ -694,6 +731,31 @@ export default function KnowledgeBasePage() {
                 Upload and Process
               </Button>
             </CardFooter>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><TestTube /> Temporary Upload &amp; Delete Test</CardTitle>
+              <CardDescription>
+                An isolated test to diagnose fundamental issues with Storage and Firestore permissions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                    <Button onClick={handleUploadTestFile} disabled={isTestingDelete} variant="outline" className="flex-1">
+                        {isTestingDelete && testOperationStatus.startsWith('Uploading') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                        Upload Test File
+                    </Button>
+                    <Button onClick={handleDeleteTestFile} disabled={isTestingDelete || !lastTestFileId} variant="destructive" className="flex-1">
+                        {isTestingDelete && testOperationStatus.startsWith('Deleting') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                        Delete Test File
+                    </Button>
+                </div>
+                <div className="mt-4 p-3 rounded-md bg-muted text-muted-foreground text-xs break-words">
+                  <p className="font-semibold">Status:</p>
+                  <p>{testOperationStatus}</p>
+                </div>
+            </CardContent>
           </Card>
 
           <Card>
