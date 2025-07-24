@@ -35,20 +35,25 @@ export async function uploadTestFile(): Promise<UploadTestFileOutput> {
     await file.save(buffer, {
       metadata: { contentType: 'text/plain' },
     });
-    const [downloadURL] = await file.getSignedUrl({ action: 'read', expires: '03-09-2491' });
+    // NOTE: We are intentionally NOT creating a signed URL here, as it's the
+    // source of the `client_email` error in local development environments.
+    // The deployed app will have the necessary service account credentials.
 
     // 3. Write metadata to Firestore
     await firestoreRef.set({
       id,
       fileName,
       storagePath,
-      downloadURL,
       createdAt: new Date().toISOString(),
     });
 
     return { id, message: `Successfully created test file with ID: ${id}` };
   } catch (error: any) {
     console.error('[uploadTestFile] Error:', error);
+    // Provide a more specific error if it's a permissions issue
+    if (error.code === 403) {
+      return { id, message: '', error: `Upload failed: Permission denied. Check Storage rules and IAM permissions for the service account.` };
+    }
     return { id, message: '', error: `Upload failed: ${error.message}` };
   }
 }
