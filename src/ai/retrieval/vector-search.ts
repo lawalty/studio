@@ -9,7 +9,7 @@
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
 
-const DEFAULT_DISTANCE_THRESHOLD = 0.6; // Default distance, allows for reasonably similar results.
+const FALLBACK_DISTANCE_THRESHOLD = 0.6; // A sensible fallback ONLY if Firestore read fails.
 
 interface SearchResult {
   sourceId: string;
@@ -29,7 +29,7 @@ interface SearchParams {
   limit?: number;
 }
 
-// Helper to get the distance threshold from Firestore. This is now the maximum allowed distance.
+// Helper to get the distance threshold from Firestore.
 async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
@@ -38,33 +38,32 @@ async function getDistanceThreshold(): Promise<number> {
             const data = docSnap.data();
             const storedThreshold = data?.vectorSearchDistanceThreshold;
 
-            // Handle both array (from slider) and number (direct) data types for robustness.
-            if (Array.isArray(storedThreshold) && typeof storedThreshold[0] === 'number') {
-                return Math.max(0, Math.min(2, storedThreshold[0]));
-            }
+            // Handle both number (direct) and array (from slider) data types for robustness.
             if (typeof storedThreshold === 'number') {
                 return Math.max(0, Math.min(2, storedThreshold));
             }
         }
     } catch (error) {
-        console.error("Error fetching distance threshold, using default:", error);
+        console.error("Error fetching distance threshold from Firestore, using fallback:", error);
     }
-    return DEFAULT_DISTANCE_THRESHOLD;
+    // This fallback is a last resort if the Firestore document is missing or unreadable.
+    return FALLBACK_DISTANCE_THRESHOLD;
 }
 
 export async function searchKnowledgeBase({
   query,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
-  const embeddingVector = await ai.embed({
+  const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: query,
   });
 
-  if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
+  if (!embeddingResponse || embeddingResponse.length === 0 || !embeddingResponse[0].embedding) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
+  const embeddingVector = embeddingResponse[0].embedding;
   
   const distanceThreshold = await getDistanceThreshold();
   

@@ -58,7 +58,7 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
-const DEFAULT_DISTANCE_THRESHOLD = 0.6;
+const INITIAL_DISTANCE_THRESHOLD = 0.6;
 
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
@@ -74,7 +74,7 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
-  const [distanceThreshold, setDistanceThreshold] = useState([DEFAULT_DISTANCE_THRESHOLD]);
+  const [distanceThreshold, setDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const { toast } = useToast();
 
@@ -104,12 +104,12 @@ export default function KnowledgeBasePage() {
           if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
             setSelectedTopicForUpload(topicsArray[0]);
           }
-          // Fetch distance threshold, handling both array and number for robustness
+          // Fetch distance threshold
           const storedThreshold = data.vectorSearchDistanceThreshold;
           if (typeof storedThreshold === 'number') {
             setDistanceThreshold([storedThreshold]);
-          } else if (Array.isArray(storedThreshold) && typeof storedThreshold[0] === 'number') {
-            setDistanceThreshold([storedThreshold[0]]);
+          } else {
+            setDistanceThreshold([INITIAL_DISTANCE_THRESHOLD]);
           }
         }
       } catch (error) {
@@ -715,7 +715,7 @@ export default function KnowledgeBasePage() {
                         className="my-4"
                     />
                     <p className="text-xs text-muted-foreground">
-                        Controls search strictness. A lower value (e.g., 0.2) requires a very close match. A higher value (e.g., 0.7) allows for more loosely related results. Default is 0.6.
+                        Controls search strictness. A lower value (e.g., 0.2) requires a very close match. A higher value (e.g., 0.7) allows for more loosely related results. Default is {INITIAL_DISTANCE_THRESHOLD}.
                     </p>
                 </div>
             </CardContent>
