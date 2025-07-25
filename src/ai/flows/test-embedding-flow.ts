@@ -20,13 +20,16 @@ export type TestEmbeddingOutput = z.infer<typeof TestEmbeddingOutputSchema>;
 
 const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
     try {
-      const embedding = await ai.embed({
+      const response = await ai.embed({
         embedder: 'googleai/text-embedding-004',
         content: 'This is a simple test sentence.',
       });
+
+      // The actual embedding vector is nested inside the response object.
+      const embeddingVector = response?.[0]?.embedding;
       
-      if (embedding && Array.isArray(embedding) && embedding.length > 0) {
-        const vectorLength = embedding.length;
+      if (embeddingVector && Array.isArray(embeddingVector) && embeddingVector.length > 0) {
+        const vectorLength = embeddingVector.length;
         if (vectorLength > 1) { // A valid embedding will have more than 1 dimension.
             return {
               success: true,
@@ -38,7 +41,7 @@ const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
       // If we reach here, the structure is not what we expected.
       return { 
         success: false, 
-        error: `The embedding service returned an invalid embedding structure. Expected a vector with 768 dimensions, but received something different. Response: ${JSON.stringify(embedding)}` 
+        error: `The embedding service returned an invalid embedding structure. Expected a vector with 768 dimensions, but received something different. Response: ${JSON.stringify(response)}` 
       };
 
     } catch (e: any) {
@@ -65,5 +68,3 @@ const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
 export async function testEmbedding(): Promise<TestEmbeddingOutput> {
   return testEmbeddingFlow();
 }
-
-    

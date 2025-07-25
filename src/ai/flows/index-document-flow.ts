@@ -128,10 +128,13 @@ export async function indexDocument({
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
             
-            const embeddingVector = await withRetry(() => ai.embed({
+            const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
             }));
+
+            // The embedding is nested in the response.
+            const embeddingVector = embeddingResponse?.[0]?.embedding;
 
             // Validate the embedding response.
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
@@ -225,5 +228,3 @@ export async function indexDocument({
         };
       }
 }
-
-    
