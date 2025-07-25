@@ -1,36 +1,34 @@
 rules_version = '2';
 
-// Quick Reference for Match Paths:
-// - /b/{bucket}/o: Matches all objects in the bucket.
-// - site_assets/{allPaths=**}: Matches all files within the site_assets folder.
-// - knowledge_base_files/{allPaths=**}: Matches all files in the knowledge_base_files folder.
-// - chat_history_files/{allPaths=**}: Matches files in the chat_history_files folder.
-
 service firebase.storage {
   match /b/{bucket}/o {
+    
+    // Default deny all reads and writes
+    // match /{allPaths=**} {
+    //  allow read, write: if false;
+    // }
 
-    // PUBLIC READ-ONLY: Site assets (logos, backgrounds) and knowledge base files (PDFs for download)
-    // Anyone should be able to read these files. Only authenticated users (admins) can write/delete them.
-    match /site_assets/{allPaths=**} {
-      allow read: if true;
+    // Allow authenticated users (admins) to write to the knowledge base and site assets folders.
+    match /knowledge_base_files/{level}/{fileId} {
       allow write: if request.auth != null;
     }
-    match /knowledge_base_files/{allPaths=**} {
-      allow read: if true;
+
+    match /site_assets/{assetName} {
       allow write: if request.auth != null;
     }
 
-    // ANONYMOUS WRITE: Chat history transcripts
-    // The client-side application needs to be able to upload chat transcripts (as PDFs)
-    // without requiring the end-user to be logged in. This path is write-only for clients.
-    match /chat_history_files/{allPaths=**} {
-      allow read: if request.auth != null; // Only admins can read back history files
-      allow write: if true; // Anyone can write
+    // Allow anyone to READ/GET from knowledge base and site assets.
+    // This is required for the UI to display images and for users to download referenced PDFs.
+    match /knowledge_base_files/{level}/{allFiles=**} {
+      allow get: if true;
+    }
+     match /site_assets/{allFiles=**} {
+      allow get: if true;
     }
 
-    // DEFAULT RULE: Deny all other read/write operations by default.
-    // This is a security best practice. Any path not explicitly matched above will be denied.
-    // Note: This rule is implicitly active if no other rule matches. The explicit matches above
-    // provide all the necessary permissions.
+    // Allow anyone to write their chat history for RAG processing.
+    match /chat_history_files/{fileId} {
+      allow write: if true;
+    }
   }
 }
