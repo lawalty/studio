@@ -1,44 +1,46 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Allow public read on configuration files (e.g., for splash screen assets)
-    // but restrict writes to authenticated users (admins).
-    match /configurations/{docId} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-
-    // Allow any authenticated user to manage their own data.
-    // This is a common pattern for user-specific data.
-    match /users/{userId}/{documents=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Allow authenticated users to manage knowledge base metadata.
-    match /kb_high_meta_v1/{docId} {
-      allow read, write: if request.auth != null;
-    }
-    match /kb_medium_meta_v1/{docId} {
-      allow read, write: if request.auth != null;
-    }
-    match /kb_low_meta_v1/{docId} {
-      allow read, write: if request.auth != null;
-    }
-    match /kb_archive_meta_v1/{docId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Allow authenticated users to manage knowledge base chunks.
-    // This is critical for the RAG pipeline.
-    match /kb_chunks/{chunkId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Disallow all other reads/writes by default for security.
+  
+    // Default deny all access to other collections
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // Allow authenticated admins to read/write to the configurations and KB metadata.
+    // This is required for the admin panel to function correctly.
+    match /configurations/{docId} {
+       allow read, write: if request.auth != null;
+    }
+    
+    match /kb_high_meta_v1/{docId} {
+       allow read, write, delete: if request.auth != null;
+    }
+    match /kb_medium_meta_v1/{docId} {
+       allow read, write, delete: if request.auth != null;
+    }
+    match /kb_low_meta_v1/{docId} {
+       allow read, write, delete: if request.auth != null;
+    }
+     match /kb_spanish_pdfs_meta_v1/{docId} {
+       allow read, write, delete: if request.auth != null;
+    }
+    match /kb_chat_history_meta_v1/{docId} {
+       allow read, write, delete: if request.auth != null;
+    }
+    match /kb_archive_meta_v1/{docId} {
+       allow read, write, delete: if request.auth != null;
+    }
+
+    // Allow admin to write to the chunks collection.
+    // This is a global collection for all RAG chunks.
+    match /kb_chunks/{chunkId} {
+      allow read, write, delete: if request.auth != null;
+    }
+
+    // Allow admins to run diagnostic tests.
+    match /__diagnostic_tests/{testId} {
+      allow read, write, delete: if request.auth != null;
     }
   }
 }
