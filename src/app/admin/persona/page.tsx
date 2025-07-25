@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Separator, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -22,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
+import { Separator } from '@/components/ui/separator';
 
 
 const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
@@ -194,7 +195,7 @@ export default function PersonaPage() {
       
     } catch (error: any) {
       console.error('Error testing greeting:', error);
-      toast({ title: 'Error', description: `Could not play greeting. ${error.message}`, variant: 'destructive' });
+      toast({ title: 'Error', description: `Could not play greeting. ${''\'\''}error.message`, variant: 'destructive' });
     } finally {
       setIsTestingGreeting(false);
     }
@@ -208,13 +209,13 @@ export default function PersonaPage() {
     try {
       const flowInput: AdjustAiPersonaAndPersonalityInput = { personaTraits };
       const { updatedPersonaDescription } = await adjustAiPersonaAndPersonality(flowInput);
-      toast({ title: "AI Persona Updated", description: `IA Blair v2 says: "${updatedPersonaDescription}"` });
+      toast({ title: "AI Persona Updated", description: `IA Blair v2 says: "${''\'\''}updatedPersonaDescription}"` });
       personaUpdatedSuccessfully = true;
     } catch (personaError: any) {
       console.error("[PersonaPage] Error calling AI to adjust persona:", personaError);
       toast({
         title: "AI Persona Update Failed",
-        description: `The AI's personality could not be set. Your other settings were still saved. Error: ${personaError.message || 'Unknown'}.`,
+        description: `The AI's personality could not be set. Your other settings were still saved. Error: ${''\'\''}personaError.message || 'Unknown'}.`,
         variant: "destructive",
         duration: 10000,
       });
@@ -236,7 +237,7 @@ export default function PersonaPage() {
         setSelectedAvatarFile(null); // Clear selected file
         avatarUpdated = true;
       } catch (uploadError: any) {
-        toast({ title: "Static Avatar Upload Failed", description: `Could not upload: ${uploadError.message}`, variant: "destructive" });
+        toast({ title: "Static Avatar Upload Failed", description: `Could not upload: ${''\'\''}uploadError.message}`, variant: "destructive" });
         setIsSaving(false); return;
       }
     } else if (avatarPreview === DEFAULT_AVATAR_PLACEHOLDER) {
@@ -255,7 +256,7 @@ export default function PersonaPage() {
         setSelectedAnimatedAvatarFile(null); // Clear selected file
         animatedAvatarUpdated = true;
       } catch (uploadError: any) {
-        toast({ title: "Animated Avatar Upload Failed", description: `Could not upload GIF: ${uploadError.message}`, variant: "destructive" });
+        toast({ title: "Animated Avatar Upload Failed", description: `Could not upload GIF: ${''\'\''}uploadError.message}`, variant: "destructive" });
         setIsSaving(false); return;
       }
     } else if (animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER) {
@@ -483,7 +484,7 @@ export default function PersonaPage() {
                           src={avatarPreview} alt="IA Blair v2 Static Avatar Preview" width={150} height={150}
                           className="rounded-full border-2 border-primary shadow-md object-cover"
                           data-ai-hint={avatarPreview === DEFAULT_AVATAR_PLACEHOLDER || avatarPreview.includes("placehold.co") ? "professional woman" : undefined}
-                          key={`static-avatar-${avatarPreview.substring(0,30)}`}
+                          key={`static-avatar-${''\'\''}avatarPreview.substring(0,30)}`}
                           unoptimized={avatarPreview.startsWith('data:image/') || avatarPreview.startsWith('blob:') || !avatarPreview.startsWith('https://')}
                           onError={() => { console.warn("Custom static avatar failed to load, falling back."); setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);}}
                         />
@@ -506,7 +507,7 @@ export default function PersonaPage() {
                           src={animatedAvatarPreview} alt="IA Blair v2 Animated Avatar Preview" width={150} height={150}
                           className="rounded-full border-2 border-accent shadow-md object-cover"
                           data-ai-hint={animatedAvatarPreview === DEFAULT_ANIMATED_AVATAR_PLACEHOLDER || animatedAvatarPreview.includes("placehold.co") ? "animated face" : undefined}
-                          key={`animated-avatar-${animatedAvatarPreview.substring(0,30)}`}
+                          key={`animated-avatar-${''\'\''}animatedAvatarPreview.substring(0,30)}`}
                           unoptimized={true}
                           onError={() => { console.warn("Custom animated avatar failed to load, falling back."); setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);}}
                         />
@@ -560,7 +561,7 @@ export default function PersonaPage() {
                             {textGenResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                             <AlertTitle>{textGenResult.success ? "Success" : "Failed"}</AlertTitle>
                             <AlertDescription className="text-xs break-words">
-                                {textGenResult.success ? `Model responded: "${textGenResult.generatedText}"` : textGenResult.error}
+                                {textGenResult.success ? `Model responded: "${''\'\''}textGenResult.generatedText}"` : textGenResult.error}
                             </AlertDescription>
                         </Alert>
                     )}
@@ -587,7 +588,7 @@ export default function PersonaPage() {
                             {embeddingResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
                             <AlertTitle>{embeddingResult.success ? "Success" : "Failed"}</AlertTitle>
                             <AlertDescription className="text-xs break-words">
-                                {embeddingResult.success ? `Successfully generated an embedding with ${embeddingResult.embeddingVectorLength} dimensions.` : embeddingResult.error}
+                                {embeddingResult.success ? `Successfully generated an embedding with ${''\'\''}embeddingResult.embeddingVectorLength} dimensions.` : embeddingResult.error}
                             </AlertDescription>
                         </Alert>
                     )}
@@ -625,3 +626,5 @@ export default function PersonaPage() {
     </div>
   );
 }
+
+    
