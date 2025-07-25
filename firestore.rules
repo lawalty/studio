@@ -1,46 +1,30 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Default deny all access to other collections
-    match /{document=**} {
-      allow read, write: if false;
+
+    // Allow admin full access to configuration settings
+    match /configurations/{docId} {
+      allow read, write: if request.auth != null;
     }
 
-    // Allow authenticated admins to read/write to the configurations and KB metadata.
-    // This is required for the admin panel to function correctly.
-    match /configurations/{docId} {
-       allow read, write: if request.auth != null;
+    // Allow admin full access to all knowledge base metadata collections
+    match /kb_{level}_meta_v1/{docId} {
+       // Allow any user to CREATE a document in the chat history.
+       // This is for the front-end client to save the transcript for processing.
+       // All other operations (read, update, delete) are restricted to admins.
+      allow create: if level == 'chat_history';
+      allow read, update, delete: if request.auth != null;
     }
     
-    match /kb_high_meta_v1/{docId} {
-       allow read, write, delete: if request.auth != null;
-    }
-    match /kb_medium_meta_v1/{docId} {
-       allow read, write, delete: if request.auth != null;
-    }
-    match /kb_low_meta_v1/{docId} {
-       allow read, write, delete: if request.auth != null;
-    }
-     match /kb_spanish_pdfs_meta_v1/{docId} {
-       allow read, write, delete: if request.auth != null;
-    }
-    match /kb_chat_history_meta_v1/{docId} {
-       allow read, write, delete: if request.auth != null;
-    }
-    match /kb_archive_meta_v1/{docId} {
-       allow read, write, delete: if request.auth != null;
-    }
-
-    // Allow admin to write to the chunks collection.
-    // This is a global collection for all RAG chunks.
+    // Allow admin full access to the indexed data chunks
     match /kb_chunks/{chunkId} {
-      allow read, write, delete: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
 
-    // Allow admins to run diagnostic tests.
-    match /__diagnostic_tests/{testId} {
-      allow read, write, delete: if request.auth != null;
+    // Deny all other reads/writes by default for security
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
