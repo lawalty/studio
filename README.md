@@ -15,14 +15,14 @@ For running the app on your local machine (`npm run dev`).
 **Action:** Create a new file named `.env.local` in the root directory. Copy the contents of the `.env` file into it and fill in the values. The Project ID and Storage Bucket have been corrected in the `.env` template to prevent common errors.
 
 **Variables to set in `.env.local`:**
-*   `NEXT_PUBLIC_FIREBASE_API_KEY`="AIzaSyBz0edyk760wi-cssGZ7l0ipTpeDr9G9eQ"
-*   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`="ai-blair-7fb8o.firebaseapp.com"
-*   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`="ai-blair-7fb8o"
-*   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-7fb8o.firebasestorage.app"
-*   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`="513112805900"
-*   `NEXT_PUBLIC_FIREBASE_APP_ID`="1:513112805900:web:9a6f209b3f3ab00fb31429"
+*   `NEXT_PUBLIC_FIREBASE_API_KEY`="AIzaSyCR1IqGrezIHP5dq7TPMyDYCJdxn0DFm2Q"
+*   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`="ai-blair-v4.firebaseapp.com"
+*   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`="ai-blair-v4"
+*   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-v4.firebasestorage.app"
+*   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`="1079390859335"
+*   `NEXT_PUBLIC_FIREBASE_APP_ID`="1:1079390859335:web:be0806edbcb7f394088162"
 *   `GEMINI_API_KEY` (Get from [Google AI Studio](https://aistudio.google.com/app/apikey))
-*   `GCLOUD_PROJECT`="ai-blair-7fb8o"
+*   `GCLOUD_PROJECT`="ai-blair-v4"
 *   `LOCATION` (e.g., `us-central1`)
 *   `VERTEX_AI_INDEX_ID`
 *   `VERTEX_AI_INDEX_ENDPOINT_ID`
@@ -48,7 +48,7 @@ For the live version of your app hosted on Firebase App Hosting.
 **Private Secrets (Secret Manager):**
 *   Sensitive keys (`GEMINI_API_KEY`, `ADMIN_PASSWORD`, Vertex AI IDs, etc.) are referenced in `apphosting.yaml` but their actual values must be stored in Google Secret Manager for security.
 *   **Action Required:**
-    1.  Go to the [Google Cloud Secret Manager](https://console.cloud.google.com/security/secret-manager) for your project (`ai-blair-7fb8o`).
+    1.  Go to the [Google Cloud Secret Manager](https://console.cloud.google.com/security/secret-manager) for your project (`ai-blair-v4`).
     2.  For each secret variable listed in `apphosting.yaml` (like `GEMINI_API_KEY`), click **"Create Secret"**.
     3.  Enter the **Secret name** exactly as it appears in `apphosting.yaml` (e.g., `GEMINI_API_KEY`).
     4.  Enter the corresponding key/ID as the **Secret value**.
