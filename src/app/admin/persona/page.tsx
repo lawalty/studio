@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2 } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Separator, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -18,6 +18,11 @@ import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
+import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
+import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
+
 
 const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?text=GIF";
@@ -52,6 +57,12 @@ export default function PersonaPage() {
   const animatedAvatarInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  
+  // State for diagnostics
+  const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
+  const [textGenResult, setTextGenResult] = useState<TestTextGenerationOutput | null>(null);
+  const [embeddingResult, setEmbeddingResult] = useState<TestEmbeddingOutput | null>(null);
+  const [firestoreResult, setFirestoreResult] = useState<TestFirestoreWriteOutput | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -309,6 +320,30 @@ export default function PersonaPage() {
     toast({ title: "Animated Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
   };
 
+  const handleRunTextGenTest = async () => {
+    setIsTesting(prev => ({ ...prev, textGen: true }));
+    setTextGenResult(null);
+    const result = await testTextGeneration();
+    setTextGenResult(result);
+    setIsTesting(prev => ({ ...prev, textGen: false }));
+  };
+
+  const handleRunEmbeddingTest = async () => {
+    setIsTesting(prev => ({ ...prev, embedding: true }));
+    setEmbeddingResult(null);
+    const result = await testEmbedding();
+    setEmbeddingResult(result);
+    setIsTesting(prev => ({ ...prev, embedding: false }));
+  };
+
+  const handleRunFirestoreTest = async () => {
+    setIsTesting(prev => ({ ...prev, firestore: true }));
+    setFirestoreResult(null);
+    const result = await testFirestoreWrite();
+    setFirestoreResult(result);
+    setIsTesting(prev => ({ ...prev, firestore: false }));
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -492,6 +527,103 @@ export default function PersonaPage() {
           </Button>
         </CardFooter>
       </Card>
+
+      <Separator className="my-8" />
+      
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Core Service Diagnostics</h3>
+        </div>
+        <CardDescription>
+            Run these tests to diagnose issues with your Google AI API key or Google Cloud project configuration.
+            Failures in these tests are the most common reason for errors when saving the persona or indexing documents.
+        </CardDescription>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Terminal className="h-4 w-4" />
+                        Text Generation Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Tests basic connectivity to the Gemini model using your API key.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleRunTextGenTest} disabled={isTesting.textGen}>
+                        {isTesting.textGen && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Run Test
+                    </Button>
+                    {textGenResult && (
+                        <Alert className="mt-4" variant={textGenResult.success ? "default" : "destructive"}>
+                            {textGenResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            <AlertTitle>{textGenResult.success ? "Success" : "Failed"}</AlertTitle>
+                            <AlertDescription className="text-xs break-words">
+                                {textGenResult.success ? `Model responded: "${textGenResult.generatedText}"` : textGenResult.error}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <DatabaseZap className="h-4 w-4" />
+                        Embedding Model Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Tests connectivity to the text embedding model required for RAG.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleRunEmbeddingTest} disabled={isTesting.embedding}>
+                        {isTesting.embedding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Run Test
+                    </Button>
+                    {embeddingResult && (
+                        <Alert className="mt-4" variant={embeddingResult.success ? "default" : "destructive"}>
+                            {embeddingResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            <AlertTitle>{embeddingResult.success ? "Success" : "Failed"}</AlertTitle>
+                            <AlertDescription className="text-xs break-words">
+                                {embeddingResult.success ? `Successfully generated an embedding with ${embeddingResult.embeddingVectorLength} dimensions.` : embeddingResult.error}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <KeyRound className="h-4 w-4" />
+                        Server Authentication Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Tests if the server can write to Firestore using its configured credentials (e.g., from Application Default Credentials or a service account).
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleRunFirestoreTest} disabled={isTesting.firestore}>
+                        {isTesting.firestore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Run Test
+                    </Button>
+                    {firestoreResult && (
+                        <Alert className="mt-4" variant={firestoreResult.success ? "default" : "destructive"}>
+                            {firestoreResult.success ? <CheckCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            <AlertTitle>{firestoreResult.success ? "Success" : "Failed"}</AlertTitle>
+                            <AlertDescription className="text-xs break-words whitespace-pre-wrap">
+                                {firestoreResult.success ? `Successfully authenticated and wrote to Firestore.` : firestoreResult.error}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+      </div>
     </div>
   );
 }
+
+    
