@@ -27,7 +27,7 @@ const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
       
       if (embedding && Array.isArray(embedding) && embedding.length > 0) {
         const vectorLength = embedding.length;
-        if (vectorLength > 0) {
+        if (vectorLength > 1) { // A valid embedding will have more than 1 dimension.
             return {
               success: true,
               embeddingVectorLength: vectorLength,
@@ -35,9 +35,10 @@ const testEmbeddingFlow = async (): Promise<TestEmbeddingOutput> => {
         }
       } 
       
+      // If we reach here, the structure is not what we expected.
       return { 
         success: false, 
-        error: `The embedding service returned an empty or invalid embedding structure.` 
+        error: `The embedding service returned an invalid embedding structure. Expected a vector with 768 dimensions, but received something different. Response: ${JSON.stringify(embedding)}` 
       };
 
     } catch (e: any) {
