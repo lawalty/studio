@@ -9,8 +9,6 @@
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
 
-const FALLBACK_DISTANCE_THRESHOLD = 0.6; // A sensible fallback ONLY if Firestore read fails.
-
 export interface SearchResult {
   sourceId: string;
   text: string;
@@ -29,40 +27,47 @@ interface SearchParams {
   limit?: number;
 }
 
+// Function to pre-process text for better embedding and search quality.
+const preprocessText = (text: string): string => {
+  if (!text) return '';
+  return text.toLowerCase();
+};
+
 // Helper to get the distance threshold from Firestore.
 async function getDistanceThreshold(): Promise<number> {
-    try {
-        const docRef = db.collection('configurations').doc('site_display_assets');
-        const docSnap = await docRef.get();
-        if (docSnap.exists) {
-            const data = docSnap.data();
-            const storedThreshold = data?.vectorSearchDistanceThreshold;
+    const docRef = db.collection('configurations').doc('site_display_assets');
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+        const data = docSnap.data();
+        const storedThreshold = data?.vectorSearchDistanceThreshold;
 
-            if (typeof storedThreshold === 'number') {
-                return Math.max(0, Math.min(2, storedThreshold));
-            } else if (Array.isArray(storedThreshold) && typeof storedThreshold[0] === 'number') {
-                // Handle array value from slider component
-                return Math.max(0, Math.min(2, storedThreshold[0]));
-            }
+        // Handle both number and array-from-slider cases
+        if (Array.isArray(storedThreshold) && typeof storedThreshold[0] === 'number') {
+            return Math.max(0, Math.min(2, storedThreshold[0]));
+        } else if (typeof storedThreshold === 'number') {
+            return Math.max(0, Math.min(2, storedThreshold));
         }
-    } catch (error) {
-        console.error("Error fetching distance threshold from Firestore, using fallback:", error);
     }
-    return FALLBACK_DISTANCE_THRESHOLD;
+    // If no value is in Firestore, return a default that is permissive for testing.
+    return 0.6;
 }
 
 export async function searchKnowledgeBase({
   query,
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
+
+  // Pre-process the incoming query to match the pre-processing of indexed text.
+  const processedQuery = preprocessText(query);
+  
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
-    content: query,
+    content: processedQuery, // Use the processed query for embedding
   });
 
   const embeddingVector = embeddingResponse?.[0]?.embedding;
   if (!embeddingVector || embeddingVector.length === 0) {
-    console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
+    console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", processedQuery);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
   
@@ -96,15 +101,18 @@ export async function searchKnowledgeBase({
 
   // 3. Sort the filtered results by priority level, then by distance.
   const priorityOrder: Record<string, number> = { 'High': 1, 'Medium': 2, 'Low': 3, 'Chat History': 4, 'Spanish PDFs': 5, 'Archive': 6 };
+  
   allValidResults.sort((a, b) => {
-      const priorityA = priorityOrder[a.level] || 99;
-      const priorityB = priorityOrder[b.level] || 99;
-      // First, sort by priority level.
-      if (priorityA !== priorityB) {
-          return priorityA - priorityB;
-      }
-      // If priorities are the same, then sort by distance (closer is better).
-      return a.distance - b.distance;
+    const priorityA = priorityOrder[a.level] || 99;
+    const priorityB = priorityOrder[b.level] || 99;
+    
+    // First, sort by priority level.
+    if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+    }
+    
+    // If priorities are the same, then sort by distance (closer is better).
+    return a.distance - b.distance;
   });
 
   // 4. Return the top N results based on the original limit.
