@@ -49,7 +49,7 @@ async function getDistanceThreshold(): Promise<number> {
         }
     }
     // If no value is in Firestore, return a default that is permissive for testing.
-    return 0.6;
+    return 1.0;
 }
 
 export async function searchKnowledgeBase({
