@@ -60,11 +60,11 @@ export async function searchKnowledgeBase({
     content: query,
   });
 
-  if (!embeddingResponse || embeddingResponse.length === 0 || !embeddingResponse[0].embedding) {
+  const embeddingVector = embeddingResponse?.[0]?.embedding;
+  if (!embeddingVector || embeddingVector.length === 0) {
     console.error("[searchKnowledgeBase] Failed to generate a valid embedding for the search query:", query);
     throw new Error("Failed to generate a valid embedding for the search query.");
   }
-  const embeddingVector = embeddingResponse[0].embedding;
   
   const distanceThreshold = await getDistanceThreshold();
   
@@ -94,15 +94,16 @@ export async function searchKnowledgeBase({
     }
   });
 
-  // 3. Sort the filtered results by priority level.
+  // 3. Sort the filtered results by priority level, then by distance.
   const priorityOrder: Record<string, number> = { 'High': 1, 'Medium': 2, 'Low': 3, 'Chat History': 4, 'Spanish PDFs': 5, 'Archive': 6 };
   allValidResults.sort((a, b) => {
       const priorityA = priorityOrder[a.level] || 99;
       const priorityB = priorityOrder[b.level] || 99;
+      // First, sort by priority level.
       if (priorityA !== priorityB) {
-          return priorityA - b.distance;
+          return priorityA - priorityB;
       }
-      // If priorities are the same, sort by distance (closer is better)
+      // If priorities are the same, then sort by distance (closer is better).
       return a.distance - b.distance;
   });
 
