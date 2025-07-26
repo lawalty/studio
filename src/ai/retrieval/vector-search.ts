@@ -57,12 +57,11 @@ export async function searchKnowledgeBase({
   limit = 5,
 }: SearchParams): Promise<SearchResult[]> {
 
-  // Pre-process the incoming query to match the pre-processing of indexed text.
   const processedQuery = preprocessText(query);
   
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
-    content: processedQuery, // Use the processed query for embedding
+    content: processedQuery,
   });
 
   const embeddingVector = embeddingResponse?.[0]?.embedding;
@@ -72,49 +71,38 @@ export async function searchKnowledgeBase({
   }
   
   const distanceThreshold = await getDistanceThreshold();
-  
-  // 1. Query for a larger set of neighbors from the entire collection first.
-  const vectorQuery = db.collection('kb_chunks')
+  const priorityLevels: string[] = ['High', 'Medium', 'Low'];
+  const finalResults: SearchResult[] = [];
+
+  for (const level of priorityLevels) {
+    if (finalResults.length >= limit) {
+      break; // Stop searching if we have enough results
+    }
+
+    const vectorQuery = db.collection('kb_chunks')
+      .where('level', '==', level)
       .findNearest('embedding', embeddingVector, {
-          limit: 20, // Fetch more results to allow for filtering/prioritization
+          limit: limit, // Query for the remaining number of results needed
           distanceMeasure: 'COSINE'
       });
       
-  const snapshot = await vectorQuery.get();
-  
-  if (snapshot.empty) {
-    return [];
-  }
+    const snapshot = await vectorQuery.get();
 
-  // 2. Filter these results by the distance threshold in code.
-  const allValidResults: SearchResult[] = [];
-  snapshot.forEach(doc => {
-    const distance = (doc as any).distance; 
-    // A smaller distance is a better match. We accept any result where the distance is LESS THAN OR EQUAL to the threshold.
-    if (distance <= distanceThreshold) {
-      allValidResults.push({
-        ...(doc.data() as Omit<SearchResult, 'distance'>),
-        distance: distance,
+    if (!snapshot.empty) {
+      snapshot.forEach(doc => {
+        const distance = (doc as any).distance;
+        if (distance <= distanceThreshold && finalResults.length < limit) {
+          finalResults.push({
+            ...(doc.data() as Omit<SearchResult, 'distance'>),
+            distance: distance,
+          });
+        }
       });
     }
-  });
+  }
 
-  // 3. Sort the filtered results by priority level, then by distance.
-  const priorityOrder: Record<string, number> = { 'High': 1, 'Medium': 2, 'Low': 3, 'Chat History': 4, 'Spanish PDFs': 5, 'Archive': 6 };
-  
-  allValidResults.sort((a, b) => {
-    const priorityA = priorityOrder[a.level] || 99;
-    const priorityB = priorityOrder[b.level] || 99;
-    
-    // First, sort by priority level.
-    if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-    }
-    
-    // If priorities are the same, then sort by distance (closer is better).
-    return a.distance - b.distance;
-  });
+  // Sort final aggregated results by distance to ensure the best matches are first
+  finalResults.sort((a, b) => a.distance - b.distance);
 
-  // 4. Return the top N results based on the original limit.
-  return allValidResults.slice(0, limit);
+  return finalResults.slice(0, limit);
 }
