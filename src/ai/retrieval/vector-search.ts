@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 
 const FALLBACK_DISTANCE_THRESHOLD = 0.6; // A sensible fallback ONLY if Firestore read fails.
 
-interface SearchResult {
+export interface SearchResult {
   sourceId: string;
   text: string;
   sourceName: string;
@@ -33,20 +33,21 @@ interface SearchParams {
 async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
-        const docSnap = await docRef.get();
-        if (docSnap.exists()) {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists) {
             const data = docSnap.data();
             const storedThreshold = data?.vectorSearchDistanceThreshold;
 
-            // Handle both number (direct) and array (from slider) data types for robustness.
             if (typeof storedThreshold === 'number') {
                 return Math.max(0, Math.min(2, storedThreshold));
+            } else if (Array.isArray(storedThreshold) && typeof storedThreshold[0] === 'number') {
+                // Handle array value from slider component
+                return Math.max(0, Math.min(2, storedThreshold[0]));
             }
         }
     } catch (error) {
         console.error("Error fetching distance threshold from Firestore, using fallback:", error);
     }
-    // This fallback is a last resort if the Firestore document is missing or unreadable.
     return FALLBACK_DISTANCE_THRESHOLD;
 }
 
@@ -99,7 +100,7 @@ export async function searchKnowledgeBase({
       const priorityA = priorityOrder[a.level] || 99;
       const priorityB = priorityOrder[b.level] || 99;
       if (priorityA !== priorityB) {
-          return priorityA - priorityB;
+          return priorityA - b.distance;
       }
       // If priorities are the same, sort by distance (closer is better)
       return a.distance - b.distance;
