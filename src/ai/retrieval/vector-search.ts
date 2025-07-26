@@ -1,10 +1,8 @@
 
 'use server';
 /**
- * @fileOverview Performs a prioritized, sequential, vector-based semantic search on the knowledge base using Firestore's native vector search.
- *
- * - searchKnowledgeBase - Finds relevant text chunks from the 'kb_chunks' collection in Firestore. It fetches a broad set of results
- *   and then filters and prioritizes them in code ('High' -> 'Medium' -> 'Low') to ensure the most important results are returned first.
+ * @fileOverview Performs a vector-based semantic search on the knowledge base using Firestore's native vector search.
+ * This version is simplified for diagnostics to only search the 'High' priority KB.
  */
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
@@ -71,39 +69,33 @@ export async function searchKnowledgeBase({
   }
   
   const distanceThreshold = await getDistanceThreshold();
-  const priorityLevels: string[] = ['High', 'Medium', 'Low'];
-  const finalResults: SearchResult[] = [];
+  const results: SearchResult[] = [];
 
-  for (const level of priorityLevels) {
-    if (finalResults.length >= limit) {
-      break; // Stop searching if we have enough results
-    }
-
-    const vectorQuery = db.collection('kb_chunks')
-      .where('level', '==', level)
-      .findNearest('embedding', embeddingVector, {
-          limit: limit, // Query for the total limit on each level
-          distanceMeasure: 'COSINE'
-      });
+  // Simplified diagnostic query: Only search 'High' priority KB
+  const vectorQuery = db.collection('kb_chunks')
+    .where('level', '==', 'High')
+    .findNearest('embedding', embeddingVector, {
+        limit: limit,
+        distanceMeasure: 'COSINE'
+    });
       
-    const snapshot = await vectorQuery.get();
+  const snapshot = await vectorQuery.get();
 
-    if (!snapshot.empty) {
-      snapshot.forEach(doc => {
-        const distance = (doc as any).distance;
-        // Strict filtering by distance threshold
-        if (distance <= distanceThreshold && finalResults.length < limit) {
-          finalResults.push({
-            ...(doc.data() as Omit<SearchResult, 'distance'>),
-            distance: distance,
-          });
-        }
-      });
-    }
+  if (!snapshot.empty) {
+    snapshot.forEach(doc => {
+      const distance = (doc as any).distance;
+      // Strict filtering by distance threshold
+      if (distance <= distanceThreshold) {
+        results.push({
+          ...(doc.data() as Omit<SearchResult, 'distance'>),
+          distance: distance,
+        });
+      }
+    });
   }
 
-  // Sort final aggregated results by distance to ensure the best matches are first
-  finalResults.sort((a, b) => a.distance - b.distance);
+  // Sort final results by distance to ensure the best matches are first
+  results.sort((a, b) => a.distance - b.distance);
 
-  return finalResults.slice(0, limit);
+  return results.slice(0, limit);
 }
