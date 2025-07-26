@@ -33,7 +33,7 @@ interface SearchParams {
 async function getDistanceThreshold(): Promise<number> {
     try {
         const docRef = db.collection('configurations').doc('site_display_assets');
-        const docSnap = await getDoc(docRef);
+        const docSnap = await docRef.get();
         if (docSnap.exists) {
             const data = docSnap.data();
             const storedThreshold = data?.vectorSearchDistanceThreshold;
