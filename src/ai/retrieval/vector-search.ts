@@ -82,7 +82,7 @@ export async function searchKnowledgeBase({
     const vectorQuery = db.collection('kb_chunks')
       .where('level', '==', level)
       .findNearest('embedding', embeddingVector, {
-          limit: limit, // Query for the remaining number of results needed
+          limit: limit, // Query for the total limit on each level
           distanceMeasure: 'COSINE'
       });
       
@@ -91,6 +91,7 @@ export async function searchKnowledgeBase({
     if (!snapshot.empty) {
       snapshot.forEach(doc => {
         const distance = (doc as any).distance;
+        // Strict filtering by distance threshold
         if (distance <= distanceThreshold && finalResults.length < limit) {
           finalResults.push({
             ...(doc.data() as Omit<SearchResult, 'distance'>),
