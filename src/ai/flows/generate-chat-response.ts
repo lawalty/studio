@@ -61,7 +61,7 @@ const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: stri
         }
         return null;
     } catch (error) {
-        console.error(`[findSpanishPdf] Error searching for Spanish version of ${''\'\''}englishSourceId}:`, error);
+        console.error(`[findSpanishPdf] Error searching for Spanish version of ${englishSourceId}:`, error);
         return null;
     }
 };
@@ -170,9 +170,9 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
             primarySearchResult = searchResults[0];
             retrievedContext = searchResults
               .map(r =>
-                `<document source="${''\'\''}r.sourceName}" sourceId="${''\'\''}r.sourceId}" topic="${''\'\''}r.topic}" priority="${''\'\''}r.level}" downloadURL="${''\'\''}r.downloadURL || ''}" pageNumber="${''\'\''}r.pageNumber || ''}" title="${''\'\''}r.title || ''}" header="${''\'\''}r.header || ''}">
+                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}" pageNumber="${r.pageNumber || ''}" title="${r.title || ''}" header="${r.header || ''}">
   <content>
-    ${''\'\''}r.text}
+    ${r.text}
   </content>
 </document>`
               )
@@ -194,7 +194,7 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
         conversationalTopics,
         language: language || 'English',
         chatHistory: `<history>
-${''\'\''}historyForRAG.map((msg: any) => `${''\'\''}msg.role}: ${''\'\''}msg.parts?.[0]?.text || ''}`).join('\n')}
+${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}
 </history>`,
         retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND'
     };
@@ -218,7 +218,7 @@ ${''\'\''}historyForRAG.map((msg: any) => `${''\'\''}msg.role}: ${''\'\''}msg.pa
     } catch (error: any) {
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
       return {
-        aiResponse: `DEBUG: An error occurred in the AI flow. Technical details: ${''\'\''}error.message || 'Unknown error'}`,
+        aiResponse: `DEBUG: An error occurred in the AI flow. Technical details: ${error.message || 'Unknown error'}`,
         shouldEndConversation: true,
       };
     }
@@ -230,5 +230,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    
