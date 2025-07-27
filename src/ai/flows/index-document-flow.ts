@@ -131,6 +131,9 @@ export async function indexDocument({
             const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
+                options: {
+                  outputDimensionality: 768,
+                }
             }));
 
             // The embedding is nested in the response.
@@ -228,3 +231,5 @@ export async function indexDocument({
         };
       }
 }
+
+    
