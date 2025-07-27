@@ -151,8 +151,8 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
     
     // 2. NLP Pre-processing: Refine the query for better search accuracy.
     try {
-        const refinedQuery = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-flash' });
-        searchQuery = refinedQuery.output || queryForNlp; // Fallback to original if refinement fails
+        const { output } = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-flash' });
+        searchQuery = output || queryForNlp; // Fallback to original if refinement fails
     } catch (e) {
         console.error('[generateChatResponseFlow] NLP query refinement failed:', e);
         // On failure, we still proceed with the translated (or original) query.

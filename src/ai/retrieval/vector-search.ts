@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Performs a vector-based semantic search on the knowledge base.
@@ -118,12 +119,16 @@ export async function searchKnowledgeBase({
     const results: SearchResult[] = neighbors
         .map(neighbor => {
             const chunkId = neighbor.datapoint?.datapointId;
-            const distance = neighbor.distance; // Vertex AI provides the distance
+            const distance = neighbor.distance;
             
             if (!chunkId || distance === undefined || distance === null) return null;
 
             const chunkData = chunksById.get(chunkId);
             if (!chunkData) return null;
+
+            // For COSINE distance, similarity is 1 - distance. For DOT_PRODUCT_DISTANCE, it is the distance itself.
+            // Assuming COSINE for this conversion, as it's common.
+            const similarity = 1 - distance; 
 
             return {
                 sourceId: chunkData.sourceId,
@@ -135,11 +140,11 @@ export async function searchKnowledgeBase({
                 pageNumber: chunkData.pageNumber,
                 title: chunkData.title,
                 header: chunkData.header,
-                distance: 1 - distance, // Convert to similarity-like score if needed (COSINE is often 1-distance)
+                distance: similarity, // Return the similarity score
             };
         })
         .filter((result): result is SearchResult => result !== null)
-        .sort((a, b) => b.distance - a.distance); // Sort by highest similarity (lowest distance)
+        .sort((a, b) => b.distance - a.distance); // Sort by highest similarity
 
     return results;
   } catch (error: any) {
