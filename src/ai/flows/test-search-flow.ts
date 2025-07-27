@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A Genkit flow for testing the vector search functionality from the client.
@@ -11,20 +10,10 @@
 import { z } from 'zod';
 import { ai } from '@/ai/genkit';
 import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
+import type { SearchResult as ClientSearchResult } from '@/ai/retrieval/vector-search';
 
 // This is the same interface as in vector-search, but exported for the client.
-export type SearchResult = {
-  sourceId: string;
-  text: string;
-  sourceName: string;
-  level: string;
-  topic: string;
-  downloadURL?: string;
-  distance: number;
-  pageNumber?: number;
-  title?: string;
-  header?: string;
-};
+export type SearchResult = ClientSearchResult;
 
 const TestSearchInputSchema = z.object({
   query: z.string().min(1, "Query cannot be empty."),
@@ -47,5 +36,3 @@ export async function testSearch(input: TestSearchInput): Promise<TestSearchOutp
     return { results: [], error: errorMessage };
   }
 }
-
-    

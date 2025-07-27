@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -9,15 +8,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search } from 'lucide-react';
+import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
+import { testSearch, type TestSearchOutput, type SearchResult } from '@/ai/flows/test-search-flow';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 interface ApiKeys {
@@ -42,6 +43,8 @@ export default function ApiKeysPage() {
   const [textGenResult, setTextGenResult] = useState<TestTextGenerationOutput | null>(null);
   const [embeddingResult, setEmbeddingResult] = useState<TestEmbeddingOutput | null>(null);
   const [firestoreResult, setFirestoreResult] = useState<TestFirestoreWriteOutput | null>(null);
+  const [searchResult, setSearchResult] = useState<TestSearchOutput | null>(null);
+  const [searchQuery, setSearchQuery] = useState('What is a pawnbroker?');
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -118,6 +121,18 @@ export default function ApiKeysPage() {
     const result = await testFirestoreWrite();
     setFirestoreResult(result);
     setIsTesting(prev => ({ ...prev, firestore: false }));
+  };
+  
+  const handleRunSearchTest = async () => {
+    if (!searchQuery.trim()) {
+      toast({ title: "Search Query Empty", description: "Please enter a query to test.", variant: "destructive" });
+      return;
+    }
+    setIsTesting(prev => ({ ...prev, search: true }));
+    setSearchResult(null);
+    const result = await testSearch({ query: searchQuery });
+    setSearchResult(result);
+    setIsTesting(prev => ({ ...prev, search: false }));
   };
 
   return (
@@ -200,7 +215,7 @@ export default function ApiKeysPage() {
             Run these tests to diagnose issues with your Google AI API key or Google Cloud project configuration.
             Text extraction failures are often due to issues with the Text Generation or Embedding models.
         </CardDescription>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
@@ -281,10 +296,52 @@ export default function ApiKeysPage() {
                     )}
                 </CardContent>
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Search className="h-4 w-4" />
+                        Vector Search Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Tests the full RAG pipeline by sending a query to your Vertex AI Vector Search index.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-2">
+                      <Label htmlFor="search-query">Test Query</Label>
+                      <Input id="search-query" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    </div>
+                    <Button onClick={handleRunSearchTest} disabled={isTesting.search} className="mt-2">
+                        {isTesting.search && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Run RAG Test
+                    </Button>
+                    {searchResult && (
+                      <div className="mt-4">
+                        <Alert variant={searchResult.error ? "destructive" : "default"}>
+                            {searchResult.error ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                            <AlertTitle>{searchResult.error ? "Search Failed" : "Search Succeeded"}</AlertTitle>
+                            <AlertDescription className="text-xs break-words">
+                                {searchResult.error ? searchResult.error : `Found ${searchResult.results.length} relevant document(s).`}
+                            </AlertDescription>
+                        </Alert>
+                        {searchResult.results && searchResult.results.length > 0 && (
+                            <ScrollArea className="mt-4 h-48 w-full rounded-md border p-3">
+                                {searchResult.results.map((res, i) => (
+                                  <div key={i} className="text-xs p-2 border-b last:border-b-0">
+                                      <p className="font-semibold text-primary flex items-center gap-1"><FileText size={12}/> {res.sourceName}</p>
+                                      <p className="text-muted-foreground mt-1 line-clamp-2">"{res.text}"</p>
+                                      <p className="text-right text-muted-foreground/80 mt-1">Similarity: {res.distance.toFixed(3)}</p>
+                                  </div>
+                                ))}
+                            </ScrollArea>
+                        )}
+                      </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
       </div>
     </Card>
   );
 }
-
-    

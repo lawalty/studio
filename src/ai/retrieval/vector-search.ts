@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Performs a vector-based semantic search on the knowledge base.
@@ -149,4 +148,3 @@ export async function searchKnowledgeBase({
     throw new Error(`Search failed. This may be due to a configuration issue with the Vertex AI environment variables or permissions. Details: ${error.message}`);
   }
 }
-
