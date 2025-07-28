@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText } from 'lucide-react';
+import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -16,10 +17,8 @@ import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/te
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
 import { testSearch, type TestSearchOutput, type SearchResult } from '@/ai/flows/test-search-flow';
-import { Checkbox } from '@/components/ui/checkbox';
-import type { KnowledgeBaseLevel } from '@/app/admin/knowledge-base/page';
-import { ScrollArea } from '@/components/ui/scroll-area';
-
+import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
+import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 
 interface ApiKeys {
   tts: string;
@@ -37,6 +36,8 @@ export default function ApiKeysPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isTestingTts, setIsTestingTts] = useState(false);
 
   // State for diagnostics
   const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
@@ -98,6 +99,39 @@ export default function ApiKeysPage() {
     }
     setIsLoading(false);
   };
+  
+  const handleTestTts = async () => {
+    setIsTestingTts(true);
+    toast({ title: 'Generating TTS Audio...', description: 'Please wait a moment.' });
+    
+    const testText = "This is a test of the custom text-to-speech voice.";
+
+    try {
+      let audioDataUri = '';
+      if (apiKeys.useTtsApi && apiKeys.tts && apiKeys.voiceId) {
+          const result = await elevenLabsTextToSpeech({ text: testText, apiKey: apiKeys.tts, voiceId: apiKeys.voiceId });
+          if(result.error) throw new Error(result.error);
+          audioDataUri = result.media;
+      } else {
+          const result = await googleTextToSpeech(testText);
+          audioDataUri = result.media;
+          toast({ title: 'Using Default Voice', description: 'Custom TTS is disabled or misconfigured. Testing the default Google voice.'})
+      }
+
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+      audioRef.current.src = audioDataUri;
+      await audioRef.current.play();
+      
+    } catch (error: any) {
+      console.error('Error testing TTS:', error);
+      toast({ title: 'Error', description: `Could not play audio. ${error.message}`, variant: 'destructive' });
+    } finally {
+      setIsTestingTts(false);
+    }
+  };
+
 
   const handleRunTextGenTest = async () => {
     setIsTesting(prev => ({ ...prev, textGen: true }));
@@ -195,6 +229,10 @@ export default function ApiKeysPage() {
                     aria-label="Toggle Custom TTS API usage"
                 />
             </div>
+            <Button onClick={handleTestTts} disabled={isLoading || isTestingTts} variant="outline" size="sm">
+                {isTestingTts ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
+                Test TTS Voice
+            </Button>
           </>
         )}
       </CardContent>
@@ -345,3 +383,5 @@ export default function ApiKeysPage() {
     </Card>
   );
 }
+
+    
