@@ -616,7 +616,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
 
-                await speakText(greetingText, greetingMessage, startInactivityTimer);
+                await speakText(greetingText, greetingMessage, () => {
+                    if (communicationMode === 'audio-only') {
+                        toggleListening(true);
+                    } else {
+                        startInactivityTimer();
+                    }
+                });
                 
             } catch (error: any) {
                 console.error("Error generating or sending initial greeting:", error);
@@ -631,7 +637,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, startInactivityTimer, logErrorToFirestore]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, startInactivityTimer, logErrorToFirestore, communicationMode, toggleListening]);
     
     useEffect(() => {
         if (!isReady || communicationMode === 'text-only') return;
@@ -801,3 +807,4 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
