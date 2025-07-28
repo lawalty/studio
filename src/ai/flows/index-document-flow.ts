@@ -136,12 +136,11 @@ export async function indexDocument({
                 }
             }));
 
-            // The embedding is nested in the response.
             const embeddingVector = embeddingResponse?.[0]?.embedding;
 
-            // Validate the embedding response.
-            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length === 0) {
-              throw new Error(`Failed to generate a valid embedding for chunk number ${index + 1}. The embedding service returned an unexpected structure.`);
+            // Validate the embedding response. It MUST be 768 dimensions.
+            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length !== 768) {
+              throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}. The embedding service returned an invalid structure.`);
             }
 
             const newChunkDocRef = chunksCollection.doc();
@@ -152,7 +151,7 @@ export async function indexDocument({
               topic,
               text: chunkText,
               chunkNumber: index + 1,
-              embedding: embeddingVector, // Save the final, correct vector.
+              embedding: embeddingVector,
               createdAt: new Date().toISOString(),
               downloadURL: downloadURL || null,
               pageNumber: pageNumber || null,
@@ -231,5 +230,3 @@ export async function indexDocument({
         };
       }
 }
-
-    

@@ -27,6 +27,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
+import { exportEmbeddingsToGcs } from '@/ai/flows/export-embeddings-to-gcs-flow';
+
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
@@ -76,6 +78,7 @@ export default function KnowledgeBasePage() {
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   const [distanceThreshold, setDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
 
   // RAG Test State
@@ -431,6 +434,18 @@ export default function KnowledgeBasePage() {
           setOperationStatus(source.id, false);
       }
   }, [toast]);
+  
+  const handleExport = async () => {
+    setIsExporting(true);
+    toast({ title: "Exporting Embeddings...", description: "This feature is deprecated and will be removed."});
+    const result = await exportEmbeddingsToGcs();
+    if (result.success) {
+      toast({ title: "Export Complete", description: "Embeddings exported to Google Cloud Storage."});
+    } else {
+      toast({ title: "Export Failed", description: result.error, variant: 'destructive', duration: 10000 });
+    }
+    setIsExporting(false);
+  };
 
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
@@ -767,7 +782,20 @@ export default function KnowledgeBasePage() {
               )}
             </CardContent>
           </Card>
-
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><DownloadCloud /> Vertex AI Index</CardTitle>
+              <CardDescription>
+                This action is deprecated. Use the RAG test above to test search.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button onClick={handleExport} disabled={isExporting}>
+                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                    Export Embeddings (Deprecated)
+                </Button>
+            </CardContent>
+          </Card>
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
