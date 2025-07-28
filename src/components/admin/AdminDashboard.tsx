@@ -87,7 +87,7 @@ export default function AdminDashboard() {
         <AccordionItem value="admin-controls" className="border rounded-lg">
           <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
             <span className="mr-4">Admin Controls</span>
-            <span className="flex-grow border-b border-dashed border-border"></span>
+            <span className="flex-grow border-b border-dashed border-muted-foreground/30"></span>
           </AccordionTrigger>
           <AccordionContent className="px-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
@@ -102,7 +102,7 @@ export default function AdminDashboard() {
         <AccordionItem value="error-board" className="border rounded-lg">
           <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
              <span className="mr-4">Error Board ({isLoadingErrors ? '...' : siteErrors.length})</span>
-             <span className="flex-grow border-b border-dashed border-border"></span>
+             <span className="flex-grow border-b border-dashed border-muted-foreground/30"></span>
           </AccordionTrigger>
           <AccordionContent className="px-6 pt-2">
             <Card className="shadow-none border-none -m-6">
