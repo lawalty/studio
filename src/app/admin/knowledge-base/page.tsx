@@ -17,7 +17,7 @@ import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-u
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { testSearch, type SearchResult } from '@/ai/flows/test-search-flow';
-import { exportEmbeddingsToGcs } from '@/ai/flows/export-embeddings-to-gcs-flow';
+import { exportEmbeddingsToGcs, type ExportEmbeddingsToGcsOutput } from '@/ai/flows/export-embeddings-to-gcs-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, DownloadCloud } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -27,6 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
+import { Alert } from '@/components/ui/alert';
 
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
@@ -76,6 +77,7 @@ export default function KnowledgeBasePage() {
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   const [isExporting, setIsExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<ExportEmbeddingsToGcsOutput | null>(null);
   const [distanceThreshold, setDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const { toast } = useToast();
@@ -211,24 +213,15 @@ export default function KnowledgeBasePage() {
   
   const handleExport = async () => {
     setIsExporting(true);
+    setExportResult(null); // Clear previous results
     toast({ title: 'Starting Export...', description: 'Gathering embeddings from Firestore. This may take a moment.' });
     try {
         const result = await exportEmbeddingsToGcs();
+        setExportResult(result);
         if (result.success) {
             toast({
                 title: 'Export Successful!',
-                description: (
-                    <div className="flex flex-col gap-2">
-                        <span>{`${result.count} embeddings exported.`}</span>
-                        <span className="text-xs">
-                            Path: <Input readOnly value={result.gcsPath} className="mt-1 h-8 text-xs" />
-                        </span>
-                        <span>
-                            You can now use this path to update your Vertex AI Index.
-                        </span>
-                    </div>
-                ),
-                duration: 20000,
+                description: `Created file with ${result.count} embeddings. You can now copy the path.`,
             });
         } else {
             throw new Error(result.error || 'An unknown error occurred during export.');
@@ -239,6 +232,7 @@ export default function KnowledgeBasePage() {
             description: e.message,
             variant: 'destructive',
         });
+        setExportResult({ success: false, error: e.message });
     } finally {
         setIsExporting(false);
     }
@@ -745,6 +739,28 @@ export default function KnowledgeBasePage() {
                     {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
                     Export Embeddings for Index
                 </Button>
+                {exportResult && (
+                  <div className="mt-4">
+                    {exportResult.success ? (
+                      <Alert>
+                          <CheckCircle className="h-4 w-4" />
+                          <CardTitle className="text-sm font-semibold">Export Successful</CardTitle>
+                          <CardDescription className="text-xs mt-1">
+                              {`${exportResult.count} embeddings exported. You can now use this path to update your Vertex AI Index.`}
+                          </CardDescription>
+                          <Input readOnly value={exportResult.gcsPath} className="mt-2 h-8 text-xs" />
+                      </Alert>
+                    ) : (
+                      <Alert variant="destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          <CardTitle className="text-sm font-semibold">Export Failed</CardTitle>
+                          <CardDescription className="text-xs mt-1 break-words">
+                              {exportResult.error}
+                          </CardDescription>
+                      </Alert>
+                    )}
+                  </div>
+                )}
             </CardContent>
           </Card>
           
