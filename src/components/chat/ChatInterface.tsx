@@ -746,9 +746,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         <Mic size={20} className="mr-2" /> {uiText.listening}
                     </div>
                  ) : isSpeaking ? null : (
-                   <Button onClick={() => toggleListening(true)} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
-                     <Mic className="h-8 w-8" />
-                   </Button>
+                    <Button onClick={() => toggleListening(true)} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
+                        <Mic className="h-8 w-8" />
+                    </Button>
                  )}
               </div>
                <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
