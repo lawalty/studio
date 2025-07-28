@@ -375,7 +375,6 @@ export default function KnowledgeBasePage() {
     }
   };
 
-
   const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
       if (source.level === newLevel) return;
       setOperationStatus(source.id, true);
@@ -591,6 +590,7 @@ export default function KnowledgeBasePage() {
         </AccordionItem>
     );
   };
+  
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
       <div>
