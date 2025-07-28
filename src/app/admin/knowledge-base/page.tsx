@@ -16,8 +16,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
-import type { SearchResult } from '@/ai/retrieval/vector-search';
+import { testSearch } from '@/ai/flows/test-search-flow';
+import type { SearchResult } from '@/ai/flows/test-search-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, Terminal } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -591,8 +591,6 @@ export default function KnowledgeBasePage() {
         </AccordionItem>
     );
   };
-
-
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
       <div>
@@ -667,7 +665,7 @@ export default function KnowledgeBasePage() {
               </Button>
             </CardFooter>
           </Card>
-                    
+
           <Card>
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><Wrench /> RAG Test</CardTitle>
@@ -735,26 +733,29 @@ export default function KnowledgeBasePage() {
               )}
             </CardContent>
           </Card>
-           <Card className="border-destructive">
-                <CardHeader>
-                    <CardTitle className="text-destructive flex items-center gap-2">
-                        <Terminal /> Action Required: Create Index
-                    </CardTitle>
-                    <CardDescription>
-                        Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
-                        <code>
-                            gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding
-                        </code>
-                    </pre>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Note: Index creation can take several minutes. You only need to run this command once for your project.
-                    </p>
-                </CardContent>
+          
+          {ragTestError?.includes("Missing vector index configuration") && (
+            <Card className="border-destructive">
+                  <CardHeader>
+                      <CardTitle className="text-destructive flex items-center gap-2">
+                          <Terminal /> Action Required: Create Index
+                      </CardTitle>
+                      <CardDescription>
+                          Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
+                      </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
+                          <code>
+                              gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding
+                          </code>
+                      </pre>
+                      <p className="text-xs text-muted-foreground mt-2">
+                          Note: Index creation can take several minutes. You only need to run this command once for your project.
+                      </p>
+                  </CardContent>
             </Card>
+          )}
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
@@ -770,5 +771,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
