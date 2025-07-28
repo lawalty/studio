@@ -272,7 +272,6 @@ export default function KnowledgeBasePage() {
   
   const { toast } = useToast();
 
-  // RAG Test State
   const [ragTestQuery, setRagTestQuery] = useState('');
   const [isTestingRag, setIsTestingRag] = useState(false);
   const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
@@ -281,9 +280,9 @@ export default function KnowledgeBasePage() {
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
-  const setOperationStatus = (id: string, status: boolean) => {
+  const setOperationStatus = useCallback((id: string, status: boolean) => {
     setOperationInProgress(prev => ({ ...prev, [id]: status }));
-  };
+  }, []);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -406,7 +405,7 @@ export default function KnowledgeBasePage() {
     } finally {
       setOperationStatus(source.id, false);
     }
-  }, [toast]);
+  }, [toast, setOperationStatus]);
   
   const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
@@ -461,7 +460,7 @@ export default function KnowledgeBasePage() {
     } finally {
         setOperationStatus(source.id, false);
     }
-  }, [toast]);
+  }, [toast, setOperationStatus]);
 
   const handleFileUpload = useCallback(async () => {
     if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
@@ -566,7 +565,7 @@ export default function KnowledgeBasePage() {
         setIsCurrentlyUploading(false);
         setOperationStatus(sourceId, false);
     }
-  }, [selectedFile, selectedTopicForUpload, selectedLevelForUpload, linkedEnglishSourceIdForUpload, uploadDescription, toast]);
+  }, [selectedFile, selectedTopicForUpload, selectedLevelForUpload, linkedEnglishSourceIdForUpload, uploadDescription, toast, setOperationStatus]);
 
   const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
       if (source.level === newLevel) return;
@@ -607,7 +606,7 @@ export default function KnowledgeBasePage() {
       } finally {
           setOperationStatus(source.id, false);
       }
-  }, [toast]);
+  }, [toast, setOperationStatus]);
   
 
   return (
@@ -747,7 +746,7 @@ export default function KnowledgeBasePage() {
                             <CardContent>
                                 <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
                                     <code>
-                                        gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION '--field-config=field-path=embedding,vector-config={"dimension":768,"flat":{}}'
+                                        gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding
                                     </code>
                                 </pre>
                             </CardContent>
