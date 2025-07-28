@@ -318,10 +318,42 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
+
+    const toggleListening = useCallback((shouldListen?: boolean) => {
+        if (recognitionRef.current) {
+            const currentlyListening = isListening; // Capture state before any async operations
+            const turnOn = shouldListen === true;
+            const turnOff = shouldListen === false;
+
+            if (turnOff && currentlyListening) {
+                recognitionRef.current.stop();
+            } else if (turnOn && !currentlyListening) {
+                if (!hasConversationEnded && !isSpeaking && !isSendingMessage) {
+                    try {
+                        finalTranscriptRef.current = '';
+                        recognitionRef.current.start();
+                    } catch (e: any) {
+                        logErrorToFirestore(e, 'ChatInterface/toggleListening');
+                    }
+                }
+            } else if (shouldListen === undefined) { // Toggle logic
+                if (currentlyListening) {
+                    recognitionRef.current.stop();
+                } else if (!hasConversationEnded && !isSpeaking && !isSendingMessage) {
+                    try {
+                        finalTranscriptRef.current = '';
+                        recognitionRef.current.start();
+                    } catch (e: any) {
+                        logErrorToFirestore(e, 'ChatInterface/toggleListening');
+                    }
+                }
+            }
+        }
+    }, [isListening, hasConversationEnded, isSpeaking, isSendingMessage, logErrorToFirestore]);
     
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
-        if (isListening) recognitionRef.current?.stop();
+        toggleListening(false);
         if (isSpeaking) {
             if (audioPlayerRef.current) audioPlayerRef.current.pause();
             window.speechSynthesis.cancel();
@@ -341,12 +373,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } else {
             setHasConversationEnded(true);
         }
-    }, [clearInactivityTimer, isListening, isSpeaking, uiText.inactivityEndMessage, speakText, translate]);
+    }, [clearInactivityTimer, isSpeaking, uiText.inactivityEndMessage, speakText, translate, toggleListening]);
 
 
     const startInactivityTimer = useCallback(() => {
         clearInactivityTimer();
-        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
+        if (hasConversationEnded) return;
 
         inactivityTimerRef.current = setTimeout(async () => {
             if (isSpeaking || isListening) return;
@@ -360,14 +392,18 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const translatedPrompt = await translate(promptText);
                 const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
                 speakText(translatedPrompt, promptMessage, () => {
-                    startInactivityTimer();
+                    if (communicationMode === 'audio-only') {
+                        toggleListening(true);
+                    } else {
+                        startInactivityTimer();
+                    }
                 });
             } else {
                 inactivityCheckLevelRef.current = 0;
                 handleEndChatManually('final-inactive');
             }
         }, configRef.current.responsePauseTimeMs);
-    }, [clearInactivityTimer, communicationMode, hasConversationEnded, translate, uiText, speakText, handleEndChatManually, isSpeaking, isListening]);
+    }, [clearInactivityTimer, hasConversationEnded, translate, uiText, speakText, handleEndChatManually, isSpeaking, isListening, communicationMode, toggleListening]);
     
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isSendingMessage) return;
@@ -636,19 +672,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
     }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore]);
 
-    const toggleListening = useCallback(() => {
-        if (isListening) {
-            recognitionRef.current?.stop();
-        } else if (!hasConversationEnded && !isSpeaking && !isSendingMessage) {
-            try {
-                finalTranscriptRef.current = '';
-                recognitionRef.current?.start();
-            } catch (e: any) {
-                logErrorToFirestore(e, 'ChatInterface/toggleListening');
-            }
-        }
-    }, [isListening, hasConversationEnded, isSpeaking, isSendingMessage, logErrorToFirestore]);
-
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
         try {
@@ -714,7 +737,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         <Mic size={20} className="mr-2" /> {uiText.listening}
                     </div>
                  ) : isSpeaking ? null : (
-                   <Button onClick={toggleListening} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
+                   <Button onClick={() => toggleListening()} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
                      <Mic className="h-8 w-8" />
                    </Button>
                  )}
@@ -752,7 +775,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={configRef.current.avatarSrc} />
           <MessageInput
             onSendMessage={handleSendMessage} isSending={isSendingMessage} isSpeaking={isSpeaking}
-            showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
+            showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={() => toggleListening()}
             inputValue={inputValue} onInputValueChange={setInputValue} disabled={hasConversationEnded}
           />
           {hasConversationEnded ? (
