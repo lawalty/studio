@@ -292,19 +292,30 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
-
-    const handleEndChatManually = useCallback((reason?: 'final-inactive') => {
+    
+    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
         if (isListening) recognitionRef.current?.stop();
         if (isSpeaking) {
-          if (audioPlayerRef.current) audioPlayerRef.current.pause();
-          window.speechSynthesis.cancel();
+            if (audioPlayerRef.current) audioPlayerRef.current.pause();
+            window.speechSynthesis.cancel();
         }
+        
         if (reason === 'final-inactive') {
-            addMessage(uiText.inactivityEndMessage, 'model');
+            const finalMessage: Message = { 
+                id: uuidv4(), 
+                text: uiText.inactivityEndMessage, 
+                sender: 'model', 
+                timestamp: Date.now() 
+            };
+            await speakText(uiText.inactivityEndMessage, finalMessage, () => {
+                setHasConversationEnded(true);
+            });
+        } else {
+            setHasConversationEnded(true);
         }
-        setHasConversationEnded(true);
-    }, [clearInactivityTimer, isListening, isSpeaking, addMessage, uiText.inactivityEndMessage]);
+    }, [clearInactivityTimer, isListening, isSpeaking, uiText.inactivityEndMessage, speakText]);
+
 
     const startInactivityTimer = useCallback(() => {
         clearInactivityTimer();
@@ -725,3 +736,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
