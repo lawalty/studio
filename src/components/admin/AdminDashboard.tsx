@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle, Trash2, ServerCrash } from 'lucide-react';
+import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle, Trash2, ServerCrash, Download } from 'lucide-react';
 import AdminNavLinkCard from '@/components/admin/AdminNavLinkCard';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -83,7 +83,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <Accordion type="multiple" collapsible className="w-full space-y-4">
+      <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
         <AccordionItem value="admin-controls" className="border rounded-lg">
           <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
             <span className="mr-4">Admin Controls</span>
@@ -146,7 +146,13 @@ export default function AdminDashboard() {
       
       {/* Usage Statistics */}
       <section>
-        <h2 className="text-2xl font-semibold tracking-tight mb-4">Usage Statistics</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-semibold tracking-tight">Usage Statistics</h2>
+          <Button variant="outline" size="icon" disabled>
+              <Download className="h-4 w-4" />
+              <span className="sr-only">Download Report</span>
+          </Button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
