@@ -405,8 +405,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
             speakText(translatedPrompt, promptMessage, () => {
-                toggleListening(true); // Always listen after the prompt
-                // The onend event of the speech recognition will restart the timer if no speech is detected.
+                toggleListening(true);
             });
 
         }, configRef.current.responsePauseTimeMs);
@@ -617,18 +616,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
 
                 await speakText(greetingText, greetingMessage, () => {
-                    if (communicationMode === 'audio-only') {
-                        toggleListening(true);
-                    } else {
-                        startInactivityTimer();
-                    }
+                    toggleListening(true);
                 });
                 
             } catch (error: any) {
                 console.error("Error generating or sending initial greeting:", error);
                 await logErrorToFirestore(error, 'ChatInterface/sendInitialGreeting');
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
-                await speakText(greetingText, fallbackMessage, startInactivityTimer);
+                await speakText(greetingText, fallbackMessage, () => toggleListening(true));
             } finally {
                 setIsSendingMessage(false);
             }
@@ -637,7 +632,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, startInactivityTimer, logErrorToFirestore, communicationMode, toggleListening]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, toggleListening]);
     
     useEffect(() => {
         if (!isReady || communicationMode === 'text-only') return;
@@ -660,8 +655,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (finalTranscriptRef.current.trim()) {
                 handleSendMessage(finalTranscriptRef.current.trim());
             } else {
-                // This is key for the inactivity timer: if recognition ends with no speech,
-                // it means the user was silent, so we restart the timer to check again.
                 startInactivityTimer();
             }
             finalTranscriptRef.current = '';
@@ -736,6 +729,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }
 
     if (communicationMode === 'audio-only') {
+      const showListeningMessage = isListening && !isSendingMessage && !isSpeaking;
+      const showPreparingMessage = isSendingMessage && !isSpeaking;
+
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-6">
           {!hasConversationEnded ? (
@@ -745,16 +741,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 {configRef.current.splashScreenWelcomeMessage}
               </h2>
               <div className="flex h-16 w-full items-center justify-center">
-                 {isSendingMessage ? (
-                    <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>
-                 ) : isListening ? (
+                 {showPreparingMessage && <div className="font-bold text-lg text-primary animate-pulse">{uiText.isPreparing}</div>}
+                 {showListeningMessage && (
                     <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse">
                         <Mic size={20} className="mr-2" /> {uiText.listening}
                     </div>
-                 ) : isSpeaking ? null : (
-                    <Button onClick={() => toggleListening(true)} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
-                        <Mic className="h-8 w-8" />
-                    </Button>
                  )}
               </div>
                <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
@@ -807,4 +798,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
