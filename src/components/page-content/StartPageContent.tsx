@@ -172,14 +172,18 @@ export default function StartPageContent() {
     let typingTimer: NodeJS.Timeout | null = null;
 
     const playAudio = () => {
-        if (audioRef.current) {
-            audioRef.current.currentTime = 0;
-            audioRef.current.play().catch(error => {
-                // Autoplay was prevented. This is common in browsers.
-                // We can let the user interaction (clicking a chat mode) enable sound later.
-                console.warn("Audio autoplay was prevented:", error);
-            });
-        }
+      // Check session storage to see if the audio has already been played.
+      if (sessionStorage.getItem('hasPlayedWelcomeAudio') === 'true') {
+        return; // Do not play if the flag is set.
+      }
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(error => {
+          console.warn("Audio autoplay was prevented:", error);
+        });
+        // Set the flag in session storage after playing.
+        sessionStorage.setItem('hasPlayedWelcomeAudio', 'true');
+      }
     };
     
     if (!isLoading && isImageLoaded && !configError) {
