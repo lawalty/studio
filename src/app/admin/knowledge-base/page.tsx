@@ -16,8 +16,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { testSearch, type SearchResult } from '@/ai/flows/test-search-flow';
-import { exportEmbeddingsToGcs, type ExportEmbeddingsToGcsOutput } from '@/ai/flows/export-embeddings-to-gcs-flow';
+import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
+import type { SearchResult } from '@/ai/retrieval/vector-search';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, DownloadCloud } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -27,8 +27,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
-import { Alert, AlertDescription as AlertDescriptionComponent } from '@/components/ui/alert';
-
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
@@ -76,8 +74,6 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportResult, setExportResult] = useState<ExportEmbeddingsToGcsOutput | null>(null);
   const [distanceThreshold, setDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const { toast } = useToast();
@@ -88,7 +84,7 @@ export default function KnowledgeBasePage() {
   const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
   const [ragTestError, setRagTestError] = useState<string | null>(null);
 
-  const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status) || isExporting;
+  const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
   const setOperationStatus = (id: string, status: boolean) => {
     setOperationInProgress(prev => ({ ...prev, [id]: status }));
@@ -176,7 +172,7 @@ export default function KnowledgeBasePage() {
         await setDoc(docRef, { vectorSearchDistanceThreshold: distanceThreshold[0] }, { merge: true });
         toast({
             title: "Threshold Saved",
-            description: `Distance threshold set to ${distanceThreshold[0]}.`,
+            description: `Similarity threshold set to ${distanceThreshold[0]}.`,
         });
     } catch (error: any) {
         toast({
@@ -198,46 +194,14 @@ export default function KnowledgeBasePage() {
       setRagTestResults(null);
       setRagTestError(null);
       try {
-          const { results, error } = await testSearch({ query: ragTestQuery });
-          if (error) {
-              setRagTestError(error);
-          } else {
-              setRagTestResults(results);
-          }
+          const results = await searchKnowledgeBase({ query: ragTestQuery, distanceThreshold: distanceThreshold[0] });
+          setRagTestResults(results);
       } catch (e: any) {
           setRagTestError(`An unexpected error occurred: ${e.message}`);
       } finally {
           setIsTestingRag(false);
       }
   };
-  
-  const handleExport = async () => {
-    setIsExporting(true);
-    setExportResult(null); // Clear previous results
-    toast({ title: 'Starting Export...', description: 'Gathering embeddings from Firestore. This may take a moment.' });
-    try {
-        const result = await exportEmbeddingsToGcs();
-        setExportResult(result);
-        if (result.success) {
-            toast({
-                title: 'Export Successful!',
-                description: `Created file with ${result.count} embeddings. You can now copy the folder path below.`,
-            });
-        } else {
-            throw new Error(result.error || 'An unknown error occurred during export.');
-        }
-    } catch (e: any) {
-        toast({
-            title: 'Export Failed',
-            description: e.message,
-            variant: 'destructive',
-        });
-        setExportResult({ success: false, error: e.message });
-    } finally {
-        setIsExporting(false);
-    }
-  };
-
 
   const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
@@ -247,7 +211,6 @@ export default function KnowledgeBasePage() {
         id: source.id,
         level: source.level,
         sourceName: source.sourceName,
-        // Pass optional fields to satisfy the updated schema
         pageNumber: source.pageNumber,
         title: source.title,
         header: source.header,
@@ -346,7 +309,6 @@ export default function KnowledgeBasePage() {
     let sourceDocRef: ReturnType<typeof doc> | null = null;
 
     try {
-        // Step 1: Create the Firestore document FIRST to make it appear in the UI.
         const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
         sourceDocRef = doc(db, collectionName, sourceId);
         
@@ -362,7 +324,6 @@ export default function KnowledgeBasePage() {
         }
         await setDoc(sourceDocRef, newSourceData);
 
-        // Step 2: Upload file to Cloud Storage.
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
         await uploadBytes(fileRef, fileToUpload).catch(storageError => {
@@ -375,13 +336,11 @@ export default function KnowledgeBasePage() {
         const downloadURL = await getDownloadURL(fileRef);
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
         
-        // Step 3: Extract text from the now-uploaded file.
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
 
-        // Step 4: Call the indexing flow.
         await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
 
         const indexInput: Parameters<typeof indexDocument>[0] = {
@@ -397,14 +356,12 @@ export default function KnowledgeBasePage() {
         }
         const indexingResult = await indexDocument(indexInput);
 
-        // Step 5: Final Validation.
         if (!indexingResult.success || indexingResult.chunksWritten === 0) {
             throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
         }
 
         toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
 
-        // Reset form on full success.
         setSelectedFile(null);
         setUploadDescription('');
         setLinkedEnglishSourceIdForUpload('');
@@ -448,7 +405,6 @@ export default function KnowledgeBasePage() {
           const sourceData = docSnap.data();
 
           const newDocData: Record<string, any> = { ...sourceData, level: newLevel };
-          // If moving out of Spanish PDFs, remove the link.
           if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
             delete newDocData.linkedEnglishSourceId;
           }
@@ -657,7 +613,7 @@ export default function KnowledgeBasePage() {
       <div>
         <h1 className="text-3xl font-bold font-headline text-primary">Knowledge Base Management</h1>
         <p className="text-muted-foreground">
-          Manage the documents and sources that form the AI&apos;s knowledge. Upload new content, move sources between priority levels, or remove them entirely.
+          Manage the documents and sources that form the AI's knowledge. Upload new content, move sources between priority levels, or remove them entirely.
         </p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -720,48 +676,11 @@ export default function KnowledgeBasePage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress || !selectedTopicForUpload}>
+              <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress || !selectedTopicForUpload || isCurrentlyUploading}>
                 {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                 Upload and Process
               </Button>
             </CardFooter>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2"><DownloadCloud /> Vertex AI Index</CardTitle>
-                <CardDescription>
-                    Export embeddings to a file in Cloud Storage. Provide the GCS folder path to Vertex AI to update your search index.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Button onClick={handleExport} disabled={anyOperationGloballyInProgress}>
-                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                    Export Embeddings
-                </Button>
-                {exportResult && (
-                  <div className="mt-4">
-                    {exportResult.success ? (
-                      <Alert>
-                          <CheckCircle className="h-4 w-4" />
-                          <CardTitle className="text-sm font-semibold">Export Successful</CardTitle>
-                          <AlertDescriptionComponent className="text-xs mt-1">
-                              {`${exportResult.count} embeddings exported. Use this GCS folder path to update your Vertex AI Index.`}
-                          </AlertDescriptionComponent>
-                          <Input readOnly value={exportResult.gcsPath} className="mt-2 h-8 text-xs" />
-                      </Alert>
-                    ) : (
-                      <Alert variant="destructive">
-                          <AlertTriangle className="h-4 w-4" />
-                          <CardTitle className="text-sm font-semibold">Export Failed</CardTitle>
-                          <AlertDescriptionComponent className="text-xs mt-1 break-words">
-                              {exportResult.error}
-                          </AlertDescriptionComponent>
-                      </Alert>
-                    )}
-                  </div>
-                )}
-            </CardContent>
           </Card>
           
           <Card>
@@ -773,7 +692,7 @@ export default function KnowledgeBasePage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="distance-threshold">Distance Threshold: {distanceThreshold[0]}</Label>
+                    <Label htmlFor="distance-threshold">Similarity Threshold: {distanceThreshold[0]}</Label>
                     <Slider
                         id="distance-threshold"
                         min={0.1}
@@ -833,7 +752,7 @@ export default function KnowledgeBasePage() {
                       {ragTestResults.map((result, index) => (
                         <div key={index} className="mb-4 pb-4 border-b last:border-b-0">
                           <p className="text-xs text-muted-foreground">
-                            <strong>Source:</strong> {result.sourceName} | <strong>Level:</strong> {result.level} | <strong>Distance:</strong> {result.distance.toFixed(4)}
+                            <strong>Source:</strong> {result.sourceName} | <strong>Level:</strong> {result.level} | <strong>Similarity:</strong> {result.distance.toFixed(4)}
                           </p>
                           <blockquote className="mt-2 border-l-2 pl-4 italic text-sm">
                             {result.text}
@@ -842,7 +761,7 @@ export default function KnowledgeBasePage() {
                       ))}
                     </ScrollArea>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No relevant chunks found in the knowledge base for this query and the current distance threshold.</p>
+                    <p className="text-sm text-muted-foreground">No relevant chunks found in the knowledge base for this query and the current similarity threshold.</p>
                   )}
                 </div>
               )}

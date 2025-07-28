@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow for testing the vector search functionality from the client.
@@ -17,6 +18,7 @@ export type SearchResult = ClientSearchResult;
 
 const TestSearchInputSchema = z.object({
   query: z.string().min(1, "Query cannot be empty."),
+  distanceThreshold: z.number().optional(),
 });
 export type TestSearchInput = z.infer<typeof TestSearchInputSchema>;
 
@@ -28,7 +30,10 @@ export type TestSearchOutput = z.infer<typeof TestSearchOutputSchema>;
 
 export async function testSearch(input: TestSearchInput): Promise<TestSearchOutput> {
   try {
-    const searchResults = await searchKnowledgeBase({ query: input.query });
+    const searchResults = await searchKnowledgeBase({ 
+        query: input.query,
+        distanceThreshold: input.distanceThreshold,
+    });
     return { results: searchResults };
   } catch (e: any) {
     console.error('[testSearchFlow] Search test failed:', e);
