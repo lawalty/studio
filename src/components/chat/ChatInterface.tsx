@@ -175,6 +175,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         errorEncountered: "Sorry, I encountered an error. Please try again.",
         chatLogTitle: "Chat with AI Blair",
         inactivityPrompt: "Are you still there?",
+        inactivityPromptInitial: "Is anyone there?",
         inactivityEndMessage: "It sounds like no one is available, so I'll end our conversation now. Feel free to start a new chat anytime!"
     };
 
@@ -310,7 +311,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 sender: 'model', 
                 timestamp: Date.now() 
             };
-            await speakText(translatedEndMessage, finalMessage, () => {
+            speakText(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
         } else {
@@ -328,7 +329,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
             if (inactivityCheckLevelRef.current === 0) {
                 inactivityCheckLevelRef.current = 1;
-                const translatedPrompt = await translate(uiText.inactivityPrompt);
+                
+                // Determine which prompt to use based on conversation history
+                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
+                const promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+
+                const translatedPrompt = await translate(promptText);
                 const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
                 speakText(translatedPrompt, promptMessage, () => {
                     startInactivityTimer(); // Start the *next* timer after the prompt is spoken
@@ -338,7 +344,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 handleEndChatManually('final-inactive');
             }
         }, configRef.current.responsePauseTimeMs);
-    }, [clearInactivityTimer, communicationMode, hasConversationEnded, translate, uiText.inactivityPrompt, speakText, handleEndChatManually, isSpeaking, isListening]);
+    }, [clearInactivityTimer, communicationMode, hasConversationEnded, translate, uiText, speakText, handleEndChatManually, isSpeaking, isListening]);
     
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isSendingMessage) return;
@@ -475,10 +481,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     useCustomTts: typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : false,
                     archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
                 };
-
-                // After fetching, translate the inactivity prompt once
-                await translate(uiText.inactivityPrompt);
-                await translate(uiText.inactivityEndMessage);
             }
           } catch (e) {
             toast({ title: "Config Error", description: `Could not load app settings. Using defaults.`, variant: "destructive" });
@@ -727,5 +729,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
