@@ -40,6 +40,7 @@ const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
+const INACTIVITY_TIMEOUT_MS = 30000; // 30 seconds
 
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
   const primaryBg = 'hsl(210 13% 50%)';
@@ -149,6 +150,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const recognitionRef = useRef<any | null>(null);
     const speechRecognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -170,7 +172,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         micErrorTitle: "Microphone Error",
         micErrorDesc: "Could not start microphone.",
         errorEncountered: "Sorry, I encountered an error. Please try again.",
-        chatLogTitle: "Chat with AI Blair"
+        chatLogTitle: "Chat with AI Blair",
+        inactivityEndMessage: "No response detected. Ending the session. Feel free to start a new chat anytime!"
     };
 
     const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference']) => {
@@ -178,6 +181,34 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setMessages(prev => [...prev, newMessage]);
     }, []);
     
+    const handleEndChatManually = useCallback((reason?: 'inactive') => {
+        if (isListening) recognitionRef.current?.stop();
+        if (isSpeaking) {
+          if (audioPlayerRef.current) audioPlayerRef.current.pause();
+          window.speechSynthesis.cancel();
+        }
+        if (reason === 'inactive') {
+            addMessage(uiText.inactivityEndMessage, 'model');
+        }
+        setHasConversationEnded(true);
+    }, [isListening, isSpeaking, addMessage, uiText.inactivityEndMessage]);
+    
+    const startInactivityTimer = useCallback(() => {
+        if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+        if (communicationMode === 'audio-only') {
+            inactivityTimerRef.current = setTimeout(() => {
+                handleEndChatManually('inactive');
+            }, INACTIVITY_TIMEOUT_MS);
+        }
+    }, [communicationMode, handleEndChatManually]);
+    
+    const clearInactivityTimer = useCallback(() => {
+        if (inactivityTimerRef.current) {
+            clearTimeout(inactivityTimerRef.current);
+            inactivityTimerRef.current = null;
+        }
+    }, []);
+
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message) => {
         if (!textToSpeak.trim()) return;
 
@@ -223,6 +254,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     setAnimatedResponse(null);
                     // This is now the ONLY place the message is added for audio modes.
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                    startInactivityTimer();
                 };
                 
                 audioPlayerRef.current.src = audioDataUri;
@@ -247,6 +279,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setIsSpeaking(false);
                  // If audio fails, still add the message directly
                 addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                startInactivityTimer();
             }
         } else {
             // Text-only mode
@@ -281,12 +314,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
              // If TTS fails, the catch block already added it. No action needed here.
         }
     
-    }, [communicationMode, addMessage, configRef, toast]);
+    }, [communicationMode, addMessage, configRef, toast, startInactivityTimer]);
 
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isSendingMessage) return;
 
+        clearInactivityTimer();
         addMessage(text, 'user');
         setInputValue('');
         setIsSendingMessage(true);
@@ -325,7 +359,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             addMessage(errorMessage, 'model');
             setIsSendingMessage(false);
         }
-    }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered]);
+    }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered, clearInactivityTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -378,8 +412,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [toast]);
     
     useEffect(() => {
-        if (hasConversationEnded) archiveAndIndexChat(messages);
-    }, [hasConversationEnded, messages, archiveAndIndexChat]);
+        if (hasConversationEnded) {
+            clearInactivityTimer();
+            archiveAndIndexChat(messages);
+        }
+    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer]);
     
     // ONE-TIME Effect for initial data load and setup.
     useEffect(() => {
@@ -423,6 +460,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         return () => { // Cleanup on unmount
             isMounted = false;
             dismissAllToasts();
+            clearInactivityTimer();
             if (speechRecognitionTimerRef.current) clearTimeout(speechRecognitionTimerRef.current);
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             if (recognitionRef.current) try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
@@ -503,14 +541,22 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         recognition.interimResults = true;
         recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
-        recognition.onstart = () => setIsListening(true);
+        recognition.onstart = () => {
+            setIsListening(true);
+            clearInactivityTimer();
+        };
         recognition.onend = () => {
             setIsListening(false);
-            if (finalTranscriptRef.current.trim()) handleSendMessage(finalTranscriptRef.current.trim());
+            if (finalTranscriptRef.current.trim()) {
+                handleSendMessage(finalTranscriptRef.current.trim());
+            } else {
+                startInactivityTimer();
+            }
             finalTranscriptRef.current = '';
         };
         recognition.onerror = (event: any) => {
           setIsListening(false);
+          startInactivityTimer();
           if (!['no-speech', 'aborted'].includes(event.error)) {
             toast({ title: uiText.micErrorTitle, description: event.error, variant: 'destructive' });
           }
@@ -527,7 +573,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (recognitionRef.current) recognitionRef.current.stop();
           }, configRef.current.responsePauseTimeMs);
         };
-    }, [isReady, communicationMode, language, handleSendMessage, toast, uiText.micErrorTitle]);
+    }, [isReady, communicationMode, language, handleSendMessage, toast, uiText.micErrorTitle, startInactivityTimer, clearInactivityTimer]);
 
     const toggleListening = useCallback(() => {
         if (isListening) {
@@ -541,15 +587,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
         }
     }, [isListening, hasConversationEnded, isSpeaking, isSendingMessage, toast, uiText.micErrorDesc, uiText.micErrorTitle]);
-
-    const handleEndChatManually = useCallback(() => {
-        if (isListening) recognitionRef.current?.stop();
-        if (isSpeaking) {
-          if (audioPlayerRef.current) audioPlayerRef.current.pause();
-          window.speechSynthesis.cancel();
-        }
-        setHasConversationEnded(true);
-    }, [isListening, isSpeaking]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
@@ -620,7 +657,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                    </Button>
                  )}
               </div>
-               <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
+               <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isSpeaking || isSendingMessage}>
                  <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
                </Button>
             </>
@@ -663,11 +700,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
              </div>
           ) : (
              <div className="mt-3 flex justify-end">
-                <Button onClick={handleEndChatManually} variant="outline" size="sm" disabled={isSendingMessage || isSpeaking}><Power className="mr-2 h-4 w-4" /> {uiText.endChat}</Button>
+                <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isSendingMessage || isSpeaking}><Power className="mr-2 h-4 w-4" /> {uiText.endChat}</Button>
              </div>
           )}
         </div>
       </div>
     );
 }
-
