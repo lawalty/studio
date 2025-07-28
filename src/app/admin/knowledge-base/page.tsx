@@ -747,7 +747,7 @@ export default function KnowledgeBasePage() {
                   <CardContent>
                       <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
                           <code>
-                              gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding
+                              gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=field-path=embedding,vector-config='{`"dimension":768,"flat":{}`}'
                           </code>
                       </pre>
                       <p className="text-xs text-muted-foreground mt-2">
@@ -771,3 +771,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
