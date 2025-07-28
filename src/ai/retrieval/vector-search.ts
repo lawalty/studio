@@ -1,8 +1,10 @@
 'use server';
 /**
  * @fileOverview Performs a vector-based semantic search on the knowledge base.
- * This version uses Firestore's native vector search capabilities with pre-filtering
- * to ensure only documents from specified priority levels are searched.
+ * This version uses Firestore's native vector search capabilities.
+ * NOTE: Firestore vector search does not currently support pre-filtering with
+ * 'in'/'not-in'/'array-contains-any'. Therefore, we fetch results from all
+ * levels and then filter them in the application code.
  */
 import { admin } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
@@ -55,13 +57,11 @@ export async function searchKnowledgeBase({
       throw new Error(`Failed to generate a valid 768-dimension embedding for the search query. Vector length received: ${queryEmbedding?.length || 0}`);
     }
     
-    // 2. Perform the vector search directly in Firestore with pre-filtering.
-    // This is the key change: we only search 'High', 'Medium', and 'Low' priority documents.
-    const chunksCollection = firestore.collection('kb_chunks')
-        .where('level', 'in', ['High', 'Medium', 'Low']);
+    // 2. Perform the vector search directly in Firestore on the entire collection.
+    const chunksCollection = firestore.collection('kb_chunks');
 
     const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
-        limit,
+        limit: limit * 2, // Fetch more results to allow for filtering
         distanceMeasure: 'COSINE'
     });
 
@@ -71,13 +71,16 @@ export async function searchKnowledgeBase({
       return [];
     }
 
-    // 3. Format the results, filtering by the distance threshold.
+    // 3. Format and filter the results in the application code.
     const results: SearchResult[] = [];
+    const validLevels = new Set(['High', 'Medium', 'Low']);
+
     querySnapshot.forEach(doc => {
-      // The 'distance' from a Firestore query is actually the similarity score (cosine similarity)
+      const data = doc.data();
       const similarity = doc.distance;
-      if (similarity >= distanceThreshold) {
-        const data = doc.data();
+      
+      // Post-query filtering
+      if (validLevels.has(data.level) && similarity >= distanceThreshold) {
         results.push({
           sourceId: data.sourceId,
           text: data.text,
@@ -93,8 +96,10 @@ export async function searchKnowledgeBase({
       }
     });
 
-    // Sort by highest similarity
-    return results.sort((a, b) => b.distance - a.distance);
+    // Sort by highest similarity and apply the final limit
+    return results
+        .sort((a, b) => b.distance - a.distance)
+        .slice(0, limit);
 
   } catch (error: any) {
     console.error('[searchKnowledgeBase] An error occurred during Firestore vector search:', error);
@@ -106,7 +111,7 @@ export async function searchKnowledgeBase({
     } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
       detailedError = `A permission error occurred while querying Firestore. Ensure the service account has the 'Cloud Datastore User' role. Full error: ${rawError}`;
     } else if (rawError.includes('INVALID_ARGUMENT')) {
-      detailedError = `The search query failed due to an invalid argument. This often means the embedding vector's dimensions do not match the Firestore index dimensions. This app requires a 768-dimension index. Full error: ${rawError}`;
+      detailedError = `The search query failed due to an invalid argument. This often means the embedding vector's dimensions do not match the Firestore index dimensions, or an unsupported query filter was used. This app requires a 768-dimension index. Full error: ${rawError}`;
     }
 
     throw new Error(detailedError);

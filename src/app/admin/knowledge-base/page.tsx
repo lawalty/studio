@@ -73,8 +73,7 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
-  const [distanceThreshold, setDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
-  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
+  
   const { toast } = useToast();
 
   // RAG Test State
@@ -82,6 +81,7 @@ export default function KnowledgeBasePage() {
   const [isTestingRag, setIsTestingRag] = useState(false);
   const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
   const [ragTestError, setRagTestError] = useState<string | null>(null);
+  const [ragDistanceThreshold, setRagDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
@@ -102,13 +102,6 @@ export default function KnowledgeBasePage() {
           setAvailableTopics(topicsArray);
           if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
             setSelectedTopicForUpload(topicsArray[0]);
-          }
-          // Fetch distance threshold
-          const storedThreshold = data.vectorSearchDistanceThreshold;
-          if (typeof storedThreshold === 'number') {
-            setDistanceThreshold([storedThreshold]);
-          } else {
-            setDistanceThreshold([INITIAL_DISTANCE_THRESHOLD]);
           }
         }
       } catch (error) {
@@ -164,26 +157,6 @@ export default function KnowledgeBasePage() {
     return () => unsubscribers.forEach(unsub => unsub());
   }, []);
 
-  const handleSaveThreshold = async () => {
-    setIsSavingThreshold(true);
-    try {
-        const docRef = doc(db, 'configurations/site_display_assets');
-        await setDoc(docRef, { vectorSearchDistanceThreshold: distanceThreshold[0] }, { merge: true });
-        toast({
-            title: "Threshold Saved",
-            description: `Similarity threshold set to ${distanceThreshold[0]}.`,
-        });
-    } catch (error: any) {
-        toast({
-            title: "Error Saving Threshold",
-            description: "Could not save the setting to Firestore.",
-            variant: "destructive",
-        });
-    } finally {
-        setIsSavingThreshold(false);
-    }
-  };
-
   const handleRunRagTest = async () => {
       if (!ragTestQuery.trim()) {
           toast({ title: 'Query is empty', description: 'Please enter a search query to test.', variant: 'destructive' });
@@ -193,8 +166,16 @@ export default function KnowledgeBasePage() {
       setRagTestResults(null);
       setRagTestError(null);
       try {
-          const results = await searchKnowledgeBase({ query: ragTestQuery, distanceThreshold: distanceThreshold[0] });
+          const results = await searchKnowledgeBase({ query: ragTestQuery, distanceThreshold: ragDistanceThreshold[0] });
           setRagTestResults(results);
+          if (results.length === 0) {
+            toast({
+              title: "0 Results Found",
+              description: "No relevant chunks were found. Try adjusting the similarity threshold slider below or re-indexing your document.",
+              variant: "default",
+              duration: 8000
+            })
+          }
       } catch (e: any) {
           setRagTestError(`An unexpected error occurred: ${e.message}`);
       } finally {
@@ -681,39 +662,7 @@ export default function KnowledgeBasePage() {
               </Button>
             </CardFooter>
           </Card>
-          
-          <Card>
-            <CardHeader>
-                <CardTitle className="font-headline flex items-center gap-2"><SlidersHorizontal /> RAG Tuning</CardTitle>
-                <CardDescription>
-                    Adjust the sensitivity of the Retrieval-Augmented Generation (RAG) system.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="distance-threshold">Similarity Threshold: {distanceThreshold[0]}</Label>
-                    <Slider
-                        id="distance-threshold"
-                        min={0.1}
-                        max={1}
-                        step={0.01}
-                        value={distanceThreshold}
-                        onValueChange={setDistanceThreshold}
-                        className="my-4"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                        Controls search strictness. A lower value (e.g., 0.2) requires a very close match. A higher value (e.g., 0.7) allows for more loosely related results. Default is {INITIAL_DISTANCE_THRESHOLD}.
-                    </p>
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button onClick={handleSaveThreshold} disabled={isSavingThreshold}>
-                    {isSavingThreshold ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save Threshold
-                </Button>
-            </CardFooter>
-          </Card>
-          
+                    
           <Card>
             <CardHeader>
               <CardTitle className="font-headline flex items-center gap-2"><Wrench /> RAG Test</CardTitle>
@@ -731,6 +680,21 @@ export default function KnowledgeBasePage() {
                   onChange={(e) => setRagTestQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleRunRagTest()}
                 />
+              </div>
+               <div className="space-y-4 pt-2">
+                  <Label htmlFor="distance-threshold">Similarity Threshold: {ragDistanceThreshold[0]}</Label>
+                  <Slider
+                      id="distance-threshold"
+                      min={0.1}
+                      max={1}
+                      step={0.01}
+                      value={ragDistanceThreshold}
+                      onValueChange={setRagDistanceThreshold}
+                      className="my-4"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                      Controls search strictness. Higher is stricter. Default is {INITIAL_DISTANCE_THRESHOLD}.
+                  </p>
               </div>
               <Button onClick={handleRunRagTest} disabled={isTestingRag}>
                 {isTestingRag ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
