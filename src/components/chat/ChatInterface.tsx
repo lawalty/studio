@@ -40,7 +40,6 @@ const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
-const INACTIVITY_TIMEOUT_MS = 30000; // 30 seconds
 
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
   const primaryBg = 'hsl(210 13% 50%)';
@@ -151,12 +150,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const recognitionRef = useRef<any | null>(null);
     const speechRecognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const inactivityCheckLevelRef = useRef<number>(0);
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Hooks
     const router = useRouter();
-    const { language } = useLanguage();
+    const { language, translate } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
     
     // UI Text (static)
@@ -173,44 +173,20 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         micErrorDesc: "Could not start microphone.",
         errorEncountered: "Sorry, I encountered an error. Please try again.",
         chatLogTitle: "Chat with AI Blair",
-        inactivityEndMessage: "No response detected. Ending the session. Feel free to start a new chat anytime!"
+        inactivityPrompt: "Are you still there?",
+        inactivityEndMessage: "It sounds like no one is available, so I'll end our conversation now. Feel free to start a new chat anytime!"
     };
 
     const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference']) => {
         const newMessage: Message = { id: uuidv4(), text, sender, timestamp: Date.now(), pdfReference };
         setMessages(prev => [...prev, newMessage]);
     }, []);
-    
-    const handleEndChatManually = useCallback((reason?: 'inactive') => {
-        if (isListening) recognitionRef.current?.stop();
-        if (isSpeaking) {
-          if (audioPlayerRef.current) audioPlayerRef.current.pause();
-          window.speechSynthesis.cancel();
-        }
-        if (reason === 'inactive') {
-            addMessage(uiText.inactivityEndMessage, 'model');
-        }
-        setHasConversationEnded(true);
-    }, [isListening, isSpeaking, addMessage, uiText.inactivityEndMessage]);
-    
-    const startInactivityTimer = useCallback(() => {
-        if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
-        if (communicationMode === 'audio-only') {
-            inactivityTimerRef.current = setTimeout(() => {
-                handleEndChatManually('inactive');
-            }, INACTIVITY_TIMEOUT_MS);
-        }
-    }, [communicationMode, handleEndChatManually]);
-    
-    const clearInactivityTimer = useCallback(() => {
-        if (inactivityTimerRef.current) {
-            clearTimeout(inactivityTimerRef.current);
-            inactivityTimerRef.current = null;
-        }
-    }, []);
 
-    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message) => {
-        if (!textToSpeak.trim()) return;
+    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
+        if (!textToSpeak.trim()) {
+            onSpeechEnd?.();
+            return;
+        };
 
         // Pre-process text for correct pronunciation before sending to any API.
         const processedText = textToSpeak
@@ -252,9 +228,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     setIsSpeaking(false);
                     if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
                     setAnimatedResponse(null);
-                    // This is now the ONLY place the message is added for audio modes.
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                    startInactivityTimer();
+                    onSpeechEnd?.();
                 };
                 
                 audioPlayerRef.current.src = audioDataUri;
@@ -277,9 +252,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } catch (e) {
                 console.error("TTS API Error:", e);
                 setIsSpeaking(false);
-                 // If audio fails, still add the message directly
                 addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                startInactivityTimer();
+                onSpeechEnd?.();
             }
         } else {
             // Text-only mode
@@ -299,28 +273,63 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     currentIndex++;
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                 } else {
-                    // Animation finished. If in text-only mode, this is where we update state.
                     if (!useAudio) {
                         setIsSpeaking(false);
                         setAnimatedResponse(null);
                         addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                        onSpeechEnd?.();
                     }
-                    // For audio modes, the audio.onended event handles the final state update.
                 }
             };
             typeCharacter();
-        } else {
-             // In audio-only mode, if TTS is successful, the onended handler will add the message.
-             // If TTS fails, the catch block already added it. No action needed here.
         }
     
-    }, [communicationMode, addMessage, configRef, toast, startInactivityTimer]);
+    }, [communicationMode, addMessage, configRef, toast]);
 
+    const clearInactivityTimer = useCallback(() => {
+        if (inactivityTimerRef.current) {
+            clearTimeout(inactivityTimerRef.current);
+            inactivityTimerRef.current = null;
+        }
+    }, []);
 
+    const handleEndChatManually = useCallback((reason?: 'final-inactive') => {
+        clearInactivityTimer();
+        if (isListening) recognitionRef.current?.stop();
+        if (isSpeaking) {
+          if (audioPlayerRef.current) audioPlayerRef.current.pause();
+          window.speechSynthesis.cancel();
+        }
+        if (reason === 'final-inactive') {
+            addMessage(uiText.inactivityEndMessage, 'model');
+        }
+        setHasConversationEnded(true);
+    }, [clearInactivityTimer, isListening, isSpeaking, addMessage, uiText.inactivityEndMessage]);
+
+    const startInactivityTimer = useCallback(() => {
+        clearInactivityTimer();
+        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
+
+        inactivityTimerRef.current = setTimeout(async () => {
+            if (inactivityCheckLevelRef.current === 0) {
+                inactivityCheckLevelRef.current = 1;
+                const translatedPrompt = await translate(uiText.inactivityPrompt);
+                const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
+                speakText(translatedPrompt, promptMessage, () => {
+                    startInactivityTimer();
+                });
+            } else {
+                inactivityCheckLevelRef.current = 0;
+                handleEndChatManually('final-inactive');
+            }
+        }, configRef.current.responsePauseTimeMs);
+    }, [clearInactivityTimer, communicationMode, hasConversationEnded, translate, uiText.inactivityPrompt, speakText, handleEndChatManually]);
+    
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isSendingMessage) return;
 
         clearInactivityTimer();
+        inactivityCheckLevelRef.current = 0;
         addMessage(text, 'user');
         setInputValue('');
         setIsSendingMessage(true);
@@ -349,17 +358,22 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             };
             
             setIsSendingMessage(false);
-            await speakText(result.aiResponse, aiMessage);
+            await speakText(result.aiResponse, aiMessage, () => {
+                if (result.shouldEndConversation) {
+                    setHasConversationEnded(true);
+                } else {
+                    startInactivityTimer();
+                }
+            });
 
-            if (result.shouldEndConversation) setHasConversationEnded(true);
-            
         } catch (error: any) {
             console.error("Error in generateChatResponse:", error);
             const errorMessage = error.message || uiText.errorEncountered;
             addMessage(errorMessage, 'model');
             setIsSendingMessage(false);
+            startInactivityTimer();
         }
-    }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered, clearInactivityTimer]);
+    }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered, clearInactivityTimer, startInactivityTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -509,7 +523,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     };
 
                     setIsSendingMessage(false);
-                    await speakText(greetingText, greetingMessage);
+                    await speakText(greetingText, greetingMessage, () => {
+                        startInactivityTimer();
+                    });
 
                 } catch (error) {
                     console.error("Error generating or sending initial greeting:", error);
@@ -521,12 +537,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         timestamp: Date.now()
                     };
                     setIsSendingMessage(false);
-                    await speakText(greetingText, fallbackMessage);
+                    await speakText(greetingText, fallbackMessage, () => {
+                        startInactivityTimer();
+                    });
                 }
             };
             sendInitialGreeting();
         }
-    }, [isReady, messages.length, language, speakText]);
+    }, [isReady, messages.length, language, speakText, startInactivityTimer]);
     
     // Effect for speech recognition setup
     useEffect(() => {
