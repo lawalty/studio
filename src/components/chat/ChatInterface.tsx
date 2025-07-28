@@ -204,58 +204,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
     
-    const clearInactivityTimer = useCallback(() => {
-        if (inactivityTimerRef.current) {
-            clearTimeout(inactivityTimerRef.current);
-            inactivityTimerRef.current = null;
-        }
-    }, []);
-    
-    const toggleListening = useCallback((shouldListen?: boolean) => {
-        if (!recognitionRef.current || !isMountedRef.current) return;
-        
-        const isCurrentlyListening = isListening;
-        const turnOn = shouldListen === true;
-        const turnOff = shouldListen === false;
-        const isBotActive = isBotProcessing || isSpeaking;
-        
-        if (turnOff && isCurrentlyListening) {
-            recognitionRef.current.stop();
-        } else if (turnOn && !isCurrentlyListening) {
-            if (!hasConversationEnded && !isBotActive) {
-                try {
-                    finalTranscriptRef.current = '';
-                    recognitionRef.current.start();
-                } catch (e: any) {
-                    if (e.name !== 'invalid-state') { 
-                      logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
-                    }
-                }
-            }
-        } else if (shouldListen === undefined) { 
-            if (isCurrentlyListening) {
-                recognitionRef.current.stop();
-            } else if (!hasConversationEnded && !isBotActive) {
-                try {
-                    finalTranscriptRef.current = '';
-                    recognitionRef.current.start();
-                } catch (e: any) {
-                     if (e.name !== 'invalid-state') {
-                        logErrorToFirestore(e, 'ChatInterface/toggleListening/toggle');
-                     }
-                }
-            }
-        }
-    }, [isListening, hasConversationEnded, isBotProcessing, isSpeaking, logErrorToFirestore]);
-
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!isMountedRef.current) return;
         if (!textToSpeak.trim()) {
             onSpeechEnd?.();
             return;
         };
-        setIsSpeaking(true);
-
+        setIsBotProcessing(false); // Stop "is preparing"
+    
         const processedText = textToSpeak
           .replace(/\bCOO\b/gi, 'Chief Operating Officer')
           .replace(/\bEZCORP\b/gi, 'easy corp');
@@ -322,7 +278,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           });
 
           await audioPromise;
-          if (isMountedRef.current) audioPlayerRef.current.play();
+          if (isMountedRef.current) {
+            setIsSpeaking(true); // Set speaking state right before playing
+            audioPlayerRef.current.play();
+          }
       }
     
       if (communicationMode !== 'audio-only') {
@@ -405,6 +364,43 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         }, configRef.current.responsePauseTimeMs);
     }, [hasConversationEnded, isBotProcessing, isSpeaking, isListening, translate, uiText, speakText, handleEndChatManually, toggleListening, clearInactivityTimer]);
+    
+    const toggleListening = useCallback((shouldListen?: boolean) => {
+        if (!recognitionRef.current || !isMountedRef.current) return;
+        
+        const isCurrentlyListening = isListening;
+        const turnOn = shouldListen === true;
+        const turnOff = shouldListen === false;
+        const isBotActive = isBotProcessing || isSpeaking;
+        
+        if (turnOff && isCurrentlyListening) {
+            recognitionRef.current.stop();
+        } else if (turnOn && !isCurrentlyListening) {
+            if (!hasConversationEnded && !isBotActive) {
+                try {
+                    finalTranscriptRef.current = '';
+                    recognitionRef.current.start();
+                } catch (e: any) {
+                    if (e.name !== 'invalid-state') { 
+                      logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
+                    }
+                }
+            }
+        } else if (shouldListen === undefined) { 
+            if (isCurrentlyListening) {
+                recognitionRef.current.stop();
+            } else if (!hasConversationEnded && !isBotActive) {
+                try {
+                    finalTranscriptRef.current = '';
+                    recognitionRef.current.start();
+                } catch (e: any) {
+                     if (e.name !== 'invalid-state') {
+                        logErrorToFirestore(e, 'ChatInterface/toggleListening/toggle');
+                     }
+                }
+            }
+        }
+    }, [isListening, hasConversationEnded, isBotProcessing, isSpeaking, logErrorToFirestore]);
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing || isSpeaking) return;
@@ -440,7 +436,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 formatting,
             };
             const result = await generateChatResponse(flowInput);
-            setIsBotProcessing(false); // Done fetching
             
             const aiMessage: Message = {
                 id: uuidv4(),
@@ -468,6 +463,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [addMessage, hasConversationEnded, isBotProcessing, isSpeaking, language, speakText, uiText.errorEncountered, clearInactivityTimer, startInactivityTimer, logErrorToFirestore, toggleListening]);
     
+    const clearInactivityTimer = useCallback(() => {
+        if (inactivityTimerRef.current) {
+            clearTimeout(inactivityTimerRef.current);
+            inactivityTimerRef.current = null;
+        }
+    }, []);
+
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
         toast({ title: "Archiving Conversation..." });
@@ -599,7 +601,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     textToTranslate = result.greeting;
                 }
                 greetingText = await translate(textToTranslate);
-                setIsBotProcessing(false);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, greetingMessage, () => {
                     toggleListening(true);
@@ -728,12 +729,18 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             <>
               <Image {...imageProps} alt="AI Blair Avatar" />
               <h2 className="text-2xl font-bold font-headline text-primary">
-                {uiMessage}
+                {isSpeaking ? "" : uiMessage}
               </h2>
               <div className="flex h-16 w-full items-center justify-center">
                  {statusMessage && !isSpeaking && (
                     <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse">
-                        {isListening ? <Mic size={20} className="mr-2" /> : <Loader2 size={20} className="mr-2 animate-spin" />}
+                        <Mic size={20} className="mr-2" />
+                        {statusMessage}
+                    </div>
+                 )}
+                 {isBotProcessing && (
+                    <div className="flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow animate-pulse">
+                        <Loader2 size={20} className="mr-2 animate-spin" />
                         {statusMessage}
                     </div>
                  )}
