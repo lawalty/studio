@@ -3,12 +3,23 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle } from 'lucide-react';
+import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle, Trash2, ServerCrash } from 'lucide-react';
 import AdminNavLinkCard from '@/components/admin/AdminNavLinkCard';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Alert } from '../ui/alert';
+import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle } from '../ui/alert';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
+import { Button } from '../ui/button';
+import { ScrollArea } from '../ui/scroll-area';
+import { formatDistanceToNow } from 'date-fns';
 
+interface SiteError {
+    id: string;
+    message: string;
+    source: string;
+    timestamp: Date;
+}
 
 const topTopicsData = [
   { topic: "General Inquiry", chats: 120 },
@@ -28,6 +39,8 @@ const topDocumentsData = [
 
 export default function AdminDashboard() {
   const [realtimeUsers, setRealtimeUsers] = useState(0);
+  const [siteErrors, setSiteErrors] = useState<SiteError[]>([]);
+  const [isLoadingErrors, setIsLoadingErrors] = useState(true);
 
   useEffect(() => {
     // Simulate real-time user count fluctuations
@@ -38,12 +51,34 @@ export default function AdminDashboard() {
       setRealtimeUsers(prev => {
         const change = Math.random() > 0.5 ? 1 : -1;
         const newCount = prev + change;
-        return Math.max(0, newCount); // Ensure it doesn't go below 0
+        return Math.max(0, newCount);
       });
-    }, 5000); // Update every 5 seconds
+    }, 5000);
 
-    return () => clearInterval(interval);
+    // Fetch site errors
+    const errorsQuery = query(collection(db, 'site_errors'), orderBy('timestamp', 'desc'));
+    const unsubscribeErrors = onSnapshot(errorsQuery, (snapshot) => {
+        const errorsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp.toDate(),
+        } as SiteError));
+        setSiteErrors(errorsData);
+        setIsLoadingErrors(false);
+    }, (error) => {
+        console.error("Failed to fetch site errors:", error);
+        setIsLoadingErrors(false);
+    });
+
+    return () => {
+        clearInterval(interval);
+        unsubscribeErrors();
+    };
   }, []);
+
+  const handleDeleteError = async (errorId: string) => {
+      await deleteDoc(doc(db, 'site_errors', errorId));
+  };
 
   return (
     <div className="space-y-8">
@@ -58,6 +93,46 @@ export default function AdminDashboard() {
          </div>
       </section>
       
+      {/* Error Board */}
+      <section>
+          <h2 className="text-2xl font-semibold tracking-tight mb-4">Error Board</h2>
+          <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><ServerCrash className="h-5 w-5" /> Recent System Errors</CardTitle>
+                  <CardDescription>
+                      Errors from public-facing interactions are logged here. Review and dismiss them as needed.
+                  </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  {isLoadingErrors ? <p>Loading errors...</p> : siteErrors.length === 0 ? (
+                      <Alert variant="default" className="border-green-500/50 text-green-700 dark:text-green-400">
+                          <AlertTitle className="flex items-center gap-2"><Bot /> All Systems Operational</AlertTitle>
+                          <AlertDescriptionComponent>No errors have been logged recently.</AlertDescriptionComponent>
+                      </Alert>
+                  ) : (
+                      <ScrollArea className="h-72">
+                          <div className="space-y-4 pr-4">
+                              {siteErrors.map(error => (
+                                  <Alert key={error.id} variant="destructive">
+                                      <div className="flex justify-between items-start">
+                                          <div className="flex-1">
+                                              <AlertTitle>Error in: {error.source}</AlertTitle>
+                                              <AlertDescriptionComponent className="break-words mt-1">{error.message}</AlertDescriptionComponent>
+                                              <p className="text-xs text-destructive/80 mt-2">{formatDistanceToNow(error.timestamp, { addSuffix: true })}</p>
+                                          </div>
+                                          <Button variant="ghost" size="icon" onClick={() => handleDeleteError(error.id)} className="h-6 w-6 ml-2 shrink-0">
+                                              <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                      </div>
+                                  </Alert>
+                              ))}
+                          </div>
+                      </ScrollArea>
+                  )}
+              </CardContent>
+          </Card>
+      </section>
+
       {/* Usage Statistics */}
       <section>
         <h2 className="text-2xl font-semibold tracking-tight mb-4">Usage Statistics</h2>

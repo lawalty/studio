@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mic, Power, DatabaseZap, Save, RotateCcw, Square } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -189,13 +189,25 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setMessages(prev => [...prev, newMessage]);
     }, []);
 
+    const logErrorToFirestore = useCallback(async (error: any, source: string) => {
+        try {
+            await addDoc(collection(db, "site_errors"), {
+                message: error.message || "An unknown error occurred.",
+                source: source,
+                timestamp: serverTimestamp(),
+                details: JSON.stringify(error, Object.getOwnPropertyNames(error))
+            });
+        } catch (dbError) {
+            console.error("CRITICAL: Failed to log error to Firestore.", dbError);
+        }
+    }, []);
+
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!textToSpeak.trim()) {
             onSpeechEnd?.();
             return;
         };
 
-        // Pre-process text for correct pronunciation before sending to any API.
         const processedText = textToSpeak
           .replace(/\bCOO\b/gi, 'Chief Operating Officer')
           .replace(/\bEZCORP\b/gi, 'easy corp');
@@ -216,54 +228,61 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 if (useCustomTts && ttsApiKey && ttsVoiceId) {
                     const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
                     if (result.error || !result.media) {
-                        toast({ title: "Custom TTS Error", description: result.error, variant: 'destructive' });
-                        const googleResult = await googleTextToSpeech(processedText);
-                        audioDataUri = googleResult.media;
-                    } else {
-                        audioDataUri = result.media;
+                        throw new Error(result.error);
                     }
+                    audioDataUri = result.media;
                 } else {
                     const result = await googleTextToSpeech(processedText);
                     audioDataUri = result.media;
                 }
-
-                if (!audioPlayerRef.current) {
-                    audioPlayerRef.current = new Audio();
-                }
-                
-                audioPlayerRef.current.onended = () => {
+            } catch (ttsError: any) {
+                console.error("TTS API Error, falling back to Google TTS:", ttsError);
+                await logErrorToFirestore(ttsError, 'ChatInterface/speakText/CustomTTS');
+                try {
+                    const result = await googleTextToSpeech(processedText);
+                    audioDataUri = result.media;
+                } catch (fallbackError) {
+                    console.error("Fallback Google TTS Error:", fallbackError);
+                    await logErrorToFirestore(fallbackError, 'ChatInterface/speakText/FallbackTTS');
+                    // If even fallback fails, just proceed with text-only animation
                     setIsSpeaking(false);
-                    if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-                    setAnimatedResponse(null);
                     addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                     onSpeechEnd?.();
-                };
-                
-                audioPlayerRef.current.src = audioDataUri;
-    
-                const audioPromise = new Promise<void>(resolve => {
-                    audioPlayerRef.current!.onloadedmetadata = () => {
-                        const duration = audioPlayerRef.current!.duration;
-                        if (isFinite(duration)) {
-                            audioDuration = duration * 1000 * configRef.current.animationSyncFactor;
-                        }
-                        resolve();
-                    };
-                    audioPlayerRef.current!.onerror = () => resolve();
-                });
-    
-                await audioPromise;
-                setIsSpeaking(true);
-                await audioPlayerRef.current.play();
-    
-            } catch (e) {
-                console.error("TTS API Error:", e);
+                    return; // exit the function
+                }
+            }
+        }
+        
+        if (useAudio && audioDataUri) {
+            if (!audioPlayerRef.current) {
+                audioPlayerRef.current = new Audio();
+            }
+            audioPlayerRef.current.onended = () => {
                 setIsSpeaking(false);
+                if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+                setAnimatedResponse(null);
                 addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
                 onSpeechEnd?.();
-            }
+            };
+            
+            audioPlayerRef.current.src = audioDataUri;
+
+            const audioPromise = new Promise<void>(resolve => {
+                audioPlayerRef.current!.onloadedmetadata = () => {
+                    const duration = audioPlayerRef.current!.duration;
+                    if (isFinite(duration)) {
+                        audioDuration = duration * 1000 * configRef.current.animationSyncFactor;
+                    }
+                    resolve();
+                };
+                audioPlayerRef.current!.onerror = () => resolve();
+            });
+
+            await audioPromise;
+            setIsSpeaking(true);
+            await audioPlayerRef.current.play();
         } else {
-            // Text-only mode
+             // Text-only mode or audio failed completely
             setIsSpeaking(true);
         }
     
@@ -291,7 +310,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             typeCharacter();
         }
     
-    }, [communicationMode, addMessage, configRef, toast]);
+    }, [communicationMode, addMessage, configRef, toast, logErrorToFirestore]);
 
     const clearInactivityTimer = useCallback(() => {
         if (inactivityTimerRef.current) {
@@ -316,7 +335,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 sender: 'model', 
                 timestamp: Date.now() 
             };
-            speakText(translatedEndMessage, finalMessage, () => {
+            await speakText(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
         } else {
@@ -330,19 +349,18 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
 
         inactivityTimerRef.current = setTimeout(async () => {
-            if (isSpeaking || isListening) return; // Don't interrupt activity
+            if (isSpeaking || isListening) return;
 
             if (inactivityCheckLevelRef.current === 0) {
                 inactivityCheckLevelRef.current = 1;
                 
-                // Determine which prompt to use based on conversation history
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
                 const promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
 
                 const translatedPrompt = await translate(promptText);
                 const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
                 speakText(translatedPrompt, promptMessage, () => {
-                    startInactivityTimer(); // Start the *next* timer after the prompt is spoken
+                    startInactivityTimer();
                 });
             } else {
                 inactivityCheckLevelRef.current = 0;
@@ -458,9 +476,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             toast({ title: "Conversation Archived" });
         } catch (error: any) {
             console.error("Failed to archive chat:", error);
+            await logErrorToFirestore(error, 'ChatInterface/archiveAndIndexChat');
             toast({ title: "Archiving Failed", description: error.message, variant: "destructive" });
         }
-    }, [toast]);
+    }, [toast, logErrorToFirestore]);
     
     useEffect(() => {
         if (hasConversationEnded) {
@@ -469,7 +488,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer]);
     
-    // ONE-TIME Effect for initial data load and setup.
     useEffect(() => {
         let isMounted = true;
         const fetchAllData = async () => {
@@ -502,7 +520,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
                 };
             }
-          } catch (e) {
+          } catch (e: any) {
+            await logErrorToFirestore(e, 'ChatInterface/fetchAllData');
             toast({ title: "Config Error", description: `Could not load app settings. Using defaults.`, variant: "destructive" });
           } finally {
             if (isMounted) {
@@ -512,7 +531,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         fetchAllData();
 
-        return () => { // Cleanup on unmount
+        return () => {
             isMounted = false;
             dismissAllToasts();
             clearInactivityTimer();
@@ -528,7 +547,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Effect to send initial greeting
     useEffect(() => {
         if (!isReady || isInitialized || messages.length > 0) return;
 
@@ -545,7 +563,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         personaTraits,
                         conversationalTopics,
                         useKnowledgeInGreeting,
-                        language: 'English', // Always generate in English
+                        language: 'English',
                     });
                     textToTranslate = result.greeting;
                 }
@@ -570,7 +588,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     }, [isReady, isInitialized, messages.length, translate, speakText, startInactivityTimer]);
     
-    // Effect for speech recognition setup
     useEffect(() => {
         if (!isReady || communicationMode === 'text-only') return;
 
@@ -656,7 +673,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
             }
             pdf.save('AI-Blair-Conversation.pdf');
-        } catch (error) {
+        } catch (error: any) {
+          await logErrorToFirestore(error, 'ChatInterface/handleSaveConversationAsPdf');
           toast({ title: "PDF Generation Failed", variant: "destructive" });
         }
     };
