@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -231,7 +232,7 @@ export default function StartPageContent() {
   const renderContent = () => {
     if (isLoading || isMaintenanceMode === null) {
       return (
-        <Card className="w-full max-w-2xl p-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
+        <Card className="w-full max-w-lg p-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
           <CardHeader>
             <Skeleton className="h-8 w-3/4 mx-auto" />
             <Skeleton className="h-6 w-1/2 mx-auto mt-2" />
@@ -251,7 +252,7 @@ export default function StartPageContent() {
     
     if (configError) {
         return (
-            <Card className="w-full max-w-2xl p-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
+            <Card className="w-full max-w-lg p-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
                 <CardHeader>
                     <CardTitle className="text-2xl font-headline text-destructive flex items-center justify-center gap-2">
                         <AlertTriangle /> Application Error
@@ -270,7 +271,7 @@ export default function StartPageContent() {
     return (
       <>
         <audio ref={audioRef} src="/ai_blair_lets_have_a_conversation.mp3" preload="auto" />
-        <Card className="w-full max-w-2xl p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
+        <Card className="w-full max-w-lg p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
           <CardHeader className="p-0">
             <CardTitle className="text-4xl font-headline text-primary">
               {uiText.welcome}
@@ -350,5 +351,3 @@ export default function StartPageContent() {
     </div>
   );
 }
-
-      
