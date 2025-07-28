@@ -18,7 +18,7 @@ import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import type { SearchResult } from '@/ai/retrieval/vector-search';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, DownloadCloud } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -27,8 +27,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
-import { exportEmbeddingsToGcs } from '@/ai/flows/export-embeddings-to-gcs-flow';
-
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
@@ -78,7 +76,6 @@ export default function KnowledgeBasePage() {
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   const [distanceThreshold, setDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const { toast } = useToast();
 
   // RAG Test State
@@ -435,18 +432,6 @@ export default function KnowledgeBasePage() {
       }
   }, [toast]);
   
-  const handleExport = async () => {
-    setIsExporting(true);
-    toast({ title: "Exporting Embeddings...", description: "This feature is deprecated and will be removed."});
-    const result = await exportEmbeddingsToGcs();
-    if (result.success) {
-      toast({ title: "Export Complete", description: "Embeddings exported to Google Cloud Storage."});
-    } else {
-      toast({ title: "Export Failed", description: result.error, variant: 'destructive', duration: 10000 });
-    }
-    setIsExporting(false);
-  };
-
   const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
   };
@@ -780,20 +765,6 @@ export default function KnowledgeBasePage() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><DownloadCloud /> Vertex AI Index</CardTitle>
-              <CardDescription>
-                This action is deprecated. Use the RAG test above to test search.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Button onClick={handleExport} disabled={isExporting}>
-                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                    Export Embeddings (Deprecated)
-                </Button>
             </CardContent>
           </Card>
         </div>
