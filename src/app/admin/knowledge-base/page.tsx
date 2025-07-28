@@ -62,381 +62,44 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
 
 const INITIAL_DISTANCE_THRESHOLD = 0.6;
 
-export default function KnowledgeBasePage() {
-  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
-  const [englishSources, setEnglishSources] = useState<KnowledgeSource[]>([]);
-  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Spanish PDFs': true, 'Chat History': true, 'Archive': true });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
-  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
-  const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
-  const [uploadDescription, setUploadDescription] = useState('');
-  const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
-  const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
-  const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
-  
-  const { toast } = useToast();
-
-  // RAG Test State
-  const [ragTestQuery, setRagTestQuery] = useState('');
-  const [isTestingRag, setIsTestingRag] = useState(false);
-  const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
-  const [ragTestError, setRagTestError] = useState<string | null>(null);
-  const [ragDistanceThreshold, setRagDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
-
-  const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
-
-  const setOperationStatus = (id: string, status: boolean) => {
-    setOperationInProgress(prev => ({ ...prev, [id]: status }));
-  };
-
-  useEffect(() => {
-    const fetchSettings = async () => {
-      const docRef = doc(db, 'configurations/site_display_assets');
-      try {
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const topicsString = data.conversationalTopics || '';
-          let topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
-          setAvailableTopics(topicsArray);
-          if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
-            setSelectedTopicForUpload(topicsArray[0]);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching initial settings:", error);
-      }
-    };
-    fetchSettings();
-  }, [selectedTopicForUpload]);
-  
-  useEffect(() => {
-    const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
-      const q = query(collection(db, config.collectionName));
-      return onSnapshot(q, (querySnapshot) => {
-        const levelSources: KnowledgeSource[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const createdAtDate = data.createdAt ? new Date(data.createdAt) : new Date();
-          levelSources.push({
-            id: doc.id,
-            sourceName: data.sourceName || 'Unknown Source',
-            description: data.description || '',
-            topic: data.topic || 'General',
-            level: level as KnowledgeBaseLevel,
-            createdAt: createdAtDate.toLocaleString(),
-            createdAtDate: createdAtDate,
-            indexingStatus: data.indexingStatus || 'failed',
-            indexingError: data.indexingError || 'No status available.',
-            downloadURL: data.downloadURL,
-            chunksWritten: data.chunksWritten,
-            mimeType: data.mimeType,
-            linkedEnglishSourceId: data.linkedEnglishSourceId,
-            pageNumber: data.pageNumber,
-            title: data.title,
-            header: data.header,
-          });
-        });
-        const sortedSources = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
-        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: sortedSources }));
-        if (['High', 'Medium', 'Low'].includes(level)) {
-            setEnglishSources(prev => {
-                const otherSources = prev.filter(s => s.level !== level);
-                return [...otherSources, ...sortedSources].sort((a, b) => a.sourceName.localeCompare(b.sourceName));
-            });
-        }
-        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
-      }, (error) => {
-        console.error(`Error fetching ${level} priority sources:`, error);
-        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
-      });
-    });
-
-    return () => unsubscribers.forEach(unsub => unsub());
-  }, []);
-
-  const handleRunRagTest = async () => {
-      if (!ragTestQuery.trim()) {
-          toast({ title: 'Query is empty', description: 'Please enter a search query to test.', variant: 'destructive' });
-          return;
-      }
-      setIsTestingRag(true);
-      setRagTestResults(null);
-      setRagTestError(null);
-      try {
-          const { results, error } = await testSearch({ query: ragTestQuery, distanceThreshold: ragDistanceThreshold[0] });
-          if(error) {
-              setRagTestError(error);
-          } else {
-              setRagTestResults(results);
-              if (results.length === 0) {
-                toast({
-                  title: "0 Results Found",
-                  description: "No relevant chunks were found. Try adjusting the similarity threshold slider below or re-indexing your document.",
-                  variant: "default",
-                  duration: 8000
-                })
-              }
-          }
-      } catch (e: any) {
-          setRagTestError(`An unexpected error occurred: ${e.message}`);
-      } finally {
-          setIsTestingRag(false);
-      }
-  };
-
-  const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
-    setOperationStatus(source.id, true);
-    toast({ title: `Deleting ${source.sourceName}...` });
-    try {
-      const result = await deleteSource({
-        id: source.id,
-        level: source.level,
-        sourceName: source.sourceName,
-        pageNumber: source.pageNumber,
-        title: source.title,
-        header: source.header,
-      });
-
-      if (result.success) {
-        toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
-      } else {
-        console.error("[handleDeleteSource] Server returned an error:", result.error);
-        toast({ title: "Deletion Failed", description: `${result.error}`, variant: "destructive", duration: 10000 });
-      }
-    } catch (error: any) {
-      console.error("[handleDeleteSource] Caught exception:", error);
-      toast({ title: "Client-side Error", description: `An unexpected error occurred: ${error.message}`, variant: "destructive", duration: 10000 });
-    } finally {
-      setOperationStatus(source.id, false);
-    }
-  }, [toast]);
-  
-  const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
-    setOperationStatus(source.id, true);
-    toast({ title: `Re-processing ${source.sourceName}...` });
-
-    const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-    await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Starting re-processing...", chunksWritten: 0 });
-
-    try {
-        if (!source.downloadURL) {
-            throw new Error("Source is missing a download URL, cannot re-process.");
-        }
-        
-        await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType || 'file'}...` });
-        const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
-
-        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-            throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
-        }
-        
-        await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
-        const indexInput: Parameters<typeof indexDocument>[0] = {
-            sourceId: source.id,
-            sourceName: source.sourceName,
-            text: extractionResult.extractedText,
-            level: source.level,
-            topic: source.topic,
-            downloadURL: source.downloadURL,
-            pageNumber: source.pageNumber,
-            title: source.title,
-            header: source.header,
-        };
-        if (source.linkedEnglishSourceId) {
-            indexInput.linkedEnglishSourceId = source.linkedEnglishSourceId;
-        }
-
-        const indexingResult = await indexDocument(indexInput);
-        
-        if (!indexingResult.success || indexingResult.chunksWritten === 0) {
-            throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database.");
-        }
-
-        toast({ title: "Success!", description: `"${source.sourceName}" has been successfully re-indexed.` });
-
-    } catch (error: any) {
-        const errorMessage = error.message || "An unknown error occurred during re-indexing.";
-        toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive", duration: 10000 });
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'failed',
-            indexingError: errorMessage
-        }).catch(updateError => console.error("Error updating doc with failure status after re-indexing attempt:", updateError));
-    } finally {
-        setOperationStatus(source.id, false);
-    }
-  }, [toast]);
-
-  const handleFileUpload = async () => {
-    if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
-        toast({ title: "Missing Information", description: "Please select a file, topic, and priority level.", variant: "destructive" });
-        return;
-    }
-    if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
-        toast({ title: "Missing Information", description: "Please link the Spanish PDF to its English source document.", variant: "destructive" });
-        return;
-    }
-
-    const fileToUpload = selectedFile;
-    const targetLevel = selectedLevelForUpload;
-    const topic = selectedTopicForUpload;
-    const description = uploadDescription;
-    const sourceId = uuidv4();
-    const mimeType = fileToUpload.type || 'application/octet-stream';
-
-    setIsCurrentlyUploading(true);
-    setOperationStatus(sourceId, true);
-    toast({ title: `Processing "${fileToUpload.name}"...`, description: "This may take a minute. Please wait." });
-
-    let sourceDocRef: ReturnType<typeof doc> | null = null;
-
-    try {
-        const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
-        sourceDocRef = doc(db, collectionName, sourceId);
-        
-        const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
-            sourceName: fileToUpload.name, description, topic, level: targetLevel,
-            createdAt: new Date().toISOString(),
-            indexingStatus: 'processing',
-            indexingError: 'Uploading file to storage...',
-            mimeType,
-        };
-        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
-            newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
-        }
-        await setDoc(sourceDocRef, newSourceData);
-
-        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-        const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload).catch(storageError => {
-            if (storageError.code === 'storage/unauthorized') {
-                throw new Error(`Storage Error: Permission denied. Check your Storage rules in the Firebase console and ensure the bucket name is correct in your config.`);
-            }
-            throw new Error(`Storage Error: ${storageError.message}`);
-        });
-
-        const downloadURL = await getDownloadURL(fileRef);
-        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
-        
-        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-            throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
-        }
-
-        await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
-
-        const indexInput: Parameters<typeof indexDocument>[0] = {
-            sourceId,
-            sourceName: fileToUpload.name,
-            text: extractionResult.extractedText,
-            level: targetLevel,
-            topic,
-            downloadURL
-        };
-        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
-            indexInput.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
-        }
-        const indexingResult = await indexDocument(indexInput);
-
-        if (!indexingResult.success || indexingResult.chunksWritten === 0) {
-            throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
-        }
-
-        toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
-
-        setSelectedFile(null);
-        setUploadDescription('');
-        setLinkedEnglishSourceIdForUpload('');
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-
-    } catch (e: any) {
-        const errorMessage = `${e.message || 'Unknown error.'}`;
-        console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
-        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
-
-        if (sourceDocRef) {
-            try {
-                await updateDoc(sourceDocRef, {
-                    indexingStatus: 'failed',
-                    indexingError: errorMessage,
-                });
-            } catch (updateError) {
-                console.error("Critical: Failed to write final failure status to Firestore.", updateError);
-            }
-        }
-    } finally {
-        setIsCurrentlyUploading(false);
-        setOperationStatus(sourceId, false);
-    }
-  };
-
-  const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
-      if (source.level === newLevel) return;
-      setOperationStatus(source.id, true);
-      toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
-
-      try {
-          const originalDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-          const docSnap = await getDoc(originalDocRef);
-          if (!docSnap.exists()) {
-              throw new Error("Original source document not found.");
-          }
-          const sourceData = docSnap.data();
-
-          const newDocData: Record<string, any> = { ...sourceData, level: newLevel };
-          if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
-            delete newDocData.linkedEnglishSourceId;
-          }
-          const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
-          
-          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
-          const chunksSnapshot = await getDocs(chunksQuery);
-
-          const writeBatchForMove = writeBatch(db);
-
-          writeBatchForMove.set(newDocRef, newDocData);
-          writeBatchForMove.delete(originalDocRef);
-          chunksSnapshot.forEach(chunkDoc => {
-              writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
-          });
-
-          await writeBatchForMove.commit();
-          toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
-
-      } catch (error: any) {
-          console.error("Error moving source:", error);
-          toast({ title: "Move Failed", description: `Could not move ${source.sourceName}. ${error.message}`, variant: "destructive" });
-      } finally {
-          setOperationStatus(source.id, false);
-      }
-  }, [toast]);
-  
-  const getFileExtension = (filename: string) => {
+const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
-  };
-  
-  const renderKnowledgeBaseLevel = (level: KnowledgeBaseLevel) => {
+};
+
+// Standalone helper function to render a knowledge base level
+const RenderKnowledgeBaseLevel = ({
+    level,
+    sources,
+    isLoading,
+    operationInProgress,
+    anyOperationGloballyInProgress,
+    handleDeleteSource,
+    handleMoveSource,
+    handleReindexSource,
+}: {
+    level: KnowledgeBaseLevel,
+    sources: KnowledgeSource[],
+    isLoading: boolean,
+    operationInProgress: Record<string, boolean>,
+    anyOperationGloballyInProgress: boolean,
+    handleDeleteSource: (source: KnowledgeSource) => void,
+    handleMoveSource: (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => void,
+    handleReindexSource: (source: KnowledgeSource) => void,
+}) => {
     const config = LEVEL_CONFIG[level];
-    const levelSources = sources[level];
-    const levelIsLoading = isLoading[level];
-    
+
     return (
         <AccordionItem value={level.toLowerCase().replace(/\s+/g, '-')} key={level}>
           <AccordionTrigger className="text-xl font-headline">
-            {config.title} Knowledge Base ({levelSources.length})
+            {config.title} Knowledge Base ({sources.length})
           </AccordionTrigger>
           <AccordionContent>
              <CardDescription className="mb-4">{config.description}</CardDescription>
-             {levelIsLoading ? (
+             {isLoading ? (
                  <div className="flex justify-center items-center h-24">
                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                  </div>
-             ) : levelSources.length === 0 ? (
+             ) : sources.length === 0 ? (
                  <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                    <History size={40} className="mx-auto mb-2" />
                    <p>No sources found in this knowledge base.</p>
@@ -454,7 +117,7 @@ export default function KnowledgeBasePage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {levelSources.map(source => {
+                            {sources.map(source => {
                                 const isOpInProgress = operationInProgress[source.id] || false;
                                 return (
                                     <TableRow key={source.id} className={cn(isOpInProgress && "opacity-50 pointer-events-none")}>
@@ -589,8 +252,364 @@ export default function KnowledgeBasePage() {
           </AccordionContent>
         </AccordionItem>
     );
-  };
+};
+
+
+export default function KnowledgeBasePage() {
+  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
+  const [englishSources, setEnglishSources] = useState<KnowledgeSource[]>([]);
+  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Spanish PDFs': true, 'Chat History': true, 'Archive': true });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
+  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
+  const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
+  const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
+  const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   
+  const { toast } = useToast();
+
+  // RAG Test State
+  const [ragTestQuery, setRagTestQuery] = useState('');
+  const [isTestingRag, setIsTestingRag] = useState(false);
+  const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
+  const [ragTestError, setRagTestError] = useState<string | null>(null);
+  const [ragDistanceThreshold, setRagDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
+
+  const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
+
+  const setOperationStatus = (id: string, status: boolean) => {
+    setOperationInProgress(prev => ({ ...prev, [id]: status }));
+  };
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const docRef = doc(db, 'configurations/site_display_assets');
+      try {
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const topicsString = data.conversationalTopics || '';
+          let topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+          setAvailableTopics(topicsArray);
+          if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
+            setSelectedTopicForUpload(topicsArray[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching initial settings:", error);
+      }
+    };
+    fetchSettings();
+  }, [selectedTopicForUpload]);
+  
+  useEffect(() => {
+    const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
+      const q = query(collection(db, config.collectionName));
+      return onSnapshot(q, (querySnapshot) => {
+        const levelSources: KnowledgeSource[] = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          const createdAtDate = data.createdAt ? new Date(data.createdAt) : new Date();
+          levelSources.push({
+            id: doc.id,
+            sourceName: data.sourceName || 'Unknown Source',
+            description: data.description || '',
+            topic: data.topic || 'General',
+            level: level as KnowledgeBaseLevel,
+            createdAt: createdAtDate.toLocaleString(),
+            createdAtDate: createdAtDate,
+            indexingStatus: data.indexingStatus || 'failed',
+            indexingError: data.indexingError || 'No status available.',
+            downloadURL: data.downloadURL,
+            chunksWritten: data.chunksWritten,
+            mimeType: data.mimeType,
+            linkedEnglishSourceId: data.linkedEnglishSourceId,
+            pageNumber: data.pageNumber,
+            title: data.title,
+            header: data.header,
+          });
+        });
+        const sortedSources = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
+        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: sortedSources }));
+        if (['High', 'Medium', 'Low'].includes(level)) {
+            setEnglishSources(prev => {
+                const otherSources = prev.filter(s => s.level !== level);
+                return [...otherSources, ...sortedSources].sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+            });
+        }
+        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
+      }, (error) => {
+        console.error(`Error fetching ${level} priority sources:`, error);
+        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
+      });
+    });
+
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, []);
+
+  const handleRunRagTest = useCallback(async () => {
+      if (!ragTestQuery.trim()) {
+          toast({ title: 'Query is empty', description: 'Please enter a search query to test.', variant: 'destructive' });
+          return;
+      }
+      setIsTestingRag(true);
+      setRagTestResults(null);
+      setRagTestError(null);
+      try {
+          const { results, error } = await testSearch({ query: ragTestQuery, distanceThreshold: ragDistanceThreshold[0] });
+          if(error) {
+              setRagTestError(error);
+          } else {
+              setRagTestResults(results);
+              if (results.length === 0) {
+                toast({
+                  title: "0 Results Found",
+                  description: "No relevant chunks were found. Try adjusting the similarity threshold slider below or re-indexing your document.",
+                  variant: "default",
+                  duration: 8000
+                })
+              }
+          }
+      } catch (e: any) {
+          setRagTestError(`An unexpected error occurred: ${e.message}`);
+      } finally {
+          setIsTestingRag(false);
+      }
+  }, [ragTestQuery, ragDistanceThreshold, toast]);
+
+  const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
+    setOperationStatus(source.id, true);
+    toast({ title: `Deleting ${source.sourceName}...` });
+    try {
+      const result = await deleteSource({
+        id: source.id,
+        level: source.level,
+        sourceName: source.sourceName,
+        pageNumber: source.pageNumber,
+        title: source.title,
+        header: source.header,
+      });
+
+      if (result.success) {
+        toast({ title: "Deletion Successful", description: `${source.sourceName} has been completely removed.`, variant: "default" });
+      } else {
+        console.error("[handleDeleteSource] Server returned an error:", result.error);
+        toast({ title: "Deletion Failed", description: `${result.error}`, variant: "destructive", duration: 10000 });
+      }
+    } catch (error: any) {
+      console.error("[handleDeleteSource] Caught exception:", error);
+      toast({ title: "Client-side Error", description: `An unexpected error occurred: ${error.message}`, variant: "destructive", duration: 10000 });
+    } finally {
+      setOperationStatus(source.id, false);
+    }
+  }, [toast]);
+  
+  const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
+    setOperationStatus(source.id, true);
+    toast({ title: `Re-processing ${source.sourceName}...` });
+
+    const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+    await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Starting re-processing...", chunksWritten: 0 });
+
+    try {
+        if (!source.downloadURL) {
+            throw new Error("Source is missing a download URL, cannot re-process.");
+        }
+        
+        await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType || 'file'}...` });
+        const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
+
+        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+            throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
+        }
+        
+        await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
+        const indexInput: Parameters<typeof indexDocument>[0] = {
+            sourceId: source.id,
+            sourceName: source.sourceName,
+            text: extractionResult.extractedText,
+            level: source.level,
+            topic: source.topic,
+            downloadURL: source.downloadURL,
+            pageNumber: source.pageNumber,
+            title: source.title,
+            header: source.header,
+        };
+        if (source.linkedEnglishSourceId) {
+            indexInput.linkedEnglishSourceId = source.linkedEnglishSourceId;
+        }
+
+        const indexingResult = await indexDocument(indexInput);
+        
+        if (!indexingResult.success || indexingResult.chunksWritten === 0) {
+            throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database.");
+        }
+
+        toast({ title: "Success!", description: `"${source.sourceName}" has been successfully re-indexed.` });
+
+    } catch (error: any) {
+        const errorMessage = error.message || "An unknown error occurred during re-indexing.";
+        toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive", duration: 10000 });
+        await updateDoc(sourceDocRef, {
+            indexingStatus: 'failed',
+            indexingError: errorMessage
+        }).catch(updateError => console.error("Error updating doc with failure status after re-indexing attempt:", updateError));
+    } finally {
+        setOperationStatus(source.id, false);
+    }
+  }, [toast]);
+
+  const handleFileUpload = useCallback(async () => {
+    if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
+        toast({ title: "Missing Information", description: "Please select a file, topic, and priority level.", variant: "destructive" });
+        return;
+    }
+    if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
+        toast({ title: "Missing Information", description: "Please link the Spanish PDF to its English source document.", variant: "destructive" });
+        return;
+    }
+
+    const fileToUpload = selectedFile;
+    const targetLevel = selectedLevelForUpload;
+    const topic = selectedTopicForUpload;
+    const description = uploadDescription;
+    const sourceId = uuidv4();
+    const mimeType = fileToUpload.type || 'application/octet-stream';
+
+    setIsCurrentlyUploading(true);
+    setOperationStatus(sourceId, true);
+    toast({ title: `Processing "${fileToUpload.name}"...`, description: "This may take a minute. Please wait." });
+
+    let sourceDocRef: ReturnType<typeof doc> | null = null;
+
+    try {
+        const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
+        sourceDocRef = doc(db, collectionName, sourceId);
+        
+        const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
+            sourceName: fileToUpload.name, description, topic, level: targetLevel,
+            createdAt: new Date().toISOString(),
+            indexingStatus: 'processing',
+            indexingError: 'Uploading file to storage...',
+            mimeType,
+        };
+        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
+            newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+        }
+        await setDoc(sourceDocRef, newSourceData);
+
+        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+        const fileRef = storageRef(storage, storagePath);
+        await uploadBytes(fileRef, fileToUpload).catch(storageError => {
+            if (storageError.code === 'storage/unauthorized') {
+                throw new Error(`Storage Error: Permission denied. Check your Storage rules in the Firebase console and ensure the bucket name is correct in your config.`);
+            }
+            throw new Error(`Storage Error: ${storageError.message}`);
+        });
+
+        const downloadURL = await getDownloadURL(fileRef);
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
+        
+        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+            throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
+        }
+
+        await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
+
+        const indexInput: Parameters<typeof indexDocument>[0] = {
+            sourceId,
+            sourceName: fileToUpload.name,
+            text: extractionResult.extractedText,
+            level: targetLevel,
+            topic,
+            downloadURL
+        };
+        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
+            indexInput.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+        }
+        const indexingResult = await indexDocument(indexInput);
+
+        if (!indexingResult.success || indexingResult.chunksWritten === 0) {
+            throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
+        }
+
+        toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
+
+        setSelectedFile(null);
+        setUploadDescription('');
+        setLinkedEnglishSourceIdForUpload('');
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+
+    } catch (e: any) {
+        const errorMessage = `${e.message || 'Unknown error.'}`;
+        console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
+        toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
+
+        if (sourceDocRef) {
+            try {
+                await updateDoc(sourceDocRef, {
+                    indexingStatus: 'failed',
+                    indexingError: errorMessage,
+                });
+            } catch (updateError) {
+                console.error("Critical: Failed to write final failure status to Firestore.", updateError);
+            }
+        }
+    } finally {
+        setIsCurrentlyUploading(false);
+        setOperationStatus(sourceId, false);
+    }
+  }, [selectedFile, selectedTopicForUpload, selectedLevelForUpload, linkedEnglishSourceIdForUpload, uploadDescription, toast]);
+
+  const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
+      if (source.level === newLevel) return;
+      setOperationStatus(source.id, true);
+      toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
+
+      try {
+          const originalDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+          const docSnap = await getDoc(originalDocRef);
+          if (!docSnap.exists()) {
+              throw new Error("Original source document not found.");
+          }
+          const sourceData = docSnap.data();
+
+          const newDocData: Record<string, any> = { ...sourceData, level: newLevel };
+          if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
+            delete newDocData.linkedEnglishSourceId;
+          }
+          const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
+          
+          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
+          const chunksSnapshot = await getDocs(chunksQuery);
+
+          const writeBatchForMove = writeBatch(db);
+
+          writeBatchForMove.set(newDocRef, newDocData);
+          writeBatchForMove.delete(originalDocRef);
+          chunksSnapshot.forEach(chunkDoc => {
+              writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
+          });
+
+          await writeBatchForMove.commit();
+          toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
+
+      } catch (error: any) {
+          console.error("Error moving source:", error);
+          toast({ title: "Move Failed", description: `Could not move ${source.sourceName}. ${error.message}`, variant: "destructive" });
+      } finally {
+          setOperationStatus(source.id, false);
+      }
+  }, [toast]);
+  
+
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
       <div>
@@ -707,7 +726,7 @@ export default function KnowledgeBasePage() {
               {isTestingRag && <p className="text-sm text-muted-foreground">Searching knowledge base...</p>}
               
               {ragTestError && (
-                 <div className="mt-4">
+                 <div className="mt-4 space-y-4">
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitleComponent>Test Failed</AlertTitleComponent>
@@ -722,7 +741,7 @@ export default function KnowledgeBasePage() {
                                     <Terminal /> Action Required: Create Index
                                 </CardTitle>
                                 <CardDescription>
-                                    Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
+                                    Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed. This process may take 5-10 minutes.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -731,9 +750,6 @@ export default function KnowledgeBasePage() {
                                         gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION '--field-config=field-path=embedding,vector-config={"dimension":768,"flat":{}}'
                                     </code>
                                 </pre>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                    Note: Index creation can take several minutes. You only need to run this command once for your project.
-                                </p>
                             </CardContent>
                         </Card>
                     )}
@@ -766,12 +782,19 @@ export default function KnowledgeBasePage() {
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
-            {renderKnowledgeBaseLevel('High')}
-            {renderKnowledgeBaseLevel('Medium')}
-            {renderKnowledgeBaseLevel('Low')}
-            {renderKnowledgeBaseLevel('Spanish PDFs')}
-            {renderKnowledgeBaseLevel('Chat History')}
-            {renderKnowledgeBaseLevel('Archive')}
+            {Object.keys(LEVEL_CONFIG).map((level) => (
+                <RenderKnowledgeBaseLevel
+                    key={level}
+                    level={level as KnowledgeBaseLevel}
+                    sources={sources[level as KnowledgeBaseLevel]}
+                    isLoading={isLoading[level as KnowledgeBaseLevel]}
+                    operationInProgress={operationInProgress}
+                    anyOperationGloballyInProgress={anyOperationGloballyInProgress}
+                    handleDeleteSource={handleDeleteSource}
+                    handleMoveSource={handleMoveSource}
+                    handleReindexSource={handleReindexSource}
+                />
+            ))}
           </Accordion>
         </div>
       </div>
