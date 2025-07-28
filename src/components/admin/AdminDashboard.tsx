@@ -83,9 +83,12 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <Accordion type="multiple" collapsible className="w-full space-y-4" defaultValue={['admin-controls', 'error-board']}>
+      <Accordion type="multiple" collapsible className="w-full space-y-4">
         <AccordionItem value="admin-controls" className="border rounded-lg">
-          <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">Admin Controls</AccordionTrigger>
+          <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
+            <span className="mr-4">Admin Controls</span>
+            <span className="flex-grow border-b border-dashed border-border"></span>
+          </AccordionTrigger>
           <AccordionContent className="px-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
               <AdminNavLinkCard href="/admin/persona" title="AI Persona" description="Define conversational style and traits." Icon={Bot}/>
@@ -98,7 +101,8 @@ export default function AdminDashboard() {
 
         <AccordionItem value="error-board" className="border rounded-lg">
           <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
-            Error Board ({isLoadingErrors ? '...' : siteErrors.length})
+             <span className="mr-4">Error Board ({isLoadingErrors ? '...' : siteErrors.length})</span>
+             <span className="flex-grow border-b border-dashed border-border"></span>
           </AccordionTrigger>
           <AccordionContent className="px-6 pt-2">
             <Card className="shadow-none border-none -m-6">
