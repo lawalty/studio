@@ -115,6 +115,7 @@ interface ChatInterfaceProps {
 export default function ChatInterface({ communicationMode }: ChatInterfaceProps) {
     // Component readiness state
     const [isReady, setIsReady] = useState(false);
+    const [isInitialized, setIsInitialized] = useState(false);
     
     // Dynamic conversational state
     const [messages, setMessages] = useState<Message[]>([]);
@@ -156,7 +157,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     // Hooks
     const router = useRouter();
-    const { language, translate, isTranslating } = useLanguage();
+    const { language, translate } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
     
     // UI Text (static)
@@ -302,19 +303,20 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
         
         if (reason === 'final-inactive') {
+            const translatedEndMessage = await translate(uiText.inactivityEndMessage);
             const finalMessage: Message = { 
                 id: uuidv4(), 
-                text: uiText.inactivityEndMessage, 
+                text: translatedEndMessage, 
                 sender: 'model', 
                 timestamp: Date.now() 
             };
-            await speakText(uiText.inactivityEndMessage, finalMessage, () => {
+            await speakText(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
         } else {
             setHasConversationEnded(true);
         }
-    }, [clearInactivityTimer, isListening, isSpeaking, uiText.inactivityEndMessage, speakText]);
+    }, [clearInactivityTimer, isListening, isSpeaking, uiText.inactivityEndMessage, speakText, translate]);
 
 
     const startInactivityTimer = useCallback(() => {
@@ -322,19 +324,21 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
 
         inactivityTimerRef.current = setTimeout(async () => {
+            if (isSpeaking || isListening) return; // Don't interrupt activity
+
             if (inactivityCheckLevelRef.current === 0) {
                 inactivityCheckLevelRef.current = 1;
                 const translatedPrompt = await translate(uiText.inactivityPrompt);
                 const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
                 speakText(translatedPrompt, promptMessage, () => {
-                    startInactivityTimer();
+                    startInactivityTimer(); // Start the *next* timer after the prompt is spoken
                 });
             } else {
                 inactivityCheckLevelRef.current = 0;
                 handleEndChatManually('final-inactive');
             }
         }, configRef.current.responsePauseTimeMs);
-    }, [clearInactivityTimer, communicationMode, hasConversationEnded, translate, uiText.inactivityPrompt, speakText, handleEndChatManually]);
+    }, [clearInactivityTimer, communicationMode, hasConversationEnded, translate, uiText.inactivityPrompt, speakText, handleEndChatManually, isSpeaking, isListening]);
     
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isSendingMessage) return;
@@ -471,6 +475,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     useCustomTts: typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : false,
                     archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
                 };
+
+                // After fetching, translate the inactivity prompt once
+                await translate(uiText.inactivityPrompt);
+                await translate(uiText.inactivityEndMessage);
             }
           } catch (e) {
             toast({ title: "Config Error", description: `Could not load app settings. Using defaults.`, variant: "destructive" });
@@ -500,63 +508,45 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     // Effect to send initial greeting
     useEffect(() => {
-        // Only run if the component is ready, translations are not pending, and it's the first message.
-        if (isReady && !isTranslating && messages.length === 0) {
-            const sendInitialGreeting = async () => {
-                setIsSendingMessage(true);
-                let greetingText = "Hello! How can I help you today?"; // Default fallback
+        if (!isReady || isInitialized || messages.length > 0) return;
 
-                try {
-                    const { 
-                        customGreetingMessage, 
-                        useKnowledgeInGreeting, 
-                        personaTraits, 
-                        conversationalTopics 
-                    } = configRef.current;
+        const sendInitialGreeting = async () => {
+            setIsSendingMessage(true);
+            let greetingText = "Hello! How can I help you today?"; 
 
-                    if (customGreetingMessage) {
-                        greetingText = await translate(customGreetingMessage);
-                    } else {
-                        // Call the AI to generate a greeting
-                        const result = await generateInitialGreeting({
-                            personaTraits,
-                            conversationalTopics,
-                            useKnowledgeInGreeting,
-                            language,
-                        });
-                        greetingText = result.greeting;
-                    }
-                    
-                    const greetingMessage: Message = {
-                        id: uuidv4(),
-                        text: greetingText,
-                        sender: 'model',
-                        timestamp: Date.now()
-                    };
-
-                    setIsSendingMessage(false);
-                    await speakText(greetingText, greetingMessage, () => {
-                        startInactivityTimer();
+            try {
+                const { customGreetingMessage, useKnowledgeInGreeting, personaTraits, conversationalTopics } = configRef.current;
+                
+                let textToTranslate = customGreetingMessage || "Hello! How can I help you today?";
+                if (!customGreetingMessage) {
+                    const result = await generateInitialGreeting({
+                        personaTraits,
+                        conversationalTopics,
+                        useKnowledgeInGreeting,
+                        language: 'English', // Always generate in English
                     });
-
-                } catch (error) {
-                    console.error("Error generating or sending initial greeting:", error);
-                    // Use the default fallback greeting on error
-                    const fallbackMessage: Message = {
-                        id: uuidv4(),
-                        text: greetingText,
-                        sender: 'model',
-                        timestamp: Date.now()
-                    };
-                    setIsSendingMessage(false);
-                    await speakText(greetingText, fallbackMessage, () => {
-                        startInactivityTimer();
-                    });
+                    textToTranslate = result.greeting;
                 }
-            };
-            sendInitialGreeting();
-        }
-    }, [isReady, messages.length, language, speakText, startInactivityTimer, isTranslating, translate]);
+                
+                greetingText = await translate(textToTranslate);
+                
+                const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
+
+                await speakText(greetingText, greetingMessage, startInactivityTimer);
+                
+            } catch (error) {
+                console.error("Error generating or sending initial greeting:", error);
+                const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
+                await speakText(greetingText, fallbackMessage, startInactivityTimer);
+            } finally {
+                setIsSendingMessage(false);
+            }
+        };
+        
+        sendInitialGreeting();
+        setIsInitialized(true); 
+
+    }, [isReady, isInitialized, messages.length, translate, speakText, startInactivityTimer]);
     
     // Effect for speech recognition setup
     useEffect(() => {
@@ -737,3 +727,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
