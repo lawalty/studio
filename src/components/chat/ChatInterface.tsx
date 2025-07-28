@@ -181,6 +181,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         chatLogTitle: "Chat with AI Blair",
         inactivityPrompt: "Are you still there?",
         inactivityPromptInitial: "Is anyone there?",
+        inactivityPromptSecondary: "Hello, are you still there?",
         inactivityEndMessage: "It sounds like no one is available, so I'll end our conversation now. Feel free to start a new chat anytime!"
     };
 
@@ -378,32 +379,38 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     const startInactivityTimer = useCallback(() => {
         clearInactivityTimer();
-        if (hasConversationEnded) return;
+        if (hasConversationEnded || isSpeaking || isListening) return;
 
         inactivityTimerRef.current = setTimeout(async () => {
-            if (isSpeaking || isListening) return;
+            if (isSpeaking || isListening) return; // Double check state right before executing
 
+            let promptText;
             if (inactivityCheckLevelRef.current === 0) {
+                // First check
                 inactivityCheckLevelRef.current = 1;
-                
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                const promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
-
-                const translatedPrompt = await translate(promptText);
-                const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
-                speakText(translatedPrompt, promptMessage, () => {
-                    if (communicationMode === 'audio-only') {
-                        toggleListening(true);
-                    } else {
-                        startInactivityTimer();
-                    }
-                });
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+            } else if (inactivityCheckLevelRef.current === 1) {
+                // Second check
+                inactivityCheckLevelRef.current = 2;
+                promptText = uiText.inactivityPromptSecondary;
             } else {
+                // Third check fails, end conversation
                 inactivityCheckLevelRef.current = 0;
                 handleEndChatManually('final-inactive');
+                return;
             }
+
+            const translatedPrompt = await translate(promptText);
+            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
+            
+            speakText(translatedPrompt, promptMessage, () => {
+                toggleListening(true); // Always listen after the prompt
+                // The onend event of the speech recognition will restart the timer if no speech is detected.
+            });
+
         }, configRef.current.responsePauseTimeMs);
-    }, [clearInactivityTimer, hasConversationEnded, translate, uiText, speakText, handleEndChatManually, isSpeaking, isListening, communicationMode, toggleListening]);
+    }, [clearInactivityTimer, hasConversationEnded, isSpeaking, isListening, translate, uiText, speakText, handleEndChatManually, toggleListening]);
     
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isSendingMessage) return;
@@ -647,6 +654,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (finalTranscriptRef.current.trim()) {
                 handleSendMessage(finalTranscriptRef.current.trim());
             } else {
+                // This is key for the inactivity timer: if recognition ends with no speech,
+                // it means the user was silent, so we restart the timer to check again.
                 startInactivityTimer();
             }
             finalTranscriptRef.current = '';
@@ -737,7 +746,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         <Mic size={20} className="mr-2" /> {uiText.listening}
                     </div>
                  ) : isSpeaking ? null : (
-                   <Button onClick={() => toggleListening()} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
+                   <Button onClick={() => toggleListening(true)} variant="default" size="lg" className="h-16 w-16 rounded-full animate-pulse">
                      <Mic className="h-8 w-8" />
                    </Button>
                  )}
