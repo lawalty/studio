@@ -731,31 +731,30 @@ export default function KnowledgeBasePage() {
                   )}
                 </div>
               )}
+              {ragTestError?.includes("Missing vector index configuration") && (
+                <Card className="border-destructive mt-4">
+                      <CardHeader>
+                          <CardTitle className="text-destructive flex items-center gap-2">
+                              <Terminal /> Action Required: Create Index
+                          </CardTitle>
+                          <CardDescription>
+                              Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
+                          </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                          <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
+                              <code>
+                                  gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=field-path=embedding,vector-config='{"dimension":768,"flat":{}}'
+                              </code>
+                          </pre>
+                          <p className="text-xs text-muted-foreground mt-2">
+                              Note: Index creation can take several minutes. You only need to run this command once for your project.
+                          </p>
+                      </CardContent>
+                </Card>
+              )}
             </CardContent>
           </Card>
-          
-          {ragTestError?.includes("Missing vector index configuration") && (
-            <Card className="border-destructive">
-                  <CardHeader>
-                      <CardTitle className="text-destructive flex items-center gap-2">
-                          <Terminal /> Action Required: Create Index
-                      </CardTitle>
-                      <CardDescription>
-                          Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
-                      </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                      <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
-                          <code>
-                              gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=field-path=embedding,vector-config='{`"dimension":768,"flat":{}`}'
-                          </code>
-                      </pre>
-                      <p className="text-xs text-muted-foreground mt-2">
-                          Note: Index creation can take several minutes. You only need to run this command once for your project.
-                      </p>
-                  </CardContent>
-            </Card>
-          )}
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
@@ -771,5 +770,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
