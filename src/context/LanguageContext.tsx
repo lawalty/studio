@@ -12,6 +12,7 @@ interface LanguageContextType {
   setLanguage: (language: Language) => void;
   translate: (text: string) => Promise<string>;
   translations: Record<string, string>;
+  isTranslating: boolean;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -19,6 +20,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [language, setLanguageState] = useState<Language>('English');
   const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [isTranslating, setIsTranslating] = useState(false);
   const { toast } = useToast();
 
   const setLanguage = (newLanguage: Language) => {
@@ -43,7 +45,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
     if (translations[translationKey]) {
       return translations[translationKey];
     }
-
+    
+    setIsTranslating(true);
     try {
       const result = await translateText({ text, targetLanguage: language });
       const translated = result.translatedText;
@@ -60,11 +63,13 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           description: `Could not translate text to ${language}. Using default. Error: ${error.message || 'Unknown'}`
       });
       return text; // Return original text on error
+    } finally {
+        setIsTranslating(false);
     }
   }, [language, translations, toast]);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, translate, translations }}>
+    <LanguageContext.Provider value={{ language, setLanguage, translate, translations, isTranslating }}>
       {children}
     </LanguageContext.Provider>
   );

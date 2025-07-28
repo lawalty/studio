@@ -156,7 +156,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     // Hooks
     const router = useRouter();
-    const { language, translate } = useLanguage();
+    const { language, translate, isTranslating } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
     
     // UI Text (static)
@@ -500,7 +500,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     // Effect to send initial greeting
     useEffect(() => {
-        if (isReady && messages.length === 0) {
+        // Only run if the component is ready, translations are not pending, and it's the first message.
+        if (isReady && !isTranslating && messages.length === 0) {
             const sendInitialGreeting = async () => {
                 setIsSendingMessage(true);
                 let greetingText = "Hello! How can I help you today?"; // Default fallback
@@ -514,7 +515,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     } = configRef.current;
 
                     if (customGreetingMessage) {
-                        greetingText = customGreetingMessage;
+                        greetingText = await translate(customGreetingMessage);
                     } else {
                         // Call the AI to generate a greeting
                         const result = await generateInitialGreeting({
@@ -555,7 +556,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             };
             sendInitialGreeting();
         }
-    }, [isReady, messages.length, language, speakText, startInactivityTimer]);
+    }, [isReady, messages.length, language, speakText, startInactivityTimer, isTranslating, translate]);
     
     // Effect for speech recognition setup
     useEffect(() => {
@@ -736,5 +737,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
