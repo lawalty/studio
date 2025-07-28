@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -45,6 +44,7 @@ export default function StartPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { language, translate } = useLanguage();
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const [uiText, setUiText] = useState({
     welcome: welcomeMessage,
@@ -170,8 +170,20 @@ export default function StartPageContent() {
     let animationDelayTimer: NodeJS.Timeout | null = null;
     let typingTimer: NodeJS.Timeout | null = null;
 
+    const playAudio = () => {
+        if (audioRef.current) {
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(error => {
+                // Autoplay was prevented. This is common in browsers.
+                // We can let the user interaction (clicking a chat mode) enable sound later.
+                console.warn("Audio autoplay was prevented:", error);
+            });
+        }
+    };
+    
     if (!isLoading && isImageLoaded && !configError) {
       animationDelayTimer = setTimeout(() => {
+        playAudio();
         setTypedMessage(''); 
         let i = 0;
         const targetMessage = uiText.typedAnim;
@@ -191,6 +203,9 @@ export default function StartPageContent() {
     return () => {
       if (animationDelayTimer) clearTimeout(animationDelayTimer);
       if (typingTimer) clearInterval(typingTimer);
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
     };
   }, [isLoading, isImageLoaded, typingSpeedMs, uiText.typedAnim, configError]);
   
@@ -254,6 +269,7 @@ export default function StartPageContent() {
 
     return (
       <>
+        <audio ref={audioRef} src="/ai_blair_lets_have_a_conversation.mp3" preload="auto" />
         <Card className="w-full max-w-2xl p-6 space-y-6 text-center shadow-2xl border bg-card/80 backdrop-blur-sm">
           <CardHeader className="p-0">
             <CardTitle className="text-4xl font-headline text-primary">
@@ -334,3 +350,5 @@ export default function StartPageContent() {
     </div>
   );
 }
+
+      
