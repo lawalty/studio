@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -23,6 +23,7 @@ import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/te
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
 import { Separator } from '@/components/ui/separator';
+import { Slider } from '@/components/ui/slider';
 
 
 const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
@@ -36,6 +37,7 @@ const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer servi
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
+const DEFAULT_STYLE_VALUE = 50;
 
 
 export default function PersonaPage() {
@@ -49,6 +51,12 @@ export default function PersonaPage() {
   const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
   const [responsePauseTime, setResponsePauseTime] = useState<string>(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
   const [animationSyncFactor, setAnimationSyncFactor] = useState<string>(String(DEFAULT_ANIMATION_SYNC_FACTOR));
+
+  // Response Style Sliders State
+  const [formality, setFormality] = useState([DEFAULT_STYLE_VALUE]);
+  const [conciseness, setConciseness] = useState([DEFAULT_STYLE_VALUE]);
+  const [tone, setTone] = useState([DEFAULT_STYLE_VALUE]);
+  const [formatting, setFormatting] = useState([DEFAULT_STYLE_VALUE]);
 
 
   const [isSaving, setIsSaving] = useState(false);
@@ -81,6 +89,11 @@ export default function PersonaPage() {
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
           setAnimationSyncFactor(data?.animationSyncFactor === undefined ? String(DEFAULT_ANIMATION_SYNC_FACTOR) : String(data.animationSyncFactor));
+          // Load slider values
+          setFormality([data?.formality ?? DEFAULT_STYLE_VALUE]);
+          setConciseness([data?.conciseness ?? DEFAULT_STYLE_VALUE]);
+          setTone([data?.tone ?? DEFAULT_STYLE_VALUE]);
+          setFormatting([data?.formatting ?? DEFAULT_STYLE_VALUE]);
         } else {
           // If doc doesn't exist, set all to defaults
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
@@ -91,6 +104,10 @@ export default function PersonaPage() {
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
           setAnimationSyncFactor(String(DEFAULT_ANIMATION_SYNC_FACTOR));
+          setFormality([DEFAULT_STYLE_VALUE]);
+          setConciseness([DEFAULT_STYLE_VALUE]);
+          setTone([DEFAULT_STYLE_VALUE]);
+          setFormatting([DEFAULT_STYLE_VALUE]);
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
@@ -103,6 +120,10 @@ export default function PersonaPage() {
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
         setAnimationSyncFactor(String(DEFAULT_ANIMATION_SYNC_FACTOR));
+        setFormality([DEFAULT_STYLE_VALUE]);
+        setConciseness([DEFAULT_STYLE_VALUE]);
+        setTone([DEFAULT_STYLE_VALUE]);
+        setFormatting([DEFAULT_STYLE_VALUE]);
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -282,6 +303,10 @@ export default function PersonaPage() {
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
         responsePauseTimeMs: validPauseTime,
         animationSyncFactor: validSyncFactor,
+        formality: formality[0],
+        conciseness: conciseness[0],
+        tone: tone[0],
+        formatting: formatting[0],
       };
 
       if (avatarUpdated || newAvatarUrl !== currentData.avatarUrl) {
@@ -528,6 +553,59 @@ export default function PersonaPage() {
           </Button>
         </CardFooter>
       </Card>
+
+      <Card>
+          <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><SlidersHorizontal /> Response Style Equalizer</CardTitle>
+              <CardDescription>
+                  Fine-tune the AI&apos;s response style. These values are sent with every chat request to guide the AI.
+              </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-8 pt-2">
+              <div className="space-y-3">
+                  <Label>Formality: <span className="font-bold text-primary">{formality[0]}</span></Label>
+                  <Slider value={formality} onValueChange={setFormality} max={100} step={1} />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Casual / Slang</span>
+                      <span>Professional</span>
+                      <span>Formal / Academic</span>
+                  </div>
+              </div>
+              <div className="space-y-3">
+                  <Label>Conciseness: <span className="font-bold text-primary">{conciseness[0]}</span></Label>
+                  <Slider value={conciseness} onValueChange={setConciseness} max={100} step={1} />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Detailed / Elaborate</span>
+                      <span>Balanced</span>
+                      <span>Summary / Brief</span>
+                  </div>
+              </div>
+              <div className="space-y-3">
+                  <Label>Tone: <span className="font-bold text-primary">{tone[0]}</span></Label>
+                  <Slider value={tone} onValueChange={setTone} max={100} step={1} />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Neutral / Direct</span>
+                      <span>Friendly</span>
+                      <span>Enthusiastic / Upbeat</span>
+                  </div>
+              </div>
+              <div className="space-y-3">
+                  <Label>Formatting: <span className="font-bold text-primary">{formatting[0]}</span></Label>
+                  <Slider value={formatting} onValueChange={setFormatting} max={100} step={1} />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Paragraphs</span>
+                      <span>Balanced</span>
+                      <span>Bulleted Lists</span>
+                  </div>
+              </div>
+          </CardContent>
+           <CardFooter>
+             <Button onClick={handleSaveAllSettings} disabled={isSaving || isLoadingData}>
+               <Save className="mr-2 h-4 w-4" /> Save Style Settings
+             </Button>
+           </CardFooter>
+      </Card>
+
 
       <Separator className="my-8" />
       

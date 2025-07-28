@@ -24,6 +24,11 @@ const GenerateChatResponseInputSchema = z.object({
       text: z.string(),
     })),
   })).optional().describe('The history of the conversation so far, including the latest user message.'),
+  // New response style parameters
+  formality: z.number().optional().default(50).describe('Formality level (0=Casual, 100=Formal).'),
+  conciseness: z.number().optional().default(50).describe('Conciseness level (0=Detailed, 100=Summary).'),
+  tone: z.number().optional().default(50).describe('Tone level (0=Neutral, 100=Enthusiastic).'),
+  formatting: z.number().optional().default(50).describe('Formatting preference (0=Paragraph, 100=Bulleted List).'),
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
@@ -76,6 +81,10 @@ const chatPrompt = ai.definePrompt({
             language: z.string(),
             chatHistory: z.string(),
             retrievedContext: z.string(),
+            formality: z.number(),
+            conciseness: z.number(),
+            tone: z.number(),
+            formatting: z.number(),
         })
     },
     output: {
@@ -93,7 +102,12 @@ const chatPrompt = ai.definePrompt({
 6.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally using your persona.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-7.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+7.  **Response Style Equalizer (0-100 scale):**
+    - **Formality ({{formality}}):** If > 70, use very formal language. If < 30, use casual language and contractions. Otherwise, use a professional, neutral style.
+    - **Conciseness ({{conciseness}}):** If > 70, provide a brief summary. If < 30, provide a detailed, elaborate response. Otherwise, provide a balanced response.
+    - **Tone ({{tone}}):** If > 70, be enthusiastic and upbeat. If < 30, be very neutral and direct. Otherwise, be helpful and friendly.
+    - **Formatting ({{formatting}}):** If > 70 and the information is suitable, format the response as a bulleted or numbered list. If < 30, always use paragraphs. Otherwise, use your best judgment.
+8.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
 
     prompt: `You are an expert in: "{{conversationalTopics}}".
 The user is conversing in {{language}}.
@@ -127,7 +141,16 @@ Analyze the user's query below. Identify the core intent and key entities.
 
 
 // Define the flow at the top level.
-const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, chatHistory, language }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
+const generateChatResponseFlow = async ({ 
+    personaTraits, 
+    conversationalTopics, 
+    chatHistory, 
+    language,
+    formality = 50,
+    conciseness = 50,
+    tone = 50,
+    formatting = 50,
+}: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
@@ -196,7 +219,11 @@ const generateChatResponseFlow = async ({ personaTraits, conversationalTopics, c
         chatHistory: `<history>
 ${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}
 </history>`,
-        retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND'
+        retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND',
+        formality,
+        conciseness,
+        tone,
+        formatting,
     };
     
     try {

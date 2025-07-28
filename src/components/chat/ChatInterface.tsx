@@ -40,6 +40,7 @@ const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
+const DEFAULT_STYLE_VALUE = 50;
 
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
   const primaryBg = 'hsl(210 13% 50%)';
@@ -141,6 +142,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
         animationSyncFactor: DEFAULT_ANIMATION_SYNC_FACTOR,
+        formality: DEFAULT_STYLE_VALUE,
+        conciseness: DEFAULT_STYLE_VALUE,
+        tone: DEFAULT_STYLE_VALUE,
+        formatting: DEFAULT_STYLE_VALUE,
         ttsApiKey: '',
         ttsVoiceId: '',
         useCustomTts: false,
@@ -361,12 +366,23 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }));
 
         try {
-            const { personaTraits, conversationalTopics } = configRef.current;
+            const { 
+                personaTraits, 
+                conversationalTopics,
+                formality,
+                conciseness,
+                tone,
+                formatting,
+            } = configRef.current;
             const flowInput: GenerateChatResponseInput = {
                 personaTraits,
                 conversationalTopics,
                 chatHistory: historyForGenkit,
                 language: language,
+                formality,
+                conciseness,
+                tone,
+                formatting,
             };
             const result = await generateChatResponse(flowInput);
             
@@ -476,6 +492,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
                     animationSyncFactor: assets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR,
+                    formality: assets.formality ?? DEFAULT_STYLE_VALUE,
+                    conciseness: assets.conciseness ?? DEFAULT_STYLE_VALUE,
+                    tone: assets.tone ?? DEFAULT_STYLE_VALUE,
+                    formatting: assets.formatting ?? DEFAULT_STYLE_VALUE,
                     ttsApiKey: keys.tts || '',
                     ttsVoiceId: keys.voiceId || '',
                     useCustomTts: typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : false,
