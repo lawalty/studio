@@ -22,7 +22,7 @@ export type TestTextGenerationOutput = z.infer<typeof TestTextGenerationOutputSc
 const testTextGenerationFlow = async (): Promise<TestTextGenerationOutput> => {
     try {
       const { text } = await withRetry(() => ai.generate({
-          model: 'googleai/gemini-1.5-flash',
+          model: 'googleai/gemini-1.5-pro',
           prompt: 'Tell me a one-sentence joke.',
       }));
 
