@@ -654,7 +654,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setIsListening(false);
             if (finalTranscriptRef.current.trim()) {
                 handleSendMessage(finalTranscriptRef.current.trim());
-            } else {
+            } else if (!hasConversationEnded && !isSpeaking && !isSendingMessage) {
+                // If nothing was said, restart the inactivity timer.
                 startInactivityTimer();
             }
             finalTranscriptRef.current = '';
@@ -678,7 +679,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (recognitionRef.current) recognitionRef.current.stop();
           }, configRef.current.responsePauseTimeMs);
         };
-    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore]);
+    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, isSpeaking, isSendingMessage]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
