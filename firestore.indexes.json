@@ -6,10 +6,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "embedding",
           "vectorConfig": {
             "dimension": 768,
-            "distanceMeasure": "COSINE"
+            "flat": {}
           }
         }
       ]
