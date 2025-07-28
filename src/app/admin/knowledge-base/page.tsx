@@ -704,34 +704,37 @@ export default function KnowledgeBasePage() {
                 Test RAG
               </Button>
               {isTestingRag && <p className="text-sm text-muted-foreground">Searching knowledge base...</p>}
+              
               {ragTestError && (
                 <div className="mt-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 p-3 rounded-md">
-                  <p className="font-bold">Test Failed</p>
-                  <p className="whitespace-pre-wrap break-all">{ragTestError}</p>
+                    <p className="font-bold">Test Failed</p>
+                    <p className="whitespace-pre-wrap break-all">{ragTestError}</p>
                 </div>
               )}
+
               {ragTestResults && (
-                <div className="mt-4 space-y-4">
-                  <h4 className="font-semibold">{ragTestResults.length} Result(s) Found</h4>
-                  {ragTestResults.length > 0 ? (
-                    <ScrollArea className="h-64 w-full rounded-md border p-4">
-                      {ragTestResults.map((result, index) => (
-                        <div key={index} className="mb-4 pb-4 border-b last:border-b-0">
-                          <p className="text-xs text-muted-foreground">
-                            <strong>Source:</strong> {result.sourceName} | <strong>Level:</strong> {result.level} | <strong>Similarity:</strong> {result.distance.toFixed(4)}
-                          </p>
-                          <blockquote className="mt-2 border-l-2 pl-4 italic text-sm">
-                            {result.text}
-                          </blockquote>
-                        </div>
-                      ))}
-                    </ScrollArea>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No relevant chunks found in the knowledge base for this query and the current similarity threshold.</p>
-                  )}
-                </div>
+                  <div className="mt-4 space-y-4">
+                      <h4 className="font-semibold">{ragTestResults.length} Result(s) Found</h4>
+                      {ragTestResults.length > 0 ? (
+                          <ScrollArea className="h-64 w-full rounded-md border p-4">
+                              {ragTestResults.map((result, index) => (
+                                  <div key={index} className="mb-4 pb-4 border-b last:border-b-0">
+                                      <p className="text-xs text-muted-foreground">
+                                          <strong>Source:</strong> {result.sourceName} | <strong>Level:</strong> {result.level} | <strong>Similarity:</strong> {result.distance.toFixed(4)}
+                                      </p>
+                                      <blockquote className="mt-2 border-l-2 pl-4 italic text-sm">
+                                          {result.text}
+                                      </blockquote>
+                                  </div>
+                              ))}
+                          </ScrollArea>
+                      ) : (
+                          <p className="text-sm text-muted-foreground">No relevant chunks found in the knowledge base for this query and the current similarity threshold.</p>
+                      )}
+                  </div>
               )}
-              {ragTestError?.includes("Missing vector index configuration") && (
+
+              {ragTestError?.includes("vector index configuration") && (
                 <Card className="border-destructive mt-4">
                       <CardHeader>
                           <CardTitle className="text-destructive flex items-center gap-2">
@@ -744,7 +747,7 @@ export default function KnowledgeBasePage() {
                       <CardContent>
                           <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
                               <code>
-                                  gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=field-path=embedding,vector-config='{"dimension":768,"flat":{}}'
+                                  gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION '--field-config=field-path=embedding,vector-config={"dimension":768,"flat":{}}'
                               </code>
                           </pre>
                           <p className="text-xs text-muted-foreground mt-2">
