@@ -27,6 +27,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
+import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle as AlertTitleComponent } from '@/components/ui/alert';
+
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
@@ -97,7 +99,6 @@ export default function KnowledgeBasePage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          // Fetch topics
           const topicsString = data.conversationalTopics || '';
           let topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
           setAvailableTopics(topicsArray);
@@ -112,7 +113,6 @@ export default function KnowledgeBasePage() {
     fetchSettings();
   }, [selectedTopicForUpload]);
   
-  // This effect will listen for real-time updates on all knowledge base levels
   useEffect(() => {
     const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
       const q = query(collection(db, config.collectionName));
@@ -703,13 +703,41 @@ export default function KnowledgeBasePage() {
                 {isTestingRag ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
                 Test RAG
               </Button>
+              
               {isTestingRag && <p className="text-sm text-muted-foreground">Searching knowledge base...</p>}
               
               {ragTestError && (
-                <div className="mt-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 p-3 rounded-md">
-                    <p className="font-bold">Test Failed</p>
-                    <p className="whitespace-pre-wrap break-all">{ragTestError}</p>
-                </div>
+                 <div className="mt-4">
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitleComponent>Test Failed</AlertTitleComponent>
+                        <AlertDescriptionComponent className="whitespace-pre-wrap break-all">
+                            {ragTestError}
+                        </AlertDescriptionComponent>
+                    </Alert>
+                    {ragTestError.includes("vector index configuration") && (
+                        <Card className="border-destructive mt-4">
+                            <CardHeader>
+                                <CardTitle className="text-destructive flex items-center gap-2">
+                                    <Terminal /> Action Required: Create Index
+                                </CardTitle>
+                                <CardDescription>
+                                    Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
+                                    <code>
+                                        gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION '--field-config=field-path=embedding,vector-config={"dimension":768,"flat":{}}'
+                                    </code>
+                                </pre>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    Note: Index creation can take several minutes. You only need to run this command once for your project.
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+                 </div>
               )}
 
               {ragTestResults && (
@@ -732,29 +760,6 @@ export default function KnowledgeBasePage() {
                           <p className="text-sm text-muted-foreground">No relevant chunks found in the knowledge base for this query and the current similarity threshold.</p>
                       )}
                   </div>
-              )}
-
-              {ragTestError?.includes("vector index configuration") && (
-                <Card className="border-destructive mt-4">
-                      <CardHeader>
-                          <CardTitle className="text-destructive flex items-center gap-2">
-                              <Terminal /> Action Required: Create Index
-                          </CardTitle>
-                          <CardDescription>
-                              Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
-                          </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                          <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
-                              <code>
-                                  gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION '--field-config=field-path=embedding,vector-config={"dimension":768,"flat":{}}'
-                              </code>
-                          </pre>
-                          <p className="text-xs text-muted-foreground mt-2">
-                              Note: Index creation can take several minutes. You only need to run this command once for your project.
-                          </p>
-                      </CardContent>
-                </Card>
               )}
             </CardContent>
           </Card>
