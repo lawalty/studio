@@ -43,22 +43,24 @@ export async function exportEmbeddingsToGcs(): Promise<ExportEmbeddingsToGcsOutp
 
     // Define the path in Google Cloud Storage.
     const bucket = storage.bucket();
-    const fileName = `vertex-ai-embeddings-export/embeddings-${new Date().toISOString()}.json`;
+    const directoryPath = 'vertex-ai-embeddings-export';
+    const fileName = `${directoryPath}/embeddings-${new Date().toISOString()}.json`;
     const file = bucket.file(fileName);
 
     // Upload the file.
     await file.save(fileBuffer, {
       metadata: {
-        contentType: 'application/json',
+        contentType: 'application/jsonl', // Use jsonl for clarity
       },
     });
     
-    const gcsPath = `gs://${bucket.name}/${fileName}`;
+    // Vertex AI requires the path to the DIRECTORY, not the file.
+    const gcsDirectoryPath = `gs://${bucket.name}/${directoryPath}/`;
     
     return {
       success: true,
       count: embeddingsData.length,
-      gcsPath: gcsPath,
+      gcsPath: gcsDirectoryPath,
     };
 
   } catch (error: any) {

@@ -27,7 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Slider } from '@/components/ui/slider';
-import { Alert } from '@/components/ui/alert';
+import { Alert, AlertDescription as AlertDescriptionComponent } from '@/components/ui/alert';
 
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
@@ -221,7 +221,7 @@ export default function KnowledgeBasePage() {
         if (result.success) {
             toast({
                 title: 'Export Successful!',
-                description: `Created file with ${result.count} embeddings. You can now copy the path.`,
+                description: `Created file with ${result.count} embeddings. You can now copy the folder path below.`,
             });
         } else {
             throw new Error(result.error || 'An unknown error occurred during export.');
@@ -731,13 +731,13 @@ export default function KnowledgeBasePage() {
             <CardHeader>
                 <CardTitle className="font-headline flex items-center gap-2"><DownloadCloud /> Vertex AI Index</CardTitle>
                 <CardDescription>
-                    Export all embeddings from Firestore to a JSON file in Cloud Storage. This file is required to update your Vertex AI Vector Search index.
+                    Export embeddings to a file in Cloud Storage. Provide the GCS folder path to Vertex AI to update your search index.
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 <Button onClick={handleExport} disabled={anyOperationGloballyInProgress}>
                     {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                    Export Embeddings for Index
+                    Export Embeddings
                 </Button>
                 {exportResult && (
                   <div className="mt-4">
@@ -745,18 +745,18 @@ export default function KnowledgeBasePage() {
                       <Alert>
                           <CheckCircle className="h-4 w-4" />
                           <CardTitle className="text-sm font-semibold">Export Successful</CardTitle>
-                          <CardDescription className="text-xs mt-1">
-                              {`${exportResult.count} embeddings exported. You can now use this path to update your Vertex AI Index.`}
-                          </CardDescription>
+                          <AlertDescriptionComponent className="text-xs mt-1">
+                              {`${exportResult.count} embeddings exported. Use this GCS folder path to update your Vertex AI Index.`}
+                          </AlertDescriptionComponent>
                           <Input readOnly value={exportResult.gcsPath} className="mt-2 h-8 text-xs" />
                       </Alert>
                     ) : (
                       <Alert variant="destructive">
                           <AlertTriangle className="h-4 w-4" />
                           <CardTitle className="text-sm font-semibold">Export Failed</CardTitle>
-                          <CardDescription className="text-xs mt-1 break-words">
+                          <AlertDescriptionComponent className="text-xs mt-1 break-words">
                               {exportResult.error}
-                          </CardDescription>
+                          </AlertDescriptionComponent>
                       </Alert>
                     )}
                   </div>
