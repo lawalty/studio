@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -17,7 +18,7 @@ import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import type { SearchResult } from '@/ai/retrieval/vector-search';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, Terminal } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -166,15 +167,19 @@ export default function KnowledgeBasePage() {
       setRagTestResults(null);
       setRagTestError(null);
       try {
-          const results = await searchKnowledgeBase({ query: ragTestQuery, distanceThreshold: ragDistanceThreshold[0] });
-          setRagTestResults(results);
-          if (results.length === 0) {
-            toast({
-              title: "0 Results Found",
-              description: "No relevant chunks were found. Try adjusting the similarity threshold slider below or re-indexing your document.",
-              variant: "default",
-              duration: 8000
-            })
+          const { results, error } = await testSearch({ query: ragTestQuery, distanceThreshold: ragDistanceThreshold[0] });
+          if(error) {
+              setRagTestError(error);
+          } else {
+              setRagTestResults(results);
+              if (results.length === 0) {
+                toast({
+                  title: "0 Results Found",
+                  description: "No relevant chunks were found. Try adjusting the similarity threshold slider below or re-indexing your document.",
+                  variant: "default",
+                  duration: 8000
+                })
+              }
           }
       } catch (e: any) {
           setRagTestError(`An unexpected error occurred: ${e.message}`);
@@ -704,7 +709,7 @@ export default function KnowledgeBasePage() {
               {ragTestError && (
                 <div className="mt-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 p-3 rounded-md">
                   <p className="font-bold">Test Failed</p>
-                  <p>{ragTestError}</p>
+                  <p className="whitespace-pre-wrap break-all">{ragTestError}</p>
                 </div>
               )}
               {ragTestResults && (
@@ -730,6 +735,26 @@ export default function KnowledgeBasePage() {
               )}
             </CardContent>
           </Card>
+           <Card className="border-destructive">
+                <CardHeader>
+                    <CardTitle className="text-destructive flex items-center gap-2">
+                        <Terminal /> Action Required: Create Index
+                    </CardTitle>
+                    <CardDescription>
+                        Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
+                        <code>
+                            gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding
+                        </code>
+                    </pre>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        Note: Index creation can take several minutes. You only need to run this command once for your project.
+                    </p>
+                </CardContent>
+            </Card>
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
@@ -745,3 +770,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    

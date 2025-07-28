@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Performs a vector-based semantic search on the knowledge base.
@@ -106,7 +107,9 @@ export async function searchKnowledgeBase({
     const rawError = error.message || "An unknown error occurred.";
     let detailedError = `Search failed. This may be due to a configuration or permissions issue with Firestore. Details: ${rawError}`;
 
-    if (rawError.includes('needs to be indexed') || (error.details && error.details.includes("no matching index found"))) {
+    if (rawError.includes('FAILED_PRECONDITION') && rawError.includes('vector index configuration')) {
+        detailedError = `CRITICAL: Firestore is missing the required vector index for the 'kb_chunks' collection. Please create the index by running the gcloud command provided in the "Action Required" card on the Knowledge Base admin page.`;
+    } else if (rawError.includes('needs to be indexed') || (error.details && error.details.includes("no matching index found"))) {
         detailedError = `CRITICAL: Firestore is missing the required vector index for the 'kb_chunks' collection. Please ensure your 'firestore.indexes.json' file is configured correctly with a 768-dimension vector index and has been deployed via the Firebase CLI ('firebase deploy --only firestore:indexes').`;
     } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
       detailedError = `A permission error occurred while querying Firestore. Ensure the service account has the 'Cloud Datastore User' role. Full error: ${rawError}`;
@@ -117,3 +120,5 @@ export async function searchKnowledgeBase({
     throw new Error(detailedError);
   }
 }
+
+    
