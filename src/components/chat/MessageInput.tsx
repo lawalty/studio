@@ -31,10 +31,10 @@ export default function MessageInput({
 }: MessageInputProps) {
 
   const handleSendText = useCallback(() => {
-    if (inputValue.trim() === '' || isSending || isSpeaking || disabled) return;
+    if (inputValue.trim() === '' || isSending || disabled) return;
     onSendMessage(inputValue, 'text');
     onInputValueChange('');
-  }, [inputValue, onSendMessage, isSending, isSpeaking, onInputValueChange, disabled]);
+  }, [inputValue, onSendMessage, isSending, onInputValueChange, disabled]);
 
   const handleSubmit = (event?: FormEvent) => {
     event?.preventDefault();
@@ -46,14 +46,9 @@ export default function MessageInput({
     }
   };
 
-  // Disable mic button if component is disabled, or if (not listening AND (sending or speaking))
-  const micButtonDisabled = disabled || (isListening ? false : (isSending || isSpeaking));
-  
-  // Disable input field if component is disabled, or if sending, or if (speaking and not listening), or if (listening and in audio-only mode implicitly)
-  const inputDisabled = disabled || isSending || (isSpeaking && !isListening) || (isListening && !showMicButton); // Assuming !showMicButton implies audio-only for input context
-  
-  // Disable send button if component is disabled, or if (listening and mic isn't shown - implies form submit is for stopping listening), or if (not listening AND (sending OR speaking OR input is empty))
-  const sendButtonDisabled = disabled || (isListening && showMicButton ? false : ((isSending || isSpeaking) || inputValue.trim() === ''));
+  const micButtonDisabled = disabled || isSending;
+  const inputDisabled = disabled || isSending || isListening;
+  const sendButtonDisabled = disabled || isSending || (isListening ? false : inputValue.trim() === '');
 
   const placeholderText = disabled 
     ? "Conversation ended. Please choose an option above." 
