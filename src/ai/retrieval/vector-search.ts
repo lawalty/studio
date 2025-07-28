@@ -2,7 +2,8 @@
 'use server';
 /**
  * @fileOverview Performs a vector-based semantic search on the knowledge base.
- * This version uses Firestore's native vector search capabilities.
+ * This version uses Firestore's native vector search capabilities with pre-filtering
+ * to ensure only documents from specified priority levels are searched.
  */
 import { admin } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
@@ -55,8 +56,11 @@ export async function searchKnowledgeBase({
       throw new Error(`Failed to generate a valid 768-dimension embedding for the search query. Vector length received: ${queryEmbedding?.length || 0}`);
     }
     
-    // 2. Perform the vector search directly in Firestore.
-    const chunksCollection = firestore.collection('kb_chunks');
+    // 2. Perform the vector search directly in Firestore with pre-filtering.
+    // This is the key change: we only search 'High', 'Medium', and 'Low' priority documents.
+    const chunksCollection = firestore.collection('kb_chunks')
+        .where('level', 'in', ['High', 'Medium', 'Low']);
+
     const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
         limit,
         distanceMeasure: 'COSINE'
