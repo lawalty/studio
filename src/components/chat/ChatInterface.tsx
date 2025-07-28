@@ -203,44 +203,113 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
     
-    const startInactivityTimer = useCallback(() => {
-        clearInactivityTimer();
-        if (hasConversationEnded || isBotProcessing || isListening) return;
-
-        inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || isListening || isBotProcessing) return; // Double check state
-
-            inactivityCheckLevelRef.current += 1;
-            let promptText;
-            if (inactivityCheckLevelRef.current === 1) {
-                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
-            } else if (inactivityCheckLevelRef.current === 2) {
-                promptText = uiText.inactivityPromptSecondary;
-            } else {
-                inactivityCheckLevelRef.current = 0;
-                handleEndChatManually('final-inactive');
-                return;
-            }
-
-            const translatedPrompt = await translate(promptText);
-            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
-            
-            speakText(translatedPrompt, promptMessage, () => {
-                if (!hasConversationEnded) {
-                    toggleListening(true);
-                }
-            });
-
-        }, configRef.current.responsePauseTimeMs);
-    }, [hasConversationEnded, isBotProcessing, isListening, translate, uiText, speakText, handleEndChatManually, toggleListening]);
-    
     const clearInactivityTimer = useCallback(() => {
         if (inactivityTimerRef.current) {
             clearTimeout(inactivityTimerRef.current);
             inactivityTimerRef.current = null;
         }
     }, []);
+
+    // speakText must be defined before functions that use it (handleEndChatManually, startInactivityTimer, etc.)
+    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
+        if (!isMountedRef.current) return;
+        if (!textToSpeak.trim()) {
+            onSpeechEnd?.();
+            return;
+        };
+        setIsBotProcessing(true);
+
+        const processedText = textToSpeak
+          .replace(/\bCOO\b/gi, 'Chief Operating Officer')
+          .replace(/\bEZCORP\b/gi, 'easy corp');
+    
+        const useAudio = communicationMode !== 'text-only';
+    
+        if (useAudio) {
+            if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+            if (audioPlayerRef.current) audioPlayerRef.current.pause();
+        }
+    
+        let audioDuration = fullMessage.text.length * configRef.current.typingSpeedMs;
+        let audioDataUri = '';
+
+        if (useAudio) {
+            try {
+                const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
+                if (useCustomTts && ttsApiKey && ttsVoiceId) {
+                    const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
+                    if (result.error || !result.media) throw new Error(result.error);
+                    audioDataUri = result.media;
+                } else {
+                    const result = await googleTextToSpeech(processedText);
+                    audioDataUri = result.media;
+                }
+            } catch (ttsError: any) {
+                console.error("TTS API Error, falling back to Google TTS:", ttsError);
+                await logErrorToFirestore(ttsError, 'ChatInterface/speakText/CustomTTS');
+                try {
+                    const result = await googleTextToSpeech(processedText);
+                    audioDataUri = result.media;
+                } catch (fallbackError) {
+                    console.error("Fallback Google TTS Error:", fallbackError);
+                    await logErrorToFirestore(fallbackError, 'ChatInterface/speakText/FallbackTTS');
+                    setIsBotProcessing(false);
+                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+                    onSpeechEnd?.();
+                    return;
+                }
+            }
+        }
+        
+        const handleEnd = () => {
+          if (!isMountedRef.current) return;
+          setIsBotProcessing(false);
+          if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+          setAnimatedResponse(null);
+          addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+          onSpeechEnd?.();
+        };
+        
+      if (useAudio && audioDataUri) {
+          if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+          audioPlayerRef.current.onended = handleEnd;
+          audioPlayerRef.current.src = audioDataUri;
+          
+          const audioPromise = new Promise<void>(resolve => {
+              audioPlayerRef.current!.onloadedmetadata = () => {
+                  const duration = audioPlayerRef.current!.duration;
+                  if (isFinite(duration)) audioDuration = duration * 1000 * configRef.current.animationSyncFactor;
+                  resolve();
+              };
+              audioPlayerRef.current!.onerror = () => resolve();
+          });
+
+          await audioPromise;
+          if (isMountedRef.current) audioPlayerRef.current.play();
+      }
+    
+      if (communicationMode !== 'audio-only') {
+          const textLength = fullMessage.text.length;
+          const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
+          let currentIndex = 0;
+          setAnimatedResponse({ ...fullMessage, text: '' });
+  
+          const typeCharacter = () => {
+              if (currentIndex < textLength) {
+                  if (!isMountedRef.current) return;
+                  setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
+                  currentIndex++;
+                  animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
+              } else if (!useAudio) {
+                  handleEnd();
+              }
+          };
+          typeCharacter();
+      } else if (!useAudio) { // text-only mode and audio failed
+          handleEnd();
+      }
+    
+    }, [communicationMode, addMessage, logErrorToFirestore, configRef]);
     
     const toggleListening = useCallback((shouldListen?: boolean) => {
         if (!recognitionRef.current || !isMountedRef.current) return;
@@ -302,107 +371,38 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setHasConversationEnded(true);
         }
     }, [clearInactivityTimer, isBotProcessing, uiText.inactivityEndMessage, speakText, translate, toggleListening]);
-
-
-    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
-        if (!isMountedRef.current) return;
-        if (!textToSpeak.trim()) {
-            onSpeechEnd?.();
-            return;
-        };
-        setIsBotProcessing(true);
-
-        const processedText = textToSpeak
-          .replace(/\bCOO\b/gi, 'Chief Operating Officer')
-          .replace(/\bEZCORP\b/gi, 'easy corp');
     
-        const useAudio = communicationMode !== 'text-only';
-    
-        if (useAudio) {
-            if (typeof window !== 'undefined') window.speechSynthesis.cancel();
-            if (audioPlayerRef.current) audioPlayerRef.current.pause();
-        }
-    
-        let audioDuration = fullMessage.text.length * configRef.current.typingSpeedMs;
-        let audioDataUri = '';
+    const startInactivityTimer = useCallback(() => {
+        clearInactivityTimer();
+        if (hasConversationEnded || isBotProcessing || isListening) return;
 
-        if (useAudio) {
-            try {
-                const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
-                if (useCustomTts && ttsApiKey && ttsVoiceId) {
-                    const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
-                    if (result.error || !result.media) throw new Error(result.error);
-                    audioDataUri = result.media;
-                } else {
-                    const result = await googleTextToSpeech(processedText);
-                    audioDataUri = result.media;
-                }
-            } catch (ttsError: any) {
-                console.error("TTS API Error, falling back to Google TTS:", ttsError);
-                await logErrorToFirestore(ttsError, 'ChatInterface/speakText/CustomTTS');
-                try {
-                    const result = await googleTextToSpeech(processedText);
-                    audioDataUri = result.media;
-                } catch (fallbackError) {
-                    console.error("Fallback Google TTS Error:", fallbackError);
-                    await logErrorToFirestore(fallbackError, 'ChatInterface/speakText/FallbackTTS');
-                    setIsBotProcessing(false);
-                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                    onSpeechEnd?.();
-                    return;
-                }
+        inactivityTimerRef.current = setTimeout(async () => {
+            if (!isMountedRef.current || isListening || isBotProcessing) return; // Double check state
+
+            inactivityCheckLevelRef.current += 1;
+            let promptText;
+            if (inactivityCheckLevelRef.current === 1) {
+                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+            } else if (inactivityCheckLevelRef.current === 2) {
+                promptText = uiText.inactivityPromptSecondary;
+            } else {
+                inactivityCheckLevelRef.current = 0;
+                handleEndChatManually('final-inactive');
+                return;
             }
-        }
-        
-        const handleEnd = () => {
-          if (!isMountedRef.current) return;
-          setIsBotProcessing(false);
-          if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-          setAnimatedResponse(null);
-          addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-          onSpeechEnd?.();
-      };
-        
-      if (useAudio && audioDataUri) {
-          if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-          audioPlayerRef.current.onended = handleEnd;
-          audioPlayerRef.current.src = audioDataUri;
-          
-          const audioPromise = new Promise<void>(resolve => {
-              audioPlayerRef.current!.onloadedmetadata = () => {
-                  const duration = audioPlayerRef.current!.duration;
-                  if (isFinite(duration)) audioDuration = duration * 1000 * configRef.current.animationSyncFactor;
-                  resolve();
-              };
-              audioPlayerRef.current!.onerror = () => resolve();
-          });
 
-          await audioPromise;
-          if (isMountedRef.current) audioPlayerRef.current.play();
-      }
-    
-      if (communicationMode !== 'audio-only') {
-          const textLength = fullMessage.text.length;
-          const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
-          let currentIndex = 0;
-          setAnimatedResponse({ ...fullMessage, text: '' });
-  
-          const typeCharacter = () => {
-              if (currentIndex < textLength) {
-                  if (!isMountedRef.current) return;
-                  setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
-                  currentIndex++;
-                  animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-              } else if (!useAudio) {
-                  handleEnd();
-              }
-          };
-          typeCharacter();
-      } else if (!useAudio) { // text-only mode and audio failed
-          handleEnd();
-      }
-    
-    }, [communicationMode, addMessage, logErrorToFirestore, configRef]);
+            const translatedPrompt = await translate(promptText);
+            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
+            
+            speakText(translatedPrompt, promptMessage, () => {
+                if (!hasConversationEnded) {
+                    toggleListening(true);
+                }
+            });
+
+        }, configRef.current.responsePauseTimeMs);
+    }, [hasConversationEnded, isBotProcessing, isListening, translate, uiText, speakText, handleEndChatManually, toggleListening, clearInactivityTimer]);
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
