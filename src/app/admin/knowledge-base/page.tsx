@@ -16,9 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { testSearch } from '@/ai/flows/test-search-flow';
-import type { SearchResult } from '@/ai/flows/test-search-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, Terminal } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, Link as LinkIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -26,9 +24,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Slider } from '@/components/ui/slider';
-import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle as AlertTitleComponent } from '@/components/ui/alert';
-
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
@@ -60,13 +55,10 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'Archive': { collectionName: 'kb_archive_meta_v1', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
-const INITIAL_DISTANCE_THRESHOLD = 0.6;
-
 const getFileExtension = (filename: string) => {
     return filename.split('.').pop()?.toUpperCase() || 'FILE';
 };
 
-// Standalone helper function to render a knowledge base level
 const RenderKnowledgeBaseLevel = ({
     level,
     sources,
@@ -155,17 +147,6 @@ const RenderKnowledgeBaseLevel = ({
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button variant="ghost" size="icon" asChild disabled={!source.downloadURL || anyOperationGloballyInProgress}>
-                                                                <a href={source.downloadURL} target="_blank" rel="noopener noreferrer">
-                                                                    <Eye size={16} />
-                                                                </a>
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>View File</p></TooltipContent>
-                                                    </Tooltip>
-
                                                     <AlertDialog>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
@@ -254,7 +235,6 @@ const RenderKnowledgeBaseLevel = ({
     );
 };
 
-
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
   const [englishSources, setEnglishSources] = useState<KnowledgeSource[]>([]);
@@ -271,12 +251,6 @@ export default function KnowledgeBasePage() {
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   
   const { toast } = useToast();
-
-  const [ragTestQuery, setRagTestQuery] = useState('');
-  const [isTestingRag, setIsTestingRag] = useState(false);
-  const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
-  const [ragTestError, setRagTestError] = useState<string | null>(null);
-  const [ragDistanceThreshold, setRagDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
 
   const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
 
@@ -349,36 +323,6 @@ export default function KnowledgeBasePage() {
 
     return () => unsubscribers.forEach(unsub => unsub());
   }, []);
-
-  const handleRunRagTest = useCallback(async () => {
-      if (!ragTestQuery.trim()) {
-          toast({ title: 'Query is empty', description: 'Please enter a search query to test.', variant: 'destructive' });
-          return;
-      }
-      setIsTestingRag(true);
-      setRagTestResults(null);
-      setRagTestError(null);
-      try {
-          const { results, error } = await testSearch({ query: ragTestQuery, distanceThreshold: ragDistanceThreshold[0] });
-          if(error) {
-              setRagTestError(error);
-          } else {
-              setRagTestResults(results);
-              if (results.length === 0) {
-                toast({
-                  title: "0 Results Found",
-                  description: "No relevant chunks were found. Try adjusting the similarity threshold slider below or re-indexing your document.",
-                  variant: "default",
-                  duration: 8000
-                })
-              }
-          }
-      } catch (e: any) {
-          setRagTestError(`An unexpected error occurred: ${e.message}`);
-      } finally {
-          setIsTestingRag(false);
-      }
-  }, [ragTestQuery, ragDistanceThreshold, toast]);
 
   const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
@@ -607,7 +551,6 @@ export default function KnowledgeBasePage() {
           setOperationStatus(source.id, false);
       }
   }, [toast, setOperationStatus]);
-  
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
@@ -683,101 +626,21 @@ export default function KnowledgeBasePage() {
               </Button>
             </CardFooter>
           </Card>
-
+          
           <Card>
             <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><Wrench /> RAG Test</CardTitle>
+              <CardTitle className="font-headline flex items-center gap-2"><Wrench /> Vector Search Health</CardTitle>
               <CardDescription>
-                Directly test the vector search to see what context the AI would receive for a given query.
+                The RAG test UI has been temporarily removed. The core functionality is being repaired.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="rag-test-query">Test Query</Label>
-                <Input
-                  id="rag-test-query"
-                  placeholder="Enter a question to test..."
-                  value={ragTestQuery}
-                  onChange={(e) => setRagTestQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleRunRagTest()}
-                />
-              </div>
-               <div className="space-y-4 pt-2">
-                  <Label htmlFor="distance-threshold">Similarity Threshold: {ragDistanceThreshold[0]}</Label>
-                  <Slider
-                      id="distance-threshold"
-                      min={0.1}
-                      max={1}
-                      step={0.01}
-                      value={ragDistanceThreshold}
-                      onValueChange={setRagDistanceThreshold}
-                      className="my-4"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                      Controls search strictness. Higher is stricter. Default is {INITIAL_DISTANCE_THRESHOLD}.
-                  </p>
-              </div>
-              <Button onClick={handleRunRagTest} disabled={isTestingRag}>
-                {isTestingRag ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                Test RAG
-              </Button>
-              
-              {isTestingRag && <p className="text-sm text-muted-foreground">Searching knowledge base...</p>}
-              
-              {ragTestError && (
-                 <div className="mt-4 space-y-4">
-                    <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitleComponent>Test Failed</AlertTitleComponent>
-                        <AlertDescriptionComponent className="whitespace-pre-wrap break-all">
-                            {ragTestError}
-                        </AlertDescriptionComponent>
-                    </Alert>
-                    {ragTestError.includes("vector index configuration") && (
-                        <Card className="border-destructive mt-4">
-                            <CardHeader>
-                                <CardTitle className="text-destructive flex items-center gap-2">
-                                    <Terminal /> Action Required: Create Index
-                                </CardTitle>
-                                <CardDescription>
-                                    Your search failed because the required Firestore Vector Index is missing. Run the following command in your local terminal where you have the Google Cloud CLI installed. This process may take 5-10 minutes.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto">
-                                    <code>
-                                        gcloud firestore indexes composite create --project=ai-blair-v4 --collection-group=kb_chunks --query-scope=COLLECTION --field-config=vector-config='{"dimension":"768","flat": "{}"}',field-path=embedding
-                                    </code>
-                                </pre>
-                            </CardContent>
-                        </Card>
-                    )}
-                 </div>
-              )}
-
-              {ragTestResults && (
-                  <div className="mt-4 space-y-4">
-                      <h4 className="font-semibold">{ragTestResults.length} Result(s) Found</h4>
-                      {ragTestResults.length > 0 ? (
-                          <ScrollArea className="h-64 w-full rounded-md border p-4">
-                              {ragTestResults.map((result, index) => (
-                                  <div key={index} className="mb-4 pb-4 border-b last:border-b-0">
-                                      <p className="text-xs text-muted-foreground">
-                                          <strong>Source:</strong> {result.sourceName} | <strong>Level:</strong> {result.level} | <strong>Similarity:</strong> {result.distance.toFixed(4)}
-                                      </p>
-                                      <blockquote className="mt-2 border-l-2 pl-4 italic text-sm">
-                                          {result.text}
-                                      </blockquote>
-                                  </div>
-                              ))}
-                          </ScrollArea>
-                      ) : (
-                          <p className="text-sm text-muted-foreground">No relevant chunks found in the knowledge base for this query and the current similarity threshold.</p>
-                      )}
-                  </div>
-              )}
+             <CardContent>
+                <div className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-lg">
+                    The search test interface is currently under maintenance. We are working to restore it.
+                </div>
             </CardContent>
           </Card>
+          
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>

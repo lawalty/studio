@@ -17,7 +17,7 @@ export interface SearchResult {
   level: string;
   topic: string;
   downloadURL?: string;
-  distance: number; // This will now be the similarity score from Firestore (0 to 1)
+  distance: number; // Firestore returns distance (lower is better, e.g., 0.0 to 2.0)
   pageNumber?: number;
   title?: string;
   header?: string;
@@ -26,7 +26,7 @@ export interface SearchResult {
 interface SearchParams {
   query: string;
   limit?: number;
-  distanceThreshold?: number;
+  distanceThreshold?: number; // Represents the maximum allowed distance.
 }
 
 // Function to pre-process text for better embedding and search quality.
@@ -38,7 +38,7 @@ const preprocessText = (text: string): string => {
 export async function searchKnowledgeBase({
   query,
   limit = 10,
-  distanceThreshold = 0.6,
+  distanceThreshold = 0.4, // Default to a stricter distance threshold.
 }: SearchParams): Promise<SearchResult[]> {
   const firestore = admin.firestore();
   try {
@@ -78,10 +78,11 @@ export async function searchKnowledgeBase({
 
     querySnapshot.forEach(doc => {
       const data = doc.data();
-      const similarity = doc.distance;
+      // distance is returned by Firestore, where a smaller value is better (more similar).
+      const distance = doc.distance;
       
-      // Post-query filtering
-      if (validLevels.has(data.level) && similarity >= distanceThreshold) {
+      // Post-query filtering. We check if the distance is LESS than or equal to the threshold.
+      if (validLevels.has(data.level) && distance <= distanceThreshold) {
         results.push({
           sourceId: data.sourceId,
           text: data.text,
@@ -92,14 +93,14 @@ export async function searchKnowledgeBase({
           pageNumber: data.pageNumber,
           title: data.title,
           header: data.header,
-          distance: similarity,
+          distance: distance,
         });
       }
     });
 
-    // Sort by highest similarity and apply the final limit
+    // Sort by lowest distance (most similar) and apply the final limit
     return results
-        .sort((a, b) => b.distance - a.distance)
+        .sort((a, b) => a.distance - b.distance)
         .slice(0, limit);
 
   } catch (error: any) {
@@ -107,10 +108,10 @@ export async function searchKnowledgeBase({
     const rawError = error.message || "An unknown error occurred.";
     let detailedError = `Search failed. This may be due to a configuration or permissions issue with Firestore. Details: ${rawError}`;
 
-    if (rawError.includes('FAILED_PRECONDITION') && rawError.includes('vector index configuration')) {
-        detailedError = `CRITICAL: Firestore is missing the required vector index for the 'kb_chunks' collection. Please create the index by running the gcloud command provided in the "Action Required" card on the Knowledge Base admin page.`;
+    if (rawError.includes('FAILED_PRECONDITION') && rawError.includes('vector index')) {
+        detailedError = `CRITICAL: Firestore is missing the required vector index for the 'kb_chunks' collection, or the index is still building. Please ensure the index is configured as specified in 'firestore.indexes.json' and has been deployed successfully using 'firebase deploy --only firestore:indexes'. Index creation can take up to 10 minutes.`;
     } else if (rawError.includes('needs to be indexed') || (error.details && error.details.includes("no matching index found"))) {
-        detailedError = `CRITICAL: Firestore is missing the required vector index for the 'kb_chunks' collection. Please ensure your 'firestore.indexes.json' file is configured correctly with a 768-dimension vector index and has been deployed via the Firebase CLI ('firebase deploy --only firestore:indexes').`;
+        detailedError = `CRITICAL: Firestore is missing the required vector index for the 'kb_chunks' collection. Please ensure your 'firestore.indexes.json' file is configured correctly with a 768-dimension COSINE vector index and has been deployed via the Firebase CLI ('firebase deploy --only firestore:indexes').`;
     } else if (rawError.includes('permission denied') || rawError.includes('IAM')) {
       detailedError = `A permission error occurred while querying Firestore. Ensure the service account has the 'Cloud Datastore User' role. Full error: ${rawError}`;
     } else if (rawError.includes('INVALID_ARGUMENT')) {
@@ -120,5 +121,3 @@ export async function searchKnowledgeBase({
     throw new Error(detailedError);
   }
 }
-
-    
