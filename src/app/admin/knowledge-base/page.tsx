@@ -17,7 +17,8 @@ import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-u
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { testSearch, type SearchResult } from '@/ai/flows/test-search-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search } from 'lucide-react';
+import { exportEmbeddingsToGcs } from '@/ai/flows/export-embeddings-to-gcs-flow';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, RefreshCw, Eye, Link as LinkIcon, SlidersHorizontal, Save, Search, DownloadCloud } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -74,6 +75,7 @@ export default function KnowledgeBasePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
+  const [isExporting, setIsExporting] = useState(false);
   const [distanceThreshold, setDistanceThreshold] = useState([INITIAL_DISTANCE_THRESHOLD]);
   const [isSavingThreshold, setIsSavingThreshold] = useState(false);
   const { toast } = useToast();
@@ -84,7 +86,7 @@ export default function KnowledgeBasePage() {
   const [ragTestResults, setRagTestResults] = useState<SearchResult[] | null>(null);
   const [ragTestError, setRagTestError] = useState<string | null>(null);
 
-  const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status);
+  const anyOperationGloballyInProgress = Object.values(operationInProgress).some(status => status) || isExporting;
 
   const setOperationStatus = (id: string, status: boolean) => {
     setOperationInProgress(prev => ({ ...prev, [id]: status }));
@@ -206,6 +208,42 @@ export default function KnowledgeBasePage() {
           setIsTestingRag(false);
       }
   };
+  
+  const handleExport = async () => {
+    setIsExporting(true);
+    toast({ title: 'Starting Export...', description: 'Gathering embeddings from Firestore. This may take a moment.' });
+    try {
+        const result = await exportEmbeddingsToGcs();
+        if (result.success) {
+            toast({
+                title: 'Export Successful!',
+                description: (
+                    <div className="flex flex-col gap-2">
+                        <span>{`${result.count} embeddings exported.`}</span>
+                        <span className="text-xs">
+                            Path: <Input readOnly value={result.gcsPath} className="mt-1 h-8 text-xs" />
+                        </span>
+                        <span>
+                            You can now use this path to update your Vertex AI Index.
+                        </span>
+                    </div>
+                ),
+                duration: 20000,
+            });
+        } else {
+            throw new Error(result.error || 'An unknown error occurred during export.');
+        }
+    } catch (e: any) {
+        toast({
+            title: 'Export Failed',
+            description: e.message,
+            variant: 'destructive',
+        });
+    } finally {
+        setIsExporting(false);
+    }
+  };
+
 
   const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
@@ -693,6 +731,21 @@ export default function KnowledgeBasePage() {
                 Upload and Process
               </Button>
             </CardFooter>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><DownloadCloud /> Vertex AI Index</CardTitle>
+                <CardDescription>
+                    Export all embeddings from Firestore to a JSON file in Cloud Storage. This file is required to update your Vertex AI Vector Search index.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button onClick={handleExport} disabled={anyOperationGloballyInProgress}>
+                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                    Export Embeddings for Index
+                </Button>
+            </CardContent>
           </Card>
           
           <Card>
