@@ -149,7 +149,21 @@ export async function searchKnowledgeBase({
     return results;
   } catch (error: any) {
     console.error('[searchKnowledgeBase] An error occurred during Vertex AI search:', error);
-    // Provide a more user-friendly error message
-    throw new Error(`Search failed. This may be due to a configuration issue with the Vertex AI environment variables or permissions. Details: ${error.message}`);
+    const rawError = error.message || "An unknown error occurred.";
+    let detailedError = `Search failed. This may be due to a configuration issue with the Vertex AI environment variables or permissions. Details: ${rawError}`;
+
+    if (rawError.includes('permission denied') || rawError.includes('IAM')) {
+      detailedError = `A critical permission error occurred. This often happens when the Vertex AI Service Agent is missing the "Storage Object Viewer" role, which it needs to read index files.
+
+Action Required:
+1. Go to the IAM page in your Google Cloud Console.
+2. Find the service account named 'service-PROJECT_NUMBER@gcp-sa-aiplatform.iam.gserviceaccount.com' (replace PROJECT_NUMBER with your project number).
+3. Grant it the "Storage Object Viewer" role.
+4. Redeploy your index to the endpoint.
+
+Full error: ${rawError}`;
+    }
+
+    throw new Error(detailedError);
   }
 }
