@@ -310,7 +310,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             typeCharacter();
         }
     
-    }, [communicationMode, addMessage, configRef, toast, logErrorToFirestore]);
+    }, [communicationMode, addMessage, configRef, logErrorToFirestore]);
 
     const clearInactivityTimer = useCallback(() => {
         if (inactivityTimerRef.current) {
@@ -423,12 +423,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         } catch (error: any) {
             console.error("Error in generateChatResponse:", error);
+            await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
             const errorMessage = error.message || uiText.errorEncountered;
             addMessage(errorMessage, 'model');
             setIsSendingMessage(false);
             startInactivityTimer();
         }
-    }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered, clearInactivityTimer, startInactivityTimer]);
+    }, [addMessage, hasConversationEnded, isSendingMessage, language, speakText, uiText.errorEncountered, clearInactivityTimer, startInactivityTimer, logErrorToFirestore]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -477,7 +478,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } catch (error: any) {
             console.error("Failed to archive chat:", error);
             await logErrorToFirestore(error, 'ChatInterface/archiveAndIndexChat');
-            toast({ title: "Archiving Failed", description: error.message, variant: "destructive" });
+            toast({ title: "Archiving Failed", variant: "destructive" });
         }
     }, [toast, logErrorToFirestore]);
     
@@ -522,7 +523,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
           } catch (e: any) {
             await logErrorToFirestore(e, 'ChatInterface/fetchAllData');
-            toast({ title: "Config Error", description: `Could not load app settings. Using defaults.`, variant: "destructive" });
+            // Do not show toast to user, just log it.
           } finally {
             if (isMounted) {
                 setIsReady(true);
@@ -574,8 +575,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
                 await speakText(greetingText, greetingMessage, startInactivityTimer);
                 
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Error generating or sending initial greeting:", error);
+                await logErrorToFirestore(error, 'ChatInterface/sendInitialGreeting');
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, fallbackMessage, startInactivityTimer);
             } finally {
@@ -586,7 +588,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, startInactivityTimer]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, startInactivityTimer, logErrorToFirestore]);
     
     useEffect(() => {
         if (!isReady || communicationMode === 'text-only') return;
@@ -617,7 +619,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           setIsListening(false);
           startInactivityTimer();
           if (!['no-speech', 'aborted'].includes(event.error)) {
-            toast({ title: uiText.micErrorTitle, description: event.error, variant: 'destructive' });
+            logErrorToFirestore(event.error, 'ChatInterface/SpeechRecognition');
           }
         };
         recognition.onresult = (event: any) => {
@@ -632,7 +634,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (recognitionRef.current) recognitionRef.current.stop();
           }, configRef.current.responsePauseTimeMs);
         };
-    }, [isReady, communicationMode, language, handleSendMessage, toast, uiText.micErrorTitle, startInactivityTimer, clearInactivityTimer]);
+    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore]);
 
     const toggleListening = useCallback(() => {
         if (isListening) {
@@ -641,11 +643,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             try {
                 finalTranscriptRef.current = '';
                 recognitionRef.current?.start();
-            } catch (e) {
-                toast({ variant: 'destructive', title: uiText.micErrorTitle, description: uiText.micErrorDesc });
+            } catch (e: any) {
+                logErrorToFirestore(e, 'ChatInterface/toggleListening');
             }
         }
-    }, [isListening, hasConversationEnded, isSpeaking, isSendingMessage, toast, uiText.micErrorDesc, uiText.micErrorTitle]);
+    }, [isListening, hasConversationEnded, isSpeaking, isSendingMessage, logErrorToFirestore]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
