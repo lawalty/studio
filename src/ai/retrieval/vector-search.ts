@@ -32,7 +32,10 @@ const KB_LEVELS_IN_ORDER: ('High' | 'Medium' | 'Low')[] = ['High', 'Medium', 'Lo
 
 const preprocessText = (text: string): string => {
   if (!text) return '';
-  return text.toLowerCase();
+  return text
+    .toLowerCase() // Convert to lowercase
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim(); // Trim leading/trailing spaces
 };
 
 export async function searchKnowledgeBase({
@@ -44,7 +47,6 @@ export async function searchKnowledgeBase({
   try {
     const processedQuery = preprocessText(query);
     
-    // Generate a 768-dimension embedding for the user's query.
     const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
       content: processedQuery,
@@ -56,51 +58,59 @@ export async function searchKnowledgeBase({
       throw new Error(`Failed to generate a valid 768-dimension embedding. Vector length: ${queryEmbedding?.length || 0}`);
     }
 
-    const allResults: SearchResult[] = [];
     const chunksCollection = firestore.collection('kb_chunks');
+    // Fetch a larger pool of candidates to filter and sort from.
+    const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
+      limit: limit * 3, // Fetch more results to ensure we have enough to filter by level.
+      distanceMeasure: 'COSINE',
+    });
+    
+    const querySnapshot = await vectorQuery.get();
 
-    // Sequentially search each knowledge base level.
+    const candidates: SearchResult[] = [];
+    if (!querySnapshot.empty) {
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const distance = doc.distance;
+        if (distance <= distanceThreshold) {
+          candidates.push({
+            sourceId: data.sourceId,
+            text: data.text,
+            sourceName: data.sourceName,
+            level: data.level,
+            topic: data.topic,
+            downloadURL: data.downloadURL,
+            pageNumber: data.pageNumber,
+            title: data.title,
+            header: data.header,
+            distance: distance,
+          });
+        }
+      });
+    }
+
+    // Sort candidates by distance to ensure we're comparing the closest matches first.
+    candidates.sort((a, b) => a.distance - b.distance);
+
+    const finalResults: SearchResult[] = [];
+    const addedSourceIds = new Set<string>();
+
     for (const level of KB_LEVELS_IN_ORDER) {
-      if (allResults.length >= limit) {
-        break; // Stop if we have already collected enough results.
+      for (const candidate of candidates) {
+        if (finalResults.length >= limit) {
+          break;
+        }
+        if (candidate.level === level && !addedSourceIds.has(candidate.sourceId)) {
+          finalResults.push(candidate);
+          addedSourceIds.add(candidate.sourceId);
+        }
       }
-
-      const vectorQuery = chunksCollection
-        .where('level', '==', level)
-        .findNearest('embedding', queryEmbedding, {
-          limit,
-          distanceMeasure: 'COSINE',
-        });
-      
-      const querySnapshot = await vectorQuery.get();
-
-      if (!querySnapshot.empty) {
-        querySnapshot.forEach(doc => {
-          const data = doc.data();
-          const distance = doc.distance;
-
-          if (distance <= distanceThreshold) {
-            allResults.push({
-              sourceId: data.sourceId,
-              text: data.text,
-              sourceName: data.sourceName,
-              level: data.level,
-              topic: data.topic,
-              downloadURL: data.downloadURL,
-              pageNumber: data.pageNumber,
-              title: data.title,
-              header: data.header,
-              distance: distance,
-            });
-          }
-        });
+      if (finalResults.length >= limit) {
+        break;
       }
     }
     
-    // Sort combined results by distance and return the top 'limit' results.
-    return allResults
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, limit);
+    return finalResults;
 
   } catch (error: any) {
     console.error('[searchKnowledgeBase] An error occurred during Firestore vector search:', error);

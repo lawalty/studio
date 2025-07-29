@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info } from 'lucide-react';
+import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info, Wrench } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -184,6 +184,22 @@ export default function ApiKeysPage() {
   const getSearchResultAlert = () => {
     if (!searchResult) return null;
 
+    if (searchResult?.error?.includes("vector index")) {
+        return (
+            <Alert className="mt-4" variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Action Required: Deploy Firestore Index</AlertTitle>
+                <AlertDescription className="text-xs break-words space-y-2">
+                    <p>The vector search failed because the required index is missing in your Firestore database. Please run the following command in your terminal and then try the test again:</p>
+                    <pre className="p-2 bg-black text-white rounded-md text-xs overflow-x-auto">
+                        <code>firebase deploy --only firestore:indexes</code>
+                    </pre>
+                    <p className="mt-2 font-mono bg-red-50 p-2 rounded">Technical Details: {searchResult.error}</p>
+                </AlertDescription>
+            </Alert>
+        );
+    }
+    
     let variant: "default" | "destructive" | "warning" = "default";
     let title = "";
     let icon = <CheckCircle className="h-4 w-4" />;
@@ -382,8 +398,8 @@ export default function ApiKeysPage() {
             <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                      <Search className="h-4 w-4" />
-                      Vector Search Test
+                      <Wrench className="h-4 w-4" />
+                      Vector Search Test (RAG)
                   </CardTitle>
                   <CardDescription className="text-xs">
                       Tests the RAG pipeline using the tuned Distance Threshold.

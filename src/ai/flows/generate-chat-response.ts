@@ -66,16 +66,75 @@ const getAppConfig = async (): Promise<{ distanceThreshold: number }> => {
 // Helper function to find the Spanish version of a document
 const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: string; downloadURL: string } | null> => {
     // ... Omitted for brevity
+    return null;
 };
 
 // Define the prompt using the stable ai.definePrompt pattern
 const chatPrompt = ai.definePrompt({
-    // ... Omitted for brevity
+    name: 'chatRAGPrompt',
+    input: {
+        schema: z.object({
+            personaTraits: z.string(),
+            conversationalTopics: z.string(),
+            language: z.string(),
+            chatHistory: z.string(),
+            retrievedContext: z.string(),
+            formality: z.number(),
+            conciseness: z.number(),
+            tone: z.number(),
+            formatting: z.number(),
+        })
+    },
+    output: {
+        format: 'json',
+        schema: AiResponseJsonSchema,
+    },
+    system: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your primary goal is to answer user questions based on the retrieved documents about specific people or topics.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Adopt Persona from Context**: When the user asks "you" a question (e.g., "When did you join?"), you MUST answer from the perspective of the person or entity described in the <retrieved_context>, as if you are them. Use "I" to refer to that person. For example, if the context says "He joined in 1989," your answer must be "I joined in 1989."
+2.  **Strictly Adhere to Provided Context**: You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge.
+3.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge. Use your defined persona for this response.
+4.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
+5.  **Citations:** If, and only if, your answer is based on a document, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context. When relevant, you can also reference the page number or section header. For example: "According to the 'Safety Policy' document on page 3, under the 'Emergency Procedures' section..."
+6.  **Conversation Flow:**
+    - If the user provides a greeting or engages in simple small talk, respond naturally using your persona.
+    - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
+7.  **Response Style Equalizer (0-100 scale):**
+    - **Formality ({{formality}}):** If > 70, use very formal language. If < 30, use casual language and contractions. Otherwise, use a professional, neutral style.
+    - **Conciseness ({{conciseness}}):** If > 70, provide a brief summary. If < 30, provide a detailed, elaborate response. Otherwise, provide a balanced response.
+    - **Tone ({{tone}}):** If > 70, be enthusiastic and upbeat. If < 30, be very neutral and direct. Otherwise, be helpful and friendly.
+    - **Formatting ({{formatting}}):** If > 70 and the information is suitable, format the response as a bulleted or numbered list. If < 30, always use paragraphs. Otherwise, use your best judgment.
+8.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+
+    prompt: `You are an expert in: "{{conversationalTopics}}".
+The user is conversing in {{language}}.
+Here is the full conversation history:
+{{{chatHistory}}}
+
+Here is the context retrieved from the knowledge base to answer the user's latest message.
+<retrieved_context>
+{{{retrievedContext}}}
+</retrieved_context>
+`
 });
 
 // NLP Pre-processing prompt to refine the user's query for better search results.
 const queryRefinementPrompt = ai.definePrompt({
-    // ... Omitted for brevity
+    name: 'queryRefinementPrompt',
+    input: { schema: z.string().describe('The raw user query.') },
+    output: { schema: z.string().describe('A refined, keyword-focused query for vector search.') },
+    prompt: `You are an expert at refining user questions into effective search queries for a vector database.
+Analyze the user's query below. Identify the core intent and key entities.
+- Do NOT answer the question.
+- Do NOT add any preamble or explanation.
+- Your entire output should be a concise, rephrased query containing only the essential keywords and concepts.
+
+**User Query:**
+"{{{prompt}}}"
+
+**Refined Search Query:**
+`,
 });
 
 
@@ -104,7 +163,14 @@ const generateChatResponseFlow = async ({
 
     // 2. (Optional) Translate and refine the user's query.
     let queryForNlp = lastUserMessage;
-    // ... Translation logic omitted for brevity ...
+    if (language && language.toLowerCase() !== 'english') {
+      try {
+        const { translatedText } = await translateText({ text: queryForNlp, targetLanguage: 'English' });
+        queryForNlp = translatedText;
+      } catch (e) {
+        console.error("[generateChatResponseFlow] Failed to translate user query, proceeding with original text.", e);
+      }
+    }
     try {
         const { output } = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-flash' });
         searchQuery = output || queryForNlp;
@@ -166,11 +232,17 @@ const generateChatResponseFlow = async ({
         throw new Error('AI model returned an empty or invalid response.');
       }
       
-      // ... Spanish PDF logic omitted for brevity ...
+      if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
+          const spanishPdf = await findSpanishPdf(primarySearchResult.sourceId);
+          if (spanishPdf) {
+              output.pdfReference = spanishPdf;
+          }
+      }
       
       return output;
 
-    } catch (error: any) {
+    } catch (error: any)
+{
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
       return {
         aiResponse: `DEBUG: An error occurred. Details: ${error.message || 'Unknown'}`,

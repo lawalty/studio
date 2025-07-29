@@ -84,7 +84,10 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
 // Function to pre-process text for better embedding and search quality.
 const preprocessText = (text: string): string => {
   if (!text) return '';
-  return text.toLowerCase();
+  return text
+    .toLowerCase() // Convert to lowercase
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim(); // Trim leading/trailing spaces
 };
 
 
