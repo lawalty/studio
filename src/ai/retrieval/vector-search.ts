@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Performs a tiered, vector-based semantic search on the knowledge base
@@ -132,8 +133,14 @@ export async function searchKnowledgeBase({
 
     if (rawError.includes('vector index')) {
         detailedError = `CRITICAL: The required vector index for the 'kb_chunks' collection is missing or still building. Please deploy it using 'firebase deploy --only firestore:indexes' and wait for completion.`;
-    } else if (rawError.includes('permission denied')) {
-      detailedError = `A permission error occurred. Ensure the service account has the 'Cloud Datastore User' role. Full error: ${rawError}`;
+    } else if (rawError.includes('permission denied') || (error.code === 7)) {
+      detailedError = `CRITICAL: The search failed due to a permissions error. The App Hosting service account is missing the required IAM role to read from Firestore.
+
+Action Required:
+1. Go to the IAM page in your Google Cloud Console.
+2. Find the principal named 'App Hosting Service Account' (firebase-app-hosting-compute@...).
+3. Grant it the 'Cloud Datastore User' role.
+Full technical error: ${rawError}`;
     } else if (rawError.includes('INVALID_ARGUMENT')) {
       detailedError = `The search failed due to an invalid argument, likely a mismatch between the embedding vector's dimensions (768) and the Firestore index. Full error: ${rawError}`;
     }
