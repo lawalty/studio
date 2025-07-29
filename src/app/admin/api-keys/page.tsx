@@ -189,8 +189,17 @@ export default function ApiKeysPage() {
             <Alert className="mt-4" variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Action Required: Deploy Firestore Index</AlertTitle>
-                <AlertDescription className="text-xs break-words space-y-2">
-                    <p>The vector search failed because the required index is missing in your Firestore database. Please run the following command in your terminal and then try the test again:</p>
+                <AlertDescription className="text-xs break-words space-y-3">
+                    <p>The vector search failed because the required index is missing in your Firestore database or you are targeting the wrong project.</p>
+                    
+                    <p className="font-bold">Step 1: Set the Correct Firebase Project</p>
+                    <p>Run this command to ensure your terminal is targeting the <code className="font-mono bg-destructive/20 p-1 rounded">ai-blair-v4</code> project:</p>
+                    <pre className="p-2 bg-black text-white rounded-md text-xs overflow-x-auto">
+                        <code>firebase use ai-blair-v4</code>
+                    </pre>
+
+                    <p className="font-bold">Step 2: Deploy the Index</p>
+                    <p>Once you are in the correct project, run the following command to deploy the index. This may take a few minutes.</p>
                     <pre className="p-2 bg-black text-white rounded-md text-xs overflow-x-auto">
                         <code>firebase deploy --only firestore:indexes</code>
                     </pre>
@@ -279,7 +288,7 @@ export default function ApiKeysPage() {
                           Use Custom TTS API
                       </Label>
                       <p className="text-xs text-muted-foreground">
-                          If ON, uses the custom TTS. If OFF, uses the default voice.
+                          If ON, uses the custom TTS. If OFF, uses the default Google voice.
                       </p>
                   </div>
                   <Switch
@@ -465,7 +474,7 @@ export default function ApiKeysPage() {
                   Distance Threshold: {config.distanceThreshold.toFixed(2)}
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Lower values (e.g., 0.20) are stricter. Higher values (e.g., 0.80) are more lenient.
+                  Lower values (e.g., 0.20) are stricter (more similar). Higher values (e.g., 0.80) are more lenient.
                 </p>
               </div>
               <Slider
