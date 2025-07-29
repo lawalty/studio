@@ -26,10 +26,24 @@ const TestSearchOutputSchema = z.object({
 });
 export type TestSearchOutput = z.infer<typeof TestSearchOutputSchema>;
 
+// This pre-processing function MUST match the one used in the indexing flow.
+const preprocessText = (text: string): string => {
+  if (!text) return '';
+  return text
+    .toLowerCase() // Convert to lowercase
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim(); // Trim leading/trailing spaces
+};
+
+
 export async function testSearch(input: TestSearchInput): Promise<TestSearchOutput> {
   try {
+    // Pre-process the query to match the pre-processing done on the documents
+    // during indexing. This is critical for getting accurate matches.
+    const processedQuery = preprocessText(input.query);
+
     const searchResults = await searchKnowledgeBase({ 
-        query: input.query,
+        query: processedQuery,
         distanceThreshold: input.distanceThreshold,
     });
 
