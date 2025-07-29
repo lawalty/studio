@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Performs a tiered, vector-based semantic search on the knowledge base
@@ -72,12 +71,13 @@ export async function searchKnowledgeBase({
       querySnapshot.forEach(doc => {
         const data = doc.data();
         const distance = doc.distance;
+        // The check is now `distance <= distanceThreshold` because smaller distance means more similar for COSINE.
         if (distance <= distanceThreshold) {
           candidates.push({
             sourceId: data.sourceId,
             text: data.text,
             sourceName: data.sourceName,
-            level: data.level,
+            level: data.level, // The level field is now present on the document
             topic: data.topic,
             downloadURL: data.downloadURL,
             pageNumber: data.pageNumber,
@@ -100,6 +100,7 @@ export async function searchKnowledgeBase({
         if (finalResults.length >= limit) {
           break;
         }
+        // This filter will now work correctly as `level` is present in the chunks.
         if (candidate.level === level && !addedSourceIds.has(candidate.sourceId)) {
           finalResults.push(candidate);
           addedSourceIds.add(candidate.sourceId);
@@ -108,6 +109,18 @@ export async function searchKnowledgeBase({
       if (finalResults.length >= limit) {
         break;
       }
+    }
+    
+    // If no results after level-based sorting, return the closest matches regardless of level.
+    if (finalResults.length === 0 && candidates.length > 0) {
+        const uniqueCandidates: SearchResult[] = [];
+        candidates.forEach(candidate => {
+            if (!addedSourceIds.has(candidate.sourceId)) {
+                uniqueCandidates.push(candidate);
+                addedSourceIds.add(candidate.sourceId);
+            }
+        });
+        return uniqueCandidates.slice(0, limit);
     }
     
     return finalResults;
