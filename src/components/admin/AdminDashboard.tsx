@@ -83,67 +83,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
-        <AccordionItem value="admin-controls" className="border rounded-lg">
-          <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
-            <span className="mr-4">Admin Controls</span>
-            <span className="flex-grow border-b border-dashed border-muted-foreground/30"></span>
-          </AccordionTrigger>
-          <AccordionContent className="px-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-              <AdminNavLinkCard href="/admin/persona" title="AI Persona" description="Define conversational style and traits." Icon={Bot}/>
-              <AdminNavLinkCard href="/admin/knowledge-base" title="Knowledge Base" description="Manage documents for the AI." Icon={Database}/>
-              <AdminNavLinkCard href="/admin/api-keys" title="API Keys" description="Manage third-party service keys." Icon={KeyRound}/>
-              <AdminNavLinkCard href="/admin/site-settings" title="Site Settings" description="Adjust splash screen and display." Icon={Cog}/>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        <AccordionItem value="error-board" className="border rounded-lg">
-          <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
-             <span className="mr-4">Error Board ({isLoadingErrors ? '...' : siteErrors.length})</span>
-             <span className="flex-grow border-b border-dashed border-muted-foreground/30"></span>
-          </AccordionTrigger>
-          <AccordionContent className="px-6 pt-2">
-            <Card className="shadow-none border-none -m-6">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><ServerCrash className="h-5 w-5" /> Recent System Errors</CardTitle>
-                    <CardDescription>
-                        Errors from public-facing interactions are logged here. Review and dismiss them as needed.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {isLoadingErrors ? <p>Loading errors...</p> : siteErrors.length === 0 ? (
-                        <Alert variant="default" className="border-green-500/50 text-green-700 dark:text-green-400">
-                            <AlertTitle className="flex items-center gap-2"><Bot /> All Systems Operational</AlertTitle>
-                            <AlertDescriptionComponent>No errors have been logged recently.</AlertDescriptionComponent>
-                        </Alert>
-                    ) : (
-                        <ScrollArea className="h-72">
-                            <div className="space-y-4 pr-4">
-                                {siteErrors.map(error => (
-                                    <Alert key={error.id} variant="destructive">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex-1">
-                                                <AlertTitle>Error in: {error.source}</AlertTitle>
-                                                <AlertDescriptionComponent className="break-words mt-1">{error.message}</AlertDescriptionComponent>
-                                                <p className="text-xs text-destructive/80 mt-2">{formatDistanceToNow(error.timestamp, { addSuffix: true })}</p>
-                                            </div>
-                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteError(error.id)} className="h-6 w-6 ml-2 shrink-0">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </Alert>
-                                ))}
-                            </div>
-                        </ScrollArea>
-                    )}
-                </CardContent>
-            </Card>
-          </AccordionContent>
-        </AccordionItem>
-      </Accordion>
-      
       {/* Usage Statistics */}
       <section>
         <div className="flex justify-between items-center mb-4">
@@ -257,6 +196,67 @@ export default function AdminDashboard() {
             Note: The analytics data displayed on this dashboard is currently placeholder data for demonstration purposes.
         </CardDescription>
       </Alert>
+      
+      <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
+        <AccordionItem value="admin-controls" className="border rounded-lg">
+          <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
+            <span className="mr-4">Admin Controls</span>
+            <span className="flex-grow border-b border-dashed border-muted-foreground/30"></span>
+          </AccordionTrigger>
+          <AccordionContent className="px-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+              <AdminNavLinkCard href="/admin/persona" title="AI Persona" description="Define conversational style and traits." Icon={Bot}/>
+              <AdminNavLinkCard href="/admin/knowledge-base" title="Knowledge Base" description="Manage documents for the AI." Icon={Database}/>
+              <AdminNavLinkCard href="/admin/api-keys" title="API Keys" description="Manage third-party service keys." Icon={KeyRound}/>
+              <AdminNavLinkCard href="/admin/site-settings" title="Site Settings" description="Adjust splash screen and display." Icon={Cog}/>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="error-board" className="border rounded-lg">
+          <AccordionTrigger className="text-2xl font-semibold tracking-tight px-6 hover:no-underline">
+             <span className="mr-4">Error Board ({isLoadingErrors ? '...' : siteErrors.length})</span>
+             <span className="flex-grow border-b border-dashed border-muted-foreground/30"></span>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pt-2">
+            <Card className="shadow-none border-none -m-6">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><ServerCrash className="h-5 w-5" /> Recent System Errors</CardTitle>
+                    <CardDescription>
+                        Errors from public-facing interactions are logged here. Review and dismiss them as needed.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoadingErrors ? <p>Loading errors...</p> : siteErrors.length === 0 ? (
+                        <Alert variant="default" className="border-green-500/50 text-green-700 dark:text-green-400">
+                            <AlertTitle className="flex items-center gap-2"><Bot /> All Systems Operational</AlertTitle>
+                            <AlertDescriptionComponent>No errors have been logged recently.</AlertDescriptionComponent>
+                        </Alert>
+                    ) : (
+                        <ScrollArea className="h-72">
+                            <div className="space-y-4 pr-4">
+                                {siteErrors.map(error => (
+                                    <Alert key={error.id} variant="destructive">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <AlertTitle>Error in: {error.source}</AlertTitle>
+                                                <AlertDescriptionComponent className="break-words mt-1">{error.message}</AlertDescriptionComponent>
+                                                <p className="text-xs text-destructive/80 mt-2">{formatDistanceToNow(error.timestamp, { addSuffix: true })}</p>
+                                            </div>
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteError(error.id)} className="h-6 w-6 ml-2 shrink-0">
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </Alert>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    )}
+                </CardContent>
+            </Card>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 }
