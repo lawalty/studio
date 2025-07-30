@@ -1,58 +1,50 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper function to check if the request comes from an authenticated admin user.
-    // For this project, we assume any authenticated user is an admin for simplicity.
-    function isAdmin() {
-      return request.auth != null;
+  
+    // Configurations collection:
+    // - Public can read (for site display assets like images/messages)
+    // - Only authenticated admins can write.
+    match /configurations/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
 
-    // Admins can read/write all site-wide configurations.
-    match /configurations/{docId} {
-      allow read, write: if isAdmin();
+    // Knowledge Base metadata collections (High, Medium, Low, etc.)
+    // Only authenticated admins can read, write, or delete.
+    match /kb_high_meta_v1/{docId} {
+      allow read, write, delete: if request.auth != null;
     }
     
-    // Allow public read access to all knowledge base metadata collections so the chatbot
-    // can retrieve download URLs and file names. Write access is restricted to admins.
-    match /kb_high_meta_v1/{docId} {
-       allow read: if true;
-       allow write: if isAdmin();
-    }
     match /kb_medium_meta_v1/{docId} {
-       allow read: if true;
-       allow write: if isAdmin();
+      allow read, write, delete: if request.auth != null;
     }
+    
     match /kb_low_meta_v1/{docId} {
-       allow read: if true;
-       allow write: if isAdmin();
+      allow read, write, delete: if request.auth != null;
     }
-     match /kb_archive_meta_v1/{docId} {
-       allow read: if true;
-       allow write: if isAdmin();
-    }
+
     match /kb_spanish_pdfs_meta_v1/{docId} {
-       allow read: if true;
-       allow write: if isAdmin();
+      allow read, write, delete: if request.auth != null;
     }
 
-    // Allow any user (even unauthenticated) to create a chat history document.
-    // This allows the front-end to save conversations.
-    // Reading and managing these histories is still restricted to admins.
     match /kb_chat_history_meta_v1/{docId} {
-      allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read, write, delete: if request.auth != null;
     }
 
-    // Document chunks contain the core knowledge content and should only be managed by admins.
+    match /kb_archive_meta_v1/{docId} {
+      allow read, write, delete: if request.auth != null;
+    }
+
+    // The 'kb_chunks' collection contains all text chunks and their embeddings.
+    // - Only the server (authenticated admin) should be able to read or write these.
     match /kb_chunks/{chunkId} {
-      allow read, write: if isAdmin();
+      allow read, write, delete: if request.auth != null;
     }
 
-    // Deny all other reads/writes by default for any other paths.
-    match /{path=**}/documents/{document} {
+    // Deny all access to any other collections by default.
+    match /{document=**} {
       allow read, write: if false;
     }
   }
