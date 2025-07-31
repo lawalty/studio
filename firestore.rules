@@ -3,32 +3,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow public read access to site configuration for the front-end client.
-    // Only authenticated admins can write to these settings.
-    match /configurations/{docId} {
+    // Allow the public-facing app to read all configuration and site asset
+    // documents, but allow only authenticated admins (server-side functions)
+    // to write to them. This rule is secure because the server-side flows
+    // that handle uploads and settings changes run with admin privileges
+    // and bypass these client-facing rules.
+    match /configurations/{document=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if false; // All writes must be done server-side.
     }
 
-    // This single rule secures all knowledge base metadata collections.
-    // It uses a wildcard `{level}` to match any collection name that fits
-    // the pattern (e.g., kb_high_meta, kb_medium_meta, etc.).
-    // Access is restricted to authenticated users (i.e., your server functions).
+    // Allow public read access to all knowledge base metadata collections.
+    // Writes are blocked from the client to ensure all indexing and
+    // modifications are handled securely by server-side functions.
     match /kb_{level}_meta/{docId} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if false; // All writes must be done server-side.
     }
 
-    // Secure the collection where all document chunks and their embeddings are stored.
-    // Access is restricted to authenticated users (i.e., your server functions).
+    // Allow public read access to the indexed data chunks.
+    // Writes are blocked from the client.
     match /kb_chunks/{chunkId} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if false; // All writes must be done server-side.
     }
-    
-    // Secure the site errors collection.
-    // Any process can write (to log an error), but only admins can read or delete.
+
+    // Allow only the server (admin) to read/write site errors.
     match /site_errors/{errorId} {
-      allow read, delete: if request.auth != null;
-      allow create: if true;
+        allow read, write: if false;
     }
   }
 }
