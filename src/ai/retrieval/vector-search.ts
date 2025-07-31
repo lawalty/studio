@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Performs a tiered, vector-based semantic search on the knowledge base
@@ -52,6 +53,7 @@ export async function searchKnowledgeBase({
     // The user's processed query text is sent to the embedding model here.
     // The resulting `queryEmbedding` is a vector of 768 numbers that exists only
     // in memory for this function's execution. It is NEVER stored in Firestore.
+    // This is the "WHAT" to search for.
     // =================================================================================
     const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
@@ -64,13 +66,22 @@ export async function searchKnowledgeBase({
       throw new Error(`Failed to generate a valid 768-dimension embedding. Vector length: ${queryEmbedding?.length || 0}`);
     }
 
-    const chunksCollection = firestore.collection('kb_chunks_v1');
     // =================================================================================
-    // VERIFICATION STEP 2: COMPARE THE QUERY EMBEDDING TO STORED EMBEDDINGS
+    // VERIFICATION STEP 2: DEFINE THE SEARCH LOCATION
+    // =================================================================================
+    // This `chunksCollection` object points directly to the 'kb_chunks_v1'
+    // collection in Firestore. This is the "WHERE" to search. The `.findNearest`
+    // function will ONLY operate on this specific collection.
+    // =================================================================================
+    const chunksCollection = firestore.collection('kb_chunks_v1');
+
+    // =================================================================================
+    // VERIFICATION STEP 3: COMPARE THE QUERY EMBEDDING TO STORED EMBEDDINGS
     // =================================================================================
     // The transient `queryEmbedding` is now passed to Firestore's `findNearest`
     // function. Firestore's backend compares this in-memory vector against all of
     // the permanently stored 'embedding' fields in the 'kb_chunks_v1' collection.
+    // This is where the "WHAT" is compared against the "WHERE".
     // =================================================================================
     const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
       limit: limit * 3, // Fetch more results to ensure we have enough to filter by level.
