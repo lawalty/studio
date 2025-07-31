@@ -198,9 +198,7 @@ const generateChatResponseFlow = async ({
                   <content>${r.text}</content>
                 </document>`
               )
-              .join('
-
-');
+              .join('\n\n');
         }
       }
     } catch (e) {
@@ -217,8 +215,7 @@ const generateChatResponseFlow = async ({
         personaTraits,
         conversationalTopics,
         language: language || 'English',
-        chatHistory: `<history>${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('
-')}</history>`,
+        chatHistory: `<history>${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}</history>`,
         retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND',
         formality,
         conciseness,
@@ -257,3 +254,7 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    
+
+    
