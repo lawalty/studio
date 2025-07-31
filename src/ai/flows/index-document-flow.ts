@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text, generating an
@@ -132,7 +133,10 @@ export async function indexDocument({
             
             const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
-                content: chunkText,
+                content: {
+                    text: chunkText,
+                    taskType: 'RETRIEVAL_DOCUMENT',
+                },
                 options: {
                   outputDimensionality: 768,
                 }

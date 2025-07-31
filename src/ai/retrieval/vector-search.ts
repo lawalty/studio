@@ -57,7 +57,10 @@ export async function searchKnowledgeBase({
     // =================================================================================
     const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
-      content: processedQuery,
+      content: {
+          text: processedQuery,
+          taskType: 'RETRIEVAL_QUERY',
+      },
       options: { outputDimensionality: 768 },
     });
 
@@ -69,18 +72,18 @@ export async function searchKnowledgeBase({
     // =================================================================================
     // VERIFICATION STEP 2: DEFINE THE SEARCH LOCATION
     // =================================================================================
-    // This `chunksCollection` object points directly to the 'kb_chunks_v1'
+    // This `chunksCollection` object points directly to the 'kb_chunks'
     // collection in Firestore. This is the "WHERE" to search. The `.findNearest`
     // function will ONLY operate on this specific collection.
     // =================================================================================
-    const chunksCollection = firestore.collection('kb_chunks_v1');
+    const chunksCollection = firestore.collection('kb_chunks');
 
     // =================================================================================
     // VERIFICATION STEP 3: COMPARE THE QUERY EMBEDDING TO STORED EMBEDDINGS
     // =================================================================================
     // The transient `queryEmbedding` is now passed to Firestore's `findNearest`
     // function. Firestore's backend compares this in-memory vector against all of
-    // the permanently stored 'embedding' fields in the 'kb_chunks_v1' collection.
+    // the permanently stored 'embedding' fields in the 'kb_chunks' collection.
     // This is where the "WHAT" is compared against the "WHERE".
     // =================================================================================
     const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
@@ -155,7 +158,7 @@ export async function searchKnowledgeBase({
     let detailedError = `Search failed due to a configuration or permissions issue. Details: ${rawError}`;
 
     if (rawError.includes('vector index')) {
-        detailedError = `CRITICAL: The required vector index for the 'kb_chunks_v1' collection is missing or still building. Please deploy it using 'firebase deploy --only firestore:indexes' and wait for completion.`;
+        detailedError = `CRITICAL: The required vector index for the 'kb_chunks' collection is missing or still building. Please deploy it using 'firebase deploy --only firestore:indexes' and wait for completion.`;
     } else if (rawError.includes('permission denied') || (error.code === 7)) {
       detailedError = `CRITICAL: The search failed due to a permissions error. The App Hosting service account is missing the required IAM role to read from Firestore.
 
