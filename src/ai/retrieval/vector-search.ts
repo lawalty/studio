@@ -57,11 +57,11 @@ export async function searchKnowledgeBase({
     // =================================================================================
     const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
-      content: {
-          text: processedQuery,
+      content: processedQuery,
+      options: {
           taskType: 'RETRIEVAL_QUERY',
           outputDimensionality: 768,
-      },
+      }
     });
 
     const queryEmbedding = embeddingResponse?.[0]?.embedding;
