@@ -136,10 +136,8 @@ export async function indexDocument({
                 content: {
                     text: chunkText,
                     taskType: 'RETRIEVAL_DOCUMENT',
+                    outputDimensionality: 768,
                 },
-                options: {
-                  outputDimensionality: 768,
-                }
             }));
 
             const embeddingVector = embeddingResponse?.[0]?.embedding;

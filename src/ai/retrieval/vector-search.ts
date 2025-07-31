@@ -60,8 +60,8 @@ export async function searchKnowledgeBase({
       content: {
           text: processedQuery,
           taskType: 'RETRIEVAL_QUERY',
+          outputDimensionality: 768,
       },
-      options: { outputDimensionality: 768 },
     });
 
     const queryEmbedding = embeddingResponse?.[0]?.embedding;
