@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Performs a tiered, vector-based semantic search on the knowledge base
@@ -47,6 +46,13 @@ export async function searchKnowledgeBase({
   try {
     const processedQuery = preprocessText(query);
     
+    // =================================================================================
+    // VERIFICATION STEP 1: CREATE THE TRANSIENT QUERY EMBEDDING
+    // =================================================================================
+    // The user's processed query text is sent to the embedding model here.
+    // The resulting `queryEmbedding` is a vector of 768 numbers that exists only
+    // in memory for this function's execution. It is NEVER stored in Firestore.
+    // =================================================================================
     const embeddingResponse = await ai.embed({
       embedder: 'googleai/text-embedding-004',
       content: processedQuery,
@@ -58,8 +64,14 @@ export async function searchKnowledgeBase({
       throw new Error(`Failed to generate a valid 768-dimension embedding. Vector length: ${queryEmbedding?.length || 0}`);
     }
 
-    const chunksCollection = firestore.collection('kb_chunks');
-    // Fetch a larger pool of candidates to filter and sort from.
+    const chunksCollection = firestore.collection('kb_chunks_v1');
+    // =================================================================================
+    // VERIFICATION STEP 2: COMPARE THE QUERY EMBEDDING TO STORED EMBEDDINGS
+    // =================================================================================
+    // The transient `queryEmbedding` is now passed to Firestore's `findNearest`
+    // function. Firestore's backend compares this in-memory vector against all of
+    // the permanently stored 'embedding' fields in the 'kb_chunks_v1' collection.
+    // =================================================================================
     const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
       limit: limit * 3, // Fetch more results to ensure we have enough to filter by level.
       distanceMeasure: 'COSINE',
@@ -132,7 +144,7 @@ export async function searchKnowledgeBase({
     let detailedError = `Search failed due to a configuration or permissions issue. Details: ${rawError}`;
 
     if (rawError.includes('vector index')) {
-        detailedError = `CRITICAL: The required vector index for the 'kb_chunks' collection is missing or still building. Please deploy it using 'firebase deploy --only firestore:indexes' and wait for completion.`;
+        detailedError = `CRITICAL: The required vector index for the 'kb_chunks_v1' collection is missing or still building. Please deploy it using 'firebase deploy --only firestore:indexes' and wait for completion.`;
     } else if (rawError.includes('permission denied') || (error.code === 7)) {
       detailedError = `CRITICAL: The search failed due to a permissions error. The App Hosting service account is missing the required IAM role to read from Firestore.
 
