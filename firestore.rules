@@ -1,51 +1,38 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Configurations collection:
-    // - Public can read (for site display assets like images/messages)
-    // - Only authenticated admins can write.
+
+    // Helper function to check for admin authentication
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // Rules for configuration documents. Public read, admin write.
     match /configurations/{docId} {
       allow read: if true;
-      allow write: if request.auth != null;
-    }
-
-    // Knowledge Base metadata collections (High, Medium, Low, etc.)
-    // Only authenticated admins can read, write, or delete.
-    match /kb_high_meta_v1/{docId} {
-      allow read, write, delete: if request.auth != null;
+      allow write: if isAdmin();
     }
     
-    match /kb_medium_meta_v1/{docId} {
-      allow read, write, delete: if request.auth != null;
-    }
+    // Rules for knowledge base metadata. Admin only.
+    match /kb_high_meta/{docId} { allow read, write: if isAdmin(); }
+    match /kb_medium_meta/{docId} { allow read, write: if isAdmin(); }
+    match /kb_low_meta/{docId} { allow read, write: if isAdmin(); }
+    match /kb_spanish_pdfs_meta/{docId} { allow read, write: if isAdmin(); }
+    match /kb_chat_history_meta/{docId} { allow read, write: if isAdmin(); }
+    match /kb_archive_meta/{docId} { allow read, write: if isAdmin(); }
     
-    match /kb_low_meta_v1/{docId} {
-      allow read, write, delete: if request.auth != null;
-    }
-
-    match /kb_spanish_pdfs_meta_v1/{docId} {
-      allow read, write, delete: if request.auth != null;
-    }
-
-    match /kb_chat_history_meta_v1/{docId} {
-      allow read, write, delete: if request.auth != null;
-    }
-
-    match /kb_archive_meta_v1/{docId} {
-      allow read, write, delete: if request.auth != null;
-    }
-
-    // The 'kb_chunks' collection contains all text chunks and their embeddings.
-    // - Only the server (authenticated admin) should be able to read or write these.
+    // Rules for knowledge base data chunks. Admin only.
+    // Client does not need direct access. Server-side flows handle this.
     match /kb_chunks/{chunkId} {
-      allow read, write, delete: if request.auth != null;
+      allow read, write: if isAdmin();
     }
 
-    // Deny all access to any other collections by default.
-    match /{document=**} {
-      allow read, write: if false;
+    // Rules for site errors log. Allow client to write, admin to read/delete.
+    match /site_errors/{errorId} {
+      allow create: if true;
+      allow read, delete: if isAdmin();
     }
   }
 }
