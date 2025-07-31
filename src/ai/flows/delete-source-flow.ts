@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A server function to completely delete a knowledge base source, including
@@ -32,12 +31,12 @@ const DeleteSourceOutputSchema = z.object({
 export type DeleteSourceOutput = z.infer<typeof DeleteSourceOutputSchema>;
 
 const LEVEL_CONFIG_SERVER: Record<string, { collectionName: string }> = {
-    'High': { collectionName: 'kb_high_meta_v1' },
-    'Medium': { collectionName: 'kb_medium_meta_v1' },
-    'Low': { collectionName: 'kb_low_meta_v1' },
-    'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta_v1' },
-    'Chat History': { collectionName: 'kb_chat_history_meta_v1' },
-    'Archive': { collectionName: 'kb_archive_meta_v1' },
+    'High': { collectionName: 'kb_high_meta' },
+    'Medium': { collectionName: 'kb_medium_meta' },
+    'Low': { collectionName: 'kb_low_meta' },
+    'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta' },
+    'Chat History': { collectionName: 'kb_chat_history_meta' },
+    'Archive': { collectionName: 'kb_archive_meta' },
   };
 
 export async function deleteSource({ id, level, sourceName }: DeleteSourceInput): Promise<DeleteSourceOutput> {
