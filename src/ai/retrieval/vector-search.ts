@@ -45,10 +45,15 @@ export async function searchKnowledgeBase({
     options: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768 }
   });
 
-  const queryEmbedding = embeddingResponse?.[0]?.embedding;
-  if (!queryEmbedding || queryEmbedding.length !== 768) {
+  const queryEmbeddingArray = embeddingResponse?.[0]?.embedding;
+  if (!queryEmbeddingArray || queryEmbeddingArray.length !== 768) {
     throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
   }
+
+  // Explicitly create a Firestore Vector object. This removes any ambiguity
+  // and ensures the data type passed to the query is exactly what Firestore expects.
+  const queryEmbedding = new FieldValue.Vector(queryEmbeddingArray);
+
 
   // =================================================================================
   // 2. CONNECT TO FIRESTORE AND PERFORM THE VECTOR SEARCH
