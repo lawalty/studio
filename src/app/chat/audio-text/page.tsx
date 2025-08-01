@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const ChatInterface = dynamic(() => import('../../components/chat/ChatInterface'), {
+const ChatInterface = dynamic(() => import('@/components/chat/ChatInterface'), {
   ssr: false,
   loading: () => (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">

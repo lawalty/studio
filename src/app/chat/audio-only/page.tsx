@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const ChatInterface = dynamic(() => import('../../components/chat/ChatInterface'), {
+const ChatInterface = dynamic(() => import('@/components/chat/ChatInterface'), {
   ssr: false,
   loading: () => (
     <div className="flex flex-col items-center justify-center h-full text-center py-8">
