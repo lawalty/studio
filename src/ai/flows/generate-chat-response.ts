@@ -201,9 +201,9 @@ const generateChatResponseFlow = async ({
               .join('\n\n');
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('[generateChatResponseFlow] Knowledge base search failed:', e);
-      retrievedContext = 'CONTEXT_SEARCH_FAILED';
+      retrievedContext = `CONTEXT_SEARCH_FAILED: ${e.message}`;
     }
     
     if (searchQuery && !retrievedContext) {
@@ -254,7 +254,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    
 
     
