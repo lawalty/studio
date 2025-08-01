@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -47,12 +46,12 @@ interface KnowledgeSource {
 }
 
 const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
-  'High': { collectionName: 'kb_high_meta', title: 'High Priority', description: 'Manage high priority sources.' },
-  'Medium': { collectionName: 'kb_medium_meta', title: 'Medium Priority', description: 'Manage medium priority sources.' },
-  'Low': { collectionName: 'kb_low_meta', title: 'Low Priority', description: 'Manage low priority sources.' },
-  'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta', title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
-  'Chat History': { collectionName: 'kb_chat_history_meta', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
-  'Archive': { collectionName: 'kb_archive_meta', title: 'Archive', description: 'Archived sources are not used by the AI.' },
+  'High': { collectionName: 'kb_high_meta_v2', title: 'High Priority', description: 'Manage high priority sources.' },
+  'Medium': { collectionName: 'kb_medium_meta_v2', title: 'Medium Priority', description: 'Manage medium priority sources.' },
+  'Low': { collectionName: 'kb_low_meta_v2', title: 'Low Priority', description: 'Manage low priority sources.' },
+  'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta_v2', title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
+  'Chat History': { collectionName: 'kb_chat_history_meta_v2', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
+  'Archive': { collectionName: 'kb_archive_meta_v2', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
 const getFileExtension = (filename: string) => {

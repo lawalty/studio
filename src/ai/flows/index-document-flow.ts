@@ -84,7 +84,7 @@ export async function indexDocument({
     sourceId, sourceName, text, level, topic, downloadURL,
     linkedEnglishSourceId, pageNumber, title, header
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
-      const collectionName = `kb_${level.toLowerCase().replace(/\s+/g, '_')}_meta`;
+      const collectionName = `kb_${level.toLowerCase().replace(/\s+/g, '_')}_meta_v2`;
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
 
       try {
