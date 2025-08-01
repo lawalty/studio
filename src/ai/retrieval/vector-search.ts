@@ -6,6 +6,7 @@
 import { admin } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
 import { FieldValue } from 'firebase-admin/firestore';
+import { preprocessText } from '@/ai/retrieval/preprocessing'; // Import the shared pre-processing function
 
 export interface SearchResult {
   sourceId: string;
@@ -26,11 +27,7 @@ interface SearchParams {
   distanceThreshold: number; 
 }
 
-// Pre-processing MUST match the one used during indexing.
-const preprocessText = (text: string): string => {
-  if (!text) return '';
-  return text.toLowerCase().replace(/\s+/g, ' ').trim();
-};
+// Removed local preprocessText function, now imported from preprocessing.ts
 
 export async function searchKnowledgeBase({
   query,
@@ -41,7 +38,7 @@ export async function searchKnowledgeBase({
   // =================================================================================
   // 1. GENERATE THE QUERY EMBEDDING
   // =================================================================================
-  const processedQuery = preprocessText(query);
+  const processedQuery = preprocessText(query); // Use the imported pre-processing function
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: processedQuery,

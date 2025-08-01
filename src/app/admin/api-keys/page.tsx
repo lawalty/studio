@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info, Wrench } from 'lucide-react';
+import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info, Wrench, Binary } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -201,6 +202,18 @@ export default function ApiKeysPage() {
       icon = <Info className="h-4 w-4" />;
     }
 
+    const Diagnostics = () => {
+        if (!searchResult.diagnostics) return null;
+        return (
+            <div className="mt-2 text-xs font-mono bg-slate-100 dark:bg-slate-800 p-2 rounded-md space-y-1">
+                <p className="flex items-center gap-2"><Binary className="h-3 w-3" /> <strong>Diagnostics</strong></p>
+                {searchResult.diagnostics.preprocessedQuery && <p>Preprocessed Query: &quot;{searchResult.diagnostics.preprocessedQuery}&quot;</p>}
+                {searchResult.diagnostics.queryEmbeddingGenerated !== undefined && <p>Query Embedding Generated: {searchResult.diagnostics.queryEmbeddingGenerated ? 'Yes' : 'No'}</p>}
+                {searchResult.diagnostics.queryEmbeddingError && <p>Embedding Error: {searchResult.diagnostics.queryEmbeddingError}</p>}
+            </div>
+        )
+    }
+
     return (
         <Alert className="mt-4" variant={variant}>
             {icon}
@@ -208,6 +221,7 @@ export default function ApiKeysPage() {
             <AlertDescription className="text-xs break-words">
                 {searchResult.message}
                 {searchResult.error && <p className="mt-2 font-mono bg-red-50 p-2 rounded">Technical Details: {searchResult.error}</p>}
+                <Diagnostics />
             </AlertDescription>
         </Alert>
     );

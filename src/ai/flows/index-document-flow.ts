@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
+import { preprocessText } from '@/ai/retrieval/preprocessing'; // Import the shared pre-processing function
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -77,10 +78,7 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
     throw lastError;
 }
 
-const preprocessText = (text: string): string => {
-  if (!text) return '';
-  return text.toLowerCase().replace(/\s+/g, ' ').trim();
-};
+// Removed local preprocessText function, now imported from preprocessing.ts
 
 export async function indexDocument({ 
     sourceId, sourceName, text, level, topic, downloadURL,
@@ -90,7 +88,7 @@ export async function indexDocument({
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
 
       try {
-        const processedText = preprocessText(text);
+        const processedText = preprocessText(text); // Use the imported pre-processing function
         if (!processedText.trim()) {
             const errorMessage = "No readable text content found after extraction and processing.";
             await sourceDocRef.set({
@@ -124,7 +122,7 @@ export async function indexDocument({
           
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
-              content: chunkText,
+              content: preprocessText(chunkText), // Pre-process chunkText before embedding
               options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
           }));
           const embeddingVector = embeddingResponse?.[0]?.embedding;
@@ -135,11 +133,11 @@ export async function indexDocument({
           const newChunkDocRef = chunksCollection.doc(); 
           
           const chunkData: Record<string, any> = {
-            sourceId, sourceName, level, topic, text: chunkText,
+            sourceId, sourceName, level, topic, text: chunkText, // Store original chunkText, but embed processed one
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
-            embedding: embeddingVector, // THIS IS THE CRITICAL FIX
+            embedding: embeddingVector,
           };
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
