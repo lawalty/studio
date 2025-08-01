@@ -168,6 +168,8 @@ export default function ApiKeysPage() {
     }
     setIsTesting(prev => ({ ...prev, search: true }));
     setSearchResult(null);
+    // The distanceThreshold is no longer used for Vertex AI search, but we pass it anyway.
+    // The underlying searchKnowledgeBase function will ignore it.
     const result = await testSearch({ query: searchQuery, distanceThreshold: config.distanceThreshold });
     setSearchResult(result);
     setIsTesting(prev => ({ ...prev, search: false }));
@@ -467,3 +469,5 @@ export default function ApiKeysPage() {
     </div>
   );
 }
+
+    
