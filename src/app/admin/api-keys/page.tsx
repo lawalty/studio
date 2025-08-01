@@ -193,9 +193,9 @@ export default function ApiKeysPage() {
                     <p>The vector search failed because the required index is missing in your Firestore database or you are targeting the wrong project.</p>
                     
                     <p className="font-bold">Step 1: Set the Correct Firebase Project</p>
-                    <p>Run this command to ensure your terminal is targeting the <code className="font-mono bg-destructive/20 p-1 rounded">ai-blair-v4</code> project:</p>
+                    <p>Run this command in your terminal to ensure you are targeting the correct project before deploying:</p>
                     <pre className="p-2 bg-black text-white rounded-md text-xs overflow-x-auto">
-                        <code>firebase use ai-blair-v4</code>
+                        <code>firebase use YOUR_PROJECT_ID</code>
                     </pre>
 
                     <p className="font-bold">Step 2: Deploy the Index</p>
