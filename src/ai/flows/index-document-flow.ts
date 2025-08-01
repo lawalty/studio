@@ -127,46 +127,60 @@ export async function indexDocument({
         }
         
         const chunks = simpleSplitter(processedText, { chunkSize: 1000, chunkOverlap: 100 });
+        
+        if (chunks.length === 0) {
+            // This is the added block. If there are no chunks, we consider it a success
+            // but with 0 chunks written. This prevents the undefined error.
+            const finalMetadata: Record<string, any> = {
+                indexingStatus: 'success', chunksWritten: 0,
+                indexedAt: new Date().toISOString(), indexingError: "Document processed but yielded no text chunks.",
+                sourceName, level, topic, downloadURL: downloadURL || null,
+            };
+            if (linkedEnglishSourceId) {
+                finalMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
+            }
+            await sourceDocRef.set(finalMetadata, { merge: true });
+            return { chunksWritten: 0, sourceId, success: true };
+        }
+
         const datapointsForVertex: { id: string, embedding: number[] }[] = [];
         const firestoreBatch = db.batch();
         const chunksCollection = db.collection('kb_chunks');
 
-        if (chunks.length > 0) {
-          for (let index = 0; index < chunks.length; index++) {
-            const chunkText = chunks[index];
-            
-            const embeddingResponse = await withRetry(() => ai.embed({
-                embedder: 'googleai/text-embedding-004',
-                content: chunkText,
-                options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
-            }));
-            const embeddingVector = embeddingResponse?.[0]?.embedding;
-            if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length !== 768) {
-              throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}.`);
-            }
-
-            const newChunkDocRef = chunksCollection.doc(); 
-
-            // Add the data to be upserted to Vertex AI
-            datapointsForVertex.push({ id: newChunkDocRef.id, embedding: embeddingVector });
-            
-            // Add metadata to Firestore. We no longer store the embedding vector here.
-            const chunkData: Record<string, any> = {
-              sourceId, sourceName, level, topic, text: chunkText,
-              chunkNumber: index + 1, createdAt: new Date().toISOString(),
-              downloadURL: downloadURL || null, pageNumber: pageNumber || null,
-              title: title || null, header: header || null,
-            };
-            if (linkedEnglishSourceId) {
-                chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
-            }
-            firestoreBatch.set(newChunkDocRef, chunkData);
+        for (let index = 0; index < chunks.length; index++) {
+          const chunkText = chunks[index];
+          
+          const embeddingResponse = await withRetry(() => ai.embed({
+              embedder: 'googleai/text-embedding-004',
+              content: chunkText,
+              options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
+          }));
+          const embeddingVector = embeddingResponse?.[0]?.embedding;
+          if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length !== 768) {
+            throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}.`);
           }
 
-          // Commit both operations
-          await upsertToVertexAI(datapointsForVertex);
-          await firestoreBatch.commit();
+          const newChunkDocRef = chunksCollection.doc(); 
+
+          // Add the data to be upserted to Vertex AI
+          datapointsForVertex.push({ id: newChunkDocRef.id, embedding: embeddingVector });
+          
+          // Add metadata to Firestore. We no longer store the embedding vector here.
+          const chunkData: Record<string, any> = {
+            sourceId, sourceName, level, topic, text: chunkText,
+            chunkNumber: index + 1, createdAt: new Date().toISOString(),
+            downloadURL: downloadURL || null, pageNumber: pageNumber || null,
+            title: title || null, header: header || null,
+          };
+          if (linkedEnglishSourceId) {
+              chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
+          }
+          firestoreBatch.set(newChunkDocRef, chunkData);
         }
+
+        // Commit both operations
+        await upsertToVertexAI(datapointsForVertex);
+        await firestoreBatch.commit();
         
         const finalMetadata: Record<string, any> = {
           indexingStatus: 'success', chunksWritten: chunks.length,
