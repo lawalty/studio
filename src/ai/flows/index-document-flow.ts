@@ -105,6 +105,8 @@ async function upsertToVertexAI(datapoints: { id: string, embedding: number[] }[
         })),
     };
     
+    console.log('[upsertToVertexAI] Upserting datapoints:', JSON.stringify(upsertRequest, null, 2));
+
     await indexEndpointClient.upsertDatapoints(upsertRequest);
 }
 
