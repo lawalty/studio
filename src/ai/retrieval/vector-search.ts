@@ -41,7 +41,7 @@ const preprocessText = (text: string): string => {
 export async function searchKnowledgeBase({
   query,
   limit = 10,
-  distanceThreshold = 0.4,
+  distanceThreshold = 0.8,
 }: SearchParams): Promise<SearchResult[]> {
   const firestore = admin.firestore();
   try {
