@@ -38,13 +38,11 @@ const preprocessText = (text: string): string => {
 
 export async function testSearch(input: TestSearchInput): Promise<TestSearchOutput> {
   try {
-    // Pre-process the query to match the pre-processing done on the documents
-    // during indexing. This is critical for getting accurate matches.
-    const processedQuery = preprocessText(input.query);
-
+    // The `searchKnowledgeBase` function now handles its own preprocessing.
+    // We can pass the raw query directly to it.
     const searchResults = await searchKnowledgeBase({ 
-        query: processedQuery,
-        distanceThreshold: input.distanceThreshold,
+        query: input.query, // Pass the raw query
+        distanceThreshold: input.distanceThreshold || 0.6,
     });
 
     if (searchResults.length > 0) {

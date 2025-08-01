@@ -23,7 +23,7 @@ export interface SearchResult {
 interface SearchParams {
   query: string;
   limit?: number;
-  distanceThreshold: number; // Used by Firestore vector search. Lower is more similar.
+  distanceThreshold: number; 
 }
 
 // Pre-processing MUST match the one used during indexing.
