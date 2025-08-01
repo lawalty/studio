@@ -6,7 +6,6 @@
  */
 import { admin } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
-import { FieldValue } from 'firebase-admin/firestore';
 import { preprocessText } from '@/ai/retrieval/preprocessing'; // Import the shared pre-processing function
 
 export interface SearchResult {
@@ -51,9 +50,9 @@ export async function searchKnowledgeBase({
     throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
   }
 
-  // Explicitly create a Firestore Vector object. This removes any ambiguity
-  // and ensures the data type passed to the query is exactly what Firestore expects.
-  const queryEmbedding = new FieldValue.Vector(queryEmbeddingArray);
+  // Explicitly create a Firestore Vector object using the initialized admin instance.
+  // This is the correct way to access the constructor and avoids module resolution issues.
+  const queryEmbedding = new admin.firestore.FieldValue.Vector(queryEmbeddingArray);
 
 
   // =================================================================================
