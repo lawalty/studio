@@ -129,8 +129,6 @@ export async function indexDocument({
         const chunks = simpleSplitter(processedText, { chunkSize: 1000, chunkOverlap: 100 });
         
         if (chunks.length === 0) {
-            // This is the added block. If there are no chunks, we consider it a success
-            // but with 0 chunks written. This prevents the undefined error.
             const finalMetadata: Record<string, any> = {
                 indexingStatus: 'success', chunksWritten: 0,
                 indexedAt: new Date().toISOString(), indexingError: "Document processed but yielded no text chunks.",
@@ -162,10 +160,8 @@ export async function indexDocument({
 
           const newChunkDocRef = chunksCollection.doc(); 
 
-          // Add the data to be upserted to Vertex AI
           datapointsForVertex.push({ id: newChunkDocRef.id, embedding: embeddingVector });
           
-          // Add metadata to Firestore. We no longer store the embedding vector here.
           const chunkData: Record<string, any> = {
             sourceId, sourceName, level, topic, text: chunkText,
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
@@ -178,7 +174,6 @@ export async function indexDocument({
           firestoreBatch.set(newChunkDocRef, chunkData);
         }
 
-        // Commit both operations
         await upsertToVertexAI(datapointsForVertex);
         await firestoreBatch.commit();
         
