@@ -403,7 +403,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             let promptText;
             if (inactivityCheckLevelRef.current === 1) {
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
             } else if (inactivityCheckLevelRef.current === 2) {
                 promptText = uiText.inactivityPromptSecondary;
             } else {
@@ -819,5 +819,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
