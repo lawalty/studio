@@ -246,21 +246,23 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             onSpeechEnd?.();
             return;
         }
-    
+
         setIsBotProcessing(false);
         const useAudio = communicationMode !== 'text-only';
-    
-        // 1. Cancel any ongoing speech synthesis or audio playback
+        const useAnimation = communicationMode !== 'audio-only';
+
+        // 1. Cancel any ongoing playback/synthesis
         if (useAudio) {
             if (typeof window !== 'undefined') window.speechSynthesis.cancel();
             if (audioPlayerRef.current) audioPlayerRef.current.pause();
         }
-    
+        if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+
         // 2. Pre-process text for better pronunciation
         const processedText = textToSpeak
             .replace(/\bCOO\b/gi, 'Chief Operating Officer')
             .replace(/\bEZCORP\b/gi, 'easy corp');
-    
+
         // 3. Define the final cleanup and callback function
         const handleEnd = () => {
             if (!isMountedRef.current) return;
@@ -270,7 +272,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
             onSpeechEnd?.();
         };
-    
+
         // 4. Fetch audio data if needed
         let audioDataUri = '';
         if (useAudio) {
@@ -287,74 +289,78 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } catch (ttsError: any) {
                 console.error("TTS API Error:", ttsError);
                 await logErrorToFirestore(ttsError, 'ChatInterface/speakText/TTS');
-                handleEnd(); // End gracefully if TTS fails
+                handleEnd();
                 return;
             }
         }
-    
-        // 5. Calculate animation duration and start typing animation
-        if (communicationMode !== 'audio-only') {
-            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-    
-            const audioLoadPromise = new Promise<number>((resolve) => {
-                if (!useAudio || !audioDataUri) {
-                    // For text-only mode, calculate duration based on configured speed
-                    resolve(fullMessage.text.length * configRef.current.typingSpeedMs);
-                    return;
-                }
-                
-                audioPlayerRef.current!.src = audioDataUri;
-                
-                const resolveOnce = (duration: number) => {
-                    audioPlayerRef.current!.onloadedmetadata = null;
-                    audioPlayerRef.current!.onerror = null;
-                    resolve(duration);
-                };
 
-                audioPlayerRef.current!.onloadedmetadata = () => {
-                    const durationInMs = (audioPlayerRef.current!.duration || 0) * 1000;
-                    resolveOnce(isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : fullMessage.text.length * 50);
-                };
-    
-                audioPlayerRef.current!.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
-                setTimeout(() => resolveOnce(fullMessage.text.length * 50), 3000); // Timeout fallback
-            });
-    
-            const totalAnimationDuration = await audioLoadPromise;
+        // 5. Start typing animation if applicable
+        if (useAnimation) {
+            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+            
+            const getAnimationDuration = (): Promise<number> => {
+                return new Promise((resolve) => {
+                    if (communicationMode === 'text-only' || !audioDataUri) {
+                        resolve(fullMessage.text.length * configRef.current.typingSpeedMs);
+                        return;
+                    }
+                    
+                    audioPlayerRef.current!.src = audioDataUri;
+                    
+                    const resolveOnce = (duration: number) => {
+                        if (audioPlayerRef.current) {
+                            audioPlayerRef.current.onloadedmetadata = null;
+                            audioPlayerRef.current.onerror = null;
+                        }
+                        resolve(duration);
+                    };
+
+                    audioPlayerRef.current!.onloadedmetadata = () => {
+                        const durationInMs = (audioPlayerRef.current!.duration || 0) * 1000;
+                        const adjustedDuration = isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : (fullMessage.text.length * 50);
+                        resolveOnce(adjustedDuration);
+                    };
+
+                    audioPlayerRef.current!.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
+                    setTimeout(() => resolveOnce(fullMessage.text.length * 50), 5000); // Timeout fallback
+                });
+            };
+
+            const totalAnimationDuration = await getAnimationDuration();
             const textLength = fullMessage.text.length;
             const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
-    
+            
             let currentIndex = 0;
             setAnimatedResponse({ ...fullMessage, text: '' });
-    
+            
             const typeCharacter = () => {
+                if (!isMountedRef.current) return;
                 if (currentIndex < textLength) {
-                    if (!isMountedRef.current) return;
                     setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
                     currentIndex++;
                     animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-                } else if (!useAudio) {
+                } else if (communicationMode === 'text-only') {
                     // If text-only, animation end triggers the final state change
                     handleEnd();
                 }
             };
             typeCharacter();
         }
-    
+
         // 6. Play audio if applicable
         if (useAudio && audioDataUri) {
+            setIsBotSpeaking(true);
             audioPlayerRef.current!.onended = handleEnd;
             await audioPlayerRef.current!.play().catch(e => {
                 console.error("Audio playback failed:", e);
                 handleEnd();
             });
-            setIsBotSpeaking(true);
-        } else if (useAudio) {
-            // If audio was expected but failed to generate, clean up.
+        } else if (useAudio) { // If audio was expected but failed (e.g., empty URI), clean up.
+            handleEnd();
+        } else if (!useAnimation) { // For audio-only mode, clean up immediately after processing.
             handleEnd();
         }
-    
-    }, [communicationMode, addMessage, logErrorToFirestore, configRef]);
+    }, [communicationMode, addMessage, logErrorToFirestore]);
 
     const clearInactivityTimer = useCallback(() => {
         if (inactivityTimerRef.current) {
