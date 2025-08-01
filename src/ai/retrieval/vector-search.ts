@@ -23,7 +23,7 @@ export interface SearchResult {
 interface SearchParams {
   query: string;
   limit?: number;
-  distanceThreshold?: number; // Used by Firestore vector search. Lower is more similar.
+  distanceThreshold: number; // Used by Firestore vector search. Lower is more similar.
 }
 
 // Pre-processing MUST match the one used during indexing.
@@ -35,7 +35,7 @@ const preprocessText = (text: string): string => {
 export async function searchKnowledgeBase({
   query,
   limit = 10,
-  distanceThreshold = 0.6, // Default threshold for Firestore
+  distanceThreshold,
 }: SearchParams): Promise<SearchResult[]> {
 
   // =================================================================================
