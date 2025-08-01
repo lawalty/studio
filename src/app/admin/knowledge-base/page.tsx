@@ -1,8 +1,9 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, storage } from '@/lib/firebase';
-import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc, writeBatch, query, where, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -351,58 +352,71 @@ export default function KnowledgeBasePage() {
   }, [toast, setOperationStatus]);
   
   const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
-    setOperationStatus(source.id, true);
-    toast({ title: `Re-processing ${source.sourceName}...` });
-
-    const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-    await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Starting re-processing...", chunksWritten: 0 });
-
-    try {
-        if (!source.downloadURL) {
-            throw new Error("Source is missing a download URL, cannot re-process.");
-        }
-        
-        await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType || 'file'}...` });
-        const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
-
-        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-            throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
-        }
-        
-        await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
-        const indexInput: Parameters<typeof indexDocument>[0] = {
-            sourceId: source.id,
-            sourceName: source.sourceName,
-            text: extractionResult.extractedText,
-            level: source.level,
-            topic: source.topic,
-            downloadURL: source.downloadURL,
-            pageNumber: source.pageNumber,
-            title: source.title,
-            header: source.header,
-        };
-        if (source.linkedEnglishSourceId) {
-            indexInput.linkedEnglishSourceId = source.linkedEnglishSourceId;
-        }
-
-        const indexingResult = await indexDocument(indexInput);
-        
-        if (!indexingResult.success || indexingResult.chunksWritten === 0) {
-            throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database.");
-        }
-
-        toast({ title: "Success!", description: `"${source.sourceName}" has been successfully re-indexed.` });
-
-    } catch (error: any) {
-        const errorMessage = error.message || "An unknown error occurred during re-indexing.";
-        toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive", duration: 10000 });
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'failed',
-            indexingError: errorMessage
-        }).catch(updateError => console.error("Error updating doc with failure status after re-indexing attempt:", updateError));
-    } finally {
-        setOperationStatus(source.id, false);
-    }
+      setOperationStatus(source.id, true);
+      toast({ title: `Re-processing ${source.sourceName}...` });
+  
+      const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+      await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Clearing old data and starting re-processing...", chunksWritten: 0 });
+  
+      try {
+          // Step 1: Delete existing chunks to prevent duplicates.
+          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
+          const chunksSnapshot = await getDocs(chunksQuery);
+          if (!chunksSnapshot.empty) {
+              const batch = writeBatch(db);
+              chunksSnapshot.docs.forEach(chunkDoc => {
+                  batch.delete(chunkDoc.ref);
+              });
+              await batch.commit();
+          }
+          // Note: This does not delete from Vertex AI, but the `upsert` operation in `indexDocument` will overwrite.
+  
+          // Step 2: Proceed with the re-indexing flow.
+          if (!source.downloadURL) {
+              throw new Error("Source is missing a download URL, cannot re-process.");
+          }
+          
+          await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType || 'file'}...` });
+          const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
+  
+          if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+              throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
+          }
+          
+          await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
+          const indexInput: Parameters<typeof indexDocument>[0] = {
+              sourceId: source.id,
+              sourceName: source.sourceName,
+              text: extractionResult.extractedText,
+              level: source.level,
+              topic: source.topic,
+              downloadURL: source.downloadURL,
+              pageNumber: source.pageNumber,
+              title: source.title,
+              header: source.header,
+          };
+          if (source.linkedEnglishSourceId) {
+              indexInput.linkedEnglishSourceId = source.linkedEnglishSourceId;
+          }
+  
+          const indexingResult = await indexDocument(indexInput);
+          
+          if (!indexingResult.success || indexingResult.chunksWritten === 0) {
+              throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database.");
+          }
+  
+          toast({ title: "Success!", description: `"${source.sourceName}" has been successfully re-indexed.` });
+  
+      } catch (error: any) {
+          const errorMessage = error.message || "An unknown error occurred during re-indexing.";
+          toast({ title: `Error Re-indexing`, description: errorMessage, variant: "destructive", duration: 10000 });
+          await updateDoc(sourceDocRef, {
+              indexingStatus: 'failed',
+              indexingError: errorMessage
+          }).catch(updateError => console.error("Error updating doc with failure status after re-indexing attempt:", updateError));
+      } finally {
+          setOperationStatus(source.id, false);
+      }
   }, [toast, setOperationStatus]);
 
   const handleFileUpload = useCallback(async () => {
