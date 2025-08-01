@@ -45,15 +45,10 @@ export async function searchKnowledgeBase({
     options: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768 }
   });
 
-  const queryEmbeddingArray = embeddingResponse?.[0]?.embedding;
-  if (!queryEmbeddingArray || queryEmbeddingArray.length !== 768) {
+  const queryEmbedding = embeddingResponse?.[0]?.embedding;
+  if (!queryEmbedding || queryEmbedding.length !== 768) {
     throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
   }
-
-  // Explicitly create a Firestore Vector object using the initialized admin instance.
-  // This is the correct way to access the constructor and avoids module resolution issues.
-  const queryEmbedding = new admin.firestore.FieldValue.Vector(queryEmbeddingArray);
-
 
   // =================================================================================
   // 2. CONNECT TO FIRESTORE AND PERFORM THE VECTOR SEARCH
@@ -64,7 +59,7 @@ export async function searchKnowledgeBase({
   // Perform the vector search using findNearest
   const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
     limit,
-    distanceMeasure: 'COSINE',
+    distanceMeasure: 'EUCLIDEAN',
   });
 
   let querySnapshot;
