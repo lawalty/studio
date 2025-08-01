@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -168,8 +167,6 @@ export default function ApiKeysPage() {
     }
     setIsTesting(prev => ({ ...prev, search: true }));
     setSearchResult(null);
-    // The distanceThreshold is no longer used for Vertex AI search, but we pass it anyway.
-    // The underlying searchKnowledgeBase function will ignore it.
     const result = await testSearch({ query: searchQuery, distanceThreshold: config.distanceThreshold });
     setSearchResult(result);
     setIsTesting(prev => ({ ...prev, search: false }));
@@ -233,14 +230,14 @@ export default function ApiKeysPage() {
             <>
               <Alert variant="default" className="bg-sky-50 border-sky-200">
                 <Terminal className="h-4 w-4 text-sky-700" />
-                <AlertTitle className="text-sky-800 font-bold">Important: Google AI &amp; Vertex AI Configuration</AlertTitle>
+                <AlertTitle className="text-sky-800 font-bold">Important: Google AI Configuration</AlertTitle>
                 <AlertDescription className="text-sky-700 space-y-3">
                     <p>
-                      All Google AI and Vertex AI keys and IDs are managed via environment variables for security.
+                      Your Google AI API Key is managed via an environment variable for security.
                     </p>
                     <ul className="list-disc pl-5 text-xs space-y-1">
-                        <li>For local development, add all `GEMINI_` and `VERTEX_AI_` variables to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
-                        <li>For production, set these as secrets in your hosting provider&apos;s dashboard. See `apphosting.yaml` for required secret names.</li>
+                        <li>For local development, add your `GEMINI_API_KEY` to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
+                        <li>For production, set this as a secret in your hosting provider&apos;s dashboard. See `apphosting.yaml` for the required secret name.</li>
                     </ul>
                 </AlertDescription>
               </Alert>
@@ -388,7 +385,7 @@ export default function ApiKeysPage() {
                       Vector Search Test (RAG)
                   </CardTitle>
                   <CardDescription className="text-xs">
-                      Tests the RAG pipeline using the Vertex AI Search endpoint.
+                      Tests the RAG pipeline using Firestore's native vector search.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -442,16 +439,16 @@ export default function ApiKeysPage() {
                 <h3 className="text-lg font-semibold">RAG Tuning</h3>
               </div>
               <CardDescription>
-                This slider is now for reference only. Vertex AI Search tuning is managed in the Google Cloud Console.
+                Adjust the similarity threshold for the Firestore vector search.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="distance-slider" className="font-medium">
-                  Distance Threshold (Previously: {config.distanceThreshold.toFixed(2)})
+                  Distance Threshold: {config.distanceThreshold.toFixed(2)}
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Adjust search parameters directly in your Vertex AI index configuration for optimal performance.
+                  Lower values mean stricter, more relevant results. Higher values are more lenient. Default is 0.6.
                 </p>
               </div>
               <Slider
@@ -460,7 +457,7 @@ export default function ApiKeysPage() {
                 max={1}
                 step={0.05}
                 value={[config.distanceThreshold]}
-                disabled={true}
+                onValueChange={(value) => setConfig(prev => ({ ...prev, distanceThreshold: value[0] }))}
               />
             </CardContent>
         </Card>
@@ -469,5 +466,3 @@ export default function ApiKeysPage() {
     </div>
   );
 }
-
-    

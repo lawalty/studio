@@ -1,18 +1,15 @@
-
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text, generating an
- * embedding, and writing the data to both Firestore (for metadata) and a
- * Vertex AI Vector Search index (for searchable embeddings).
+ * embedding, and writing the data to Firestore for metadata and native vector search.
  *
- * - indexDocument - Chunks text, generates embeddings, and writes to both services.
+ * - indexDocument - Chunks text, generates embeddings, and writes to Firestore.
  * - IndexDocumentInput - The input type for the function.
  * - IndexDocumentOutput - The return type for the function.
  */
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
-import { IndexEndpointServiceClient } from '@google-cloud/aiplatform';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -85,31 +82,6 @@ const preprocessText = (text: string): string => {
   return text.toLowerCase().replace(/\s+/g, ' ').trim();
 };
 
-async function upsertToVertexAI(datapoints: { id: string, embedding: number[] }[]) {
-    const { GCLOUD_PROJECT, LOCATION, VERTEX_AI_INDEX_ENDPOINT_ID } = process.env;
-
-    if (!GCLOUD_PROJECT || !LOCATION || !VERTEX_AI_INDEX_ENDPOINT_ID) {
-      throw new Error('CRITICAL: Missing Vertex AI environment variables for indexing.');
-    }
-    
-    const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
-    const indexEndpointClient = new IndexEndpointServiceClient(clientOptions);
-
-    const endpointName = indexEndpointClient.indexEndpointPath(GCLOUD_PROJECT, LOCATION, VERTEX_AI_INDEX_ENDPOINT_ID);
-
-    const upsertRequest = {
-        indexEndpoint: endpointName,
-        datapoints: datapoints.map(dp => ({
-            datapointId: dp.id,
-            featureVector: dp.embedding,
-        })),
-    };
-    
-    console.log('[upsertToVertexAI] Upserting datapoints:', JSON.stringify(upsertRequest, null, 2));
-
-    await indexEndpointClient.upsertDatapoints(upsertRequest);
-}
-
 export async function indexDocument({ 
     sourceId, sourceName, text, level, topic, downloadURL,
     linkedEnglishSourceId, pageNumber, title, header
@@ -144,7 +116,6 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: true };
         }
 
-        const datapointsForVertex: { id: string, embedding: number[] }[] = [];
         const firestoreBatch = db.batch();
         const chunksCollection = db.collection('kb_chunks');
 
@@ -162,14 +133,13 @@ export async function indexDocument({
           }
 
           const newChunkDocRef = chunksCollection.doc(); 
-
-          datapointsForVertex.push({ id: newChunkDocRef.id, embedding: embeddingVector });
           
           const chunkData: Record<string, any> = {
             sourceId, sourceName, level, topic, text: chunkText,
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
+            embedding: embeddingVector, // THIS IS THE CRITICAL FIX
           };
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
@@ -177,7 +147,6 @@ export async function indexDocument({
           firestoreBatch.set(newChunkDocRef, chunkData);
         }
 
-        await upsertToVertexAI(datapointsForVertex);
         await firestoreBatch.commit();
         
         const finalMetadata: Record<string, any> = {
@@ -198,7 +167,7 @@ export async function indexDocument({
         let detailedError: string;
 
         if (rawError.includes("permission denied") || rawError.includes('IAM')) {
-            detailedError = `Indexing failed due to a permissions issue. Ensure your service account has the "Vertex AI User" role for both searching and indexing.`;
+            detailedError = `Indexing failed due to a permissions issue. Ensure your service account has the "Cloud Datastore User" or "Firebase Admin" role.`;
         } else {
             detailedError = `Indexing failed for an unexpected reason. Full technical error: ${rawError}`;
         }
