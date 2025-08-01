@@ -122,7 +122,7 @@ export async function indexDocument({
           
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
-              content: preprocessText(chunkText), // Pre-process chunkText before embedding
+              content: chunkText, // Use the already pre-processed chunkText
               options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
           }));
           const embeddingVector = embeddingResponse?.[0]?.embedding;
@@ -133,11 +133,11 @@ export async function indexDocument({
           const newChunkDocRef = chunksCollection.doc(); 
           
           const chunkData: Record<string, any> = {
-            sourceId, sourceName, level, topic, text: chunkText, // Store original chunkText, but embed processed one
+            sourceId, sourceName, level, topic, text: chunkText,
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
-            embedding: embeddingVector,
+            embedding: embeddingVector, // Ensure embedding is part of the initial object
           };
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;

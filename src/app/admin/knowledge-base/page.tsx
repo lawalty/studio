@@ -368,7 +368,6 @@ export default function KnowledgeBasePage() {
               });
               await batch.commit();
           }
-          // Note: This does not delete from Vertex AI, but the `upsert` operation in `indexDocument` will overwrite.
   
           // Step 2: Proceed with the re-indexing flow.
           if (!source.downloadURL) {
@@ -586,7 +585,7 @@ export default function KnowledgeBasePage() {
             <CardHeader>
               <CardTitle className="font-headline">Upload New Source</CardTitle>
               <CardDescription>
-                Add a new source to the knowledge base. The file will be automatically processed and indexed in Vertex AI.
+                Add a new source to the knowledge base. The file will be automatically processed and indexed.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
