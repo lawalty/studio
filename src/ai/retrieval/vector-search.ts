@@ -1,12 +1,13 @@
 
 'use server';
 /**
- * @fileOverview Performs a tiered, vector-based semantic search on the knowledge base
- * using Firestore's native vector search capabilities. It prioritizes results from
- * different knowledge base levels (High, Medium, Low).
+ * @fileOverview Performs a vector-based semantic search using a dedicated
+ * Google Cloud Vertex AI Vector Search endpoint. This provides a more robust
+ * and scalable search than Firestore's native vector search.
  */
 import { admin } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
+import { IndexEndpointServiceClient, helpers } from '@google-cloud/aiplatform';
 
 export interface SearchResult {
   sourceId: string;
@@ -24,153 +25,146 @@ export interface SearchResult {
 interface SearchParams {
   query: string;
   limit?: number;
-  distanceThreshold?: number;
+  distanceThreshold?: number; // Note: Vertex AI uses this differently. 0 is identical, higher is less similar.
 }
 
-// Defines the order of priority for searching the knowledge base.
-const KB_LEVELS_IN_ORDER: ('High' | 'Medium' | 'Low')[] = ['High', 'Medium', 'Low'];
-
+// Pre-processing MUST match the one used during indexing.
 const preprocessText = (text: string): string => {
   if (!text) return '';
-  return text
-    .toLowerCase() // Convert to lowercase
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim(); // Trim leading/trailing spaces
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
 };
 
 export async function searchKnowledgeBase({
   query,
   limit = 10,
-  distanceThreshold = 0.8,
 }: SearchParams): Promise<SearchResult[]> {
-  const firestore = admin.firestore();
-  try {
-    const processedQuery = preprocessText(query);
-    
-    // =================================================================================
-    // VERIFICATION STEP 1: CREATE THE TRANSIENT QUERY EMBEDDING
-    // =================================================================================
-    // The user's processed query text is sent to the embedding model here.
-    // The resulting `queryEmbedding` is a vector of 768 numbers that exists only
-    // in memory for this function's execution. It is NEVER stored in Firestore.
-    // This is the "WHAT" to search for.
-    // =================================================================================
-    const embeddingResponse = await ai.embed({
-      embedder: 'googleai/text-embedding-004',
-      content: processedQuery,
-      options: {
-          taskType: 'RETRIEVAL_QUERY',
-          outputDimensionality: 768,
-      }
-    });
 
-    const queryEmbedding = embeddingResponse?.[0]?.embedding;
-    if (!queryEmbedding || queryEmbedding.length !== 768) {
-      throw new Error(`Failed to generate a valid 768-dimension embedding. Vector length: ${queryEmbedding?.length || 0}`);
+  // =================================================================================
+  // 1. VERIFY ENVIRONMENT VARIABLES
+  // =================================================================================
+  const {
+    GCLOUD_PROJECT,
+    LOCATION,
+    VERTEX_AI_INDEX_ID,
+    VERTEX_AI_INDEX_ENDPOINT_ID,
+    VERTEX_AI_DEPLOYED_INDEX_ID,
+    VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN,
+  } = process.env;
+
+  const requiredEnvVars = {
+    GCLOUD_PROJECT, LOCATION, VERTEX_AI_INDEX_ID,
+    VERTEX_AI_INDEX_ENDPOINT_ID, VERTEX_AI_DEPLOYED_INDEX_ID,
+    VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN,
+  };
+
+  for (const [key, value] of Object.entries(requiredEnvVars)) {
+    if (!value) {
+      throw new Error(`CRITICAL: The environment variable '${key}' is not set. The application cannot connect to the Vertex AI Vector Search endpoint. Please verify your .env.local file or App Hosting secret configuration.`);
     }
+  }
 
-    // =================================================================================
-    // VERIFICATION STEP 2: DEFINE THE SEARCH LOCATION
-    // =================================================================================
-    // This `chunksCollection` object points directly to the 'kb_chunks'
-    // collection in Firestore. This is the "WHERE" to search. The `.findNearest`
-    // function will ONLY operate on this specific collection.
-    // =================================================================================
-    const chunksCollection = firestore.collection('kb_chunks');
+  // =================================================================================
+  // 2. GENERATE THE QUERY EMBEDDING
+  // =================================================================================
+  // This step is identical to the previous method: create an embedding for the user's query.
+  const processedQuery = preprocessText(query);
+  const embeddingResponse = await ai.embed({
+    embedder: 'googleai/text-embedding-004',
+    content: processedQuery,
+    options: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768 }
+  });
 
-    // =================================================================================
-    // VERIFICATION STEP 3: COMPARE THE QUERY EMBEDDING TO STORED EMBEDDINGS
-    // =================================================================================
-    // The transient `queryEmbedding` is now passed to Firestore's `findNearest`
-    // function. Firestore's backend compares this in-memory vector against all of
-    // the permanently stored 'embedding' fields in the 'kb_chunks' collection.
-    // This is where the "WHAT" is compared against the "WHERE".
-    // =================================================================================
-    const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
-      limit: limit * 3, // Fetch more results to ensure we have enough to filter by level.
-      distanceMeasure: 'COSINE',
-    });
-    
-    const querySnapshot = await vectorQuery.get();
+  const queryEmbedding = embeddingResponse?.[0]?.embedding;
+  if (!queryEmbedding || queryEmbedding.length !== 768) {
+    throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
+  }
 
-    const candidates: SearchResult[] = [];
-    if (!querySnapshot.empty) {
+  // =================================================================================
+  // 3. CONNECT TO THE VERTEX AI ENDPOINT AND PERFORM THE SEARCH
+  // =================================================================================
+  const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
+  const indexEndpointClient = new IndexEndpointServiceClient(clientOptions);
+
+  const endpointName = indexEndpointClient.indexEndpointPath(GCLOUD_PROJECT!, LOCATION!, VERTEX_AI_INDEX_ENDPOINT_ID!);
+  const datapoint = {
+      datapointId: 'query-id', // A temporary ID for this query
+      featureVector: queryEmbedding,
+  };
+  
+  const findNeighborsRequest = {
+    indexEndpoint: endpointName,
+    deployedIndexId: VERTEX_AI_DEPLOYED_INDEX_ID!,
+    queries: [{ datapoint }],
+    returnFullDatapoint: false, // We only need the IDs
+  };
+
+  let searchResponse;
+  try {
+      [searchResponse] = await indexEndpointClient.findNeighbors(findNeighborsRequest);
+  } catch(e: any) {
+      console.error('[VertexSearch] Error calling findNeighbors:', e);
+      let detail = "An unexpected error occurred with the Vertex AI service.";
+      if (e.message?.includes('permission denied')) {
+          detail = `A permissions error occurred. Please ensure your service account has the "Vertex AI User" role in the Google Cloud Console.`;
+      } else if (e.message?.includes('not found')) {
+          detail = `The Vertex AI endpoint, index, or deployment was not found. Please verify all VERTEX_AI_* IDs in your environment configuration.`;
+      }
+      throw new Error(`[VertexSearch] ${detail} Raw Error: ${e.message}`);
+  }
+  
+  const neighbors = searchResponse?.nearestNeighbors?.[0]?.neighbors || [];
+  const chunkIds = neighbors.map(neighbor => neighbor.datapoint?.datapointId).filter((id): id is string => !!id);
+
+  if (chunkIds.length === 0) {
+    return [];
+  }
+
+  // =================================================================================
+  // 4. RETRIEVE THE DOCUMENT CHUNKS FROM FIRESTORE USING THE IDs
+  // =================================================================================
+  // Vertex AI returns the IDs of the closest matches. Now we fetch the actual
+  // document chunks from Firestore using those IDs.
+  const firestore = admin.firestore();
+  const chunksCollection = firestore.collection('kb_chunks');
+  
+  // Firestore 'in' query is limited to 30 items per query. We batch them.
+  const results: SearchResult[] = [];
+  const idToDistanceMap = new Map<string, number>();
+  neighbors.forEach(n => {
+    if (n.datapoint?.datapointId && n.distance) {
+      idToDistanceMap.set(n.datapoint.datapointId, n.distance);
+    }
+  });
+
+  const batches: string[][] = [];
+  for (let i = 0; i < chunkIds.length; i += 30) {
+      batches.push(chunkIds.slice(i, i + 30));
+  }
+
+  for (const batch of batches) {
+      if (batch.length === 0) continue;
+      const querySnapshot = await chunksCollection.where(admin.firestore.FieldPath.documentId(), 'in', batch).get();
       querySnapshot.forEach(doc => {
-        const data = doc.data();
-        const distance = doc.distance;
-        // The check is now `distance <= distanceThreshold` because smaller distance means more similar for COSINE.
-        if (distance <= distanceThreshold) {
-          candidates.push({
+          const data = doc.data();
+          const distance = idToDistanceMap.get(doc.id) || 0;
+          results.push({
+            // Note: The distance here is from Vertex, not Firestore. Lower is more similar.
+            distance: distance,
             sourceId: data.sourceId,
             text: data.text,
             sourceName: data.sourceName,
-            level: data.level, // The level field is now present on the document
+            level: data.level,
             topic: data.topic,
             downloadURL: data.downloadURL,
             pageNumber: data.pageNumber,
             title: data.title,
             header: data.header,
-            distance: distance,
           });
-        }
       });
-    }
-
-    // Sort candidates by distance to ensure we're comparing the closest matches first.
-    candidates.sort((a, b) => a.distance - b.distance);
-
-    const finalResults: SearchResult[] = [];
-    const addedSourceIds = new Set<string>();
-
-    for (const level of KB_LEVELS_IN_ORDER) {
-      for (const candidate of candidates) {
-        if (finalResults.length >= limit) {
-          break;
-        }
-        // This filter will now work correctly as `level` is present in the chunks.
-        if (candidate.level === level && !addedSourceIds.has(candidate.sourceId)) {
-          finalResults.push(candidate);
-          addedSourceIds.add(candidate.sourceId);
-        }
-      }
-      if (finalResults.length >= limit) {
-        break;
-      }
-    }
-    
-    // If no results after level-based sorting, return the closest matches regardless of level.
-    if (finalResults.length === 0 && candidates.length > 0) {
-        const uniqueCandidates: SearchResult[] = [];
-        candidates.forEach(candidate => {
-            if (!addedSourceIds.has(candidate.sourceId)) {
-                uniqueCandidates.push(candidate);
-                addedSourceIds.add(candidate.sourceId);
-            }
-        });
-        return uniqueCandidates.slice(0, limit);
-    }
-    
-    return finalResults;
-
-  } catch (error: any) {
-    console.error('[searchKnowledgeBase] An error occurred during Firestore vector search:', error);
-    const rawError = error.message || "An unknown error occurred.";
-    let detailedError = `Search failed due to a configuration or permissions issue. Details: ${rawError}`;
-
-    if (rawError.includes('vector index')) {
-        detailedError = `CRITICAL: The required vector index for the 'kb_chunks' collection is missing or still building. Please deploy it using 'firebase deploy --only firestore:indexes' and wait for completion.`;
-    } else if (rawError.includes('permission denied') || (error.code === 7)) {
-      detailedError = `CRITICAL: The search failed due to a permissions error. The App Hosting service account is missing the required IAM role to read from Firestore.
-
-Action Required:
-1. Go to the IAM page in your Google Cloud Console.
-2. Find the principal named 'App Hosting Service Account' (firebase-app-hosting-compute@...).
-3. Grant it the 'Cloud Datastore User' role.
-Full technical error: ${rawError}`;
-    } else if (rawError.includes('INVALID_ARGUMENT')) {
-      detailedError = `The search failed due to an invalid argument, likely a mismatch between the embedding vector's dimensions (768) and the Firestore index. Full error: ${rawError}`;
-    }
-
-    throw new Error(detailedError);
   }
+
+  // Sort final results by distance as returned by Vertex AI
+  results.sort((a, b) => a.distance - b.distance);
+
+  return results.slice(0, limit);
 }

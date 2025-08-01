@@ -183,31 +183,6 @@ export default function ApiKeysPage() {
 
   const getSearchResultAlert = () => {
     if (!searchResult) return null;
-
-    if (searchResult?.error?.includes("vector index")) {
-        return (
-            <Alert className="mt-4" variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Action Required: Deploy Firestore Index</AlertTitle>
-                <AlertDescription className="text-xs break-words space-y-3">
-                    <p>The vector search failed because the required index is missing in your Firestore database or you are targeting the wrong project.</p>
-                    
-                    <p className="font-bold">Step 1: Set the Correct Firebase Project</p>
-                    <p>Run this command in your terminal to ensure you are targeting the correct project before deploying:</p>
-                    <pre className="p-2 bg-black text-white rounded-md text-xs overflow-x-auto">
-                        <code>firebase use YOUR_PROJECT_ID</code>
-                    </pre>
-
-                    <p className="font-bold">Step 2: Deploy the Index</p>
-                    <p>Once you are in the correct project, run the following command to deploy the index. This may take a few minutes.</p>
-                    <pre className="p-2 bg-black text-white rounded-md text-xs overflow-x-auto">
-                        <code>firebase deploy --only firestore:indexes</code>
-                    </pre>
-                    <p className="mt-2 font-mono bg-red-50 p-2 rounded">Technical Details: {searchResult.error}</p>
-                </AlertDescription>
-            </Alert>
-        );
-    }
     
     let variant: "default" | "destructive" | "warning" = "default";
     let title = "";
@@ -256,14 +231,14 @@ export default function ApiKeysPage() {
             <>
               <Alert variant="default" className="bg-sky-50 border-sky-200">
                 <Terminal className="h-4 w-4 text-sky-700" />
-                <AlertTitle className="text-sky-800 font-bold">Important: Google AI API Key Configuration</AlertTitle>
+                <AlertTitle className="text-sky-800 font-bold">Important: Google AI &amp; Vertex AI Configuration</AlertTitle>
                 <AlertDescription className="text-sky-700 space-y-3">
                     <p>
-                      The Google AI API Key is managed via an environment variable.
+                      All Google AI and Vertex AI keys and IDs are managed via environment variables for security.
                     </p>
                     <ul className="list-disc pl-5 text-xs space-y-1">
-                        <li>For local development, add <code className="font-mono bg-sky-100 p-1 rounded">GEMINI_API_KEY=your_key_here</code> to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
-                        <li>For production, set this as a secret in your hosting provider&apos;s dashboard.</li>
+                        <li>For local development, add all `GEMINI_` and `VERTEX_AI_` variables to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
+                        <li>For production, set these as secrets in your hosting provider&apos;s dashboard. See `apphosting.yaml` for required secret names.</li>
                     </ul>
                 </AlertDescription>
               </Alert>
@@ -411,7 +386,7 @@ export default function ApiKeysPage() {
                       Vector Search Test (RAG)
                   </CardTitle>
                   <CardDescription className="text-xs">
-                      Tests the RAG pipeline using the tuned Distance Threshold.
+                      Tests the RAG pipeline using the Vertex AI Search endpoint.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -465,16 +440,16 @@ export default function ApiKeysPage() {
                 <h3 className="text-lg font-semibold">RAG Tuning</h3>
               </div>
               <CardDescription>
-                Adjust the sensitivity of the vector search. This setting affects both the test above and the live chatbot.
+                This slider is now for reference only. Vertex AI Search tuning is managed in the Google Cloud Console.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="distance-slider" className="font-medium">
-                  Distance Threshold: {config.distanceThreshold.toFixed(2)}
+                  Distance Threshold (Previously: {config.distanceThreshold.toFixed(2)})
                 </Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Lower values (e.g., 0.20) are stricter (more similar). Higher values (e.g., 0.80) are more lenient.
+                  Adjust search parameters directly in your Vertex AI index configuration for optimal performance.
                 </p>
               </div>
               <Slider
@@ -483,14 +458,9 @@ export default function ApiKeysPage() {
                 max={1}
                 step={0.05}
                 value={[config.distanceThreshold]}
-                onValueChange={(value) => setConfig(prev => ({ ...prev, distanceThreshold: value[0] }))}
+                disabled={true}
               />
             </CardContent>
-            <CardFooter>
-                <Button onClick={handleSave} disabled={isLoading}>
-                    <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save Tuning Settings'}
-                </Button>
-            </CardFooter>
         </Card>
 
       </div>
