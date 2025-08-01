@@ -1,16 +1,17 @@
-
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text, generating an
- * embedding for each chunk with a retry mechanism, and writing the complete data to Firestore.
+ * embedding, and writing the data to both Firestore (for metadata) and a
+ * Vertex AI Vector Search index (for searchable embeddings).
  *
- * - indexDocument - Chunks text, generates embeddings, and writes to Firestore.
+ * - indexDocument - Chunks text, generates embeddings, and writes to both services.
  * - IndexDocumentInput - The input type for the function.
  * - IndexDocumentOutput - The return type for the function.
  */
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
-import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
+import { ai } from '@/ai/genkit';
+import { IndexEndpointServiceClient } from '@google-cloud/aiplatform';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -34,7 +35,6 @@ const IndexDocumentOutputSchema = z.object({
 });
 export type IndexDocumentOutput = z.infer<typeof IndexDocumentOutputSchema>;
 
-// A simple text splitter function.
 function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: number; chunkOverlap: number }): string[] {
     if (chunkOverlap >= chunkSize) {
       throw new Error("chunkOverlap must be smaller than chunkSize.");
@@ -54,9 +54,8 @@ function simpleSplitter(text: string, { chunkSize, chunkOverlap }: { chunkSize: 
       index += chunkSize - chunkOverlap;
     }
     return chunks;
-  }
+}
 
-// Exportable helper function for retrying API calls with exponential backoff
 export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDelay = 1000): Promise<T> {
     let lastError: any;
     for (let i = 0; i < retries; i++) {
@@ -65,15 +64,13 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
         } catch (error: any) {
             lastError = error;
             const errorMessage = (error.message || '').toLowerCase();
-            // Check for common transient errors (quota, rate limit, service unavailable)
             if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('service unavailable') || (error.status && [429, 503].includes(error.status))) {
-                if (i < retries - 1) { // Don't wait on the last attempt
+                if (i < retries - 1) {
                     const delay = initialDelay * Math.pow(2, i) + Math.random() * 1000;
                     console.log(`[withRetry] Retriable error detected. Retrying in ${Math.round(delay / 1000)}s... (Attempt ${i + 1}/${retries})`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
             } else {
-                // For non-retriable errors, fail immediately
                 throw error;
             }
         }
@@ -82,27 +79,37 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
     throw lastError;
 }
 
-// Function to pre-process text for better embedding and search quality.
 const preprocessText = (text: string): string => {
   if (!text) return '';
-  return text
-    .toLowerCase() // Convert to lowercase
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim(); // Trim leading/trailing spaces
+  return text.toLowerCase().replace(/\s+/g, ' ').trim();
 };
 
+async function upsertToVertexAI(datapoints: { id: string, embedding: number[] }[]) {
+    const { GCLOUD_PROJECT, LOCATION, VERTEX_AI_INDEX_ENDPOINT_ID } = process.env;
+
+    if (!GCLOUD_PROJECT || !LOCATION || !VERTEX_AI_INDEX_ENDPOINT_ID) {
+      throw new Error('CRITICAL: Missing Vertex AI environment variables for indexing.');
+    }
+    
+    const clientOptions = { apiEndpoint: `${LOCATION}-aiplatform.googleapis.com` };
+    const indexEndpointClient = new IndexEndpointServiceClient(clientOptions);
+
+    const endpointName = indexEndpointClient.indexEndpointPath(GCLOUD_PROJECT, LOCATION, VERTEX_AI_INDEX_ENDPOINT_ID);
+
+    const upsertRequest = {
+        indexEndpoint: endpointName,
+        datapoints: datapoints.map(dp => ({
+            datapointId: dp.id,
+            featureVector: dp.embedding,
+        })),
+    };
+    
+    await indexEndpointClient.upsertDatapoints(upsertRequest);
+}
 
 export async function indexDocument({ 
-    sourceId, 
-    sourceName, 
-    text, 
-    level, 
-    topic, 
-    downloadURL,
-    linkedEnglishSourceId,
-    pageNumber,
-    title,
-    header,
+    sourceId, sourceName, text, level, topic, downloadURL,
+    linkedEnglishSourceId, pageNumber, title, header
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
       const collectionName = `kb_${level.toLowerCase().replace(/\s+/g, '_')}_meta`;
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
@@ -110,7 +117,7 @@ export async function indexDocument({
       try {
         const processedText = preprocessText(text);
         if (!processedText.trim()) {
-            const errorMessage = "No readable text content found after extraction and processing. The file may be empty or incompatible. Please try re-processing or use a different file.";
+            const errorMessage = "No readable text content found after extraction and processing.";
             await sourceDocRef.set({
               indexingStatus: 'failed',
               indexingError: errorMessage,
@@ -119,104 +126,75 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
-        const chunks = simpleSplitter(processedText, {
-          chunkSize: 1000, 
-          chunkOverlap: 100,
-        });
+        const chunks = simpleSplitter(processedText, { chunkSize: 1000, chunkOverlap: 100 });
+        const datapointsForVertex: { id: string, embedding: number[] }[] = [];
+        const firestoreBatch = db.batch();
+        const chunksCollection = db.collection('kb_chunks');
 
         if (chunks.length > 0) {
-          const batch = db.batch();
-          const chunksCollection = db.collection('kb_chunks');
-          
           for (let index = 0; index < chunks.length; index++) {
             const chunkText = chunks[index];
             
             const embeddingResponse = await withRetry(() => ai.embed({
                 embedder: 'googleai/text-embedding-004',
                 content: chunkText,
-                options: {
-                    taskType: 'RETRIEVAL_DOCUMENT',
-                    outputDimensionality: 768,
-                }
+                options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
             }));
-
             const embeddingVector = embeddingResponse?.[0]?.embedding;
-
-            // Validate the embedding response. It MUST be 768 dimensions.
             if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length !== 768) {
-              throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}. The embedding service returned an invalid structure.`);
+              throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}.`);
             }
 
-            const newChunkDocRef = chunksCollection.doc();
-            const chunkData: Record<string, any> = {
-              sourceId,
-              sourceName,
-              level,
-              topic,
-              text: chunkText,
-              chunkNumber: index + 1,
-              embedding: embeddingVector,
-              createdAt: new Date().toISOString(),
-              downloadURL: downloadURL || null,
-              pageNumber: pageNumber || null,
-              title: title || null,
-              header: header || null,
-            };
+            const newChunkDocRef = chunksCollection.doc(); 
 
+            // Add the data to be upserted to Vertex AI
+            datapointsForVertex.push({ id: newChunkDocRef.id, embedding: embeddingVector });
+            
+            // Add metadata to Firestore. We no longer store the embedding vector here.
+            const chunkData: Record<string, any> = {
+              sourceId, sourceName, level, topic, text: chunkText,
+              chunkNumber: index + 1, createdAt: new Date().toISOString(),
+              downloadURL: downloadURL || null, pageNumber: pageNumber || null,
+              title: title || null, header: header || null,
+            };
             if (linkedEnglishSourceId) {
                 chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
             }
-
-            batch.set(newChunkDocRef, chunkData);
+            firestoreBatch.set(newChunkDocRef, chunkData);
           }
-          
-          await batch.commit();
+
+          // Commit both operations
+          await upsertToVertexAI(datapointsForVertex);
+          await firestoreBatch.commit();
         }
         
         const finalMetadata: Record<string, any> = {
-          indexingStatus: 'success',
-          chunksWritten: chunks.length,
-          indexedAt: new Date().toISOString(),
-          indexingError: null,
+          indexingStatus: 'success', chunksWritten: chunks.length,
+          indexedAt: new Date().toISOString(), indexingError: null,
           sourceName, level, topic, downloadURL: downloadURL || null,
         };
         if (linkedEnglishSourceId) {
             finalMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
         }
-
         await sourceDocRef.set(finalMetadata, { merge: true });
         
-        return {
-          chunksWritten: chunks.length,
-          sourceId,
-          success: true,
-        };
+        return { chunksWritten: chunks.length, sourceId, success: true };
 
       } catch (e: any) {
         console.error(`[indexDocument] Raw error for source '${sourceName}':`, e);
         const rawError = e instanceof Error ? e.message : (e.message || JSON.stringify(e));
         let detailedError: string;
 
-        if (rawError.toLowerCase().includes('quota') || rawError.includes('429') || rawError.toLowerCase().includes('service unavailable') || rawError.includes('503')) {
-            detailedError = `Indexing failed after multiple retries due to API rate limits or temporary service unavailability. Please wait a few minutes before trying again or request a quota increase in your Google Cloud project.`;
-        } else if (rawError.includes("Could not refresh access token")) {
-            detailedError = `Indexing failed due to a local authentication error. Please run 'gcloud auth application-default login' and restart the dev server. See README.md.`;
-        } else if (rawError.includes("PROJECT_BILLING_NOT_ENABLED")) {
-            detailedError = `CRITICAL: Indexing failed because billing is not enabled for your Google Cloud project. Please enable it in the Google Cloud Console.`;
-        } else if (e.code === 7 || (rawError && (rawError.includes('permission denied') || rawError.includes('IAM')))) {
-            detailedError = `CRITICAL: The server failed to write to Firestore due to a permissions error. Please check IAM roles for your service account. It needs "Firebase Admin" or "Cloud Datastore User".`;
-        } else if (rawError.includes("API key not valid") || rawError.includes("API key is missing")) {
-            detailedError = `CRITICAL: Indexing failed due to an invalid or missing GEMINI_API_KEY. Please verify it in your .env.local file or hosting provider's secret manager.`;
+        if (rawError.includes("permission denied") || rawError.includes('IAM')) {
+            detailedError = `Indexing failed due to a permissions issue. Ensure your service account has the "Vertex AI User" role for both searching and indexing.`;
         } else {
             detailedError = `Indexing failed for an unexpected reason. Full technical error: ${rawError}`;
         }
 
         try {
           const failureMetadata: Record<string, any> = { 
-            indexingStatus: 'failed', 
-            indexingError: detailedError, 
-            sourceName, level, topic, 
-            downloadURL: downloadURL || null 
+            indexingStatus: 'failed', indexingError: detailedError, 
+            sourceName, level, topic, downloadURL: downloadURL || null 
           };
           if (linkedEnglishSourceId) {
             failureMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
@@ -225,12 +203,6 @@ export async function indexDocument({
         } catch (updateError) {
           console.error(`[indexDocument] CRITICAL: Failed to write failure status to Firestore for source '${sourceName}'.`, updateError);
         }
-
-        return {
-          chunksWritten: 0,
-          sourceId,
-          success: false,
-          error: detailedError,
-        };
+        return { chunksWritten: 0, sourceId, success: false, error: detailedError };
       }
 }

@@ -15,8 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { exportEmbeddingsToGcs } from '@/ai/flows/export-embeddings-to-gcs-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, Link as LinkIcon, DownloadCloud } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -241,7 +240,6 @@ export default function KnowledgeBasePage() {
   const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Spanish PDFs': true, 'Chat History': true, 'Archive': true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
@@ -560,36 +558,7 @@ export default function KnowledgeBasePage() {
           setOperationStatus(source.id, false);
       }
   }, [toast, setOperationStatus]);
-
-  const handleExport = useCallback(async () => {
-    setIsExporting(true);
-    toast({ title: 'Starting Export...', description: 'Preparing documents for Vertex AI.' });
-    try {
-        const result = await exportEmbeddingsToGcs();
-        if (result.success) {
-            toast({
-                title: 'Export Successful!',
-                description: `Exported ${result.documentsExported} docs. Import from GCS path: ${result.filePath}`,
-                duration: 15000,
-            });
-        } else {
-            toast({
-                title: 'Export Failed',
-                description: result.message,
-                variant: 'destructive',
-            });
-        }
-    } catch (e: any) {
-        toast({
-            title: 'Export Error',
-            description: e.message || 'An unknown error occurred.',
-            variant: 'destructive',
-        });
-    } finally {
-        setIsExporting(false);
-    }
-  }, [toast]);
-
+  
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
       <div>
@@ -604,7 +573,7 @@ export default function KnowledgeBasePage() {
             <CardHeader>
               <CardTitle className="font-headline">Upload New Source</CardTitle>
               <CardDescription>
-                Add a new source to the knowledge base. The file will be uploaded and processed by a server-side flow.
+                Add a new source to the knowledge base. The file will be automatically processed and indexed in Vertex AI.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -664,22 +633,6 @@ export default function KnowledgeBasePage() {
               </Button>
             </CardFooter>
           </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><Wrench /> Export & Sync to Vertex AI</CardTitle>
-              <CardDescription>
-                Export all Firestore embeddings to a file, then import it into your Vertex AI Vector Search index to make your documents searchable.
-              </CardDescription>
-            </CardHeader>
-             <CardContent>
-                 <Button onClick={handleExport} disabled={isExporting || anyOperationGloballyInProgress}>
-                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
-                    Export Embeddings for Vertex AI
-                 </Button>
-            </CardContent>
-          </Card>
-          
         </div>
         <div className="lg:col-span-2">
           <Accordion type="single" collapsible className="w-full" value={activeAccordionItem} onValueChange={(value) => setActiveAccordionItem(value || '')}>
