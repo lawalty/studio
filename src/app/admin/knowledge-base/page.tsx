@@ -15,7 +15,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, Link as LinkIcon } from 'lucide-react';
+import { exportEmbeddingsToGcs } from '@/ai/flows/export-embeddings-to-gcs-flow';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, Wrench, HelpCircle, ArrowLeftRight, Link as LinkIcon, DownloadCloud } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -49,7 +50,7 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: 
   'High': { collectionName: 'kb_high_meta', title: 'High Priority', description: 'Manage high priority sources.' },
   'Medium': { collectionName: 'kb_medium_meta', title: 'Medium Priority', description: 'Manage medium priority sources.' },
   'Low': { collectionName: 'kb_low_meta', title: 'Low Priority', description: 'Manage low priority sources.' },
-  'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta', title: 'Spanish PDFs', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
+  'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta', title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
   'Chat History': { collectionName: 'kb_chat_history_meta', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
   'Archive': { collectionName: 'kb_archive_meta', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
@@ -81,8 +82,8 @@ const RenderKnowledgeBaseLevel = ({
 
     return (
         <AccordionItem value={level.toLowerCase().replace(/\s+/g, '-')} key={level}>
-          <AccordionTrigger className="text-xl font-headline">
-            {config.title} Knowledge Base ({sources.length})
+          <AccordionTrigger className="text-xl font-headline justify-start">
+            {config.title} ({sources.length})
           </AccordionTrigger>
           <AccordionContent>
              <CardDescription className="mb-4">{config.description}</CardDescription>
@@ -240,6 +241,7 @@ export default function KnowledgeBasePage() {
   const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Spanish PDFs': true, 'Chat History': true, 'Archive': true });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
@@ -559,6 +561,35 @@ export default function KnowledgeBasePage() {
       }
   }, [toast, setOperationStatus]);
 
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    toast({ title: 'Starting Export...', description: 'Preparing documents for Vertex AI.' });
+    try {
+        const result = await exportEmbeddingsToGcs();
+        if (result.success) {
+            toast({
+                title: 'Export Successful!',
+                description: `Exported ${result.documentsExported} docs. Import from GCS path: ${result.filePath}`,
+                duration: 15000,
+            });
+        } else {
+            toast({
+                title: 'Export Failed',
+                description: result.message,
+                variant: 'destructive',
+            });
+        }
+    } catch (e: any) {
+        toast({
+            title: 'Export Error',
+            description: e.message || 'An unknown error occurred.',
+            variant: 'destructive',
+        });
+    } finally {
+        setIsExporting(false);
+    }
+  }, [toast]);
+
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
       <div>
@@ -636,15 +667,16 @@ export default function KnowledgeBasePage() {
           
           <Card>
             <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><Wrench /> Vector Search Health</CardTitle>
+              <CardTitle className="font-headline flex items-center gap-2"><Wrench /> Export & Sync to Vertex AI</CardTitle>
               <CardDescription>
-                The RAG test UI has been temporarily removed. The core functionality is being repaired.
+                Export all Firestore embeddings to a file, then import it into your Vertex AI Vector Search index to make your documents searchable.
               </CardDescription>
             </CardHeader>
              <CardContent>
-                <div className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-lg">
-                    The search test interface is currently under maintenance. We are working to restore it.
-                </div>
+                 <Button onClick={handleExport} disabled={isExporting || anyOperationGloballyInProgress}>
+                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadCloud className="mr-2 h-4 w-4" />}
+                    Export Embeddings for Vertex AI
+                 </Button>
             </CardContent>
           </Card>
           
