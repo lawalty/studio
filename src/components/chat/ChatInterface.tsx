@@ -242,118 +242,117 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [isListening, hasConversationEnded, isBotProcessing, isBotSpeaking, logErrorToFirestore]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
-        if (!isMountedRef.current) return;
-        if (!textToSpeak.trim()) {
+        if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.();
             return;
-        };
+        }
+    
         setIsBotProcessing(false);
-    
-        const processedText = textToSpeak
-          .replace(/\bCOO\b/gi, 'Chief Operating Officer')
-          .replace(/\bEZCORP\b/gi, 'easy corp');
-    
         const useAudio = communicationMode !== 'text-only';
     
+        // 1. Cancel any ongoing speech synthesis or audio playback
         if (useAudio) {
             if (typeof window !== 'undefined') window.speechSynthesis.cancel();
             if (audioPlayerRef.current) audioPlayerRef.current.pause();
         }
     
-        let audioDuration = fullMessage.text.length * configRef.current.typingSpeedMs;
+        // 2. Pre-process text for better pronunciation
+        const processedText = textToSpeak
+            .replace(/\bCOO\b/gi, 'Chief Operating Officer')
+            .replace(/\bEZCORP\b/gi, 'easy corp');
+    
+        // 3. Define the final cleanup and callback function
+        const handleEnd = () => {
+            if (!isMountedRef.current) return;
+            setIsBotSpeaking(false);
+            if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+            setAnimatedResponse(null);
+            addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+            onSpeechEnd?.();
+        };
+    
+        // 4. Fetch audio data if needed
         let audioDataUri = '';
-
         if (useAudio) {
             try {
                 const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
                 if (useCustomTts && ttsApiKey && ttsVoiceId) {
                     const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
-                    if (result.error || !result.media) throw new Error(result.error);
+                    if (result.error || !result.media) throw new Error(result.error || "Custom TTS failed to return media.");
                     audioDataUri = result.media;
                 } else {
                     const result = await googleTextToSpeech(processedText);
                     audioDataUri = result.media;
                 }
             } catch (ttsError: any) {
-                console.error("TTS API Error, falling back to Google TTS:", ttsError);
-                await logErrorToFirestore(ttsError, 'ChatInterface/speakText/CustomTTS');
-                try {
-                    const result = await googleTextToSpeech(processedText);
-                    audioDataUri = result.media;
-                } catch (fallbackError) {
-                    console.error("Fallback Google TTS Error:", fallbackError);
-                    setIsBotSpeaking(false);
-                    addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-                    onSpeechEnd?.();
-                    return;
-                }
+                console.error("TTS API Error:", ttsError);
+                await logErrorToFirestore(ttsError, 'ChatInterface/speakText/TTS');
+                handleEnd(); // End gracefully if TTS fails
+                return;
             }
         }
-        
-        const handleEnd = () => {
-          if (!isMountedRef.current) return;
-          setIsBotSpeaking(false);
-          if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-          setAnimatedResponse(null);
-          addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
-          onSpeechEnd?.();
-        };
-        
-      if (useAudio && audioDataUri) {
-          if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-          
-          const playAudio = async () => {
-              if (isMountedRef.current) {
-                audioPlayerRef.current!.src = audioDataUri;
-                await audioPlayerRef.current!.play();
-                setIsBotSpeaking(true);
-              }
-          };
-          
-          audioPlayerRef.current.onended = handleEnd;
-          
-          const audioPromise = new Promise<void>(resolve => {
-              const resolveOnce = () => {
-                  audioPlayerRef.current!.onloadedmetadata = null;
-                  audioPlayerRef.current!.oncanplaythrough = null;
-                  audioPlayerRef.current!.onerror = null;
-                  resolve();
-              };
-              audioPlayerRef.current!.onloadedmetadata = () => {
-                  const duration = audioPlayerRef.current!.duration;
-                  if (isFinite(duration)) audioDuration = duration * 1000 * configRef.current.animationSyncFactor;
-                  resolveOnce();
-              };
-              audioPlayerRef.current!.oncanplaythrough = resolveOnce;
-              audioPlayerRef.current!.onerror = resolveOnce;
-              // Timeout to prevent getting stuck
-              setTimeout(resolveOnce, 3000); 
-          });
-
-          await audioPromise;
-          playAudio();
-      }
     
-      if (communicationMode !== 'audio-only') {
-          const textLength = fullMessage.text.length;
-          const delayPerChar = textLength > 0 ? audioDuration / textLength : 0;
-          let currentIndex = 0;
-          setAnimatedResponse({ ...fullMessage, text: '' });
-  
-          const typeCharacter = () => {
-              if (currentIndex < textLength) {
-                  if (!isMountedRef.current) return;
-                  setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
-                  currentIndex++;
-                  animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-              } else if (!useAudio) {
-                  handleEnd();
-              }
-          };
-          typeCharacter();
-      } else if (!useAudio) { 
-          handleEnd();
-      }
+        // 5. Calculate animation duration and start typing animation
+        if (communicationMode !== 'audio-only') {
+            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+    
+            const audioLoadPromise = new Promise<number>((resolve) => {
+                if (!useAudio || !audioDataUri) {
+                    // For text-only mode, calculate duration based on configured speed
+                    resolve(fullMessage.text.length * configRef.current.typingSpeedMs);
+                    return;
+                }
+                
+                audioPlayerRef.current!.src = audioDataUri;
+                
+                const resolveOnce = (duration: number) => {
+                    audioPlayerRef.current!.onloadedmetadata = null;
+                    audioPlayerRef.current!.onerror = null;
+                    resolve(duration);
+                };
+
+                audioPlayerRef.current!.onloadedmetadata = () => {
+                    const durationInMs = (audioPlayerRef.current!.duration || 0) * 1000;
+                    resolveOnce(isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : fullMessage.text.length * 50);
+                };
+    
+                audioPlayerRef.current!.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
+                setTimeout(() => resolveOnce(fullMessage.text.length * 50), 3000); // Timeout fallback
+            });
+    
+            const totalAnimationDuration = await audioLoadPromise;
+            const textLength = fullMessage.text.length;
+            const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
+    
+            let currentIndex = 0;
+            setAnimatedResponse({ ...fullMessage, text: '' });
+    
+            const typeCharacter = () => {
+                if (currentIndex < textLength) {
+                    if (!isMountedRef.current) return;
+                    setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
+                    currentIndex++;
+                    animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
+                } else if (!useAudio) {
+                    // If text-only, animation end triggers the final state change
+                    handleEnd();
+                }
+            };
+            typeCharacter();
+        }
+    
+        // 6. Play audio if applicable
+        if (useAudio && audioDataUri) {
+            audioPlayerRef.current!.onended = handleEnd;
+            await audioPlayerRef.current!.play().catch(e => {
+                console.error("Audio playback failed:", e);
+                handleEnd();
+            });
+            setIsBotSpeaking(true);
+        } else if (useAudio) {
+            // If audio was expected but failed to generate, clean up.
+            handleEnd();
+        }
     
     }, [communicationMode, addMessage, logErrorToFirestore, configRef]);
 
@@ -404,7 +403,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             let promptText;
             if (inactivityCheckLevelRef.current === 1) {
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+                promptText = uiText.inactivityPrompt : uiText.inactivityPromptInitial;
             } else if (inactivityCheckLevelRef.current === 2) {
                 promptText = uiText.inactivityPromptSecondary;
             } else {
@@ -524,7 +523,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             
             const sourceId = uuidv4();
             const fileName = `Chat-Transcript-${new Date().toISOString().split('T')[0]}.pdf`;
-            const sourceDocRef = doc(db, 'kb_chat_history_meta_v1', sourceId);
+            const sourceDocRef = doc(db, 'kb_chat_history_meta', sourceId);
             await setDoc(sourceDocRef, { sourceName: fileName, topic: 'Chat History', level: 'Chat History', createdAt: new Date().toISOString(), indexingStatus: 'processing', mimeType: 'application/pdf' });
             
             const storagePath = `chat_history_files/${sourceId}-${fileName}`;
@@ -820,3 +819,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
