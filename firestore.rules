@@ -2,35 +2,11 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Allow the public-facing app to read all configuration and site asset
-    // documents, but allow only authenticated admins (server-side functions)
-    // to write to them. This rule is secure because the server-side flows
-    // that handle uploads and settings changes run with admin privileges
-    // and bypass these client-facing rules.
-    match /configurations/{document=**} {
-      allow read: if true;
-      allow write: if false; // All writes must be done server-side.
-    }
-
-    // Allow public read access to all knowledge base metadata collections.
-    // Writes are blocked from the client to ensure all indexing and
-    // modifications are handled securely by server-side functions.
-    match /kb_{level}_meta/{docId} {
-      allow read: if true;
-      allow write: if false; // All writes must be done server-side.
-    }
-
-    // Allow public read access to the indexed data chunks.
-    // Writes are blocked from the client.
-    match /kb_chunks/{chunkId} {
-      allow read: if true;
-      allow write: if false; // All writes must be done server-side.
-    }
-
-    // Allow only the server (admin) to read/write site errors.
-    match /site_errors/{errorId} {
-        allow read, write: if false;
+    // WARNING: These rules are completely open and are for temporary
+    // development and testing ONLY. They provide no security.
+    // You MUST secure your database before going to production.
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }
