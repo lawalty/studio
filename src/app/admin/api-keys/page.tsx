@@ -204,12 +204,15 @@ export default function ApiKeysPage() {
 
     const Diagnostics = () => {
         if (!searchResult.diagnostics) return null;
+        const { diagnostics } = searchResult;
         return (
-            <div className="mt-2 text-xs font-mono bg-slate-100 dark:bg-slate-800 p-2 rounded-md space-y-1">
+            <div className="mt-2 text-xs font-mono bg-slate-100 dark:bg-slate-800 p-2 rounded-md space-y-1 break-all">
                 <p className="flex items-center gap-2"><Binary className="h-3 w-3" /> <strong>Diagnostics</strong></p>
-                {searchResult.diagnostics.preprocessedQuery && <p>Preprocessed Query: &quot;{searchResult.diagnostics.preprocessedQuery}&quot;</p>}
-                {searchResult.diagnostics.queryEmbeddingGenerated !== undefined && <p>Query Embedding Generated: {searchResult.diagnostics.queryEmbeddingGenerated ? 'Yes' : 'No'}</p>}
-                {searchResult.diagnostics.queryEmbeddingError && <p>Embedding Error: {searchResult.diagnostics.queryEmbeddingError}</p>}
+                {diagnostics.preprocessedQuery && <p>Preprocessed Query: &quot;{diagnostics.preprocessedQuery}&quot;</p>}
+                {diagnostics.queryEmbeddingGenerated !== undefined && <p>Query Embedding Generated: {diagnostics.queryEmbeddingGenerated ? 'Yes' : 'No'}</p>}
+                {diagnostics.queryEmbeddingError && <p className="text-red-500">Embedding Error: {diagnostics.queryEmbeddingError}</p>}
+                {diagnostics.queryEmbeddingSnippet && <p>Embedding Snippet: [{diagnostics.queryEmbeddingSnippet.map(n => n.toFixed(3)).join(', ')}]</p>}
+                {diagnostics.searchError && <p className="text-red-500">Search Error: {diagnostics.searchError}</p>}
             </div>
         )
     }

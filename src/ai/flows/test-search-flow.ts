@@ -27,6 +27,8 @@ const TestSearchOutputSchema = z.object({
       preprocessedQuery: z.string().optional(),
       queryEmbeddingGenerated: z.boolean().optional(),
       queryEmbeddingError: z.string().optional(),
+      queryEmbeddingSnippet: z.array(z.number()).optional().describe("A snippet of the generated embedding vector."),
+      searchError: z.string().optional().describe("Error captured during the searchKnowledgeBase call."),
   }).optional(),
 });
 export type TestSearchOutput = z.infer<typeof TestSearchOutputSchema>;
@@ -42,78 +44,79 @@ const preprocessText = (text: string): string => {
 
 
 export async function testSearch(input: TestSearchInput): Promise<TestSearchOutput> {
+  const preprocessedQuery = preprocessText(input.query);
+  const diagnostics: any = {
+      preprocessedQuery,
+      queryEmbeddingGenerated: false,
+  };
+
+  // **Diagnostic Step 1: Preprocessing & Embedding Generation**
+  let queryEmbedding: number[] | undefined;
   try {
-    const preprocessedQuery = preprocessText(input.query);
-    
-    // **Diagnostic Step 1: Preprocessing & Embedding Generation**
-    // We will attempt to generate the embedding here to confirm it works before the search.
-    try {
-        const embeddingResponse = await ai.embed({
-            embedder: 'googleai/text-embedding-004',
-            content: preprocessedQuery,
-            options: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768 }
-        });
-        const queryEmbedding = embeddingResponse?.[0]?.embedding;
-        if (!queryEmbedding || queryEmbedding.length !== 768) {
-            throw new Error(`Generated embedding was invalid or not 768 dimensions.`);
-        }
-    } catch (e: any) {
-        return {
-            success: false,
-            message: "Failed during the query embedding generation step.",
-            results: [],
-            error: `Could not generate a valid vector for the test query. This points to an issue with the embedding model connection. Error: ${e.message}`,
-            diagnostics: { preprocessedQuery, queryEmbeddingGenerated: false, queryEmbeddingError: e.message }
-        };
-    }
-    
-    // **Diagnostic Step 2: Perform the search, but with a very lenient distance threshold for debugging.**
-    const searchResults = await searchKnowledgeBase({ 
-        query: input.query, // Pass the raw query, as searchKnowledgeBase now does its own preprocessing.
-        distanceThreshold: 1.0, // Use a threshold of 1.0 to find ALL potential matches regardless of distance.
-    });
-
-    const diagnosticInfo = {
-        preprocessedQuery,
-        queryEmbeddingGenerated: true,
-    };
-
-    if (searchResults.length > 0) {
-      // Filter the results by the user's desired threshold on the client-side for this test.
-      const filteredResults = searchResults.filter(r => r.distance <= (input.distanceThreshold || 0.6));
-      
-      if (filteredResults.length > 0) {
-        return {
-            success: true,
-            message: `Successfully found ${filteredResults.length} document(s) within the ${input.distanceThreshold || 0.6} distance threshold. Total documents found before filtering: ${searchResults.length}.`,
-            results: filteredResults,
-            diagnostics: diagnosticInfo,
-        };
-      } else {
-        return {
-            success: false,
-            message: `Found ${searchResults.length} document(s), but none were within the specified distance threshold of ${input.distanceThreshold || 0.6}. The closest match had a distance of ${searchResults[0].distance.toFixed(4)}. Try increasing the threshold.`,
-            results: searchResults, // Return all results so the user can see what was found.
-            diagnostics: diagnosticInfo,
-        };
+      const embeddingResponse = await ai.embed({
+          embedder: 'googleai/text-embedding-004',
+          content: preprocessedQuery,
+          options: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768 }
+      });
+      queryEmbedding = embeddingResponse?.[0]?.embedding;
+      if (!queryEmbedding || queryEmbedding.length !== 768) {
+          throw new Error(`Generated embedding was invalid or not 768 dimensions.`);
       }
-    } else {
-      return {
-        success: false,
-        message: "The search completed but found 0 documents, even with a lenient distance threshold. This suggests an issue with the Firestore index or a fundamental mismatch between the indexed content and the query.",
-        results: [],
-        diagnostics: diagnosticInfo,
-      };
-    }
-
+      diagnostics.queryEmbeddingGenerated = true;
+      diagnostics.queryEmbeddingSnippet = queryEmbedding.slice(0, 10); // Log first 10 values
   } catch (e: any) {
-    console.error('[testSearchFlow] Search test failed:', e);
-    const errorMessage = e.message || "An unknown error occurred during the search test.";
-    return {
-      success: false,
-      message: "The search query failed to execute. See the technical error below for details.",
-      results: [],
-      error: errorMessage,
-    };
+      diagnostics.queryEmbeddingError = e.message;
+      return {
+          success: false,
+          message: "Failed during the query embedding generation step.",
+          results: [],
+          error: `Could not generate a valid vector for the test query. This points to an issue with the embedding model connection. Error: ${e.message}`,
+          diagnostics,
+      };
+  }
+
+  // **Diagnostic Step 2: Perform the search**
+  try {
+      // Use a very lenient distance threshold to ensure we see everything Firestore returns.
+      const searchResults = await searchKnowledgeBase({ 
+          query: input.query,
+          distanceThreshold: 1.0, 
+      });
+
+      if (searchResults.length > 0) {
+          const filteredResults = searchResults.filter(r => r.distance <= (input.distanceThreshold || 0.6));
+          if (filteredResults.length > 0) {
+              return {
+                  success: true,
+                  message: `Successfully found ${filteredResults.length} document(s) within the ${input.distanceThreshold || 0.6} distance threshold. Total documents found before filtering: ${searchResults.length}.`,
+                  results: filteredResults,
+                  diagnostics,
+              };
+          } else {
+              return {
+                  success: false,
+                  message: `Found ${searchResults.length} document(s), but none were within the specified distance threshold of ${input.distanceThreshold || 0.6}. The closest match had a distance of ${searchResults[0].distance.toFixed(4)}. Try increasing the threshold.`,
+                  results: searchResults,
+                  diagnostics,
+              };
+          }
+      } else {
+          return {
+              success: false,
+              message: "The search completed but found 0 documents. The search was performed on the 'kb_chunks' collection. This indicates a core issue with either the Firestore index, the data not being in the index, or a connection problem.",
+              results: [],
+              diagnostics,
+          };
+      }
+  } catch (e: any) {
+      console.error('[testSearchFlow] Search test failed during searchKnowledgeBase call:', e);
+      diagnostics.searchError = e.message;
+      return {
+          success: false,
+          message: "The search query failed to execute. See the technical error below for details.",
+          results: [],
+          error: e.message,
+          diagnostics,
+      };
   }
 }
