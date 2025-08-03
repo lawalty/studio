@@ -7,7 +7,7 @@ async function generateIndexLink() {
   try {
     console.log('Attempting to run a query to generate the index creation link...');
     const queryEmbedding = Array(768).fill(0); // A dummy embedding for the query.
-    const chunksCollection = firestore.collection('kb_chunks');
+    const chunksCollection = firestore.collection('kb_chunks'); // REVERTED
     const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
       limit: 1,
       distanceMeasure: 'COSINE',

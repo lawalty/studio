@@ -46,13 +46,12 @@ export async function searchKnowledgeBase({
   }
 
   const firestore = admin.firestore();
-  const chunksCollection = firestore.collection('kb_chunks');
+  const chunksCollection = firestore.collection('kb_chunks'); // REVERTED
 
-  // This query now uses the new composite index on 'level' and 'embedding'.
   const vectorQuery = chunksCollection
     .findNearest('embedding', queryEmbedding, {
       limit,
-      distanceMeasure: 'EUCLIDEAN',
+      distanceMeasure: 'COSINE',
   });
 
   let querySnapshot;
@@ -74,8 +73,7 @@ export async function searchKnowledgeBase({
     const data = doc.data();
     const distance = doc.vectorDistance;
 
-    // Re-enabling the distance threshold filter.
-    // if (distance <= distanceThreshold) {
+    if (distance <= distanceThreshold) {
         results.push({
           distance,
           sourceId: data.sourceId,
@@ -88,7 +86,7 @@ export async function searchKnowledgeBase({
           title: data.title,
           header: data.header,
         });
-    // }
+    }
   });
 
   return results;

@@ -1,16 +1,13 @@
+
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text, generating an
  * embedding, and writing the data to Firestore for metadata and native vector search.
- *
- * - indexDocument - Chunks text, generates embeddings, and writes to Firestore.
- * - IndexDocumentInput - The input type for the function.
- * - IndexDocumentOutput - The return type for the function.
  */
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
-import { preprocessText } from '@/ai/retrieval/preprocessing'; // Import the shared pre-processing function
+import { preprocessText } from '@/ai/retrieval/preprocessing';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),
@@ -78,17 +75,15 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
     throw lastError;
 }
 
-// Removed local preprocessText function, now imported from preprocessing.ts
-
 export async function indexDocument({ 
     sourceId, sourceName, text, level, topic, downloadURL,
     linkedEnglishSourceId, pageNumber, title, header
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
-      const collectionName = `kb_${level.toLowerCase().replace(/\s+/g, '_')}_meta_v2`;
+      const collectionName = `kb_${level.toLowerCase().replace(/\s+/g, '_')}_meta`;
       const sourceDocRef = db.collection(collectionName).doc(sourceId);
 
       try {
-        const processedText = preprocessText(text); // Use the imported pre-processing function
+        const processedText = preprocessText(text); 
         if (!processedText.trim()) {
             const errorMessage = "No readable text content found after extraction and processing.";
             await sourceDocRef.set({
@@ -115,14 +110,14 @@ export async function indexDocument({
         }
 
         const firestoreBatch = db.batch();
-        const chunksCollection = db.collection('kb_chunks');
+        const chunksCollection = db.collection('kb_chunks'); 
 
         for (let index = 0; index < chunks.length; index++) {
           const chunkText = chunks[index];
           
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
-              content: chunkText, // Use the already pre-processed chunkText
+              content: chunkText,
               options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
           }));
           const embeddingVector = embeddingResponse?.[0]?.embedding;
@@ -137,7 +132,7 @@ export async function indexDocument({
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
-            embedding: embeddingVector, // Ensure embedding is part of the initial object
+            embedding: embeddingVector,
           };
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;

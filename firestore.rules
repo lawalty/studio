@@ -2,11 +2,23 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // WARNING: These rules are completely open and are for temporary
-    // development and testing ONLY. They provide no security.
-    // You MUST secure your database before going to production.
+    
+    // Allow any authenticated user to read and write to the configurations collection.
+    // This is necessary for the admin panel (Persona, Site Settings) to function.
+    match /configurations/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Rules for your knowledge base chunks can be more restrictive if needed,
+    // but for now, we will allow server-side access (which doesn't have request.auth)
+    // and authenticated user access for testing.
+    match /kb_chunks_v2/{chunkId} {
+      allow read, write: if true; // Allows server-side and client-side access
+    }
+
+    // Default deny all other collections.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
