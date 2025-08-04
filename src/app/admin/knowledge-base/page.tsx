@@ -473,18 +473,15 @@ export default function KnowledgeBasePage() {
 
         // Stage 3: Get Download URL
         const downloadURL = await getDownloadURL(fileRef);
-        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Waiting for permissions...' });
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Extracting text...' });
         
-        // Stage 4: Wait for Permissions to Propagate
-        await new Promise(resolve => setTimeout(resolve, 5000));
-
-        // Stage 5: Extract Text
+        // Stage 4: Extract Text
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
 
-        // Stage 6: Index Content
+        // Stage 5: Index Content
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
             sourceName: fileToUpload.name,
