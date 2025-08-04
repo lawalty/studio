@@ -37,7 +37,7 @@ export default function ApiKeysPage() {
     tts: '',
     voiceId: '',
     useTtsApi: true,
-    distanceThreshold: 0.6, // Default value
+    distanceThreshold: 0.6,
   });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -180,7 +180,7 @@ export default function ApiKeysPage() {
       default: return 'outline';
     }
   };
-
+  
   const getSearchResultAlert = () => {
     if (!searchResult) return null;
     
@@ -212,6 +212,21 @@ export default function ApiKeysPage() {
             </AlertDescription>
         </Alert>
     );
+  };
+  
+  const renderDiagnostics = () => {
+      if (!searchResult || !searchResult.diagnostics) return null;
+      const { diagnostics } = searchResult;
+      return (
+          <div className="mt-4 p-3 rounded-md border bg-muted/50">
+              <h4 className="font-semibold text-sm mb-2">Diagnostics</h4>
+              <div className="text-xs space-y-1">
+                  <p><span className="font-medium">Preprocessed Query:</span> "{diagnostics.preprocessedQuery}"</p>
+                  <p><span className="font-medium">Query Embedding Generated:</span> {diagnostics.embeddingGenerated ? 'Yes' : 'No'}</p>
+                  {diagnostics.embeddingSnippet && <p><span className="font-medium">Embedding Snippet:</span> {diagnostics.embeddingSnippet}</p>}
+              </div>
+          </div>
+      );
   };
 
 
@@ -430,6 +445,7 @@ export default function ApiKeysPage() {
                     {searchResult && (
                       <div className="mt-4">
                         {getSearchResultAlert()}
+                        {renderDiagnostics()}
                         {searchResult.results && searchResult.results.length > 0 && (
                             <ScrollArea className="mt-4 h-64 w-full rounded-md border p-3">
                                 {searchResult.results.map((res, i) => (
@@ -463,5 +479,3 @@ export default function ApiKeysPage() {
     </div>
   );
 }
-
-    
