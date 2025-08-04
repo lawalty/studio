@@ -1,12 +1,15 @@
 rules_version = '2';
 
-// WARNING: These rules are for temporary development and are not secure.
-// They allow public read and write access to all paths.
-// You must secure these rules before deploying to production.
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write;
+    
+    // Allow authenticated users to upload files to the knowledge base directory.
+    // This rule is essential for the Knowledge Base admin page to function.
+    // The {userId} wildcard is a security best practice, though for an admin
+    // panel, simply checking for an authenticated user is the key part.
+    match /knowledge_base_files/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null;
     }
+
   }
 }

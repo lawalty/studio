@@ -413,6 +413,7 @@ export default function KnowledgeBasePage() {
   }, [toast, setOperationStatus]);
 
   const handleFileUpload = useCallback(async () => {
+    // Stage 0: Validation
     if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
         toast({ title: "Missing Information", description: "Please select a file, topic, and priority level.", variant: "destructive" });
         return;
@@ -428,14 +429,17 @@ export default function KnowledgeBasePage() {
     const description = uploadDescription;
     const sourceId = uuidv4();
     const mimeType = fileToUpload.type || 'application/octet-stream';
+    let currentStage = "initialization";
 
     setIsCurrentlyUploading(true);
     setOperationStatus(sourceId, true);
-    toast({ title: `Processing "${fileToUpload.name}"...`, description: "This may take a minute. Please wait." });
-
+    
     const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
     try {
+        // Stage 1: Create Metadata Record
+        currentStage = "Step 1: Creating metadata record";
+        toast({ title: currentStage, description: `Creating tracking document for "${fileToUpload.name}"...` });
         const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
             sourceName: fileToUpload.name, description, topic, level: targetLevel,
             createdAt: new Date().toISOString(),
@@ -448,26 +452,35 @@ export default function KnowledgeBasePage() {
         }
         await setDoc(sourceDocRef, newSourceData);
 
+        // Stage 2: Upload to Cloud Storage
+        currentStage = "Step 2: Uploading to Cloud Storage";
+        toast({ title: currentStage, description: "The file is now being uploaded securely." });
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload).catch(storageError => {
-            if (storageError.code === 'storage/unauthorized') {
-                throw new Error(`Storage Error: Permission denied. Check your Storage rules in the Firebase console and ensure the bucket name is correct in your config.`);
-            }
-            throw new Error(`Storage Error: ${storageError.message}`);
-        });
+        await uploadBytes(fileRef, fileToUpload);
 
+        // Stage 3: Get Download URL
+        currentStage = "Step 3: Generating public URL";
+        toast({ title: currentStage, description: "Getting a secure URL for the AI to read the file." });
         const downloadURL = await getDownloadURL(fileRef);
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
         
-        // Brief pause to allow storage permissions to propagate
+        // Stage 4: Wait for Permissions
+        currentStage = "Step 4: Allowing permissions to propagate";
+        toast({ title: currentStage, description: "Waiting 5 seconds for the file to become accessible." });
         await new Promise(resolve => setTimeout(resolve, 5000));
 
+        // Stage 5: Extract Text
+        currentStage = "Step 5: Extracting text with AI";
+        toast({ title: currentStage, description: "Asking the Gemini model to read the document." });
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
 
+        // Stage 6: Index Content
+        currentStage = "Step 6: Indexing content";
+        toast({ title: currentStage, description: "Generating vector embeddings and saving to the database." });
         await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
 
         const indexInput: Parameters<typeof indexDocument>[0] = {
@@ -486,7 +499,8 @@ export default function KnowledgeBasePage() {
         if (!indexingResult.success || indexingResult.chunksWritten === 0) {
             throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
         }
-
+        
+        // Final Success
         toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
         
         setSelectedFile(null);
@@ -497,7 +511,7 @@ export default function KnowledgeBasePage() {
         }
 
     } catch (e: any) {
-        const errorMessage = `${e.message || 'Unknown error.'}`;
+        const errorMessage = `Failed at ${currentStage}. Error: ${e.message || 'Unknown error.'}`;
         console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
 
@@ -517,6 +531,7 @@ export default function KnowledgeBasePage() {
     }
   }, [selectedFile, selectedTopicForUpload, selectedLevelForUpload, linkedEnglishSourceIdForUpload, uploadDescription, toast, setOperationStatus]);
 
+
   const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
       if (source.level === newLevel) return;
       setOperationStatus(source.id, true);
@@ -526,7 +541,7 @@ export default function KnowledgeBasePage() {
           const docRef = doc(db, 'kb_meta', source.id);
           const updateData: Record<string, any> = { level: newLevel };
           if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
-            updateData.linkedEnglishSourceId = deleteDoc; // This is not correct, should be `deleteField()`
+            updateData.linkedEnglishSourceId = deleteField();
           }
           
           await updateDoc(docRef, updateData);
@@ -650,3 +665,4 @@ export default function KnowledgeBasePage() {
   );
 }
 
+    
