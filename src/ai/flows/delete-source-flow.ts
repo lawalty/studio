@@ -40,7 +40,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     // as the main goal is to delete the metadata and storage file.
     try {
         const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
-        const chunksSnapshot = await chunksQuery.get();
+        const chunksSnapshot = await getDocs(chunksQuery);
         if (!chunksSnapshot.empty) {
             const batch = db.batch();
             chunksSnapshot.docs.forEach(doc => {
@@ -88,4 +88,3 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     // If all critical steps succeeded, return success.
     return { success: true };
 }
-

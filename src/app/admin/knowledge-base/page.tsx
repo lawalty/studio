@@ -47,13 +47,13 @@ interface KnowledgeSource {
   header?: string;
 }
 
-const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
-  'High': { collectionName: 'kb_meta', title: 'High Priority', description: 'Manage high priority sources.' },
-  'Medium': { collectionName: 'kb_meta', title: 'Medium Priority', description: 'Manage medium priority sources.' },
-  'Low': { collectionName: 'kb_meta', title: 'Low Priority', description: 'Manage low priority sources.' },
-  'Spanish PDFs': { collectionName: 'kb_meta', title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
-  'Chat History': { collectionName: 'kb_meta', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
-  'Archive': { collectionName: 'kb_meta', title: 'Archive', description: 'Archived sources are not used by the AI.' },
+const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { title: string; description: string }> = {
+  'High': { title: 'High Priority', description: 'Manage high priority sources.' },
+  'Medium': { title: 'Medium Priority', description: 'Manage medium priority sources.' },
+  'Low': { title: 'Low Priority', description: 'Manage low priority sources.' },
+  'Spanish PDFs': { title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
+  'Chat History': { title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
+  'Archive': { title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
 const getFileExtension = (filename: string) => {
@@ -430,7 +430,6 @@ export default function KnowledgeBasePage() {
   }, [toast, setOperationStatus]);
 
   const handleFileUpload = async () => {
-    // Stage 0: Validation
     if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
         toast({ title: "Missing Information", description: "Please select a file, topic, and priority level.", variant: "destructive" });
         return;
@@ -440,20 +439,19 @@ export default function KnowledgeBasePage() {
         return;
     }
 
+    const sourceId = uuidv4();
+    setOperationStatus(sourceId, true);
+    setIsCurrentlyUploading(true);
+
     const fileToUpload = selectedFile;
     const targetLevel = selectedLevelForUpload;
     const topic = selectedTopicForUpload;
     const description = uploadDescription;
-    const sourceId = uuidv4();
     const mimeType = fileToUpload.type || 'application/octet-stream';
-    
-    setIsCurrentlyUploading(true);
-    setOperationStatus(sourceId, true);
     
     const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
     try {
-        // Stage 1: Create Metadata Record
         const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
             sourceName: fileToUpload.name, description, topic, level: targetLevel,
             createdAt: new Date().toISOString(),
@@ -466,22 +464,18 @@ export default function KnowledgeBasePage() {
         }
         await setDoc(sourceDocRef, newSourceData);
 
-        // Stage 2: Upload to Cloud Storage
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
         await uploadBytes(fileRef, fileToUpload);
 
-        // Stage 3: Get Download URL
         const downloadURL = await getDownloadURL(fileRef);
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Extracting text...' });
         
-        // Stage 4: Extract Text
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
 
-        // Stage 5: Index Content
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
             sourceName: fileToUpload.name,
@@ -499,7 +493,6 @@ export default function KnowledgeBasePage() {
             throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
         }
         
-        // Final Success
         toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
         
         setSelectedFile(null);
@@ -665,5 +658,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
