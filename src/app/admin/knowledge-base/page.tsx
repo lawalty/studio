@@ -429,8 +429,7 @@ export default function KnowledgeBasePage() {
     const description = uploadDescription;
     const sourceId = uuidv4();
     const mimeType = fileToUpload.type || 'application/octet-stream';
-    let currentStage = "initialization";
-
+    
     setIsCurrentlyUploading(true);
     setOperationStatus(sourceId, true);
     
@@ -438,8 +437,6 @@ export default function KnowledgeBasePage() {
 
     try {
         // Stage 1: Create Metadata Record
-        currentStage = "Step 1: Creating metadata record";
-        toast({ title: currentStage, description: `Creating tracking document for "${fileToUpload.name}"...` });
         const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
             sourceName: fileToUpload.name, description, topic, level: targetLevel,
             createdAt: new Date().toISOString(),
@@ -453,36 +450,27 @@ export default function KnowledgeBasePage() {
         await setDoc(sourceDocRef, newSourceData);
 
         // Stage 2: Upload to Cloud Storage
-        currentStage = "Step 2: Uploading to Cloud Storage";
-        toast({ title: currentStage, description: "The file is now being uploaded securely." });
+        await updateDoc(sourceDocRef, { indexingError: 'Uploading file to Cloud Storage...' });
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
         await uploadBytes(fileRef, fileToUpload);
 
         // Stage 3: Get Download URL
-        currentStage = "Step 3: Generating public URL";
-        toast({ title: currentStage, description: "Getting a secure URL for the AI to read the file." });
         const downloadURL = await getDownloadURL(fileRef);
-        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Waiting for permissions...' });
         
-        // Stage 4: Wait for Permissions
-        currentStage = "Step 4: Allowing permissions to propagate";
-        toast({ title: currentStage, description: "Waiting 5 seconds for the file to become accessible." });
+        // Stage 4: Wait for Permissions to Propagate
         await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Stage 5: Extract Text
-        currentStage = "Step 5: Extracting text with AI";
-        toast({ title: currentStage, description: "Asking the Gemini model to read the document." });
+        await updateDoc(sourceDocRef, { indexingError: 'Extracting document text with AI...' });
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
 
         // Stage 6: Index Content
-        currentStage = "Step 6: Indexing content";
-        toast({ title: currentStage, description: "Generating vector embeddings and saving to the database." });
         await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
-
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
             sourceName: fileToUpload.name,
@@ -511,7 +499,7 @@ export default function KnowledgeBasePage() {
         }
 
     } catch (e: any) {
-        const errorMessage = `Failed at ${currentStage}. Error: ${e.message || 'Unknown error.'}`;
+        const errorMessage = e.message || 'An unknown error occurred.';
         console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
 
@@ -538,13 +526,22 @@ export default function KnowledgeBasePage() {
       toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
 
       try {
-          const docRef = doc(db, 'kb_meta', source.id);
-          const updateData: Record<string, any> = { level: newLevel };
-          if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
-            updateData.linkedEnglishSourceId = deleteField();
+          const oldDocRef = doc(db, 'kb_meta', source.id);
+          const docSnap = await getDoc(oldDocRef);
+
+          if (!docSnap.exists()) {
+            throw new Error("Original source document not found to move.");
           }
+          const sourceData = docSnap.data();
           
-          await updateDoc(docRef, updateData);
+          const newDocData: Record<string, any> = { ...sourceData, level: newLevel };
+          if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
+            delete newDocData.linkedEnglishSourceId;
+          }
+
+          // In a single `kb_meta` collection, we just update the document in place.
+          const docRef = doc(db, 'kb_meta', source.id);
+          await updateDoc(docRef, { level: newLevel });
 
           const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
           const chunksSnapshot = await getDocs(chunksQuery);
