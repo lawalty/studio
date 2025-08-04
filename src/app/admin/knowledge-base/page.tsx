@@ -151,11 +151,17 @@ const RenderKnowledgeBaseLevel = ({
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <Button variant="ghost" size="icon" disabled={!source.downloadURL || anyOperationGloballyInProgress} asChild>
-                                                                <Link href={source.downloadURL!} target="_blank">
-                                                                    <Eye size={16} className={!source.downloadURL ? "text-muted-foreground/50" : ""} />
-                                                                </Link>
+                                                          {source.downloadURL ? (
+                                                            <Button variant="ghost" size="icon" disabled={anyOperationGloballyInProgress} asChild>
+                                                              <Link href={source.downloadURL} target="_blank">
+                                                                <Eye size={16} />
+                                                              </Link>
                                                             </Button>
+                                                          ) : (
+                                                            <Button variant="ghost" size="icon" disabled>
+                                                              <Eye size={16} className="text-muted-foreground/50" />
+                                                            </Button>
+                                                          )}
                                                         </TooltipTrigger>
                                                         <TooltipContent><p>View Original Document</p></TooltipContent>
                                                     </Tooltip>
