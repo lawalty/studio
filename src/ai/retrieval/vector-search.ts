@@ -61,9 +61,9 @@ export async function searchKnowledgeBase({
     console.error("[FirestoreVectorSearch] Error calling findNearest:", e);
     let detail = "An unexpected error occurred with the Firestore vector search.";
     if (e.message?.includes('requires a vector index')) {
-      detail = `A Firestore vector index is required. Please run the gcloud command from the error message to create it.`;
+      detail = `A Firestore vector index is required. Please create it via the gcloud command provided in the error message or by updating firestore.indexes.json.`;
     } else if (e.message?.includes('permission-denied')) {
-        detail = `A permissions error occurred. Check your server's IAM roles.`;
+        detail = `A permissions error occurred. Check your server's IAM roles and Firestore security rules.`;
     }
     throw new Error(`[FirestoreVectorSearch] ${detail} Raw Error: ${e.message}`);
   }
