@@ -104,7 +104,7 @@ export async function indexDocument({
           const originalChunkText = chunks[index];
           const newChunkDocRef = chunksCollection.doc(); 
           
-          // Apply the consistent preprocessing to the chunk text ONLY for the embedding.
+          // CRITICAL FIX: Apply the consistent preprocessing to the chunk text ONLY for the embedding.
           const processedChunkTextForEmbedding = preprocessText(originalChunkText);
           if (!processedChunkTextForEmbedding) continue; // Skip empty chunks after processing
           
