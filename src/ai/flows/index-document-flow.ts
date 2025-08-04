@@ -93,9 +93,6 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
         }
         
-        // Ensure the parent document exists before trying to add a subcollection.
-        await sourceDocRef.set({ sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
-        
         const chunks = simpleSplitter(processedText, { chunkSize: 1000, chunkOverlap: 100 });
         
         if (chunks.length === 0) {
@@ -111,12 +108,11 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: true };
         }
 
-        const firestoreBatch = db.batch();
-        // **FIX:** Get the subcollection reference from the parent document
         const chunksCollection = sourceDocRef.collection('kb_chunks'); 
 
         for (let index = 0; index < chunks.length; index++) {
           const chunkText = chunks[index];
+          const newChunkDocRef = chunksCollection.doc(); 
           
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
@@ -127,9 +123,6 @@ export async function indexDocument({
           if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length !== 768) {
             throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}.`);
           }
-
-          // **FIX:** Create a new document within the subcollection
-          const newChunkDocRef = chunksCollection.doc(); 
           
           const chunkData: Record<string, any> = {
             sourceId, sourceName, level, topic, text: chunkText,
@@ -141,10 +134,8 @@ export async function indexDocument({
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
           }
-          firestoreBatch.set(newChunkDocRef, chunkData);
+          await newChunkDocRef.set(chunkData);
         }
-
-        await firestoreBatch.commit();
         
         const finalMetadata: Record<string, any> = {
           indexingStatus: 'success', chunksWritten: chunks.length,

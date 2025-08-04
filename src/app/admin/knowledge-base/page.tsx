@@ -371,8 +371,8 @@ export default function KnowledgeBasePage() {
           await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Clearing old data...", chunksWritten: 0 });
   
           // Step 1: Delete existing chunks to prevent duplicates.
-          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
-          const chunksSnapshot = await getDocs(chunksQuery);
+          const chunksCollectionRef = sourceDocRef.collection('kb_chunks');
+          const chunksSnapshot = await getDocs(chunksCollectionRef);
           if (!chunksSnapshot.empty) {
               const batch = writeBatch(db);
               chunksSnapshot.docs.forEach(chunkDoc => {
@@ -540,8 +540,8 @@ export default function KnowledgeBasePage() {
           const docRef = doc(db, 'kb_meta', source.id);
           await updateDoc(docRef, { level: newLevel });
 
-          const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
-          const chunksSnapshot = await getDocs(chunksQuery);
+          const chunksCollectionRef = oldDocRef.collection('kb_chunks');
+          const chunksSnapshot = await getDocs(chunksCollectionRef);
 
           if (!chunksSnapshot.empty) {
             const writeBatchForMove = writeBatch(db);

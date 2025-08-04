@@ -2,12 +2,8 @@
 'use server';
 /**
  * @fileOverview A server function to completely delete a knowledge base source, including
- * its metadata, indexed chunks from the 'kb_chunks' collection group, and the original 
+ * its metadata, indexed chunks from the 'kb_chunks' subcollection, and the original 
  * file from Cloud Storage.
- *
- * - deleteSource - The main function to trigger the deletion process.
- * - DeleteSourceInput - The input type for the function.
- * - DeleteSourceOutput - The return type for the function.
  */
 import { z } from 'zod';
 import { db, admin } from '@/lib/firebase-admin';
@@ -33,12 +29,11 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     }
 
     const sourceDocRef = db.collection('kb_meta').doc(id);
+    const chunksCollectionRef = sourceDocRef.collection('kb_chunks');
 
-    // Step 1: Delete associated chunks from the 'kb_chunks' subcollection.
+    // Step 1: Delete associated chunks from the subcollection.
     try {
-        const chunksCollectionRef = sourceDocRef.collection('kb_chunks');
         const chunksSnapshot = await chunksCollectionRef.get();
-        
         if (!chunksSnapshot.empty) {
             const batch = db.batch();
             chunksSnapshot.docs.forEach(doc => {
@@ -53,12 +48,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
 
     // Step 2: Delete the main source metadata document.
     try {
-        const docSnap = await sourceDocRef.get();
-        if (docSnap.exists) {
-            await sourceDocRef.delete();
-        } else {
-           console.log(`[deleteSource] Source metadata for ${id} was already deleted. Continuing cleanup.`);
-        }
+        await sourceDocRef.delete();
     } catch (metaError: any) {
         console.error(`[deleteSource] CRITICAL: Failed to delete source metadata for ${id}:`, metaError);
         return { success: false, error: `Failed to delete the main source document from Firestore. Error: ${metaError.message}` };
