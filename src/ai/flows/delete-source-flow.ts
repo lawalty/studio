@@ -34,7 +34,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
 
     const sourceDocRef = db.collection('kb_meta').doc(id);
 
-    // Step 1: Delete associated chunks from the 'kb_chunks' collection group.
+    // Step 1: Delete associated chunks from the 'kb_chunks' subcollection.
     try {
         const chunksCollectionRef = sourceDocRef.collection('kb_chunks');
         const chunksSnapshot = await chunksCollectionRef.get();
@@ -75,8 +75,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
         } else {
           console.warn(`[deleteSource] Storage file not found at path '${storagePath}', but proceeding as this may not be an error.`);
         }
-    } catch (storageError: any)
-{
+    } catch (storageError: any) {
         console.warn(`[deleteSource] Firestore data for source ${id} deleted, but failed to clean up storage file. This may require manual cleanup in Cloud Storage. Error:`, storageError.message);
     }
     

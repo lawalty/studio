@@ -94,7 +94,6 @@ export async function indexDocument({
         }
         
         // Ensure the parent document exists before trying to add a subcollection.
-        // This is a good practice though Firestore handles it implicitly.
         await sourceDocRef.set({ sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString() }, { merge: true });
         
         const chunks = simpleSplitter(processedText, { chunkSize: 1000, chunkOverlap: 100 });
