@@ -37,16 +37,21 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     const sourceDocRef = db.collection('kb_meta').doc(id);
 
     // Step 1: Delete associated chunks from the 'kb_chunks' collection.
-    // This is a "best effort" step. If it fails, we log it but continue,
-    // as the main goal is to delete the metadata and storage file.
+    // This now correctly fetches all chunks and filters them by sourceId.
     try {
-        const chunksQuery = db.collection('kb_chunks').where('sourceId', '==', id);
-        const chunksSnapshot = await getDocs(chunksQuery);
-        if (!chunksSnapshot.empty) {
-            const batch = db.batch();
-            chunksSnapshot.docs.forEach(doc => {
+        const chunksCollection = db.collection('kb_chunks');
+        const chunksSnapshot = await chunksCollection.get(); // Get all chunks
+        const batch = db.batch();
+        
+        let chunksFound = 0;
+        chunksSnapshot.docs.forEach(doc => {
+            if (doc.data().sourceId === id) {
                 batch.delete(doc.ref);
-            });
+                chunksFound++;
+            }
+        });
+
+        if (chunksFound > 0) {
             await batch.commit();
         }
     } catch (chunkError: any) {
@@ -68,24 +73,19 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     }
 
     // Step 3: Delete the file from Cloud Storage.
-    // This is also important but we prioritize the DB cleanup.
     try {
         const bucket = admin.storage().bucket();
-        // The storage path MUST be constructed correctly to find the file.
         const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
         const file = bucket.file(storagePath);
         const [exists] = await file.exists();
         if (exists) {
             await file.delete();
         } else {
-          // It's possible the file was never uploaded or already deleted. This is not a failure.
           console.warn(`[deleteSource] Storage file not found at path '${storagePath}', but proceeding as this may not be an error.`);
         }
     } catch (storageError: any) {
-        // This is a non-critical error as the primary data has been deleted. Log it.
         console.warn(`[deleteSource] Firestore data for source ${id} deleted, but failed to clean up storage file. This may require manual cleanup in Cloud Storage. Error:`, storageError.message);
     }
     
-    // If all critical steps succeeded, return success.
     return { success: true };
 }
