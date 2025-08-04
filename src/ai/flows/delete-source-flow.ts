@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A server function to completely delete a knowledge base source, including
@@ -16,11 +17,6 @@ const DeleteSourceInputSchema = z.object({
   id: z.string().describe('The unique ID of the source document to delete.'),
   level: z.string().describe('The priority level of the source (e.g., High, Medium, Low, Archive).'),
   sourceName: z.string().describe('The original filename of the source document.'),
-  // These optional fields are now included to match the client-side data structure.
-  // Their absence was causing a silent validation failure.
-  pageNumber: z.number().optional(),
-  title: z.string().optional(),
-  header: z.string().optional(),
 });
 export type DeleteSourceInput = z.infer<typeof DeleteSourceInputSchema>;
 
@@ -30,30 +26,14 @@ const DeleteSourceOutputSchema = z.object({
 });
 export type DeleteSourceOutput = z.infer<typeof DeleteSourceOutputSchema>;
 
-const LEVEL_CONFIG_SERVER: Record<string, { collectionName: string }> = {
-    'High': { collectionName: 'kb_high_meta_v2' },
-    'Medium': { collectionName: 'kb_medium_meta_v2' },
-    'Low': { collectionName: 'kb_low_meta_v2' },
-    'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta_v2' },
-    'Chat History': { collectionName: 'kb_chat_history_meta_v2' },
-    'Archive': { collectionName: 'kb_archive_meta_v2' },
-  };
-
 export async function deleteSource({ id, level, sourceName }: DeleteSourceInput): Promise<DeleteSourceOutput> {
-    const levelConfig = LEVEL_CONFIG_SERVER[level];
-    if (!levelConfig) {
-      const errorMsg = `Invalid level '${level}' provided. Cannot determine Firestore collection.`;
-      console.error(`[deleteSource] ${errorMsg}`);
-      return { success: false, error: errorMsg };
-    }
-    
     if (!sourceName) {
       const errorMsg = `sourceName was not provided for ID ${id}. Cannot delete from storage without it.`;
       console.error(`[deleteSource] ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
 
-    const sourceDocRef = db.collection(levelConfig.collectionName).doc(id);
+    const sourceDocRef = db.collection('kb_meta').doc(id);
 
     // Step 1: Delete associated chunks from the 'kb_chunks' collection.
     // This is a "best effort" step. If it fails, we log it but continue,
@@ -108,3 +88,4 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     // If all critical steps succeeded, return success.
     return { success: true };
 }
+

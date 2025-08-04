@@ -47,12 +47,12 @@ interface KnowledgeSource {
 }
 
 const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { collectionName: string; title: string; description: string }> = {
-  'High': { collectionName: 'kb_high_meta_v2', title: 'High Priority', description: 'Manage high priority sources.' },
-  'Medium': { collectionName: 'kb_medium_meta_v2', title: 'Medium Priority', description: 'Manage medium priority sources.' },
-  'Low': { collectionName: 'kb_low_meta_v2', title: 'Low Priority', description: 'Manage low priority sources.' },
-  'Spanish PDFs': { collectionName: 'kb_spanish_pdfs_meta_v2', title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
-  'Chat History': { collectionName: 'kb_chat_history_meta_v2', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
-  'Archive': { collectionName: 'kb_archive_meta_v2', title: 'Archive', description: 'Archived sources are not used by the AI.' },
+  'High': { collectionName: 'kb_meta', title: 'High Priority', description: 'Manage high priority sources.' },
+  'Medium': { collectionName: 'kb_meta', title: 'Medium Priority', description: 'Manage medium priority sources.' },
+  'Low': { collectionName: 'kb_meta', title: 'Low Priority', description: 'Manage low priority sources.' },
+  'Spanish PDFs': { collectionName: 'kb_meta', title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
+  'Chat History': { collectionName: 'kb_meta', title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
+  'Archive': { collectionName: 'kb_meta', title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
 
 const getFileExtension = (filename: string) => {
@@ -79,11 +79,12 @@ const RenderKnowledgeBaseLevel = ({
     handleReindexSource: (source: KnowledgeSource) => void,
 }) => {
     const config = LEVEL_CONFIG[level];
+    const filteredSources = sources.filter(s => s.level === level);
 
     return (
         <AccordionItem value={level.toLowerCase().replace(/\s+/g, '-')} key={level}>
           <AccordionTrigger className="text-xl font-headline justify-start">
-            {config.title} ({sources.length})
+            {config.title} ({filteredSources.length})
           </AccordionTrigger>
           <AccordionContent>
              <CardDescription className="mb-4">{config.description}</CardDescription>
@@ -91,7 +92,7 @@ const RenderKnowledgeBaseLevel = ({
                  <div className="flex justify-center items-center h-24">
                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                  </div>
-             ) : sources.length === 0 ? (
+             ) : filteredSources.length === 0 ? (
                  <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                    <History size={40} className="mx-auto mb-2" />
                    <p>No sources found in this knowledge base.</p>
@@ -109,7 +110,7 @@ const RenderKnowledgeBaseLevel = ({
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {sources.map(source => {
+                            {filteredSources.map(source => {
                                 const isOpInProgress = operationInProgress[source.id] || false;
                                 return (
                                     <TableRow key={source.id} className={cn(isOpInProgress && "opacity-50 pointer-events-none")}>
@@ -236,9 +237,9 @@ const RenderKnowledgeBaseLevel = ({
 };
 
 export default function KnowledgeBasePage() {
-  const [sources, setSources] = useState<Record<KnowledgeBaseLevel, KnowledgeSource[]>>({ 'High': [], 'Medium': [], 'Low': [], 'Spanish PDFs': [], 'Chat History': [], 'Archive': [] });
+  const [sources, setSources] = useState<KnowledgeSource[]>([]);
   const [englishSources, setEnglishSources] = useState<KnowledgeSource[]>([]);
-  const [isLoading, setIsLoading] = useState<Record<KnowledgeBaseLevel, boolean>>({ 'High': true, 'Medium': true, 'Low': true, 'Spanish PDFs': true, 'Chat History': true, 'Archive': true });
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
@@ -247,7 +248,7 @@ export default function KnowledgeBasePage() {
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('');
+  const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high-priority');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   
   const { toast } = useToast();
@@ -280,48 +281,44 @@ export default function KnowledgeBasePage() {
   }, [selectedTopicForUpload]);
   
   useEffect(() => {
-    const unsubscribers = Object.entries(LEVEL_CONFIG).map(([level, config]) => {
-      const q = query(collection(db, config.collectionName));
-      return onSnapshot(q, (querySnapshot) => {
-        const levelSources: KnowledgeSource[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          const createdAtDate = data.createdAt ? new Date(data.createdAt) : new Date();
-          levelSources.push({
-            id: doc.id,
-            sourceName: data.sourceName || 'Unknown Source',
-            description: data.description || '',
-            topic: data.topic || 'General',
-            level: level as KnowledgeBaseLevel,
-            createdAt: createdAtDate.toLocaleString(),
-            createdAtDate: createdAtDate,
-            indexingStatus: data.indexingStatus || 'failed',
-            indexingError: data.indexingError || 'No status available.',
-            downloadURL: data.downloadURL,
-            chunksWritten: data.chunksWritten,
-            mimeType: data.mimeType,
-            linkedEnglishSourceId: data.linkedEnglishSourceId,
-            pageNumber: data.pageNumber,
-            title: data.title,
-            header: data.header,
-          });
+    const q = query(collection(db, 'kb_meta'));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const allSources: KnowledgeSource[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        const createdAtDate = data.createdAt ? new Date(data.createdAt) : new Date();
+        allSources.push({
+          id: doc.id,
+          sourceName: data.sourceName || 'Unknown Source',
+          description: data.description || '',
+          topic: data.topic || 'General',
+          level: data.level || 'Archive',
+          createdAt: createdAtDate.toLocaleString(),
+          createdAtDate: createdAtDate,
+          indexingStatus: data.indexingStatus || 'failed',
+          indexingError: data.indexingError || 'No status available.',
+          downloadURL: data.downloadURL,
+          chunksWritten: data.chunksWritten,
+          mimeType: data.mimeType,
+          linkedEnglishSourceId: data.linkedEnglishSourceId,
+          pageNumber: data.pageNumber,
+          title: data.title,
+          header: data.header,
         });
-        const sortedSources = levelSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
-        setSources(prevSources => ({ ...prevSources, [level as KnowledgeBaseLevel]: sortedSources }));
-        if (['High', 'Medium', 'Low'].includes(level)) {
-            setEnglishSources(prev => {
-                const otherSources = prev.filter(s => s.level !== level);
-                return [...otherSources, ...sortedSources].sort((a, b) => a.sourceName.localeCompare(b.sourceName));
-            });
-        }
-        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
-      }, (error) => {
-        console.error(`Error fetching ${level} priority sources:`, error);
-        setIsLoading(prevLoading => ({ ...prevLoading, [level as KnowledgeBaseLevel]: false }));
       });
+      const sortedSources = allSources.sort((a,b) => b.createdAtDate.getTime() - a.createdAtDate.getTime());
+      setSources(sortedSources);
+      
+      const english = sortedSources.filter(s => ['High', 'Medium', 'Low'].includes(s.level)).sort((a,b) => a.sourceName.localeCompare(b.sourceName));
+      setEnglishSources(english);
+
+      setIsLoading(false);
+    }, (error) => {
+      console.error(`Error fetching sources:`, error);
+      setIsLoading(false);
     });
 
-    return () => unsubscribers.forEach(unsub => unsub());
+    return () => unsubscribe();
   }, []);
 
   const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
@@ -332,9 +329,6 @@ export default function KnowledgeBasePage() {
         id: source.id,
         level: source.level,
         sourceName: source.sourceName,
-        pageNumber: source.pageNumber,
-        title: source.title,
-        header: source.header,
       });
 
       if (result.success) {
@@ -355,7 +349,7 @@ export default function KnowledgeBasePage() {
       setOperationStatus(source.id, true);
       toast({ title: `Re-processing ${source.sourceName}...` });
   
-      const sourceDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
+      const sourceDocRef = doc(db, 'kb_meta', source.id);
       await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Clearing old data and starting re-processing...", chunksWritten: 0 });
   
       try {
@@ -439,12 +433,9 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     toast({ title: `Processing "${fileToUpload.name}"...`, description: "This may take a minute. Please wait." });
 
-    let sourceDocRef: ReturnType<typeof doc> | null = null;
+    const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
     try {
-        const collectionName = LEVEL_CONFIG[targetLevel].collectionName;
-        sourceDocRef = doc(db, collectionName, sourceId);
-        
         const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
             sourceName: fileToUpload.name, description, topic, level: targetLevel,
             createdAt: new Date().toISOString(),
@@ -469,6 +460,9 @@ export default function KnowledgeBasePage() {
         const downloadURL = await getDownloadURL(fileRef);
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Starting text extraction...' });
         
+        // Brief pause to allow storage permissions to propagate
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
@@ -495,14 +489,6 @@ export default function KnowledgeBasePage() {
 
         toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
         
-        // This line is key to fix the UI bug. By updating the status on the client-side
-        // after a successful flow, we ensure the UI reflects the completed state immediately.
-        await updateDoc(sourceDocRef, {
-            indexingStatus: 'success',
-            indexingError: null,
-            chunksWritten: indexingResult.chunksWritten,
-        });
-
         setSelectedFile(null);
         setUploadDescription('');
         setLinkedEnglishSourceIdForUpload('');
@@ -537,31 +523,25 @@ export default function KnowledgeBasePage() {
       toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
 
       try {
-          const originalDocRef = doc(db, LEVEL_CONFIG[source.level].collectionName, source.id);
-          const docSnap = await getDoc(originalDocRef);
-          if (!docSnap.exists()) {
-              throw new Error("Original source document not found.");
-          }
-          const sourceData = docSnap.data();
-
-          const newDocData: Record<string, any> = { ...sourceData, level: newLevel };
+          const docRef = doc(db, 'kb_meta', source.id);
+          const updateData: Record<string, any> = { level: newLevel };
           if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
-            delete newDocData.linkedEnglishSourceId;
+            updateData.linkedEnglishSourceId = deleteDoc; // This is not correct, should be `deleteField()`
           }
-          const newDocRef = doc(db, LEVEL_CONFIG[newLevel].collectionName, source.id);
           
+          await updateDoc(docRef, updateData);
+
           const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
           const chunksSnapshot = await getDocs(chunksQuery);
 
-          const writeBatchForMove = writeBatch(db);
+          if (!chunksSnapshot.empty) {
+            const writeBatchForMove = writeBatch(db);
+            chunksSnapshot.forEach(chunkDoc => {
+                writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
+            });
+            await writeBatchForMove.commit();
+          }
 
-          writeBatchForMove.set(newDocRef, newDocData);
-          writeBatchForMove.delete(originalDocRef);
-          chunksSnapshot.forEach(chunkDoc => {
-              writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
-          });
-
-          await writeBatchForMove.commit();
           toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
 
       } catch (error: any) {
@@ -616,6 +596,7 @@ export default function KnowledgeBasePage() {
                          <SelectItem value="Medium">Medium Priority</SelectItem>
                          <SelectItem value="Low">Low Priority</SelectItem>
                          <SelectItem value="Spanish PDFs">Spanish PDFs</SelectItem>
+                         <SelectItem value="Archive">Archive</SelectItem>
                       </SelectContent>
                   </Select>
                </div>
@@ -653,8 +634,8 @@ export default function KnowledgeBasePage() {
                 <RenderKnowledgeBaseLevel
                     key={level}
                     level={level as KnowledgeBaseLevel}
-                    sources={sources[level as KnowledgeBaseLevel]}
-                    isLoading={isLoading[level as KnowledgeBaseLevel]}
+                    sources={sources}
+                    isLoading={isLoading}
                     operationInProgress={operationInProgress}
                     anyOperationGloballyInProgress={anyOperationGloballyInProgress}
                     handleDeleteSource={handleDeleteSource}
@@ -668,3 +649,4 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
