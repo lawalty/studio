@@ -108,10 +108,12 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: true };
         }
 
+        // Get a reference to the subcollection. This is the correct way.
         const chunksCollection = sourceDocRef.collection('kb_chunks'); 
 
         for (let index = 0; index < chunks.length; index++) {
           const chunkText = chunks[index];
+          // Get a reference to a new document with an auto-generated ID within the subcollection.
           const newChunkDocRef = chunksCollection.doc(); 
           
           const embeddingResponse = await withRetry(() => ai.embed({
@@ -134,6 +136,7 @@ export async function indexDocument({
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
           }
+          // Use the correct reference to write the data to the subcollection document.
           await newChunkDocRef.set(chunkData);
         }
         

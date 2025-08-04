@@ -29,6 +29,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     }
 
     const sourceDocRef = db.collection('kb_meta').doc(id);
+    // Correctly reference the subcollection
     const chunksCollectionRef = sourceDocRef.collection('kb_chunks');
 
     // Step 1: Delete associated chunks from the subcollection.
@@ -57,6 +58,7 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     // Step 3: Delete the file from Cloud Storage.
     try {
         const bucket = admin.storage().bucket();
+        // The storage path logic should remain consistent with your upload logic
         const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
         const file = bucket.file(storagePath);
         const [exists] = await file.exists();
