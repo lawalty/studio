@@ -108,17 +108,18 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: true };
         }
 
-        // Get a reference to the subcollection. This is the correct way.
         const chunksCollection = sourceDocRef.collection('kb_chunks'); 
 
         for (let index = 0; index < chunks.length; index++) {
           const chunkText = chunks[index];
-          // Get a reference to a new document with an auto-generated ID within the subcollection.
           const newChunkDocRef = chunksCollection.doc(); 
+          
+          // Apply the same preprocessing to the chunk text before embedding
+          const processedChunkText = preprocessText(chunkText);
           
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
-              content: chunkText,
+              content: processedChunkText, // Use the processed text for embedding
               options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
           }));
           const embeddingVector = embeddingResponse?.[0]?.embedding;
@@ -127,7 +128,7 @@ export async function indexDocument({
           }
           
           const chunkData: Record<string, any> = {
-            sourceId, sourceName, level, topic, text: chunkText,
+            sourceId, sourceName, level, topic, text: chunkText, // Store original (but split) chunk text
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
@@ -136,7 +137,6 @@ export async function indexDocument({
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
           }
-          // Use the correct reference to write the data to the subcollection document.
           await newChunkDocRef.set(chunkData);
         }
         
