@@ -46,9 +46,9 @@ export async function searchKnowledgeBase({
   }
 
   const firestore = admin.firestore();
-  const chunksCollection = firestore.collection('kb_chunks'); // REVERTED
+  const chunksCollectionGroup = firestore.collectionGroup('kb_chunks');
 
-  const vectorQuery = chunksCollection
+  const vectorQuery = chunksCollectionGroup
     .findNearest('embedding', queryEmbedding, {
       limit,
       distanceMeasure: 'COSINE',
