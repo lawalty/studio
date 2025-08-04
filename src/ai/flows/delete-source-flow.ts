@@ -12,6 +12,7 @@
  */
 import { z } from 'zod';
 import { db, admin } from '@/lib/firebase-admin';
+import { getDocs } from 'firebase-admin/firestore';
 
 const DeleteSourceInputSchema = z.object({
   id: z.string().describe('The unique ID of the source document to delete.'),
