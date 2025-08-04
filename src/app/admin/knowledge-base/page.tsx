@@ -429,7 +429,7 @@ export default function KnowledgeBasePage() {
       }
   }, [toast, setOperationStatus]);
 
-  const handleFileUpload = useCallback(async () => {
+  const handleFileUpload = async () => {
     // Stage 0: Validation
     if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
         toast({ title: "Missing Information", description: "Please select a file, topic, and priority level.", variant: "destructive" });
@@ -528,7 +528,7 @@ export default function KnowledgeBasePage() {
         setIsCurrentlyUploading(false);
         setOperationStatus(sourceId, false);
     }
-  }, [selectedFile, selectedTopicForUpload, selectedLevelForUpload, linkedEnglishSourceIdForUpload, uploadDescription, toast, setOperationStatus]);
+  };
 
 
   const handleMoveSource = useCallback(async (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => {
@@ -665,3 +665,5 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+    
