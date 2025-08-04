@@ -35,10 +35,9 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     const sourceDocRef = db.collection('kb_meta').doc(id);
 
     // Step 1: Delete associated chunks from the 'kb_chunks' collection group.
-    // This now correctly queries the collection group.
     try {
-        const chunksQuery = db.collectionGroup('kb_chunks').where('sourceId', '==', id);
-        const chunksSnapshot = await chunksQuery.get();
+        const chunksCollectionRef = sourceDocRef.collection('kb_chunks');
+        const chunksSnapshot = await chunksCollectionRef.get();
         
         if (!chunksSnapshot.empty) {
             const batch = db.batch();
@@ -68,8 +67,6 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
     // Step 3: Delete the file from Cloud Storage.
     try {
         const bucket = admin.storage().bucket();
-        // Construct the path carefully. We no longer rely on the 'level' for the path structure
-        // to avoid inconsistencies. We assume a flat structure within the main folder.
         const storagePath = `knowledge_base_files/${level}/${id}-${sourceName}`;
         const file = bucket.file(storagePath);
         const [exists] = await file.exists();
@@ -80,7 +77,6 @@ export async function deleteSource({ id, level, sourceName }: DeleteSourceInput)
         }
     } catch (storageError: any)
 {
-        // This is a warning because the primary data in Firestore has been deleted.
         console.warn(`[deleteSource] Firestore data for source ${id} deleted, but failed to clean up storage file. This may require manual cleanup in Cloud Storage. Error:`, storageError.message);
     }
     
