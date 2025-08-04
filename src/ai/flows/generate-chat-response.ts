@@ -65,8 +65,19 @@ const getAppConfig = async (): Promise<{ distanceThreshold: number }> => {
 
 // Helper function to find the Spanish version of a document
 const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: string; downloadURL: string } | null> => {
-    // ... Omitted for brevity
-    return null;
+    const spanishPdfQuery = adminDb.collection('kb_spanish_pdfs_meta_v1')
+        .where('linkedEnglishSourceId', '==', englishSourceId)
+        .limit(1);
+    
+    const snapshot = await spanishPdfQuery.get();
+    if (snapshot.empty) {
+        return null;
+    }
+    const spanishDoc = snapshot.docs[0].data();
+    return {
+        fileName: spanishDoc.sourceName,
+        downloadURL: spanishDoc.downloadURL,
+    };
 };
 
 // Define the prompt using the stable ai.definePrompt pattern
@@ -254,5 +265,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    
