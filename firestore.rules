@@ -3,50 +3,24 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper function to check if a user is an authenticated admin.
-    // For this app, any logged-in user is considered an admin for the admin panel.
-    function isAdmin() {
-      return request.auth != null;
-    }
-
-    // Rules for the knowledge base metadata collection.
-    // Allows admins to create, read, update, and delete source metadata.
-    match /kb_meta/{docId} {
-      allow read, write, delete: if isAdmin();
-    }
-
-    // Rules for the knowledge base chunks collection.
-    // Chunks are created and deleted by server-side flows, not directly by the client.
-    // We allow admin reads for potential diagnostic tools in the future.
-    // Writes should only be done by the server, but for simplicity and to prevent
-    // permissions errors with server-side SDKs, we allow admin writes here as well.
-    match /kb_chunks/{chunkId} {
-        allow read, write, delete: if isAdmin();
-    }
-    
-    // Rules for the chat history metadata collection.
-    // This is managed by the server, but we allow admin access.
-    match /kb_chat_history_meta/{docId} {
-      allow read, write, delete: if isAdmin();
-    }
-
-    // Rules for site configuration documents.
-    // Allows admins to read and write configuration files.
-    match /configurations/{docId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Rules for logging site errors.
-    // Allows the client to write error logs.
-    match /site_errors/{errorId} {
-      allow create: if true; // Allow any client to log an error
-      allow read, delete: if isAdmin(); // Only admins can read/delete them
-    }
-
-    // Default-deny all other collections/documents.
+    // Default deny all reads and writes
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // Allow authenticated admins to manage configuration
+    match /configurations/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Allow authenticated admins to manage kb_meta
+    match /kb_meta/{docId} {
+        allow read, write, delete: if request.auth != null;
+    }
+
+    // Allow authenticated admins to read from kb_chunks for vector search
+    match /kb_chunks/{chunkId} {
+      allow read: if request.auth != null;
     }
   }
 }
