@@ -82,7 +82,6 @@ export async function indexDocument({
       const sourceDocRef = db.collection('kb_meta').doc(sourceId);
 
       try {
-        // The original, un-preprocessed text is used for chunking to maintain sentence structure.
         const chunks = simpleSplitter(text, { chunkSize: 1000, chunkOverlap: 100 });
         
         if (chunks.length === 0) {
@@ -104,25 +103,24 @@ export async function indexDocument({
           const originalChunkText = chunks[index];
           const newChunkDocRef = chunksCollection.doc(); 
           
-          // CRITICAL FIX: Apply the consistent preprocessing to the chunk text ONLY for the embedding.
           const processedChunkTextForEmbedding = preprocessText(originalChunkText);
-          if (!processedChunkTextForEmbedding) continue; // Skip empty chunks after processing
+          if (!processedChunkTextForEmbedding) continue;
           
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
-              content: processedChunkTextForEmbedding, // Use the processed text for embedding
+              content: processedChunkTextForEmbedding,
               options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
           }));
           const embeddingVector = embeddingResponse?.[0]?.embedding;
 
           if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length !== 768) {
             console.warn(`Skipping chunk ${index + 1} due to invalid embedding.`);
-            continue; // Skip this chunk if embedding fails
+            continue;
           }
           
           const chunkData: Record<string, any> = {
             sourceId, sourceName, level, topic, 
-            text: originalChunkText, // Store original (but split) chunk text for user display
+            text: processedChunkTextForEmbedding, // CRITICAL FIX: Store the preprocessed text.
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
