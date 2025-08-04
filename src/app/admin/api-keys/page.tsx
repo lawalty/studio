@@ -37,7 +37,7 @@ export default function ApiKeysPage() {
     tts: '',
     voiceId: '',
     useTtsApi: true,
-    distanceThreshold: 0.4,
+    distanceThreshold: 0.6, // Default value
   });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -64,7 +64,7 @@ export default function ApiKeysPage() {
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
-            distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.4,
+            distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.6,
           });
         }
       } catch (error) {
@@ -93,7 +93,7 @@ export default function ApiKeysPage() {
     try {
       const docRef = doc(db, FIRESTORE_CONFIG_PATH);
       await setDoc(docRef, config, { merge: true }); 
-      toast({ title: "Settings Saved", description: "Your settings have been saved to Firestore." });
+      toast({ title: "Settings Saved", description: "Your API Key and RAG settings have been saved to Firestore." });
     } catch (error) {
       console.error("Error saving config to Firestore:", error);
       toast({
@@ -221,7 +221,7 @@ export default function ApiKeysPage() {
         <CardHeader>
           <CardTitle className="font-headline">API Key &amp; Services Management</CardTitle>
           <CardDescription>
-            Manage keys for AI services.
+            Manage keys for AI services and tune Retrieval-Augmented Generation (RAG) settings.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -277,6 +277,35 @@ export default function ApiKeysPage() {
                   {isTestingTts ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
                   Test TTS Voice
               </Button>
+
+              <Separator className="my-6" />
+
+              <div>
+                <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="h-5 w-5 text-primary" />
+                    <h3 className="text-lg font-semibold">RAG Tuning</h3>
+                </div>
+                <CardDescription className="mb-4">
+                    Adjust the similarity threshold for the Firestore vector search.
+                </CardDescription>
+                <div>
+                    <Label htmlFor="distance-slider" className="font-medium">
+                    Distance Threshold: {config.distanceThreshold.toFixed(2)}
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                    Lower values mean stricter, more relevant results (closer to 0). Higher values are more lenient (closer to 1). Default is 0.6.
+                    </p>
+                </div>
+                <Slider
+                    id="distance-slider"
+                    min={0.1}
+                    max={1}
+                    step={0.01}
+                    value={[config.distanceThreshold]}
+                    onValueChange={(value) => setConfig(prev => ({ ...prev, distanceThreshold: value[0] }))}
+                    className="mt-2"
+                />
+              </div>
             </>
           )}
         </CardContent>
@@ -386,7 +415,7 @@ export default function ApiKeysPage() {
                       Vector Search Test (RAG)
                   </CardTitle>
                   <CardDescription className="text-xs">
-                      Tests the RAG pipeline using Firestore's native vector search.
+                      Tests the RAG pipeline using Firestore's native vector search. Uses the saved distance threshold.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -430,39 +459,6 @@ export default function ApiKeysPage() {
                 </CardContent>
             </Card>
         </div>
-        
-        <Separator className="my-6" />
-
-        <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">RAG Tuning</h3>
-              </div>
-              <CardDescription>
-                Adjust the similarity threshold for the Firestore vector search.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="distance-slider" className="font-medium">
-                  Distance Threshold: {config.distanceThreshold.toFixed(2)}
-                </Label>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Lower values mean stricter, more relevant results. Higher values are more lenient. Default is 0.6.
-                </p>
-              </div>
-              <Slider
-                id="distance-slider"
-                min={0.1}
-                max={1}
-                step={0.05}
-                value={[config.distanceThreshold]}
-                onValueChange={(value) => setConfig(prev => ({ ...prev, distanceThreshold: value[0] }))}
-              />
-            </CardContent>
-        </Card>
-
       </div>
     </div>
   );

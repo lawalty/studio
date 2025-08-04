@@ -51,14 +51,14 @@ const getAppConfig = async (): Promise<{ distanceThreshold: number }> => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             return {
-                distanceThreshold: typeof data?.distanceThreshold === 'number' ? data.distanceThreshold : 0.4,
+                distanceThreshold: typeof data?.distanceThreshold === 'number' ? data.distanceThreshold : 0.6,
             };
         }
         // Return default if no config is found
-        return { distanceThreshold: 0.4 };
+        return { distanceThreshold: 0.6 };
     } catch (error) {
         console.error("[getAppConfig] Error fetching config, using default. Error:", error);
-        return { distanceThreshold: 0.4 };
+        return { distanceThreshold: 0.6 };
     }
 };
 
