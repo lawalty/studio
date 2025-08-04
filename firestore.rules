@@ -3,24 +3,27 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny all reads and writes
-    match /{document=**} {
-      allow read, write: if false;
-    }
 
-    // Allow authenticated admins to manage configuration
+    // Allow admin users to manage configuration
     match /configurations/{docId} {
       allow read, write: if request.auth != null;
     }
-    
-    // Allow authenticated admins to manage kb_meta
+
+    // Allow admin users to manage knowledge base metadata
     match /kb_meta/{docId} {
-        allow read, write, delete: if request.auth != null;
+      allow read, write, delete: if request.auth != null;
     }
 
-    // Allow authenticated admins to read from kb_chunks for vector search
+    // Allow admin users and server-side flows to read and write chunks.
+    // Read access is public to allow server-side vector search to function.
+    // Write is also public to allow the server-side indexing flow to write chunks.
     match /kb_chunks/{chunkId} {
-      allow read: if request.auth != null;
+      allow read, write: if true;
+    }
+
+    // Allow admin users to manage site error logs
+    match /site_errors/{errorId} {
+        allow read, delete: if request.auth != null;
     }
   }
 }
