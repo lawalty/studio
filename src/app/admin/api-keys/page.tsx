@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info, Wrench, Binary } from 'lucide-react';
+import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info, Wrench } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -202,21 +202,6 @@ export default function ApiKeysPage() {
       icon = <Info className="h-4 w-4" />;
     }
 
-    const Diagnostics = () => {
-        if (!searchResult.diagnostics) return null;
-        const { diagnostics } = searchResult;
-        return (
-            <div className="mt-2 text-xs font-mono bg-slate-100 dark:bg-slate-800 p-2 rounded-md space-y-1 break-all">
-                <p className="flex items-center gap-2"><Binary className="h-3 w-3" /> <strong>Diagnostics</strong></p>
-                {diagnostics.preprocessedQuery && <p>Preprocessed Query: &quot;{diagnostics.preprocessedQuery}&quot;</p>}
-                {diagnostics.queryEmbeddingGenerated !== undefined && <p>Query Embedding Generated: {diagnostics.queryEmbeddingGenerated ? 'Yes' : 'No'}</p>}
-                {diagnostics.queryEmbeddingError && <p className="text-red-500">Embedding Error: {diagnostics.queryEmbeddingError}</p>}
-                {diagnostics.queryEmbeddingSnippet && <p>Embedding Snippet: [{diagnostics.queryEmbeddingSnippet.map(n => n.toFixed(3)).join(', ')}]</p>}
-                {diagnostics.searchError && <p className="text-red-500">Search Error: {diagnostics.searchError}</p>}
-            </div>
-        )
-    }
-
     return (
         <Alert className="mt-4" variant={variant}>
             {icon}
@@ -224,7 +209,6 @@ export default function ApiKeysPage() {
             <AlertDescription className="text-xs break-words">
                 {searchResult.message}
                 {searchResult.error && <p className="mt-2 font-mono bg-red-50 p-2 rounded">Technical Details: {searchResult.error}</p>}
-                <Diagnostics />
             </AlertDescription>
         </Alert>
     );
