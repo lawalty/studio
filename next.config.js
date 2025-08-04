@@ -2,7 +2,6 @@
 
 const nextConfig = {
   output: 'standalone',
-  pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'], // Ensure all pages are in src
   images: {
     remotePatterns: [
       {
