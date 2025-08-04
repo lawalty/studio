@@ -34,6 +34,10 @@ export async function searchKnowledgeBase({
 }: SearchParams): Promise<SearchResult[]> {
 
   const processedQuery = preprocessText(query);
+  if (!processedQuery) {
+    return []; // Return empty if query is empty after processing
+  }
+  
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
     content: processedQuery,

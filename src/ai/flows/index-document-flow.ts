@@ -82,18 +82,8 @@ export async function indexDocument({
       const sourceDocRef = db.collection('kb_meta').doc(sourceId);
 
       try {
-        const processedText = preprocessText(text); 
-        if (!processedText.trim()) {
-            const errorMessage = "No readable text content found after extraction and processing.";
-            await sourceDocRef.set({
-              indexingStatus: 'failed',
-              indexingError: errorMessage,
-              sourceName, level, topic, downloadURL: downloadURL || null, createdAt: new Date().toISOString(),
-            }, { merge: true });
-            return { chunksWritten: 0, sourceId, success: false, error: errorMessage };
-        }
-        
-        const chunks = simpleSplitter(processedText, { chunkSize: 1000, chunkOverlap: 100 });
+        // The original, un-preprocessed text is used for chunking to maintain sentence structure.
+        const chunks = simpleSplitter(text, { chunkSize: 1000, chunkOverlap: 100 });
         
         if (chunks.length === 0) {
             const finalMetadata: Record<string, any> = {
@@ -111,24 +101,28 @@ export async function indexDocument({
         const chunksCollection = sourceDocRef.collection('kb_chunks'); 
 
         for (let index = 0; index < chunks.length; index++) {
-          const chunkText = chunks[index];
+          const originalChunkText = chunks[index];
           const newChunkDocRef = chunksCollection.doc(); 
           
-          // Apply the same preprocessing to the chunk text before embedding
-          const processedChunkText = preprocessText(chunkText);
+          // Apply the consistent preprocessing to the chunk text ONLY for the embedding.
+          const processedChunkTextForEmbedding = preprocessText(originalChunkText);
+          if (!processedChunkTextForEmbedding) continue; // Skip empty chunks after processing
           
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
-              content: processedChunkText, // Use the processed text for embedding
+              content: processedChunkTextForEmbedding, // Use the processed text for embedding
               options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
           }));
           const embeddingVector = embeddingResponse?.[0]?.embedding;
+
           if (!embeddingVector || !Array.isArray(embeddingVector) || embeddingVector.length !== 768) {
-            throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}.`);
+            console.warn(`Skipping chunk ${index + 1} due to invalid embedding.`);
+            continue; // Skip this chunk if embedding fails
           }
           
           const chunkData: Record<string, any> = {
-            sourceId, sourceName, level, topic, text: chunkText, // Store original (but split) chunk text
+            sourceId, sourceName, level, topic, 
+            text: originalChunkText, // Store original (but split) chunk text for user display
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
