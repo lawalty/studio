@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import Link from 'next/link';
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
@@ -129,9 +130,9 @@ const RenderKnowledgeBaseLevel = ({
                                                     <TooltipTrigger>
                                                         <div className="flex items-center gap-2">
                                                             {source.indexingStatus === 'success' && <CheckCircle size={16} className="text-green-500" />}
-                                                            {(source.indexingStatus === 'processing' || source.indexingStatus === 'pending') && <Loader2 size={16} className="animate-spin" />}
+                                                            {(source.indexingStatus === 'processing' || source.indexingStatus === 'pending' || isOpInProgress) && <Loader2 size={16} className="animate-spin" />}
                                                             {source.indexingStatus === 'failed' && <AlertTriangle size={16} className="text-destructive" />}
-                                                            <span className="capitalize">{source.indexingStatus}</span>
+                                                            <span className="capitalize">{isOpInProgress ? 'Processing' : source.indexingStatus}</span>
                                                         </div>
                                                     </TooltipTrigger>
                                                     <TooltipContent>
@@ -148,6 +149,17 @@ const RenderKnowledgeBaseLevel = ({
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button variant="ghost" size="icon" disabled={!source.downloadURL || anyOperationGloballyInProgress} asChild>
+                                                                <Link href={source.downloadURL!} target="_blank">
+                                                                    <Eye size={16} className={!source.downloadURL ? "text-muted-foreground/50" : ""} />
+                                                                </Link>
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent><p>View Original Document</p></TooltipContent>
+                                                    </Tooltip>
+
                                                     <AlertDialog>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
@@ -347,12 +359,11 @@ export default function KnowledgeBasePage() {
   
   const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
       setOperationStatus(source.id, true);
-      toast({ title: `Re-processing ${source.sourceName}...` });
-  
       const sourceDocRef = doc(db, 'kb_meta', source.id);
-      await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Clearing old data and starting re-processing...", chunksWritten: 0 });
-  
+      
       try {
+          await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Clearing old data...", chunksWritten: 0 });
+  
           // Step 1: Delete existing chunks to prevent duplicates.
           const chunksQuery = query(collection(db, 'kb_chunks'), where('sourceId', '==', source.id));
           const chunksSnapshot = await getDocs(chunksQuery);
@@ -398,7 +409,7 @@ export default function KnowledgeBasePage() {
               throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database.");
           }
   
-          toast({ title: "Success!", description: `"${source.sourceName}" has been successfully re-indexed.` });
+          toast({ title: "Success!", description: `"${source.sourceName}" has been successfully re-indexed with ${indexingResult.chunksWritten} chunks.` });
   
       } catch (error: any) {
           const errorMessage = error.message || "An unknown error occurred during re-indexing.";
@@ -450,7 +461,6 @@ export default function KnowledgeBasePage() {
         await setDoc(sourceDocRef, newSourceData);
 
         // Stage 2: Upload to Cloud Storage
-        await updateDoc(sourceDocRef, { indexingError: 'Uploading file to Cloud Storage...' });
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
         const fileRef = storageRef(storage, storagePath);
         await uploadBytes(fileRef, fileToUpload);
@@ -463,14 +473,12 @@ export default function KnowledgeBasePage() {
         await new Promise(resolve => setTimeout(resolve, 5000));
 
         // Stage 5: Extract Text
-        await updateDoc(sourceDocRef, { indexingError: 'Extracting document text with AI...' });
         const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
 
         // Stage 6: Index Content
-        await updateDoc(sourceDocRef, { indexingError: 'Indexing content (embeddings)...' });
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
             sourceName: fileToUpload.name,
@@ -532,14 +540,7 @@ export default function KnowledgeBasePage() {
           if (!docSnap.exists()) {
             throw new Error("Original source document not found to move.");
           }
-          const sourceData = docSnap.data();
           
-          const newDocData: Record<string, any> = { ...sourceData, level: newLevel };
-          if (source.level === 'Spanish PDFs' && newLevel !== 'Spanish PDFs') {
-            delete newDocData.linkedEnglishSourceId;
-          }
-
-          // In a single `kb_meta` collection, we just update the document in place.
           const docRef = doc(db, 'kb_meta', source.id);
           await updateDoc(docRef, { level: newLevel });
 
@@ -661,5 +662,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-    
