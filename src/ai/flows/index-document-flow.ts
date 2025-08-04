@@ -109,7 +109,8 @@ export async function indexDocument({
         }
 
         const firestoreBatch = db.batch();
-        const chunksCollection = db.collection('kb_chunks'); 
+        // **FIX:** Get the subcollection reference from the parent document
+        const chunksCollection = sourceDocRef.collection('kb_chunks'); 
 
         for (let index = 0; index < chunks.length; index++) {
           const chunkText = chunks[index];
@@ -124,6 +125,7 @@ export async function indexDocument({
             throw new Error(`Failed to generate a valid 768-dimension embedding for chunk ${index + 1}.`);
           }
 
+          // **FIX:** Create a new document within the subcollection
           const newChunkDocRef = chunksCollection.doc(); 
           
           const chunkData: Record<string, any> = {
