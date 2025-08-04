@@ -23,8 +23,8 @@ if (firebase_admin_1.default.apps.length === 0) {
         // uses the credentials from 'gcloud auth application-default login'.
         // In a deployed App Hosting environment, it uses the app's service account.
         firebase_admin_1.default.initializeApp({
-            projectId: process.env.GCLOUD_PROJECT || 'ai-blair-v4',
-            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ai-blair-v4.appspot.com',
+            projectId: process.env.GCLOUD_PROJECT || 'ai-blair-v5',
+            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'ai-blair-v5.appspot.com',
         });
     }
     catch (error) {

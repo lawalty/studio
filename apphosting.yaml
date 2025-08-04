@@ -11,7 +11,7 @@ runConfig:
     - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
       value: ai-blair-v5-v18v2
     - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-      value: ai-blair-v5-v18v2.firebasestorage.app
+      value: ai-blair-v5-v18v2.appspot.com
     - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
       value: '116786777596'
     - variable: NEXT_PUBLIC_FIREBASE_APP_ID
