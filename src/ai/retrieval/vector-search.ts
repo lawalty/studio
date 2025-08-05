@@ -40,8 +40,7 @@ export async function searchKnowledgeBase({
   
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
-    content: processedQuery,
-    options: { taskType: 'RETRIEVAL_QUERY', outputDimensionality: 768 }
+    content: processedQuery
   });
 
   const queryEmbedding = embeddingResponse?.[0]?.embedding;
@@ -52,10 +51,11 @@ export async function searchKnowledgeBase({
   const firestore = admin.firestore();
   const chunksCollectionGroup = firestore.collectionGroup('kb_chunks');
 
-  const vectorQuery = chunksCollectionGroup
-    .findNearest('embedding', queryEmbedding, {
-      limit,
-      distanceMeasure: 'COSINE',
+  const vectorQuery = chunksCollectionGroup.findNearest({
+    vectorField: 'embedding',
+    queryVector: queryEmbedding,
+    limit: 10,
+    distanceMeasure: 'EUCLIDEAN'
   });
 
   let querySnapshot;
@@ -71,26 +71,26 @@ export async function searchKnowledgeBase({
     }
     throw new Error(`[FirestoreVectorSearch] ${detail} Raw Error: ${e.message}`);
   }
-
   const results: SearchResult[] = [];
   querySnapshot.forEach(doc => {
     const data = doc.data();
     const distance = doc.vectorDistance;
 
-    if (distance <= distanceThreshold) {
-        results.push({
-          distance,
-          sourceId: data.sourceId,
-          text: data.text,
-          sourceName: data.sourceName,
-          level: data.level,
-          topic: data.topic,
-          downloadURL: data.downloadURL,
-          pageNumber: data.pageNumber,
-          title: data.title,
-          header: data.header,
-        });
-    }
+    // The distance threshold is now handled in the test-search-flow for diagnostics
+    // but would be applied here in a production RAG flow.
+    // We return all results here and let the caller filter.
+    results.push({
+      distance,
+      sourceId: data.sourceId,
+      text: data.text,
+      sourceName: data.sourceName,
+      level: data.level,
+      topic: data.topic,
+      downloadURL: data.downloadURL,
+      pageNumber: data.pageNumber,
+      title: data.title,
+      header: data.header,
+    });
   });
 
   return results;

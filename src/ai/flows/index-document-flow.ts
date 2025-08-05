@@ -109,7 +109,6 @@ export async function indexDocument({
           const embeddingResponse = await withRetry(() => ai.embed({
               embedder: 'googleai/text-embedding-004',
               content: processedChunkTextForEmbedding,
-              options: { taskType: 'RETRIEVAL_DOCUMENT', outputDimensionality: 768 }
           }));
           const embeddingVector = embeddingResponse?.[0]?.embedding;
 
