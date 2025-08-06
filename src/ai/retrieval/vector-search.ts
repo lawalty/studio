@@ -52,7 +52,7 @@ export async function searchKnowledgeBase({
   const chunksCollectionGroup = firestore.collectionGroup('kb_chunks');
 
   const vectorQuery = chunksCollectionGroup.findNearest({
-    vectorField: 'embedding.vector', // Correctly target the nested vector field
+    vectorField: 'embedding', // Target the top-level embedding field
     queryVector: queryEmbedding,
     limit: limit,
     distanceMeasure: 'COSINE'
@@ -82,8 +82,8 @@ export async function searchKnowledgeBase({
           sourceId: data.sourceId,
           text: data.text,
           sourceName: data.sourceName,
-          level: data.embedding.level, // Extract metadata from the embedding object
-          topic: data.embedding.topic, // Extract metadata from the embedding object
+          level: data.level, // Extract from top-level field
+          topic: data.topic, // Extract from top-level field
           downloadURL: data.downloadURL,
           pageNumber: data.pageNumber,
           title: data.title,

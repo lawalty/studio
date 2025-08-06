@@ -6,7 +6,7 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "embedding.vector",
+          "fieldPath": "embedding",
           "vectorConfig": {
             "dimension": 768,
             "flat": {}

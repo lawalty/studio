@@ -118,17 +118,20 @@ export async function indexDocument({
           }
           
           const chunkData: Record<string, any> = {
-            sourceId, sourceName,
+            sourceId,
+            sourceName,
             text: processedChunkTextForEmbedding,
-            chunkNumber: index + 1, createdAt: new Date().toISOString(),
-            downloadURL: downloadURL || null, pageNumber: pageNumber || null,
-            title: title || null, header: header || null,
-            embedding: {
-              vector: embeddingVector,
-              level: level,
-              topic: topic,
-            },
+            chunkNumber: index + 1,
+            createdAt: new Date().toISOString(),
+            downloadURL: downloadURL || null,
+            pageNumber: pageNumber || null,
+            title: title || null,
+            header: header || null,
+            level: level, // Stored at the top level
+            topic: topic, // Stored at the top level
+            embedding: embeddingVector, // The vector is the value
           };
+
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
           }
