@@ -88,7 +88,8 @@ export async function indexDocument({
             const finalMetadata: Record<string, any> = {
                 indexingStatus: 'success', chunksWritten: 0,
                 indexedAt: new Date().toISOString(), indexingError: "Document processed but yielded no text chunks.",
-                sourceName, level, topic, downloadURL: downloadURL || null,
+                sourceName, downloadURL: downloadURL || null,
+                 // Temporarily remove level and topic for debugging
             };
             if (linkedEnglishSourceId) {
                 finalMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
@@ -127,9 +128,8 @@ export async function indexDocument({
             pageNumber: pageNumber || null,
             title: title || null,
             header: header || null,
-            level: level, // Stored at the top level
-            topic: topic, // Stored at the top level
-            embedding: embeddingVector, // The vector is the value
+            embedding: embeddingVector,
+            // Temporarily removing level and topic for debugging
           };
 
           if (linkedEnglishSourceId) {
@@ -141,7 +141,8 @@ export async function indexDocument({
         const finalMetadata: Record<string, any> = {
           indexingStatus: 'success', chunksWritten: chunks.length,
           indexedAt: new Date().toISOString(), indexingError: null,
-          sourceName, level, topic, downloadURL: downloadURL || null,
+          sourceName, downloadURL: downloadURL || null,
+          // Temporarily remove level and topic for debugging
         };
         if (linkedEnglishSourceId) {
             finalMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
@@ -164,7 +165,8 @@ export async function indexDocument({
         try {
           const failureMetadata: Record<string, any> = { 
             indexingStatus: 'failed', indexingError: detailedError, 
-            sourceName, level, topic, downloadURL: downloadURL || null 
+            sourceName, downloadURL: downloadURL || null 
+            // Temporarily remove level and topic for debugging
           };
           if (linkedEnglishSourceId) {
             failureMetadata.linkedEnglishSourceId = linkedEnglishSourceId;

@@ -12,8 +12,6 @@ export interface SearchResult {
   sourceId: string;
   text: string;
   sourceName: string;
-  level: string;
-  topic: string;
   downloadURL?: string;
   distance: number;
   pageNumber?: number;
@@ -82,8 +80,6 @@ export async function searchKnowledgeBase({
           sourceId: data.sourceId,
           text: data.text,
           sourceName: data.sourceName,
-          level: data.level,
-          topic: data.topic,
           downloadURL: data.downloadURL,
           pageNumber: data.pageNumber,
           title: data.title,

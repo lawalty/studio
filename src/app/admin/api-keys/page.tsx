@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -172,14 +173,6 @@ export default function ApiKeysPage() {
     setIsTesting(prev => ({ ...prev, search: false }));
   };
 
-  const getBadgeVariant = (level: string) => {
-    switch (level) {
-      case 'High': return 'destructive';
-      case 'Medium': return 'secondary';
-      default: return 'outline';
-    }
-  };
-  
   const getSearchResultAlert = () => {
     if (!searchResult) return null;
     
@@ -455,7 +448,6 @@ export default function ApiKeysPage() {
                                       <div className="flex justify-between items-start">
                                         <p className="font-semibold text-primary flex items-center gap-1.5"><FileText size={12}/> {res.sourceName}</p>
                                         <div className="flex items-center gap-2">
-                                            <Badge variant={getBadgeVariant(res.level)}>{res.level}</Badge>
                                             <span className="text-muted-foreground/80 font-mono text-[10px]">{res.distance.toFixed(3)}</span>
                                         </div>
                                       </div>
