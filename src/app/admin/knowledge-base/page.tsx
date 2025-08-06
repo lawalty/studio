@@ -453,12 +453,16 @@ export default function KnowledgeBasePage() {
 
     try {
         const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
-            sourceName: fileToUpload.name, description, topic, level: targetLevel,
+            sourceName: fileToUpload.name, description,
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
             indexingError: 'Uploading file to storage...',
             mimeType,
         };
+        // For debugging, we are temporarily not writing these fields.
+        // newSourceData.level = targetLevel;
+        // newSourceData.topic = topic;
+
         if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
             newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
         }
