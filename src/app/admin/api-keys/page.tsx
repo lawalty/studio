@@ -448,6 +448,8 @@ export default function ApiKeysPage() {
                                       <div className="flex justify-between items-start">
                                         <p className="font-semibold text-primary flex items-center gap-1.5"><FileText size={12}/> {res.sourceName}</p>
                                         <div className="flex items-center gap-2">
+                                            <Badge variant="outline">{res.level}</Badge>
+                                            <Badge variant="secondary">{res.topic}</Badge>
                                             <span className="text-muted-foreground/80 font-mono text-[10px]">{res.distance.toFixed(3)}</span>
                                         </div>
                                       </div>

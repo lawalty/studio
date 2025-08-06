@@ -458,10 +458,9 @@ export default function KnowledgeBasePage() {
             indexingStatus: 'processing',
             indexingError: 'Uploading file to storage...',
             mimeType,
+            level: targetLevel,
+            topic: topic,
         };
-        // For debugging, we are temporarily not writing these fields.
-        // newSourceData.level = targetLevel;
-        // newSourceData.topic = topic;
 
         if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
             newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;

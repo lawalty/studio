@@ -89,7 +89,7 @@ export async function indexDocument({
                 indexingStatus: 'success', chunksWritten: 0,
                 indexedAt: new Date().toISOString(), indexingError: "Document processed but yielded no text chunks.",
                 sourceName, downloadURL: downloadURL || null,
-                 // Temporarily remove level and topic for debugging
+                level, topic,
             };
             if (linkedEnglishSourceId) {
                 finalMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
@@ -129,7 +129,8 @@ export async function indexDocument({
             title: title || null,
             header: header || null,
             embedding: embeddingVector,
-            // Temporarily removing level and topic for debugging
+            level,
+            topic,
           };
 
           if (linkedEnglishSourceId) {
@@ -142,7 +143,7 @@ export async function indexDocument({
           indexingStatus: 'success', chunksWritten: chunks.length,
           indexedAt: new Date().toISOString(), indexingError: null,
           sourceName, downloadURL: downloadURL || null,
-          // Temporarily remove level and topic for debugging
+          level, topic,
         };
         if (linkedEnglishSourceId) {
             finalMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
@@ -165,8 +166,8 @@ export async function indexDocument({
         try {
           const failureMetadata: Record<string, any> = { 
             indexingStatus: 'failed', indexingError: detailedError, 
-            sourceName, downloadURL: downloadURL || null 
-            // Temporarily remove level and topic for debugging
+            sourceName, downloadURL: downloadURL || null,
+            level, topic,
           };
           if (linkedEnglishSourceId) {
             failureMetadata.linkedEnglishSourceId = linkedEnglishSourceId;
