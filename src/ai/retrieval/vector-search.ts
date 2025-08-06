@@ -53,7 +53,7 @@ export async function searchKnowledgeBase({
     vectorField: 'embedding',
     queryVector: queryEmbedding,
     limit: limit,
-    distanceMeasure: 'EUCLIDEAN'
+    distanceMeasure: 'COSINE'
   });
 
   let querySnapshot;
