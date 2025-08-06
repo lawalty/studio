@@ -52,10 +52,10 @@ export async function searchKnowledgeBase({
   const chunksCollectionGroup = firestore.collectionGroup('kb_chunks');
 
   const vectorQuery = chunksCollectionGroup.findNearest({
-    vectorField: 'embedding',
+    vectorField: 'embedding.vector', // Correctly target the nested vector field
     queryVector: queryEmbedding,
-    limit: 10,
-    distanceMeasure: 'EUCLIDEAN'
+    limit: limit,
+    distanceMeasure: 'COSINE'
   });
 
   let querySnapshot;
@@ -76,21 +76,20 @@ export async function searchKnowledgeBase({
     const data = doc.data();
     const distance = doc.vectorDistance;
 
-    // The distance threshold is now handled in the test-search-flow for diagnostics
-    // but would be applied here in a production RAG flow.
-    // We return all results here and let the caller filter.
-    results.push({
-      distance,
-      sourceId: data.sourceId,
-      text: data.text,
-      sourceName: data.sourceName,
-      level: data.level,
-      topic: data.topic,
-      downloadURL: data.downloadURL,
-      pageNumber: data.pageNumber,
-      title: data.title,
-      header: data.header,
-    });
+    if (distance <= distanceThreshold) {
+        results.push({
+          distance,
+          sourceId: data.sourceId,
+          text: data.text,
+          sourceName: data.sourceName,
+          level: data.embedding.level, // Extract metadata from the embedding object
+          topic: data.embedding.topic, // Extract metadata from the embedding object
+          downloadURL: data.downloadURL,
+          pageNumber: data.pageNumber,
+          title: data.title,
+          header: data.header,
+        });
+    }
   });
 
   return results;

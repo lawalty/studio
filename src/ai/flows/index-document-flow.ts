@@ -118,12 +118,16 @@ export async function indexDocument({
           }
           
           const chunkData: Record<string, any> = {
-            sourceId, sourceName, level, topic, 
-            text: processedChunkTextForEmbedding, // CRITICAL FIX: Store the preprocessed text.
+            sourceId, sourceName,
+            text: processedChunkTextForEmbedding,
             chunkNumber: index + 1, createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null, pageNumber: pageNumber || null,
             title: title || null, header: header || null,
-            embedding: embeddingVector,
+            embedding: {
+              vector: embeddingVector,
+              level: level,
+              topic: topic,
+            },
           };
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
