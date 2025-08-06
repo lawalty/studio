@@ -52,10 +52,10 @@ export async function searchKnowledgeBase({
   const chunksCollectionGroup = firestore.collectionGroup('kb_chunks');
 
   const vectorQuery = chunksCollectionGroup.findNearest({
-    vectorField: 'embedding', // Target the top-level embedding field
+    vectorField: 'embedding',
     queryVector: queryEmbedding,
     limit: limit,
-    distanceMeasure: 'COSINE'
+    distanceMeasure: 'EUCLIDEAN'
   });
 
   let querySnapshot;
@@ -82,8 +82,8 @@ export async function searchKnowledgeBase({
           sourceId: data.sourceId,
           text: data.text,
           sourceName: data.sourceName,
-          level: data.level, // Extract from top-level field
-          topic: data.topic, // Extract from top-level field
+          level: data.level,
+          topic: data.topic,
           downloadURL: data.downloadURL,
           pageNumber: data.pageNumber,
           title: data.title,
