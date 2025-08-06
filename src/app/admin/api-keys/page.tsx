@@ -221,6 +221,9 @@ export default function ApiKeysPage() {
           <div className="mt-4 p-3 rounded-md border bg-muted/50">
               <h4 className="font-semibold text-sm mb-2">Diagnostics</h4>
               <div className="text-xs space-y-1">
+                  {diagnostics.totalChunksFound !== undefined && (
+                      <p><span className="font-medium">Total Chunks Found in DB:</span> {diagnostics.totalChunksFound}</p>
+                  )}
                   <p><span className="font-medium">Preprocessed Query:</span> "{diagnostics.preprocessedQuery}"</p>
                   <p><span className="font-medium">Query Embedding Generated:</span> {diagnostics.embeddingGenerated ? 'Yes' : 'No'}</p>
                   {diagnostics.embeddingSnippet && <p><span className="font-medium">Embedding Snippet:</span> {diagnostics.embeddingSnippet}</p>}
