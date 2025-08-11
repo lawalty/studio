@@ -3,7 +3,7 @@
  * native vector search capabilities.
  */
 import { admin } from '@/lib/firebase-admin';
-import { ai } from '@/ai/genkit'; 
+import { ai } from '@/ai/genkit';
 import { preprocessText } from '@/ai/retrieval/preprocessing';
 
 export interface SearchResult {
@@ -22,69 +22,69 @@ export interface SearchResult {
 interface SearchParams {
   query: string;
   limit?: number;
-  distanceThreshold: number; 
+  distanceThreshold: number;
 }
 const firestore = admin.firestore();
-let t='';  
 
+/**
+ * Searches the 'kb_chunks' collection group using Firestore's native vector search.
+ * @param {SearchParams} params - The search parameters.
+ * @returns {Promise<SearchResult[]>} A promise that resolves to an array of search results.
+ */
 export async function searchKnowledgeBase({
   query,
   limit = 10,
   distanceThreshold,
 }: SearchParams): Promise<SearchResult[]> {
-
-  const results: SearchResult[] = [];
-
   const processedQuery = preprocessText(query);
   if (!processedQuery) {
     return []; // Return empty if query is empty after processing
   }
-  
+
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
-    content: processedQuery
+    content: processedQuery,
   });
 
   const queryEmbedding = embeddingResponse?.[0]?.embedding;
   if (!queryEmbedding || queryEmbedding.length !== 768) {
     throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
   }
-  let kb_meta_documentsIds:any=[];
-  await firestore.collection('kb_meta').get()
-    .then(kb_meta_collections => {
-      kb_meta_documentsIds=kb_meta_collections.docs.map(doc => doc.id);
-    });
 
-    for(let i=0;i<kb_meta_documentsIds.length;i++)
-    {
-      await firestore.collection('kb_meta').doc(kb_meta_documentsIds[i]).collection('kb_chunks').get()
-      .then(querySnapshot => {          
-        querySnapshot.docs.forEach(documentSnapshot => {
-            t+=documentSnapshot.id+"  ";
-            let distance = 0;
-            let sumOfSquares = 0;  
-            for (let i = 0; i < queryEmbedding.length; i++) {
-              sumOfSquares += Math.pow(documentSnapshot.get('embedding')[i] - queryEmbedding[i], 2);
-            }
-            distance=Math.sqrt(sumOfSquares)
-          
-            if(distance<=distanceThreshold)
-            {
-              results.push({
-                distance:distance,
-                sourceId: documentSnapshot.get('sourceId'),
-                text: documentSnapshot.get('text'),
-                sourceName: documentSnapshot.get('sourceName'),
-                level: documentSnapshot.get('level'),
-                topic: documentSnapshot.get('topic'),
-                downloadURL: documentSnapshot.get('downloadURL'),
-                pageNumber: documentSnapshot.get('pageNumber'),
-                title: documentSnapshot.get('title'),
-                header: documentSnapshot.get('header'),
-              });
-            }  
-          });
-      })  
+  const chunksCollection = firestore.collectionGroup('kb_chunks');
+  const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
+    limit: limit,
+    distanceMeasure: 'COSINE',
+  });
+
+  const querySnapshot = await vectorQuery.get();
+
+  const results: SearchResult[] = [];
+  querySnapshot.forEach(doc => {
+    // The distance is a direct property on the snapshot documents in a vector query
+    const distance = (doc as any).distance;
+    
+    // Filter results by the dynamic distance threshold from the config.
+    // Note: For COSINE distance, a smaller value means a closer match.
+    if (distance <= distanceThreshold) {
+      const data = doc.data();
+      results.push({
+        distance: distance,
+        sourceId: data.sourceId,
+        text: data.text,
+        sourceName: data.sourceName,
+        level: data.level,
+        topic: data.topic,
+        downloadURL: data.downloadURL,
+        pageNumber: data.pageNumber,
+        title: data.title,
+        header: data.header,
+      });
     }
-  return results.slice().sort((a, b) => b.distance - a.distance).slice(0, limit); 
+  });
+
+  // Firestore's findNearest already returns results sorted by distance,
+  // so an additional sort is not strictly necessary unless you want to reverse it.
+  // The default order (ascending distance) is correct.
+  return results;
 }
