@@ -1,17 +1,17 @@
-
-'use server';
 /**
  * @fileOverview Performs a vector-based semantic search using Firestore's
  * native vector search capabilities.
  */
 import { admin } from '@/lib/firebase-admin';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/genkit'; 
 import { preprocessText } from '@/ai/retrieval/preprocessing';
 
 export interface SearchResult {
   sourceId: string;
   text: string;
   sourceName: string;
+  level:string;
+  topic:string;
   downloadURL?: string;
   distance: number;
   pageNumber?: number;
@@ -24,12 +24,16 @@ interface SearchParams {
   limit?: number;
   distanceThreshold: number; 
 }
+const firestore = admin.firestore();
+let t='';  
 
 export async function searchKnowledgeBase({
   query,
   limit = 10,
   distanceThreshold,
 }: SearchParams): Promise<SearchResult[]> {
+
+  const results: SearchResult[] = [];
 
   const processedQuery = preprocessText(query);
   if (!processedQuery) {
@@ -45,48 +49,42 @@ export async function searchKnowledgeBase({
   if (!queryEmbedding || queryEmbedding.length !== 768) {
     throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
   }
+  let kb_meta_documentsIds:any=[];
+  await firestore.collection('kb_meta').get()
+    .then(kb_meta_collections => {
+      kb_meta_documentsIds=kb_meta_collections.docs.map(doc => doc.id);
+    });
 
-  const firestore = admin.firestore();
-  const chunksCollectionGroup = firestore.collectionGroup('kb_chunks');
-
-  const vectorQuery = chunksCollectionGroup.findNearest({
-    vectorField: 'embedding',
-    queryVector: queryEmbedding,
-    limit: limit,
-    distanceMeasure: 'COSINE'
-  });
-
-  let querySnapshot;
-  try {
-    querySnapshot = await vectorQuery.get();
-  } catch (e: any) {
-    console.error("[FirestoreVectorSearch] Error calling findNearest:", e);
-    let detail = "An unexpected error occurred with the Firestore vector search.";
-    if (e.message?.includes('requires a vector index')) {
-      detail = `A Firestore vector index is required. Please create it via the gcloud command provided in the error message or by updating firestore.indexes.json.`;
-    } else if (e.message?.includes('permission-denied')) {
-        detail = `A permissions error occurred. Check your server's IAM roles and Firestore security rules.`;
+    for(let i=0;i<kb_meta_documentsIds.length;i++)
+    {
+      await firestore.collection('kb_meta').doc(kb_meta_documentsIds[i]).collection('kb_chunks').get()
+      .then(querySnapshot => {          
+        querySnapshot.docs.forEach(documentSnapshot => {
+            t+=documentSnapshot.id+"  ";
+            let distance = 0;
+            let sumOfSquares = 0;  
+            for (let i = 0; i < queryEmbedding.length; i++) {
+              sumOfSquares += Math.pow(documentSnapshot.get('embedding')[i] - queryEmbedding[i], 2);
+            }
+            distance=Math.sqrt(sumOfSquares)
+          
+            if(distance<=distanceThreshold)
+            {
+              results.push({
+                distance:distance,
+                sourceId: documentSnapshot.get('sourceId'),
+                text: documentSnapshot.get('text'),
+                sourceName: documentSnapshot.get('sourceName'),
+                level: documentSnapshot.get('level'),
+                topic: documentSnapshot.get('topic'),
+                downloadURL: documentSnapshot.get('downloadURL'),
+                pageNumber: documentSnapshot.get('pageNumber'),
+                title: documentSnapshot.get('title'),
+                header: documentSnapshot.get('header'),
+              });
+            }  
+          });
+      })  
     }
-    throw new Error(`[FirestoreVectorSearch] ${detail} Raw Error: ${e.message}`);
-  }
-  const results: SearchResult[] = [];
-  querySnapshot.forEach(doc => {
-    const data = doc.data();
-    const distance = doc.vectorDistance;
-
-    if (distance <= distanceThreshold) {
-        results.push({
-          distance,
-          sourceId: data.sourceId,
-          text: data.text,
-          sourceName: data.sourceName,
-          downloadURL: data.downloadURL,
-          pageNumber: data.pageNumber,
-          title: data.title,
-          header: data.header,
-        });
-    }
-  });
-
-  return results;
+  return results.slice().sort((a, b) => b.distance - a.distance).slice(0, limit); 
 }
