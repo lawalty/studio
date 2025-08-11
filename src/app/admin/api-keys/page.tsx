@@ -37,7 +37,7 @@ export default function ApiKeysPage() {
     tts: '',
     voiceId: '',
     useTtsApi: true,
-    distanceThreshold: 0.6,
+    distanceThreshold: 0.8,
   });
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -64,7 +64,7 @@ export default function ApiKeysPage() {
             tts: data.tts || '',
             voiceId: data.voiceId || '',
             useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
-            distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.6,
+            distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.8,
           });
         }
       } catch (error) {
@@ -213,6 +213,9 @@ export default function ApiKeysPage() {
           <div className="mt-4 p-3 rounded-md border bg-muted/50">
               <h4 className="font-semibold text-sm mb-2">Diagnostics</h4>
               <div className="text-xs space-y-1">
+                  {diagnostics.usedDistanceThreshold !== undefined && (
+                      <p><span className="font-medium">Distance Threshold Used:</span> {diagnostics.usedDistanceThreshold.toFixed(2)}</p>
+                  )}
                   {diagnostics.totalChunksFound !== undefined && (
                       <p><span className="font-medium">Total Chunks Found in DB:</span> {diagnostics.totalChunksFound}</p>
                   )}
@@ -303,7 +306,7 @@ export default function ApiKeysPage() {
                     Distance Threshold: {config.distanceThreshold.toFixed(2)}
                     </Label>
                     <p className="text-xs text-muted-foreground mt-1">
-                    Lower values mean stricter, more relevant results (closer to 0). Higher values are more lenient (closer to 1). Default is 0.6.
+                    Lower values mean stricter, more relevant results (closer to 0). Higher values are more lenient (closer to 1). Default is 0.8.
                     </p>
                 </div>
                 <Slider
@@ -475,3 +478,4 @@ export default function ApiKeysPage() {
     </div>
   );
 }
+

@@ -12,6 +12,7 @@ import { translateText } from './translate-text-flow';
 import { ai } from '@/ai/genkit';
 import { db as adminDb } from '@/lib/firebase-admin';
 import { withRetry } from './index-document-flow';
+import { getAppConfig } from '@/lib/app-config';
 
 // Zod schema for the input of the generateChatResponse flow.
 const GenerateChatResponseInputSchema = z.object({
@@ -40,28 +41,6 @@ const AiResponseJsonSchema = z.object({
   }).optional(),
 });
 export type GenerateChatResponseOutput = z.infer<typeof AiResponseJsonSchema>;
-
-const FIRESTORE_CONFIG_PATH = "configurations/app_config";
-
-// Helper to fetch the application configuration, including the dynamic RAG tuning setting.
-const getAppConfig = async (): Promise<{ distanceThreshold: number }> => {
-    try {
-        const docRef = adminDb.doc(FIRESTORE_CONFIG_PATH);
-        const docSnap = await docRef.get();
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            return {
-                distanceThreshold: typeof data?.distanceThreshold === 'number' ? data.distanceThreshold : 0.6,
-            };
-        }
-        // Return default if no config is found
-        return { distanceThreshold: 0.6 };
-    } catch (error) {
-        console.error("[getAppConfig] Error fetching config, using default. Error:", error);
-        return { distanceThreshold: 0.6 };
-    }
-};
-
 
 // Helper function to find the Spanish version of a document
 const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: string; downloadURL: string } | null> => {
