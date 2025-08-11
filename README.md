@@ -15,12 +15,12 @@ For running the app on your local machine (`npm run dev`).
 **Action:** Create a new file named `.env.local` in the root directory. Copy the contents of the `.env` file into it and fill in the values. The Project ID and Storage Bucket have been corrected in the `.env` template to prevent common errors.
 
 **Variables to set in `.env.local`:**
-*   `NEXT_PUBLIC_FIREBASE_API_KEY`="AIzaSyCR1IqGrezIHP5dq7TPMyDYCJdxn0DFm2Q"
+*   `NEXT_PUBLIC_FIREBASE_API_KEY`="AIzaSyA-RlhW6HTAFUPdvLVzyi4jl85FVsSrXEk"
 *   `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`="ai-blair-v5-backup2.firebaseapp.com"
 *   `NEXT_PUBLIC_FIREBASE_PROJECT_ID`="ai-blair-v5-backup2"
 *   `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`="ai-blair-v5-backup2.appspot.com"
-*   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`="1079390859335"
-*   `NEXT_PUBLIC_FIREBASE_APP_ID`="1:1079390859335:web:be0806edbcb7f394088162"
+*   `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`="189617000826"
+*   `NEXT_PUBLIC_FIREBASE_APP_ID`="1:189617000826:web:897d3dfbf7ddabc79706c3"
 *   `GEMINI_API_KEY` (Get from [Google AI Studio](https://aistudio.google.com/app/apikey))
 *   `GCLOUD_PROJECT`="ai-blair-v5-backup2"
 *   `LOCATION` (e.g., `us-central1`)
