@@ -28,6 +28,16 @@ interface SearchParams {
 }
 const firestore = admin.firestore();
 
+// Define a priority order for the knowledge base levels.
+const LEVEL_PRIORITY: Record<string, number> = {
+    'High': 1,
+    'Medium': 2,
+    'Low': 3,
+    'Spanish PDFs': 4,
+    'Chat History': 5,
+    // 'Archive' is filtered out and won't be searched.
+};
+
 /**
  * Calculates the cosine distance between two vectors.
  * Cosine distance is defined as 1 - cosine similarity.
@@ -124,6 +134,13 @@ export async function searchKnowledgeBase({
       }
   });
 
-  // Sort by distance (ascending, so smaller is better) and then limit the results.
-  return results.sort((a, b) => a.distance - b.distance).slice(0, limit);
+  // Sort results first by priority level (High > Medium > Low), then by distance.
+  return results.sort((a, b) => {
+    const priorityA = LEVEL_PRIORITY[a.level] || 99;
+    const priorityB = LEVEL_PRIORITY[b.level] || 99;
+    if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+    }
+    return a.distance - b.distance;
+  }).slice(0, limit);
 }
