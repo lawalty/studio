@@ -481,7 +481,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 if (result.shouldEndConversation) {
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
-                     if (communicationMode === 'audio-only') {
+                     if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
                         toggleListening(true);
                      }
                 }
@@ -493,7 +493,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const errorMessage = error.message || uiText.errorEncountered;
             setIsBotProcessing(false);
             addMessage(errorMessage, 'model');
-            if (communicationMode === 'audio-only' && !hasConversationEnded) {
+            if ((communicationMode === 'audio-only' || communicationMode === 'audio-text') && !hasConversationEnded) {
                 startInactivityTimer();
             }
         }
@@ -632,7 +632,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 greetingText = await translate(textToTranslate);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, greetingMessage, () => {
-                    if (communicationMode === 'audio-only') {
+                    if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
                         toggleListening(true);
                     }
                 });
@@ -642,7 +642,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setIsBotProcessing(false);
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, fallbackMessage, () => {
-                    if (communicationMode === 'audio-only') {
+                    if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
                         toggleListening(true);
                     }
                 });
@@ -680,7 +680,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
-            } else if (!hasConversationEnded && !isBotProcessing && !isBotSpeaking && communicationMode === 'audio-only') {
+            } else if (!hasConversationEnded && !isBotProcessing && !isBotSpeaking && (communicationMode === 'audio-only' || communicationMode === 'audio-text')) {
                 startInactivityTimer();
             }
         };
@@ -808,7 +808,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={configRef.current.avatarSrc} />
           <MessageInput
-            onSendMessage={handleSendMessage} isSending={isBotProcessing || isBotSpeaking} isSpeaking={isBotSpeaking}
+            onSendMessage={(text) => handleSendMessage(text)} isSending={isBotProcessing || isBotSpeaking} isSpeaking={isBotSpeaking}
             showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
             inputValue={inputValue} onInputValueChange={setInputValue} disabled={hasConversationEnded}
           />

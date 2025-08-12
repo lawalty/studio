@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Mic, SendHorizontal, Square } from 'lucide-react';
 
 interface MessageInputProps {
-  onSendMessage: (text: string, method: 'text' | 'voice') => void;
+  onSendMessage: (text: string) => void;
   isSending: boolean;
   isSpeaking: boolean; 
   showMicButton?: boolean;
@@ -31,7 +31,7 @@ export default function MessageInput({
 
   const handleSendText = useCallback(() => {
     if (inputValue.trim() === '' || isSending || disabled) return;
-    onSendMessage(inputValue, 'text');
+    onSendMessage(inputValue);
     onInputValueChange('');
   }, [inputValue, onSendMessage, isSending, onInputValueChange, disabled]);
 
