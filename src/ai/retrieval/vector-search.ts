@@ -63,6 +63,12 @@ export async function searchKnowledgeBase({
 
   chunksSnapshot.forEach(doc => {
       const data = doc.data();
+      
+      // *** FIX: Exclude documents from the 'Archive' level from the search ***
+      if (data.level === 'Archive') {
+          return; // Skip this chunk
+      }
+
       const storedEmbedding = data.embedding;
 
       if (!storedEmbedding || !Array.isArray(storedEmbedding) || storedEmbedding.length !== 768) {
