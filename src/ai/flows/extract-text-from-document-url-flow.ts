@@ -56,9 +56,11 @@ CRITICAL INSTRUCTIONS:
 4.  Do NOT add any commentary, preamble, or summary.
 5.  Your output MUST ONLY be the clean, extracted text.`;
 
+        // The Gemini API can infer the mimeType from the base64 data.
+        // By not specifying a mimeType, we avoid the "not supported" error for Word docs.
         const result = await model.generateContent([
             systemPrompt,
-            { inlineData: { mimeType: 'application/octet-stream', data: fileDataUri.split(',')[1] } }
+            { inlineData: { data: fileDataUri.split(',')[1] } }
         ]);
         
         const text = result.response.text()?.trim() ?? '';
