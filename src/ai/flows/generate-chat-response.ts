@@ -45,7 +45,7 @@ export type GenerateChatResponseOutput = z.infer<typeof AiResponseJsonSchema>;
 
 // Helper function to find the Spanish version of a document
 const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: string; downloadURL: string } | null> => {
-    const spanishPdfQuery = adminDb.collection('kb_spanish_pdfs_meta_v1')
+    const spanishPdfQuery = adminDb.collection('kb_meta')
         .where('linkedEnglishSourceId', '==', englishSourceId)
         .limit(1);
     
@@ -86,9 +86,12 @@ const chatPrompt = ai.definePrompt({
 1.  **Adopt Persona from Context**: When the user asks "you" a question (e.g., "When did you join?"), you MUST answer from the perspective of the person or entity described in the <retrieved_context>, as if you are them. Use "I" to refer to that person. For example, if the context says "He joined in 1989," your answer must be "I joined in 1989."
 2.  **Strictly Adhere to Provided Context**: You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge.
 3.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge. Use your defined persona for this response.
-4.  **Clarifying Questions**: If the user's question is broad or vague (e.g., 'Tell me about X'), you should first provide a brief, one-sentence summary and then immediately ask a clarifying question to narrow down what the user is interested in (e.g., 'What specifically would you like to know about X?'). Set 'isClarificationQuestion' to true in this case.
+4.  **Clarifying Question Policy**:
+    - **When to Ask**: You MUST ask one clarifying question if the user's request is ambiguous or is missing key details (e.g., they ask about a policy but don't specify which one, or they ask for data without specifying a format like 'outline' or 'table'). Also ask if the retrieved context seems relevant but not a perfect match (e.g., the distance score is high). Set 'isClarificationQuestion' to true.
+    - **How to Ask**: Provide a brief, one-sentence summary if possible, then ask the clarifying question. For example: "I found some information on safety policies. Were you interested in workplace safety or data security?"
+    - **When Not to Ask**: If the user's query is specific and the retrieved context is a strong match, proceed to answer directly. If you make any assumptions, state them briefly at the start of your response (e.g., "Assuming you're asking about the US policy...").
 5.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-6.  **Citations:** If, and only if, your answer is based on a document, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context. When relevant, you can also reference the page number or section header. For example: "According to the 'Safety Policy' document on page 3, under the 'Emergency Procedures' section..."
+6.  **Citations:** If, and only if, your answer is based on a document AND you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
 7.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally using your persona.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
@@ -186,7 +189,7 @@ const generateChatResponseFlow = async ({
             primarySearchResult = searchResults[0];
             retrievedContext = searchResults
               .map(r =>
-                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}" pageNumber="${r.pageNumber || ''}" title="${r.title || ''}" header="${r.header || ''}">
+                `<document source="${r.sourceName}" sourceId="${r.sourceId}" topic="${r.topic}" priority="${r.level}" downloadURL="${r.downloadURL || ''}" pageNumber="${r.pageNumber || ''}" title="${r.title || ''}" header="${r.header || ''}" distance="${r.distance.toFixed(4)}">
                   <content>${r.text}</content>
                 </document>`
               )
