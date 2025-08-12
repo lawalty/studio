@@ -25,21 +25,26 @@ export const getAppConfig = async (): Promise<AppConfig> => {
     try {
         const docRef = db.doc(FIRESTORE_CONFIG_PATH);
         const docSnap = await docRef.get();
-        if (docSnap.exists()) {
+        if (docSnap.exists) { // <-- CORRECTED: Changed from exists() to exists
             const data = docSnap.data();
-            // Ensure the fetched value is a number, otherwise use the default.
             const threshold = typeof data?.distanceThreshold === 'number'
                 ? data.distanceThreshold
                 : DEFAULT_DISTANCE_THRESHOLD;
+            
+            // Success log: Log the threshold being used.
+            console.log(`[getAppConfig] Successfully loaded config. Using distanceThreshold: ${threshold}`);
+
             return {
                 distanceThreshold: threshold,
             };
+        } else {
+            // Explicit warning if the document is not found.
+            console.warn(`[getAppConfig] Firestore document not found at '${FIRESTORE_CONFIG_PATH}'. Using default distanceThreshold: ${DEFAULT_DISTANCE_THRESHOLD}`);
+            return { distanceThreshold: DEFAULT_DISTANCE_THRESHOLD };
         }
-        // Return default if no config document is found.
-        return { distanceThreshold: DEFAULT_DISTANCE_THRESHOLD };
     } catch (error) {
-        console.error("[getAppConfig] Error fetching config from Firestore, using default. Error:", error);
-        // Fallback to default in case of any read error.
+        // Enhanced error logging.
+        console.error(`[getAppConfig] CRITICAL: Failed to fetch config from Firestore at '${FIRESTORE_CONFIG_PATH}'. Falling back to default.`, error);
         return { distanceThreshold: DEFAULT_DISTANCE_THRESHOLD };
     }
 };

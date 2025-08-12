@@ -2,7 +2,7 @@
 
 import type { Message } from '@/components/chat/ChatInterface';
 import { cn } from "@/lib/utils";
-import { User, Bot, Download } from 'lucide-react';
+import { User, Bot, Download, Thermometer } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import React, { useEffect, useState } from 'react';
 
@@ -96,9 +96,17 @@ export default function ChatBubble({
           {finalContent}
         </div>
         {renderPdfLink()}
-        <p className={cn("text-xs mt-1", isUser ? "text-primary-foreground/70 text-right" : "text-muted-foreground text-left")}>
-          {formattedTime}
-        </p>
+        <div className="flex justify-between items-center mt-1">
+            <p className={cn("text-xs", isUser ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                {formattedTime}
+            </p>
+            {message.sender === 'model' && typeof message.distanceThreshold === 'number' && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground" title={`RAG Distance Threshold: ${message.distanceThreshold.toFixed(3)}`}>
+                    <Thermometer className="h-3 w-3" />
+                    <span>{message.distanceThreshold.toFixed(2)}</span>
+                </div>
+            )}
+        </div>
       </div>
       {isUser && (
          <Avatar className="h-8 w-8 ml-2 self-start">

@@ -31,6 +31,7 @@ export interface Message {
     fileName: string;
     downloadURL: string;
   };
+  distanceThreshold?: number;
 }
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
@@ -185,8 +186,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         inactivityEndMessage: "It sounds like no one is available, so I'll end our conversation now. Feel free to start a new chat anytime!"
     };
 
-    const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference']) => {
-        const newMessage: Message = { id: uuidv4(), text, sender, timestamp: Date.now(), pdfReference };
+    const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference'], distanceThreshold?: number) => {
+        const newMessage: Message = { id: uuidv4(), text, sender, timestamp: Date.now(), pdfReference, distanceThreshold };
         setMessages(prev => [...prev, newMessage]);
     }, []);
 
@@ -268,7 +269,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setIsBotSpeaking(false);
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             setAnimatedResponse(null);
-            addMessage(fullMessage.text, 'model', fullMessage.pdfReference);
+            addMessage(fullMessage.text, 'model', fullMessage.pdfReference, fullMessage.distanceThreshold);
             onSpeechEnd?.();
         };
 
@@ -472,7 +473,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 text: result.aiResponse,
                 sender: 'model',
                 timestamp: Date.now(),
-                pdfReference: result.pdfReference
+                pdfReference: result.pdfReference,
+                distanceThreshold: result.distanceThreshold,
             };
             
             await speakText(result.aiResponse, aiMessage, () => {
