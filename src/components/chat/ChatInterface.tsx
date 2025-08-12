@@ -252,10 +252,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             onSpeechEnd?.();
             return;
         }
-        
-        const targetStatus = communicationMode === 'audio-only' ? 'speaking' : 'typing';
-        setBotStatus(targetStatus);
-        setStatusMessage(uiText.isTyping); 
 
         // 1. Cancel any ongoing playback/synthesis
         if (audioPlayerRef.current) audioPlayerRef.current.pause();
@@ -298,6 +294,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 return;
             }
         }
+        
+        const targetStatus = communicationMode === 'audio-only' ? 'speaking' : 'typing';
+        setBotStatus(targetStatus);
+        setStatusMessage(targetStatus === 'speaking' ? uiText.isSpeaking : uiText.isTyping);
 
         // 5. Start typing animation if applicable
         if (communicationMode !== 'audio-only') {
@@ -353,8 +353,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         // 6. Play audio if applicable
         if (communicationMode !== 'text-only' && audioDataUri) {
-            setBotStatus('speaking');
-            setStatusMessage(uiText.isSpeaking);
             audioPlayerRef.current!.onended = handleEnd;
             await audioPlayerRef.current!.play().catch(e => {
                 console.error("Audio playback failed:", e);
@@ -431,7 +429,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             
             await speakText(translatedPrompt, promptMessage, () => {
                 if (!hasConversationEnded) {
-                    toggleListening(true);
+                    if (communicationMode === 'audio-only') {
+                        toggleListening(true);
+                    }
                 } else {
                     setBotStatus('idle');
                     setStatusMessage('');
@@ -540,10 +540,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             
             const sourceId = uuidv4();
             const fileName = `Chat-Transcript-${new Date().toISOString().split('T')[0]}.pdf`;
-            const sourceDocRef = doc(db, 'kb_chat_history_meta', sourceId);
+            const sourceDocRef = doc(db, 'kb_meta', sourceId);
             await setDoc(sourceDocRef, { sourceName: fileName, topic: 'Chat History', level: 'Chat History', createdAt: new Date().toISOString(), indexingStatus: 'processing', mimeType: 'application/pdf' });
             
-            const storagePath = `chat_history_files/${sourceId}-${fileName}`;
+            const storagePath = `knowledge_base_files/Chat History/${sourceId}-${fileName}`;
             await uploadBytes(storageRef(storage, storagePath), pdfBlob);
             const downloadURL = await getDownloadURL(storageRef(storage, storagePath));
             await updateDoc(sourceDocRef, { downloadURL });
@@ -628,10 +628,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     useEffect(() => {
         if (!isReady || isInitialized || messages.length > 0) return;
+        
+        setBotStatus('preparing');
+        setStatusMessage(uiText.isPreparing);
 
         const sendInitialGreeting = async () => {
-            setBotStatus('preparing');
-            setStatusMessage(uiText.isPreparing);
             let greetingText = "Hello! How can I help you today?"; 
             try {
                 const { customGreetingMessage, useKnowledgeInGreeting, personaTraits, conversationalTopics } = configRef.current;
@@ -819,7 +820,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         <div className="md:col-span-2 flex flex-col h-full">
           <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={configRef.current.avatarSrc} />
           <MessageInput
-            onSendMessage={(text) => handleSendMessage(text)} isSending={isBotProcessing || isBotSpeaking}
+            onSendMessage={(text) => handleSendMessage(text)} isSending={isBotProcessing || isBotSpeaking} isSpeaking={isBotSpeaking}
             showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
             inputValue={inputValue} onInputValueChange={setInputValue} disabled={hasConversationEnded}
           />
@@ -839,3 +840,4 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 }
 
     
+
