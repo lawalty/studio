@@ -695,7 +695,7 @@ export default function KnowledgeBasePage() {
                     <RadioGroup defaultValue={sourceType} onValueChange={(value) => setSourceType(value as SourceType)} className="grid grid-cols-2 gap-4">
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="PDF" id="r-pdf" />
-                            <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF</Label>
+                            <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF / DOCX</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="Text" id="r-text" />
