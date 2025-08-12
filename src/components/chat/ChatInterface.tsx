@@ -36,7 +36,7 @@ export interface Message {
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config"; // Corrected path
+const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 const DEFAULT_STYLE_VALUE = 50;
@@ -408,7 +408,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             let promptText;
             if (inactivityCheckLevelRef.current === 1) {
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
             } else if (inactivityCheckLevelRef.current === 2) {
                 promptText = uiText.inactivityPromptSecondary;
             } else {
@@ -560,11 +560,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         const fetchAllData = async () => {
           try {
             const siteAssetsSnap = await getDoc(doc(db, FIRESTORE_SITE_ASSETS_PATH));
-            const appConfigSnap = await getDoc(doc(db, FIRESTORE_APP_CONFIG_PATH)); // Use corrected path
+            const appConfigSnap = await getDoc(doc(db, FIRESTORE_APP_CONFIG_PATH));
 
             if (isMountedRef.current) {
                 const assets = siteAssetsSnap.exists() ? siteAssetsSnap.data() : {};
-                const appConfig = appConfigSnap.exists() ? appConfigSnap.data() : {}; // Use appConfig
+                const appConfig = appConfigSnap.exists() ? appConfigSnap.data() : {};
 
                 configRef.current = {
                     avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
@@ -581,9 +581,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     conciseness: assets.conciseness ?? DEFAULT_STYLE_VALUE,
                     tone: assets.tone ?? DEFAULT_STYLE_VALUE,
                     formatting: assets.formatting ?? DEFAULT_STYLE_VALUE,
-                    ttsApiKey: appConfig.tts || '', // Read from appConfig
-                    ttsVoiceId: appConfig.voiceId || '', // Read from appConfig
-                    useCustomTts: typeof appConfig.useTtsApi === 'boolean' ? appConfig.useTtsApi : false, // Read from appConfig
+                    ttsApiKey: appConfig.tts || '',
+                    ttsVoiceId: appConfig.voiceId || '',
+                    useCustomTts: typeof appConfig.useTtsApi === 'boolean' ? appConfig.useTtsApi : false,
                     archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
                 };
                 setUiMessage(configRef.current.splashScreenWelcomeMessage);
