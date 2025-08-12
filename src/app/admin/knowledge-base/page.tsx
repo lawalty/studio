@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -15,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromLocalFile } from '@/ai/flows/extract-text-from-local-file-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye, Type, AudioLines, Image as ImageIcon } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -25,8 +26,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 import AdminNav from '@/components/admin/AdminNav';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
+type SourceType = 'Document' | 'Text' | 'Audio' | 'Image';
 
 interface KnowledgeSource {
   id: string;
@@ -263,8 +266,11 @@ export default function KnowledgeBasePage() {
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
+  const [rawTextContent, setRawTextContent] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
+  const [sourceType, setSourceType] = useState<SourceType>('Document');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high-priority');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
@@ -438,8 +444,8 @@ export default function KnowledgeBasePage() {
   }, [toast, setOperationStatus]);
 
   const handleFileUpload = async () => {
-    if (!selectedFile || !selectedTopicForUpload || !selectedLevelForUpload) {
-        toast({ title: "Missing Information", description: "Please select a file, topic, and priority level.", variant: "destructive" });
+    if ((!selectedFile && !rawTextContent) || !selectedTopicForUpload || !selectedLevelForUpload) {
+        toast({ title: "Missing Information", description: "Please provide a source (file or text), topic, and priority level.", variant: "destructive" });
         return;
     }
     if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
@@ -451,35 +457,65 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
 
-    const fileToUpload = selectedFile;
+    let fileToUpload: File;
+    let textToProcess: string | null = null;
+    let fileName: string;
+    let mimeType: string;
+
+    if (sourceType === 'Text') {
+        if (rawTextContent) {
+            textToProcess = rawTextContent;
+            fileName = `${topic.replace(/\s+/g, '-')}-${sourceId.substring(0, 8)}.txt`;
+            fileToUpload = new File([rawTextContent], fileName, { type: 'text/plain' });
+            mimeType = 'text/plain';
+        } else if (selectedFile) {
+            fileToUpload = selectedFile;
+            fileName = selectedFile.name;
+            mimeType = selectedFile.type || 'text/plain';
+        } else {
+             toast({ title: "Missing Text", description: "Please either paste text or select a .txt file.", variant: "destructive" });
+             setIsCurrentlyUploading(false); setOperationStatus(sourceId, false); return;
+        }
+    } else {
+        if (!selectedFile) {
+            toast({ title: "Missing File", description: "Please select a file to upload.", variant: "destructive" });
+            setIsCurrentlyUploading(false); setOperationStatus(sourceId, false); return;
+        }
+        fileToUpload = selectedFile;
+        fileName = selectedFile.name;
+        mimeType = fileToUpload.type || 'application/octet-stream';
+    }
+    
     const targetLevel = selectedLevelForUpload;
     const topic = selectedTopicForUpload;
     const description = uploadDescription;
-    const mimeType = fileToUpload.type || 'application/octet-stream';
     
     const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
     try {
         const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
-            sourceName: fileToUpload.name, description,
+            sourceName: fileName, description,
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
-            indexingError: 'Extracting text from document...',
+            indexingError: 'Extracting text from source...',
             mimeType,
             level: targetLevel,
             topic: topic,
         };
         await setDoc(sourceDocRef, newSourceData);
 
-        // Step 1: Extract text on the client-side first.
-        const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
-        if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-            throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
+        // Step 1: Extract text. Use provided text if available, otherwise extract from file.
+        if (textToProcess === null) {
+            const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
+            if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+                throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
+            }
+            textToProcess = extractionResult.extractedText;
         }
         
-        // Step 2: If extraction is successful, upload the file to storage.
+        // Step 2: Upload the original file/generated text file to storage.
         await updateDoc(sourceDocRef, { indexingError: 'Uploading file to storage...' });
-        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileName}`;
         const fileRef = storageRef(storage, storagePath);
         await uploadBytes(fileRef, fileToUpload);
         const downloadURL = await getDownloadURL(fileRef);
@@ -488,8 +524,8 @@ export default function KnowledgeBasePage() {
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Indexing content...' });
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
-            sourceName: fileToUpload.name,
-            text: extractionResult.extractedText,
+            sourceName: fileName,
+            text: textToProcess,
             level: targetLevel,
             topic,
             downloadURL
@@ -503,9 +539,11 @@ export default function KnowledgeBasePage() {
             throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
         }
         
-        toast({ title: "Success!", description: `"${fileToUpload.name}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
+        toast({ title: "Success!", description: `"${fileName}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
         
+        // Reset form
         setSelectedFile(null);
+        setRawTextContent('');
         setUploadDescription('');
         setLinkedEnglishSourceIdForUpload('');
         if (fileInputRef.current) {
@@ -514,7 +552,7 @@ export default function KnowledgeBasePage() {
 
     } catch (e: any) {
         const errorMessage = e.message || 'An unknown error occurred.';
-        console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
+        console.error(`[handleUpload] Error for ${fileName}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
 
         try {
@@ -570,6 +608,22 @@ export default function KnowledgeBasePage() {
       }
   }, [toast, setOperationStatus]);
   
+  const getFileInputAccept = () => {
+      switch (sourceType) {
+          case 'Document':
+              return '.pdf,.doc,.docx,.txt';
+          case 'Text':
+              return '.txt';
+          case 'Audio':
+              return 'audio/*';
+          case 'Image':
+              return 'image/*';
+          default:
+              return '*/*';
+      }
+  };
+
+
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
       <AdminNav />
@@ -589,10 +643,49 @@ export default function KnowledgeBasePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="file-upload">File</Label>
-                <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} />
-              </div>
+                <div className="space-y-2">
+                    <Label>Source Type</Label>
+                    <RadioGroup defaultValue={sourceType} onValueChange={(value) => setSourceType(value as SourceType)} className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="Document" id="r-doc" />
+                            <Label htmlFor="r-doc" className="flex items-center gap-2"><FileText size={16}/> Document</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="Text" id="r-text" />
+                            <Label htmlFor="r-text" className="flex items-center gap-2"><Type size={16}/> Text</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="Audio" id="r-audio" />
+                            <Label htmlFor="r-audio" className="flex items-center gap-2"><AudioLines size={16}/> Audio</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="Image" id="r-image" />
+                            <Label htmlFor="r-image" className="flex items-center gap-2"><ImageIcon size={16}/> Image</Label>
+                        </div>
+                    </RadioGroup>
+                </div>
+
+                {sourceType === 'Text' && (
+                    <div className="space-y-2">
+                        <Label htmlFor="raw-text-content">Paste Text</Label>
+                        <Textarea 
+                          id="raw-text-content" 
+                          rows={8} 
+                          placeholder="Paste your text content here..."
+                          value={rawTextContent}
+                          onChange={(e) => setRawTextContent(e.target.value)}
+                        />
+                        <p className="text-center text-xs text-muted-foreground">OR</p>
+                    </div>
+                )}
+                
+                <div className="space-y-2">
+                    <Label htmlFor="file-upload">
+                        {sourceType === 'Text' ? 'Upload a .txt file' : `Upload ${sourceType} File`}
+                    </Label>
+                    <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept={getFileInputAccept()} />
+                </div>
+
                <div className="space-y-2">
                   <Label>Topic</Label>
                   <Select value={selectedTopicForUpload} onValueChange={setSelectedTopicForUpload}>
@@ -640,7 +733,7 @@ export default function KnowledgeBasePage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={handleFileUpload} disabled={!selectedFile || anyOperationGloballyInProgress || !selectedTopicForUpload || isCurrentlyUploading}>
+              <Button onClick={handleFileUpload} disabled={(!selectedFile && sourceType !== 'Text') || (sourceType === 'Text' && !selectedFile && !rawTextContent) || anyOperationGloballyInProgress || !selectedTopicForUpload || isCurrentlyUploading}>
                 {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                 Upload and Process
               </Button>
@@ -668,3 +761,4 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
