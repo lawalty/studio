@@ -29,7 +29,7 @@ import AdminNav from '@/components/admin/AdminNav';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
-type SourceType = 'Document' | 'Text' | 'Audio' | 'Image';
+type SourceType = 'PDF' | 'Text' | 'Audio' | 'Image';
 
 interface KnowledgeSource {
   id: string;
@@ -270,7 +270,7 @@ export default function KnowledgeBasePage() {
   const [audioTranscription, setAudioTranscription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
-  const [sourceType, setSourceType] = useState<SourceType>('Document');
+  const [sourceType, setSourceType] = useState<SourceType>('PDF');
   const [isListeningForUpload, setIsListeningForUpload] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -448,7 +448,7 @@ export default function KnowledgeBasePage() {
 
     const handleFileUpload = async () => {
     let hasContent = false;
-    if (sourceType === 'Document' || sourceType === 'Image') hasContent = !!selectedFile;
+    if (sourceType === 'PDF' || sourceType === 'Image') hasContent = !!selectedFile;
     if (sourceType === 'Text') hasContent = !!rawTextContent || !!selectedFile;
     if (sourceType === 'Audio') hasContent = !!audioTranscription || !!selectedFile;
     
@@ -609,8 +609,8 @@ export default function KnowledgeBasePage() {
   
     const getFileInputAccept = () => {
       switch (sourceType) {
-          case 'Document':
-              return '.pdf,.doc,.docx,.txt';
+          case 'PDF':
+              return '.pdf,.doc,.docx';
           case 'Text':
               return '.txt';
           case 'Audio':
@@ -694,8 +694,8 @@ export default function KnowledgeBasePage() {
                     <Label>Source Type</Label>
                     <RadioGroup defaultValue={sourceType} onValueChange={(value) => setSourceType(value as SourceType)} className="grid grid-cols-2 gap-4">
                         <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="Document" id="r-doc" />
-                            <Label htmlFor="r-doc" className="flex items-center gap-2"><FileText size={16}/> Document</Label>
+                            <RadioGroupItem value="PDF" id="r-pdf" />
+                            <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="Text" id="r-text" />
@@ -756,7 +756,7 @@ export default function KnowledgeBasePage() {
                         {sourceType === 'Text' && 'Upload a .txt file'}
                         {sourceType === 'Audio' && 'Upload an Audio File'}
                         {sourceType === 'Image' && 'Upload an Image File'}
-                        {sourceType === 'Document' && 'Upload a Document'}
+                        {sourceType === 'PDF' && 'Upload a PDF/DOCX Document'}
                     </Label>
                     <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept={getFileInputAccept()} />
                 </div>
