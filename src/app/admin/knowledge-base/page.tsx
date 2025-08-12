@@ -538,28 +538,29 @@ export default function KnowledgeBasePage() {
       toast({ title: `Moving ${source.sourceName} to ${newLevel}...` });
 
       try {
-          const oldDocRef = doc(db, 'kb_meta', source.id);
-          const docSnap = await getDoc(oldDocRef);
-
-          if (!docSnap.exists()) {
-            throw new Error("Original source document not found to move.");
-          }
+          const sourceDocRef = doc(db, 'kb_meta', source.id);
           
-          const docRef = doc(db, 'kb_meta', source.id);
-          await updateDoc(docRef, { level: newLevel });
+          // Start a batched write
+          const batch = writeBatch(db);
 
-          const chunksCollectionRef = oldDocRef.collection('kb_chunks');
+          // 1. Update the main metadata document
+          batch.update(sourceDocRef, { level: newLevel });
+          
+          // 2. Query all associated chunks in the subcollection
+          const chunksCollectionRef = collection(db, 'kb_meta', source.id, 'kb_chunks');
           const chunksSnapshot = await getDocs(chunksCollectionRef);
 
+          // 3. Add an update for each chunk to the batch
           if (!chunksSnapshot.empty) {
-            const writeBatchForMove = writeBatch(db);
             chunksSnapshot.forEach(chunkDoc => {
-                writeBatchForMove.update(chunkDoc.ref, { level: newLevel });
+                batch.update(chunkDoc.ref, { level: newLevel });
             });
-            await writeBatchForMove.commit();
           }
 
-          toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}.`, variant: "default" });
+          // 4. Commit the entire batch at once
+          await batch.commit();
+
+          toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}. All ${chunksSnapshot.size} chunks were updated.`, variant: "default" });
 
       } catch (error: any) {
           console.error("Error moving source:", error);
