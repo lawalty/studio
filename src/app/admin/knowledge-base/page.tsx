@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromLocalFile } from '@/ai/flows/extract-text-from-local-file-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye, Type, AudioLines, Image as ImageIcon } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye, Type, AudioLines, Image as ImageIcon, Mic, Square } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -267,11 +267,14 @@ export default function KnowledgeBasePage() {
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
   const [rawTextContent, setRawTextContent] = useState('');
+  const [audioTranscription, setAudioTranscription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
   const [sourceType, setSourceType] = useState<SourceType>('Document');
+  const [isListeningForUpload, setIsListeningForUpload] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
   const [activeAccordionItem, setActiveAccordionItem] = useState<string>('high-priority');
   const [operationInProgress, setOperationInProgress] = useState<Record<string, boolean>>({});
   
@@ -443,9 +446,14 @@ export default function KnowledgeBasePage() {
       }
   }, [toast, setOperationStatus]);
 
-  const handleFileUpload = async () => {
-    if ((!selectedFile && !rawTextContent) || !selectedTopicForUpload || !selectedLevelForUpload) {
-        toast({ title: "Missing Information", description: "Please provide a source (file or text), topic, and priority level.", variant: "destructive" });
+    const handleFileUpload = async () => {
+    let hasContent = false;
+    if (sourceType === 'Document' || sourceType === 'Image') hasContent = !!selectedFile;
+    if (sourceType === 'Text') hasContent = !!rawTextContent || !!selectedFile;
+    if (sourceType === 'Audio') hasContent = !!audioTranscription || !!selectedFile;
+    
+    if (!hasContent || !selectedTopicForUpload || !selectedLevelForUpload) {
+        toast({ title: "Missing Information", description: "Please provide a source (file, text, or transcription), topic, and priority level.", variant: "destructive" });
         return;
     }
     if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
@@ -457,38 +465,34 @@ export default function KnowledgeBasePage() {
     setOperationStatus(sourceId, true);
     setIsCurrentlyUploading(true);
 
-    let fileToUpload: File;
+    let fileToUpload: File | null = null;
     let textToProcess: string | null = null;
     let fileName: string;
     let mimeType: string;
 
-    if (sourceType === 'Text') {
-        if (rawTextContent) {
-            textToProcess = rawTextContent;
-            fileName = `${topic.replace(/\s+/g, '-')}-${sourceId.substring(0, 8)}.txt`;
-            fileToUpload = new File([rawTextContent], fileName, { type: 'text/plain' });
-            mimeType = 'text/plain';
-        } else if (selectedFile) {
-            fileToUpload = selectedFile;
-            fileName = selectedFile.name;
-            mimeType = selectedFile.type || 'text/plain';
-        } else {
-             toast({ title: "Missing Text", description: "Please either paste text or select a .txt file.", variant: "destructive" });
-             setIsCurrentlyUploading(false); setOperationStatus(sourceId, false); return;
-        }
+    const topic = selectedTopicForUpload;
+    const description = uploadDescription;
+    const targetLevel = selectedLevelForUpload;
+
+    if (sourceType === 'Text' && rawTextContent) {
+        textToProcess = rawTextContent;
+        fileName = `${topic.replace(/\s+/g, '-')}-${sourceId.substring(0, 8)}.txt`;
+        fileToUpload = new File([rawTextContent], fileName, { type: 'text/plain' });
+        mimeType = 'text/plain';
+    } else if (sourceType === 'Audio' && audioTranscription) {
+        textToProcess = audioTranscription;
+        fileName = `Live-Transcription-${sourceId.substring(0, 8)}.txt`;
+        fileToUpload = new File([audioTranscription], fileName, { type: 'text/plain' });
+        mimeType = 'text/plain';
     } else {
         if (!selectedFile) {
             toast({ title: "Missing File", description: "Please select a file to upload.", variant: "destructive" });
             setIsCurrentlyUploading(false); setOperationStatus(sourceId, false); return;
         }
         fileToUpload = selectedFile;
-        fileName = selectedFile.name;
+        fileName = fileToUpload.name;
         mimeType = fileToUpload.type || 'application/octet-stream';
     }
-    
-    const targetLevel = selectedLevelForUpload;
-    const topic = selectedTopicForUpload;
-    const description = uploadDescription;
     
     const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
@@ -504,23 +508,24 @@ export default function KnowledgeBasePage() {
         };
         await setDoc(sourceDocRef, newSourceData);
 
-        // Step 1: Extract text. Use provided text if available, otherwise extract from file.
-        if (textToProcess === null) {
+        if (textToProcess === null && fileToUpload) {
             const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
             if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-                throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
+                throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content.');
             }
             textToProcess = extractionResult.extractedText;
         }
+
+        if (!textToProcess) {
+            throw new Error("Could not determine text content for indexing.");
+        }
         
-        // Step 2: Upload the original file/generated text file to storage.
         await updateDoc(sourceDocRef, { indexingError: 'Uploading file to storage...' });
         const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileName}`;
         const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload);
+        await uploadBytes(fileRef, fileToUpload!);
         const downloadURL = await getDownloadURL(fileRef);
 
-        // Step 3: Now that we have the text and URL, call the server-side indexing flow.
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Indexing content...' });
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
@@ -544,6 +549,7 @@ export default function KnowledgeBasePage() {
         // Reset form
         setSelectedFile(null);
         setRawTextContent('');
+        setAudioTranscription('');
         setUploadDescription('');
         setLinkedEnglishSourceIdForUpload('');
         if (fileInputRef.current) {
@@ -578,26 +584,19 @@ export default function KnowledgeBasePage() {
       try {
           const sourceDocRef = doc(db, 'kb_meta', source.id);
           
-          // Start a batched write
           const batch = writeBatch(db);
-
-          // 1. Update the main metadata document
           batch.update(sourceDocRef, { level: newLevel });
           
-          // 2. Query all associated chunks in the subcollection
           const chunksCollectionRef = collection(db, 'kb_meta', source.id, 'kb_chunks');
           const chunksSnapshot = await getDocs(chunksCollectionRef);
 
-          // 3. Add an update for each chunk to the batch
           if (!chunksSnapshot.empty) {
             chunksSnapshot.forEach(chunkDoc => {
                 batch.update(chunkDoc.ref, { level: newLevel });
             });
           }
 
-          // 4. Commit the entire batch at once
           await batch.commit();
-
           toast({ title: "Move Successful", description: `${source.sourceName} moved to ${newLevel}. All ${chunksSnapshot.size} chunks were updated.`, variant: "default" });
 
       } catch (error: any) {
@@ -608,20 +607,68 @@ export default function KnowledgeBasePage() {
       }
   }, [toast, setOperationStatus]);
   
-  const getFileInputAccept = () => {
+    const getFileInputAccept = () => {
       switch (sourceType) {
           case 'Document':
               return '.pdf,.doc,.docx,.txt';
           case 'Text':
               return '.txt';
           case 'Audio':
-              return 'audio/*';
+              return 'audio/*,.mp3,.wav';
           case 'Image':
               return 'image/*';
           default:
               return '*/*';
       }
-  };
+    };
+    
+    // Setup Speech Recognition
+    useEffect(() => {
+        const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognitionAPI) {
+            console.warn("Speech Recognition API not supported in this browser.");
+            return;
+        }
+
+        recognitionRef.current = new SpeechRecognitionAPI();
+        const recognition = recognitionRef.current;
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US'; 
+
+        recognition.onresult = (event: any) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            setAudioTranscription(finalTranscript + interimTranscript);
+        };
+
+        recognition.onend = () => {
+            setIsListeningForUpload(false);
+        };
+
+        recognition.onerror = (event: any) => {
+            console.error("Speech Recognition Error:", event.error);
+            toast({ title: "Microphone Error", description: event.error, variant: "destructive" });
+            setIsListeningForUpload(false);
+        };
+
+    }, [toast]);
+    
+    const handleToggleListening = () => {
+        if (isListeningForUpload) {
+            recognitionRef.current?.stop();
+        } else {
+            recognitionRef.current?.start();
+        }
+        setIsListeningForUpload(!isListeningForUpload);
+    };
 
 
   return (
@@ -679,9 +726,37 @@ export default function KnowledgeBasePage() {
                     </div>
                 )}
                 
+                {sourceType === 'Audio' && (
+                    <div className="space-y-2">
+                        <Label htmlFor="audio-transcription">Live Transcription</Label>
+                        <div className="relative">
+                            <Textarea 
+                              id="audio-transcription" 
+                              rows={8} 
+                              placeholder="Click the microphone to start transcribing, or paste text here..."
+                              value={audioTranscription}
+                              onChange={(e) => setAudioTranscription(e.target.value)}
+                            />
+                            <Button 
+                                type="button" 
+                                size="icon"
+                                variant={isListeningForUpload ? "destructive" : "outline"}
+                                className="absolute bottom-2 right-2"
+                                onClick={handleToggleListening}
+                            >
+                                {isListeningForUpload ? <Square size={16} /> : <Mic size={16} />}
+                            </Button>
+                        </div>
+                        <p className="text-center text-xs text-muted-foreground">OR</p>
+                    </div>
+                )}
+
                 <div className="space-y-2">
                     <Label htmlFor="file-upload">
-                        {sourceType === 'Text' ? 'Upload a .txt file' : `Upload ${sourceType} File`}
+                        {sourceType === 'Text' && 'Upload a .txt file'}
+                        {sourceType === 'Audio' && 'Upload an Audio File'}
+                        {sourceType === 'Image' && 'Upload an Image File'}
+                        {sourceType === 'Document' && 'Upload a Document'}
                     </Label>
                     <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept={getFileInputAccept()} />
                 </div>
@@ -733,7 +808,7 @@ export default function KnowledgeBasePage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={handleFileUpload} disabled={(!selectedFile && sourceType !== 'Text') || (sourceType === 'Text' && !selectedFile && !rawTextContent) || anyOperationGloballyInProgress || !selectedTopicForUpload || isCurrentlyUploading}>
+              <Button onClick={handleFileUpload} disabled={anyOperationGloballyInProgress || !selectedTopicForUpload || isCurrentlyUploading}>
                 {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                 Upload and Process
               </Button>
@@ -761,4 +836,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
