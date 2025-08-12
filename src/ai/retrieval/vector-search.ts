@@ -1,8 +1,7 @@
 /**
- * @fileOverview Performs a vector-based semantic search.
- * This implementation manually calculates the distance between a query's
- * embedding and all the chunks in the knowledge base. It is intended
- * as a diagnostic tool to bypass potential issues with Firestore's
+ * @fileOverview Performs a vector-based semantic search by manually iterating
+ * through all chunks in the knowledge base and calculating the distance. This
+ * approach is used for diagnostics to bypass potential issues with Firestore's
  * native vector index.
  */
 import { admin } from '@/lib/firebase-admin';
@@ -30,7 +29,8 @@ interface SearchParams {
 const firestore = admin.firestore();
 
 /**
- * Searches the knowledge base by manually calculating vector distances.
+ * Searches the knowledge base by manually calculating vector distances
+ * across all chunks using an efficient collection group query.
  * @param {SearchParams} params - The search parameters.
  * @returns {Promise<SearchResult[]>} A promise that resolves to an array of search results.
  */
@@ -57,15 +57,17 @@ export async function searchKnowledgeBase({
     throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
   }
 
-  // Use a collection group query to efficiently get all chunks at once.
+  // Use a collection group query to efficiently get all chunks from all
+  // subcollections named 'kb_chunks' at once. This is much faster.
   const chunksSnapshot = await firestore.collectionGroup('kb_chunks').get();
 
   chunksSnapshot.forEach(doc => {
       const data = doc.data();
       const storedEmbedding = data.embedding;
 
-      if (!storedEmbedding || storedEmbedding.length !== 768) {
-          return; // Skip chunks with invalid embeddings
+      if (!storedEmbedding || !Array.isArray(storedEmbedding) || storedEmbedding.length !== 768) {
+          // Skip chunks that have missing or malformed embeddings.
+          return;
       }
       
       // Manually calculate Euclidean distance
@@ -75,6 +77,8 @@ export async function searchKnowledgeBase({
       }
       const distance = Math.sqrt(sumOfSquares);
 
+      // Only include results that are within the specified threshold.
+      // This filtering is now done here based on the centralized refactor.
       if (distance <= distanceThreshold) {
         results.push({
           distance: distance,
