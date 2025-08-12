@@ -1,6 +1,9 @@
 /**
- * @fileOverview Performs a vector-based semantic search using Firestore's
- * native vector search capabilities.
+ * @fileOverview Performs a vector-based semantic search.
+ * This implementation manually calculates the distance between a query's
+ * embedding and all the chunks in the knowledge base. It is intended
+ * as a diagnostic tool to bypass potential issues with Firestore's
+ * native vector index.
  */
 import { admin } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
@@ -27,7 +30,7 @@ interface SearchParams {
 const firestore = admin.firestore();
 
 /**
- * Searches the 'kb_chunks' collection group using Firestore's native vector search.
+ * Searches the knowledge base by manually calculating vector distances.
  * @param {SearchParams} params - The search parameters.
  * @returns {Promise<SearchResult[]>} A promise that resolves to an array of search results.
  */
@@ -36,6 +39,9 @@ export async function searchKnowledgeBase({
   limit = 10,
   distanceThreshold,
 }: SearchParams): Promise<SearchResult[]> {
+
+  const results: SearchResult[] = [];
+
   const processedQuery = preprocessText(query);
   if (!processedQuery) {
     return []; // Return empty if query is empty after processing
@@ -43,7 +49,7 @@ export async function searchKnowledgeBase({
 
   const embeddingResponse = await ai.embed({
     embedder: 'googleai/text-embedding-004',
-    content: processedQuery,
+    content: processedQuery
   });
 
   const queryEmbedding = embeddingResponse?.[0]?.embedding;
@@ -51,40 +57,40 @@ export async function searchKnowledgeBase({
     throw new Error(`Failed to generate a valid 768-dimension embedding for the query.`);
   }
 
-  const chunksCollection = firestore.collectionGroup('kb_chunks');
-  const vectorQuery = chunksCollection.findNearest('embedding', queryEmbedding, {
-    limit: limit,
-    distanceMeasure: 'COSINE',
-  });
+  // Use a collection group query to efficiently get all chunks at once.
+  const chunksSnapshot = await firestore.collectionGroup('kb_chunks').get();
 
-  const querySnapshot = await vectorQuery.get();
-
-  const results: SearchResult[] = [];
-  querySnapshot.forEach(doc => {
-    // The distance is a direct property on the snapshot documents in a vector query
-    const distance = (doc as any).distance;
-    
-    // Filter results by the dynamic distance threshold from the config.
-    // Note: For COSINE distance, a smaller value means a closer match.
-    if (distance <= distanceThreshold) {
+  chunksSnapshot.forEach(doc => {
       const data = doc.data();
-      results.push({
-        distance: distance,
-        sourceId: data.sourceId,
-        text: data.text,
-        sourceName: data.sourceName,
-        level: data.level,
-        topic: data.topic,
-        downloadURL: data.downloadURL,
-        pageNumber: data.pageNumber,
-        title: data.title,
-        header: data.header,
-      });
-    }
+      const storedEmbedding = data.embedding;
+
+      if (!storedEmbedding || storedEmbedding.length !== 768) {
+          return; // Skip chunks with invalid embeddings
+      }
+      
+      // Manually calculate Euclidean distance
+      let sumOfSquares = 0;
+      for (let i = 0; i < queryEmbedding.length; i++) {
+        sumOfSquares += Math.pow(storedEmbedding[i] - queryEmbedding[i], 2);
+      }
+      const distance = Math.sqrt(sumOfSquares);
+
+      if (distance <= distanceThreshold) {
+        results.push({
+          distance: distance,
+          sourceId: data.sourceId,
+          text: data.text,
+          sourceName: data.sourceName,
+          level: data.level,
+          topic: data.topic,
+          downloadURL: data.downloadURL,
+          pageNumber: data.pageNumber,
+          title: data.title,
+          header: data.header,
+        });
+      }
   });
 
-  // Firestore's findNearest already returns results sorted by distance,
-  // so an additional sort is not strictly necessary unless you want to reverse it.
-  // The default order (ascending distance) is correct.
-  return results;
+  // Sort by distance (ascending, so smaller is better) and then limit the results.
+  return results.sort((a, b) => a.distance - b.distance).slice(0, limit);
 }
