@@ -24,6 +24,7 @@ import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embeddi
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
 import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
+import AdminNav from '@/components/admin/AdminNav';
 
 
 const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
@@ -372,6 +373,7 @@ export default function PersonaPage() {
 
   return (
     <div className="space-y-6">
+      <AdminNav />
       <Card>
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><Bot /> AI Persona &amp; Main Settings</CardTitle>

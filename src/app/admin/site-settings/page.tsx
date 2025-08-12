@@ -15,6 +15,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import AdminNav from '@/components/admin/AdminNav';
 
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -292,6 +293,7 @@ Please check your environment variables and Google Cloud Console settings.`;
 
   return (
     <div className="space-y-6">
+       <AdminNav />
        {configError ? (
         <Alert variant="destructive" className="mb-6">
             <AlertTriangle className="h-4 w-4" />

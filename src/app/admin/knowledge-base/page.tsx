@@ -25,6 +25,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
+import AdminNav from '@/components/admin/AdminNav';
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
 
@@ -572,6 +573,7 @@ export default function KnowledgeBasePage() {
   
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
+      <AdminNav />
       <div>
         <h1 className="text-3xl font-bold font-headline text-primary">Knowledge Base Management</h1>
         <p className="text-muted-foreground">

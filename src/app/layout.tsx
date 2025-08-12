@@ -25,12 +25,8 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.variable}>
         <LanguageProvider>
-          <ConditionalLayout>
-            <main className="flex-grow flex flex-col">
-              {children}
-            </main>
-            <Toaster />
-          </ConditionalLayout>
+           <ConditionalLayout>{children}</ConditionalLayout>
+           <Toaster />
         </LanguageProvider>
       </body>
     </html>

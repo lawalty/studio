@@ -22,6 +22,7 @@ import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
+import AdminNav from '@/components/admin/AdminNav';
 
 interface AppConfig {
   tts: string;
@@ -230,6 +231,7 @@ export default function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
+      <AdminNav />
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">API Key &amp; Services Management</CardTitle>
