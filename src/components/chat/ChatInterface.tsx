@@ -36,7 +36,7 @@ export interface Message {
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png?text=GIF";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config"; // Corrected path
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 const DEFAULT_STYLE_VALUE = 50;
@@ -408,7 +408,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             let promptText;
             if (inactivityCheckLevelRef.current === 1) {
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+                promptText = uiText.inactivityPrompt : uiText.inactivityPromptInitial;
             } else if (inactivityCheckLevelRef.current === 2) {
                 promptText = uiText.inactivityPromptSecondary;
             } else {
@@ -560,18 +560,18 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         const fetchAllData = async () => {
           try {
             const siteAssetsSnap = await getDoc(doc(db, FIRESTORE_SITE_ASSETS_PATH));
-            const keysSnap = await getDoc(doc(db, FIRESTORE_KEYS_PATH));
+            const appConfigSnap = await getDoc(doc(db, FIRESTORE_APP_CONFIG_PATH)); // Use corrected path
 
             if (isMountedRef.current) {
                 const assets = siteAssetsSnap.exists() ? siteAssetsSnap.data() : {};
-                const keys = keysSnap.exists() ? keysSnap.data() : {};
+                const appConfig = appConfigSnap.exists() ? appConfigSnap.data() : {}; // Use appConfig
 
                 configRef.current = {
                     avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
                     animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
                     personaTraits: assets.personaTraits || configRef.current.personaTraits,
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
+                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? configRef.current.responsePauseTimeMs,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
@@ -581,9 +581,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     conciseness: assets.conciseness ?? DEFAULT_STYLE_VALUE,
                     tone: assets.tone ?? DEFAULT_STYLE_VALUE,
                     formatting: assets.formatting ?? DEFAULT_STYLE_VALUE,
-                    ttsApiKey: keys.tts || '',
-                    ttsVoiceId: keys.voiceId || '',
-                    useCustomTts: typeof keys.useTtsApi === 'boolean' ? keys.useTtsApi : false,
+                    ttsApiKey: appConfig.tts || '', // Read from appConfig
+                    ttsVoiceId: appConfig.voiceId || '', // Read from appConfig
+                    useCustomTts: typeof appConfig.useTtsApi === 'boolean' ? appConfig.useTtsApi : false, // Read from appConfig
                     archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
                 };
                 setUiMessage(configRef.current.splashScreenWelcomeMessage);
