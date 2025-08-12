@@ -29,6 +29,33 @@ interface SearchParams {
 const firestore = admin.firestore();
 
 /**
+ * Calculates the cosine distance between two vectors.
+ * Cosine distance is defined as 1 - cosine similarity.
+ * @param {number[]} vecA - The first vector.
+ * @param {number[]} vecB - The second vector.
+ * @returns {number} The cosine distance, a value between 0 (identical) and 2 (opposite).
+ */
+function cosineDistance(vecA: number[], vecB: number[]): number {
+  let dotProduct = 0;
+  let magA = 0;
+  let magB = 0;
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    magA += vecA[i] * vecA[i];
+    magB += vecB[i] * vecB[i];
+  }
+  magA = Math.sqrt(magA);
+  magB = Math.sqrt(magB);
+
+  if (magA === 0 || magB === 0) {
+    return 1; // Return a neutral distance if one of the vectors is zero.
+  }
+
+  const similarity = dotProduct / (magA * magB);
+  return 1 - similarity;
+}
+
+/**
  * Searches the knowledge base by manually calculating vector distances
  * across all chunks using an efficient collection group query.
  * @param {SearchParams} params - The search parameters.
@@ -64,7 +91,7 @@ export async function searchKnowledgeBase({
   chunksSnapshot.forEach(doc => {
       const data = doc.data();
       
-      // *** FIX: Exclude documents from the 'Archive' level from the search ***
+      // Exclude documents from the 'Archive' level from the search
       if (data.level === 'Archive') {
           return; // Skip this chunk
       }
@@ -76,15 +103,11 @@ export async function searchKnowledgeBase({
           return;
       }
       
-      // Manually calculate Euclidean distance
-      let sumOfSquares = 0;
-      for (let i = 0; i < queryEmbedding.length; i++) {
-        sumOfSquares += Math.pow(storedEmbedding[i] - queryEmbedding[i], 2);
-      }
-      const distance = Math.sqrt(sumOfSquares);
+      // Calculate Cosine Distance
+      const distance = cosineDistance(queryEmbedding, storedEmbedding);
 
       // Only include results that are within the specified threshold.
-      // This filtering is now done here based on the centralized refactor.
+      // A smaller distance means a better match.
       if (distance <= distanceThreshold) {
         results.push({
           distance: distance,
