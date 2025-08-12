@@ -9,7 +9,7 @@
  * - ExtractTextFromLocalFileOutput - The return type.
  */
 import { z } from 'zod';
-import { ai } from '@/ai/genkit'; // Genkit can be used in client components
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Helper function to convert a File object to a Base64 Data URI
 const fileToDataUri = (file: File): Promise<string> => {
@@ -41,25 +41,14 @@ export async function extractTextFromLocalFile(
   { file }: ExtractTextFromLocalFileInput
 ): Promise<ExtractTextFromLocalFileOutput> {
     try {
-      const fileDataUri = await fileToDataUri(file);
-
-      const systemPrompt = `Your task is to extract all human-readable text from the provided document.
-
-CRITICAL INSTRUCTIONS:
-1.  Your primary goal is to perform Optical Character Recognition (OCR) to extract all human-readable text from the document, including text found within images.
-2.  Preserve paragraph breaks and essential formatting like lists.
-3.  Ignore page headers, footers, page numbers, and irrelevant metadata.
-4.  Do NOT add any commentary, preamble, explanation, or summary.
-5.  Do NOT wrap the output in code blocks or any other formatting.
-6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
-
-      const response = await ai.generate({
-        model: 'googleai/gemini-1.5-pro',
-        system: systemPrompt,
-        prompt: [{ media: { url: fileDataUri } }],
-        config: {
-          temperature: 0.1,
-          safetySettings: [
+      const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+      if (!apiKey) {
+        return { error: "GEMINI_API_KEY is not configured in your environment. Please set NEXT_PUBLIC_GEMINI_API_KEY in .env.local" };
+      }
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-pro",
+        safetySettings: [
             {
                 category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
                 threshold: 'BLOCK_NONE',
@@ -76,11 +65,37 @@ CRITICAL INSTRUCTIONS:
                 category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
                 threshold: 'BLOCK_NONE',
             },
-          ]
-        },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+        }
       });
 
-      const extractedText = response.text?.trim();
+      const systemPrompt = `Your task is to extract all human-readable text from the provided document.
+
+CRITICAL INSTRUCTIONS:
+1.  Your primary goal is to perform Optical Character Recognition (OCR) to extract all human-readable text from the document, including text found within images.
+2.  Preserve paragraph breaks and essential formatting like lists.
+3.  Ignore page headers, footers, page numbers, and irrelevant metadata.
+4.  Do NOT add any commentary, preamble, explanation, or summary.
+5.  Do NOT wrap the output in code blocks or any other formatting.
+6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
+
+      const fileDataUri = await fileToDataUri(file);
+      const mimeType = file.type;
+
+      const result = await model.generateContent([
+          systemPrompt,
+          {
+            inlineData: {
+                mimeType,
+                data: fileDataUri.split(',')[1],
+            }
+          }
+      ]);
+      
+      const response = result.response;
+      const extractedText = response.text()?.trim();
 
       if (extractedText) {
         let cleanedText = extractedText.replace(/```[a-z]*/g, '').replace(/```/g, '');

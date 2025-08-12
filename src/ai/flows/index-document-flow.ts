@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
 import { ai } from '@/ai/genkit';
 import { preprocessText } from '@/ai/retrieval/preprocessing';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const IndexDocumentInputSchema = z.object({
   sourceId: z.string().describe('The unique ID of the source document.'),

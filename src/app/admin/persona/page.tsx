@@ -31,7 +31,7 @@ const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?te
 const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_KEYS_PATH = "configurations/api_keys_config";
+const FIRESTORE_KEYS_PATH = "configurations/app_config";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
@@ -336,14 +336,14 @@ export default function PersonaPage() {
     setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
     setSelectedAvatarFile(null); 
     if (avatarInputRef.current) avatarInputRef.current.value = ""; 
-    toast({ title: "Static Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
+    toast({ title: "Static Avatar Preview Reset", description: "Click 'Save All Settings' to make it permanent."});
   };
 
   const handleResetAnimatedAvatar = async () => {
     setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
     setSelectedAnimatedAvatarFile(null); 
     if (animatedAvatarInputRef.current) animatedAvatarInputRef.current.value = ""; 
-    toast({ title: "Animated Avatar Preview Reset", description: "Preview reset. Click 'Save All Settings' to make it permanent."});
+    toast({ title: "Animated Avatar Preview Reset", description: "Click 'Save All Settings' to make it permanent."});
   };
 
   const handleRunTextGenTest = async () => {
