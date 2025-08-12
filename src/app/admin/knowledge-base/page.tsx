@@ -692,10 +692,10 @@ export default function KnowledgeBasePage() {
             <CardContent className="space-y-4">
                 <div className="space-y-2">
                     <Label>Source Type</Label>
-                    <RadioGroup defaultValue={sourceType} onValueChange={(value) => setSourceType(value as SourceType)} className="grid grid-cols-2 gap-4">
+                    <RadioGroup defaultValue={sourceType} onValueChange={(value) => setSourceType(value as SourceType)} className="grid grid-cols-2 justify-items-center gap-4">
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="PDF" id="r-pdf" />
-                            <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF / DOCX</Label>
+                            <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF / Word</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="Text" id="r-text" />
@@ -756,7 +756,7 @@ export default function KnowledgeBasePage() {
                         {sourceType === 'Text' && 'Upload a .txt file'}
                         {sourceType === 'Audio' && 'Upload an Audio File'}
                         {sourceType === 'Image' && 'Upload an Image File'}
-                        {sourceType === 'PDF' && 'Upload a PDF/DOCX Document'}
+                        {sourceType === 'PDF' && 'Upload a PDF/Word Document'}
                     </Label>
                     <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept={getFileInputAccept()} />
                 </div>
@@ -836,3 +836,6 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+
+
+    
