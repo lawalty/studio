@@ -1,12 +1,13 @@
 'use server';
 /**
- * @fileOverview This flow is now DEPRECATED and is not used.
- * Text extraction logic has been moved to the client-side in the new
- * `extract-text-from-local-file-flow.ts` to more reliably handle
- * large files by processing them in the browser before upload.
+ * @fileOverview This flow extracts text from a document available at a public URL.
+ * It's used as a server-side fallback for file types that the client-side
+ * `extractTextFromLocalFile` flow cannot reliably handle, such as .docx files.
  */
 import { z } from 'zod';
 import { ai } from '@/ai/genkit';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
 
 const ExtractTextFromDocumentInputSchema = z.object({
   documentUrl: z.string().url().describe("The public URL of the document to process."),
@@ -22,9 +23,53 @@ export type ExtractTextFromDocumentOutput = z.infer<typeof ExtractTextFromDocume
 export async function extractTextFromDocument(
   { documentUrl }: ExtractTextFromDocumentInput
 ): Promise<ExtractTextFromDocumentOutput> {
-    const message = "This flow is deprecated. Use extractTextFromLocalFile instead.";
-    console.warn(`[extractTextFromDocument] ${message}`);
-    return {
-      error: message
-    };
+    try {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            throw new Error("GEMINI_API_KEY is not configured on the server.");
+        }
+        
+        const response = await fetch(documentUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch document from URL: ${response.statusText}`);
+        }
+        const fileBuffer = await response.arrayBuffer();
+        const fileDataUri = `data:${response.headers.get('content-type') || 'application/octet-stream'};base64,${Buffer.from(fileBuffer).toString('base64')}`;
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-pro",
+            safetySettings: [
+                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            ],
+            generationConfig: { temperature: 0.1 }
+        });
+
+        const systemPrompt = `Your task is to extract all human-readable text from the provided document.
+CRITICAL INSTRUCTIONS:
+1.  Perform OCR to extract all text, including text within images.
+2.  Preserve paragraph breaks and essential formatting.
+3.  Ignore headers, footers, and page numbers.
+4.  Do NOT add any commentary, preamble, or summary.
+5.  Your output MUST ONLY be the clean, extracted text.`;
+
+        const result = await model.generateContent([
+            systemPrompt,
+            { inlineData: { mimeType: 'application/octet-stream', data: fileDataUri.split(',')[1] } }
+        ]);
+        
+        const text = result.response.text()?.trim() ?? '';
+        if (text) {
+            return { extractedText: text.replace(/```[a-z]*/g, '').replace(/```/g, '').trim() };
+        } else {
+            return { error: "Text extraction failed. The document might be empty or unreadable." };
+        }
+      
+    } catch (e: any) {
+      console.error('[extractTextFromDocument] A critical error occurred:', e);
+      return { error: `Server-side text extraction failed: ${e.message}` };
+    }
 }

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -27,9 +26,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import Link from 'next/link';
 import AdminNav from '@/components/admin/AdminNav';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
-type SourceType = 'PDF' | 'Text' | 'Audio' | 'Image';
+type SourceType = 'PDF / Word' | 'Text' | 'Audio' | 'Image';
 
 interface KnowledgeSource {
   id: string;
@@ -270,7 +270,7 @@ export default function KnowledgeBasePage() {
   const [audioTranscription, setAudioTranscription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
-  const [sourceType, setSourceType] = useState<SourceType>('PDF');
+  const [sourceType, setSourceType] = useState<SourceType>('PDF / Word');
   const [isListeningForUpload, setIsListeningForUpload] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -397,14 +397,8 @@ export default function KnowledgeBasePage() {
           
           await updateDoc(sourceDocRef, { indexingError: `This may take a moment. Extracting text...` });
 
-          // Fetch the original file blob from the download URL
-          const response = await fetch(source.downloadURL);
-          if (!response.ok) throw new Error(`Failed to fetch original file from storage. Status: ${response.statusText}`);
-          const fileBlob = await response.blob();
-          const localFile = new File([fileBlob], source.sourceName, { type: source.mimeType || 'application/octet-stream' });
-          
-          // Use the new client-side extraction flow
-          const extractionResult = await extractTextFromLocalFile({ file: localFile });
+          // Step 3: Use the robust server-side extraction flow.
+          const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
   
           if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
               throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
@@ -448,7 +442,7 @@ export default function KnowledgeBasePage() {
 
     const handleFileUpload = async () => {
     let hasContent = false;
-    if (sourceType === 'PDF' || sourceType === 'Image') hasContent = !!selectedFile;
+    if (sourceType === 'PDF / Word' || sourceType === 'Image') hasContent = !!selectedFile;
     if (sourceType === 'Text') hasContent = !!rawTextContent || !!selectedFile;
     if (sourceType === 'Audio') hasContent = !!audioTranscription || !!selectedFile;
     
@@ -501,32 +495,42 @@ export default function KnowledgeBasePage() {
             sourceName: fileName, description,
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
-            indexingError: 'Extracting text from source...',
+            indexingError: 'Uploading file to storage...',
             mimeType,
             level: targetLevel,
             topic: topic,
         };
         await setDoc(sourceDocRef, newSourceData);
 
-        if (textToProcess === null && fileToUpload) {
+        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileName}`;
+        const fileRef = storageRef(storage, storagePath);
+        await uploadBytes(fileRef, fileToUpload!);
+        const downloadURL = await getDownloadURL(fileRef);
+
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text...' });
+        
+        // Use client-side extraction for supported types, otherwise flag for server-side.
+        const isWordDoc = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileName.endsWith('.docx') || fileName.endsWith('.doc');
+
+        if (textToProcess === null && !isWordDoc && fileToUpload) {
             const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
             if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
                 throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content.');
             }
             textToProcess = extractionResult.extractedText;
+        } else if (textToProcess === null && isWordDoc) {
+             const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+             if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
+                 throw new Error(extractionResult?.error || 'Server-side text extraction failed for Word document.');
+             }
+             textToProcess = extractionResult.extractedText;
         }
 
         if (!textToProcess) {
             throw new Error("Could not determine text content for indexing.");
         }
         
-        await updateDoc(sourceDocRef, { indexingError: 'Uploading file to storage...' });
-        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileName}`;
-        const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload!);
-        const downloadURL = await getDownloadURL(fileRef);
-
-        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Indexing content...' });
+        await updateDoc(sourceDocRef, { indexingError: 'Indexing content...' });
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
             sourceName: fileName,
@@ -609,7 +613,7 @@ export default function KnowledgeBasePage() {
   
     const getFileInputAccept = () => {
       switch (sourceType) {
-          case 'PDF':
+          case 'PDF / Word':
               return '.pdf,.doc,.docx';
           case 'Text':
               return '.txt';
@@ -694,7 +698,7 @@ export default function KnowledgeBasePage() {
                     <Label>Source Type</Label>
                     <RadioGroup defaultValue={sourceType} onValueChange={(value) => setSourceType(value as SourceType)} className="grid grid-cols-2 justify-items-center gap-4">
                         <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="PDF" id="r-pdf" />
+                            <RadioGroupItem value="PDF / Word" id="r-pdf" />
                             <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF / Word</Label>
                         </div>
                         <div className="flex items-center space-x-2">
@@ -756,7 +760,7 @@ export default function KnowledgeBasePage() {
                         {sourceType === 'Text' && 'Upload a .txt file'}
                         {sourceType === 'Audio' && 'Upload an Audio File'}
                         {sourceType === 'Image' && 'Upload an Image File'}
-                        {sourceType === 'PDF' && 'Upload a PDF/Word Document'}
+                        {sourceType === 'PDF / Word' && 'Upload a PDF/Word Document'}
                     </Label>
                     <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept={getFileInputAccept()} />
                 </div>
@@ -836,6 +840,3 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
-
-
-    
