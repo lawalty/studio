@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A server function to completely delete a knowledge base source, including

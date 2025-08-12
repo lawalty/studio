@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview A flow to test server-side Firestore write access.

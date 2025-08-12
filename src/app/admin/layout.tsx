@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { ReactNode } from 'react';
@@ -15,9 +14,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   
-  const isLoginPage = pathname === '/admin/login';
   const isAdminPage = pathname.startsWith('/admin');
-  const showAdminNav = isAdminPage && pathname !== '/admin/login' && pathname !== '/admin';
+  const isLoginPage = pathname === '/admin/login';
+  const showAdminNav = isAdminPage && !isLoginPage;
 
   useEffect(() => {
     let auth: any;

@@ -1,4 +1,3 @@
-
 import type { Message } from '@/components/chat/ChatInterface';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";

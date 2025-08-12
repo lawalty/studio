@@ -1,4 +1,3 @@
-
 'use client';
 /**
  * @fileOverview Extracts clean, readable text from a local file object entirely on the client-side.

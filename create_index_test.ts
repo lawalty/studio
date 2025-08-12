@@ -1,4 +1,3 @@
-
 import { admin } from './src/lib/firebase-admin';
 
 async function generateIndexLink() {

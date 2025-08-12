@@ -1,4 +1,3 @@
-
 import { Suspense } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';

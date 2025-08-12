@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { Message } from '@/components/chat/ChatInterface';
