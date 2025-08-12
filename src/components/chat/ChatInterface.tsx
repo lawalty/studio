@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -137,6 +138,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
         personaTraits: "You are IA Blair v2, a knowledgeable and helpful assistant.",
+        personalBio: "I am an AI assistant.",
         conversationalTopics: "",
         splashScreenWelcomeMessage: "Welcome to AI Chat",
         responsePauseTimeMs: 750,
@@ -459,6 +461,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         try {
             const { 
                 personaTraits, 
+                personalBio,
                 conversationalTopics,
                 formality,
                 conciseness,
@@ -467,6 +470,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } = configRef.current;
             const flowInput: GenerateChatResponseInput = {
                 personaTraits,
+                personalBio,
                 conversationalTopics,
                 chatHistory: historyForGenkit,
                 language: language,
@@ -582,6 +586,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
                     animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
                     personaTraits: assets.personaTraits || configRef.current.personaTraits,
+                    personalBio: assets.personalBio || "I am an AI assistant.",
                     conversationalTopics: assets.conversationalTopics || "",
                     splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? configRef.current.responsePauseTimeMs,
@@ -838,3 +843,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    

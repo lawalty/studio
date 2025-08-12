@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow that generates a chat response from an AI model.
@@ -16,6 +17,7 @@ import { getAppConfig } from '@/lib/app-config';
 // Zod schema for the input of the generateChatResponse flow.
 const GenerateChatResponseInputSchema = z.object({
   personaTraits: z.string().describe("A description of the AI's personality and character traits."),
+  personalBio: z.string().describe("The AI's personal history and backstory."),
   conversationalTopics: z.string().describe("A comma-separated list of topics the AI is an expert in."),
   language: z.string().optional().default('English').describe('The language the user is speaking in and expects a response in.'),
   chatHistory: z.array(z.object({
@@ -66,6 +68,7 @@ const chatPrompt = ai.definePrompt({
     input: {
         schema: z.object({
             personaTraits: z.string(),
+            personalBio: z.string(),
             conversationalTopics: z.string(),
             language: z.string(),
             chatHistory: z.string(),
@@ -80,11 +83,13 @@ const chatPrompt = ai.definePrompt({
         format: 'json',
         schema: AiResponseJsonSchema,
     },
-    system: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your primary goal is to answer user questions based on the retrieved documents about specific people or topics.
+    system: `You are a helpful conversational AI.
+Your persona is: "{{personaTraits}}".
+Your personal bio/history is: "{{personalBio}}". Use this to answer questions about yourself.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Adopt Persona from Context**: When the user asks "you" a question (e.g., "When did you join?"), you MUST answer from the perspective of the person or entity described in the <retrieved_context>, as if you are them. Use "I" to refer to that person. For example, if the context says "He joined in 1989," your answer must be "I joined in 1989."
-2.  **Strictly Adhere to Provided Context**: You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge.
+1.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself.
+2.  **Use Knowledge Base for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge.
 3.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge. Use your defined persona for this response.
 4.  **Clarifying Question Policy**:
     - **When to Ask**: You MUST ask one clarifying question if the user's request is ambiguous or is missing key details (e.g., they ask about a policy but don't specify which one, or they ask for data without specifying a format like 'outline' or 'table'). Also ask if the retrieved context seems relevant but not a perfect match (e.g., the distance score is high). Set 'isClarificationQuestion' to true.
@@ -136,6 +141,7 @@ Analyze the user's query below. Identify the core intent and key entities.
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ 
     personaTraits, 
+    personalBio,
     conversationalTopics, 
     chatHistory, 
     language,
@@ -208,6 +214,7 @@ const generateChatResponseFlow = async ({
     // 4. Construct the prompt and generate the final AI response.
     const promptInput = {
         personaTraits,
+        personalBio,
         conversationalTopics,
         language: language || 'English',
         chatHistory: `<history>${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}</history>`,
@@ -253,3 +260,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -33,6 +34,7 @@ const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const FIRESTORE_KEYS_PATH = "configurations/app_config";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
+const DEFAULT_PERSONAL_BIO_TEXT = "I am a new AI assistant, recently created to help with questions about the pawn industry. I am still learning and growing my knowledge base every day.";
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
@@ -42,6 +44,7 @@ const DEFAULT_STYLE_VALUE = 50;
 
 export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
+  const [personalBio, setPersonalBio] = useState(DEFAULT_PERSONAL_BIO_TEXT);
   const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
   const [avatarPreview, setAvatarPreview] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
@@ -84,6 +87,7 @@ export default function PersonaPage() {
           setAvatarPreview(data?.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER);
           setAnimatedAvatarPreview(data?.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
+          setPersonalBio(data?.personalBio || DEFAULT_PERSONAL_BIO_TEXT);
           setConversationalTopics(data?.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS);
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
@@ -99,6 +103,7 @@ export default function PersonaPage() {
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
           setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
+          setPersonalBio(DEFAULT_PERSONAL_BIO_TEXT);
           setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS);
           setUseKnowledgeInGreeting(true);
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
@@ -115,6 +120,7 @@ export default function PersonaPage() {
         setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
         setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
         setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
+        setPersonalBio(DEFAULT_PERSONAL_BIO_TEXT);
         setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS);
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
@@ -137,6 +143,10 @@ export default function PersonaPage() {
 
   const handlePersonaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPersonaTraits(e.target.value);
+  };
+  
+  const handlePersonalBioChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPersonalBio(e.target.value);
   };
 
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,7 +238,7 @@ export default function PersonaPage() {
     let personaUpdatedSuccessfully = false;
     
     try {
-      const flowInput: AdjustAiPersonaAndPersonalityInput = { personaTraits };
+      const flowInput: AdjustAiPersonaAndPersonalityInput = { personaTraits, personalBio };
       const { updatedPersonaDescription } = await adjustAiPersonaAndPersonality(flowInput);
       toast({ title: "AI Persona Updated", description: `IA Blair v2 says: "${updatedPersonaDescription}"` });
       personaUpdatedSuccessfully = true;
@@ -298,6 +308,7 @@ export default function PersonaPage() {
 
       const dataToSave: { [key: string]: any } = {
         personaTraits,
+        personalBio,
         conversationalTopics,
         useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
@@ -391,10 +402,25 @@ export default function PersonaPage() {
                   value={personaTraits}
                   onChange={handlePersonaChange}
                   placeholder="Describe IA Blair v2's personality, tone, knowledge areas, etc."
-                  rows={8}
+                  rows={6}
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">This description will be used by the AI to guide its responses.</p>
+              </div>
+
+              <div>
+                <Label htmlFor="personalBio" className="font-medium flex items-center gap-1.5"><BookUser className="h-4 w-4" /> Personal Bio</Label>
+                <Textarea
+                  id="personalBio"
+                  value={personalBio}
+                  onChange={handlePersonalBioChange}
+                  placeholder="Provide a backstory or historical context for the AI."
+                  rows={4}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  This text will be used as the AI's own history when asked questions about itself.
+                </p>
               </div>
 
               <div>
@@ -609,3 +635,5 @@ export default function PersonaPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -17,6 +18,11 @@ const AdjustAiPersonaAndPersonalityInputSchema = z.object({
     .string()
     .describe(
       'A detailed description of the AI persona traits and attributes to be used in conversations.'
+    ),
+  personalBio: z
+    .string()
+    .describe(
+        'The personal history and backstory of the AI. Used to answer questions about itself.'
     ),
 });
 export type AdjustAiPersonaAndPersonalityInput = z.infer<
@@ -40,10 +46,15 @@ const adjustAiPersonaAndPersonalityFlow = async (flowInput: AdjustAiPersonaAndPe
       name: 'adjustAiPersonaAndPersonalityPrompt',
       input: {schema: AdjustAiPersonaAndPersonalityInputSchema},
       output: {schema: AdjustAiPersonaAndPersonalityOutputSchema},
-      prompt: `You are IA Blair. Your personality settings have just been updated with the following traits:
+      prompt: `You are IA Blair. Your personality settings have just been updated with the following:
+
+**New Persona Traits:**
 "{{{personaTraits}}}"
 
-Please provide a concise and natural-sounding confirmation, in your new character as IA Blair, that your settings have been successfully applied. Do not list or repeat the persona traits in your response; simply confirm the update in character, reflecting this new personality. For example, if your new persona is very formal, your confirmation should be formal. If it's very friendly, be friendly.
+**New Personal Bio:**
+"{{{personalBio}}}"
+
+Please provide a concise and natural-sounding confirmation, in your new character as IA Blair, that your settings have been successfully applied. Do not list or repeat the traits or bio in your response; simply confirm the update in character, reflecting this new personality and history. For example, if your new persona is very formal, your confirmation should be formal. If it's very friendly, be friendly.
 Confirmation:`,
     });
 
@@ -68,3 +79,5 @@ export async function adjustAiPersonaAndPersonality(
 ): Promise<AdjustAiPersonaAndPersonalityOutput> {
   return adjustAiPersonaAndPersonalityFlow(input);
 }
+
+    
