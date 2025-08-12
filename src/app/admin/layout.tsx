@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { getAuth, onAuthStateChanged, type User } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
 import { app } from '@/lib/firebase'; 
+import AdminNav from '@/components/admin/AdminNav';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -15,11 +16,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   
   const isLoginPage = pathname === '/admin/login';
+  const showAdminNav = isAdminPage && pathname !== '/admin';
 
   useEffect(() => {
     let auth: any;
     try {
-      // Robustly get auth, only if app is available.
       if (app) {
         auth = getAuth(app);
       } else {
@@ -55,12 +56,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // If on a login or register page, just render the page itself.
   if (isLoginPage) {
     return <>{children}</>;
   }
 
-  // If not on an auth page and there is no user, show a loading state while redirecting.
   if (!user) {
     return (
         <div className="flex h-screen items-center justify-center">
@@ -72,6 +71,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {showAdminNav && <AdminNav />}
       {children}
     </div>
   );

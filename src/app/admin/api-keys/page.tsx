@@ -331,7 +331,7 @@ export default function ApiKeysPage() {
 
       <Separator />
 
-      <div className="px-6 pb-6 space-y-6">
+      <div className="space-y-6">
         <div className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" />
             <h3 className="text-lg font-semibold">Core Service Diagnostics</h3>
