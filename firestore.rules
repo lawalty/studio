@@ -1,15 +1,12 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Allow read/write access to the entire database for any authenticated user.
-    // Server-side operations using the Admin SDK (like vector search) are authenticated
-    // and will be allowed. Client-side operations (like the admin UI) will also
-    // be allowed as long as the user is logged in.
+    // Allow public read access for all documents, but only allow authenticated
+    // users (i.e., the admin) to write data. This is necessary for the
+    // public-facing pages to load configuration and assets.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }
