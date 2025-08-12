@@ -19,7 +19,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     let auth: any;
     try {
-      auth = getAuth(app);
+      // Robustly get auth, only if app is available.
+      if (app) {
+        auth = getAuth(app);
+      } else {
+        throw new Error("Firebase app is not initialized.");
+      }
     } catch (e) {
       console.error("Firebase not initialized, cannot set up auth listener.", e);
       setIsLoading(false);
