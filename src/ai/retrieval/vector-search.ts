@@ -64,8 +64,8 @@ export async function searchKnowledgeBase({
   chunksSnapshot.forEach(doc => {
       const data = doc.data();
       
-      // *** FIX: Exclude documents from the 'Archive' level from the search ***
-      if (data.level === 'Archive') {
+      // *** FIX: Exclude documents from 'Archive' and 'Chat History' levels from the search ***
+      if (data.level === 'Archive' || data.level === 'Chat History') {
           return; // Skip this chunk
       }
 
