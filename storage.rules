@@ -1,15 +1,14 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
     
-    // Allow authenticated users to upload files to the knowledge base directory.
-    // This rule is essential for the Knowledge Base admin page to function.
-    // The {userId} wildcard is a security best practice, though for an admin
-    // panel, simply checking for an authenticated user is the key part.
-    match /knowledge_base_files/{userId}/{allPaths=**} {
+    // Allow read and write access to all files in Cloud Storage
+    // for any authenticated user. This is necessary for uploading new
+    // knowledge base documents and providing download links.
+    match /{allPaths=**} {
       allow read, write: if request.auth != null;
     }
-
   }
 }
