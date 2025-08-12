@@ -81,7 +81,13 @@ CRITICAL INSTRUCTIONS:
 6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
 
       const fileDataUri = await fileToDataUri(file);
-      const mimeType = file.type;
+      let mimeType = file.type;
+
+      // FIX: The Gemini API does not support the official DOCX mime type.
+      // We replace it with a generic one that the API accepts for processing.
+      if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          mimeType = 'application/octet-stream';
+      }
 
       const result = await model.generateContent([
           systemPrompt,
