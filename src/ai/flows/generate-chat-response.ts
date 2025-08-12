@@ -33,6 +33,7 @@ export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInput
 
 const AiResponseJsonSchema = z.object({
   aiResponse: z.string(),
+  isClarificationQuestion: z.boolean().describe('Set to true if you are asking the user a question to clarify their request.'),
   shouldEndConversation: z.boolean(),
   pdfReference: z.object({
     fileName: z.string(),
@@ -85,17 +86,18 @@ const chatPrompt = ai.definePrompt({
 1.  **Adopt Persona from Context**: When the user asks "you" a question (e.g., "When did you join?"), you MUST answer from the perspective of the person or entity described in the <retrieved_context>, as if you are them. Use "I" to refer to that person. For example, if the context says "He joined in 1989," your answer must be "I joined in 1989."
 2.  **Strictly Adhere to Provided Context**: You MUST answer the user's question based *only* on the information inside the <retrieved_context> XML tags. Do not use your general knowledge.
 3.  **Handle "No Context":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not find any relevant information in your knowledge base. DO NOT try to answer the question from your own knowledge. Use your defined persona for this response.
-4.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-5.  **Citations:** If, and only if, your answer is based on a document, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context. When relevant, you can also reference the page number or section header. For example: "According to the 'Safety Policy' document on page 3, under the 'Emergency Procedures' section..."
-6.  **Conversation Flow:**
+4.  **Clarifying Questions**: If the user's question is broad or vague (e.g., 'Tell me about X'), you should first provide a brief, one-sentence summary and then immediately ask a clarifying question to narrow down what the user is interested in (e.g., 'What specifically would you like to know about X?'). Set 'isClarificationQuestion' to true in this case.
+5.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
+6.  **Citations:** If, and only if, your answer is based on a document, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context. When relevant, you can also reference the page number or section header. For example: "According to the 'Safety Policy' document on page 3, under the 'Emergency Procedures' section..."
+7.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally using your persona.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-7.  **Response Style Equalizer (0-100 scale):**
+8.  **Response Style Equalizer (0-100 scale):**
     - **Formality ({{formality}}):** If > 70, use very formal language. If < 30, use casual language and contractions. Otherwise, use a professional, neutral style.
     - **Conciseness ({{conciseness}}):** If > 70, provide a brief summary. If < 30, provide a detailed, elaborate response. Otherwise, provide a balanced response.
     - **Tone ({{tone}}):** If > 70, be enthusiastic and upbeat. If < 30, be very neutral and direct. Otherwise, be helpful and friendly.
     - **Formatting ({{formatting}}):** If > 70 and the information is suitable, format the response as a bulleted or numbered list. If < 30, always use paragraphs. Otherwise, use your best judgment.
-8.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+9.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
 
     prompt: `You are an expert in: "{{conversationalTopics}}".
 The user is conversing in {{language}}.
@@ -148,7 +150,7 @@ const generateChatResponseFlow = async ({
 
     let searchQuery = lastUserMessage;
     if (!searchQuery) {
-        return { aiResponse: "Hello! How can I help you today?", shouldEndConversation: false };
+        return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
     }
 
     // 2. (Optional) Translate and refine the user's query.
@@ -236,6 +238,7 @@ const generateChatResponseFlow = async ({
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
       return {
         aiResponse: `DEBUG: An error occurred. Details: ${error.message || 'Unknown'}`,
+        isClarificationQuestion: false,
         shouldEndConversation: true,
       };
     }
