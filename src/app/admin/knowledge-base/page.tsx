@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from "@/hooks/use-toast";
 import { v4 as uuidv4 } from 'uuid';
-import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
+import { extractTextFromLocalFile } from '@/ai/flows/extract-text-from-local-file-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
 import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye } from 'lucide-react';
@@ -386,8 +386,16 @@ export default function KnowledgeBasePage() {
               throw new Error("Source is missing a download URL, cannot re-process.");
           }
           
-          await updateDoc(sourceDocRef, { indexingError: `Extracting text from ${source.mimeType || 'file'}...` });
-          const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
+          await updateDoc(sourceDocRef, { indexingError: `This may take a moment. Extracting text...` });
+
+          // Fetch the original file blob from the download URL
+          const response = await fetch(source.downloadURL);
+          if (!response.ok) throw new Error(`Failed to fetch original file from storage. Status: ${response.statusText}`);
+          const fileBlob = await response.blob();
+          const localFile = new File([fileBlob], source.sourceName, { type: source.mimeType || 'application/octet-stream' });
+          
+          // Use the new client-side extraction flow
+          const extractionResult = await extractTextFromLocalFile({ file: localFile });
   
           if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
               throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
@@ -456,29 +464,28 @@ export default function KnowledgeBasePage() {
             sourceName: fileToUpload.name, description,
             createdAt: new Date().toISOString(),
             indexingStatus: 'processing',
-            indexingError: 'Uploading file to storage...',
+            indexingError: 'Extracting text from document...',
             mimeType,
             level: targetLevel,
             topic: topic,
         };
-
-        if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
-            newSourceData.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
-        }
         await setDoc(sourceDocRef, newSourceData);
 
-        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
-        const fileRef = storageRef(storage, storagePath);
-        await uploadBytes(fileRef, fileToUpload);
-
-        const downloadURL = await getDownloadURL(fileRef);
-        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Upload complete. Extracting text...' });
-        
-        const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+        // Step 1: Extract text on the client-side first.
+        const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
         if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
             throw new Error(extractionResult?.error || 'Text extraction failed to produce readable content. The document may be empty or an image-only PDF.');
         }
+        
+        // Step 2: If extraction is successful, upload the file to storage.
+        await updateDoc(sourceDocRef, { indexingError: 'Uploading file to storage...' });
+        const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileToUpload.name}`;
+        const fileRef = storageRef(storage, storagePath);
+        await uploadBytes(fileRef, fileToUpload);
+        const downloadURL = await getDownloadURL(fileRef);
 
+        // Step 3: Now that we have the text and URL, call the server-side indexing flow.
+        await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Indexing content...' });
         const indexInput: Parameters<typeof indexDocument>[0] = {
             sourceId,
             sourceName: fileToUpload.name,
@@ -510,15 +517,13 @@ export default function KnowledgeBasePage() {
         console.error(`[handleUpload] Error for ${fileToUpload.name}:`, e);
         toast({ title: "Processing Failed", description: errorMessage, variant: "destructive", duration: 10000 });
 
-        if (sourceDocRef) {
-            try {
-                await updateDoc(sourceDocRef, {
-                    indexingStatus: 'failed',
-                    indexingError: errorMessage,
-                });
-            } catch (updateError) {
-                console.error("Critical: Failed to write final failure status to Firestore.", updateError);
-            }
+        try {
+            await updateDoc(sourceDocRef, {
+                indexingStatus: 'failed',
+                indexingError: errorMessage,
+            });
+        } catch (updateError) {
+            console.error("Critical: Failed to write final failure status to Firestore.", updateError);
         }
     } finally {
         setIsCurrentlyUploading(false);
