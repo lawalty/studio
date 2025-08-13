@@ -172,7 +172,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const { language, translate } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
     
-    // UI Text (static) - wrapped in useMemo to prevent re-renders
     const uiText = useMemo(() => ({
         loadingConfig: "Loading Chat Configuration...",
         isPreparing: "is preparing",
@@ -215,42 +214,25 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
 
-    const toggleListening = useCallback((shouldListen?: boolean) => {
+    const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
         
         const isCurrentlyListening = botStatus === 'listening';
-        const turnOn = shouldListen === true;
-        const turnOff = shouldListen === false;
-        const isBotActive = botStatus !== 'idle';
-        
-        if (turnOff && isCurrentlyListening) {
+
+        if (isCurrentlyListening) {
             recognitionRef.current.stop();
-        } else if (turnOn && !isCurrentlyListening) {
-            if (!hasConversationEnded && !isBotActive) {
-                try {
-                    setInputValue('');
-                    recognitionRef.current.start();
-                } catch (e: any) {
-                    if (e.name !== 'invalid-state') { 
-                      logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
-                    }
-                }
-            }
-        } else if (shouldListen === undefined) { 
-            if (isCurrentlyListening) {
-                recognitionRef.current.stop();
-            } else if (!hasConversationEnded && !isBotActive) {
-                try {
-                    setInputValue('');
-                    recognitionRef.current.start();
-                } catch (e: any) {
-                     if (e.name !== 'invalid-state') {
-                        logErrorToFirestore(e, 'ChatInterface/toggleListening/toggle');
-                     }
+        } else if (!hasConversationEnded && !isBotSpeaking) {
+            try {
+                setInputValue('');
+                recognitionRef.current.start();
+            } catch (e: any) {
+                // Ignore "invalid state" errors which can happen if start() is called when it's already starting.
+                if (e.name !== 'invalid-state') {
+                  logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
                 }
             }
         }
-    }, [botStatus, hasConversationEnded, logErrorToFirestore]);
+    }, [botStatus, hasConversationEnded, isBotSpeaking, logErrorToFirestore]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!isMountedRef.current || !textToSpeak.trim()) {
@@ -444,7 +426,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             await speakText(translatedPrompt, promptMessage, () => {
                 if (!hasConversationEnded) {
                     if (communicationMode === 'audio-only') {
-                        toggleListening(true);
+                        toggleListening();
                     }
                 } else {
                     setBotStatus('idle');
@@ -510,7 +492,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
                      if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
-                        toggleListening(true);
+                        toggleListening();
                      }
                 }
             });
@@ -661,8 +643,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 greetingText = await translate(textToTranslate);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, greetingMessage, () => {
-                    if (communicationMode === 'audio-only') {
-                        toggleListening(true);
+                    if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
+                        toggleListening();
                     }
                 });
             } catch (error: any) {
@@ -672,8 +654,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setStatusMessage('');
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(fallbackMessage, () => {
-                    if (communicationMode === 'audio-only') {
-                        toggleListening(true);
+                    if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
+                        toggleListening();
                     }
                 });
             }
@@ -714,7 +696,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const finalTranscript = finalTranscriptRef.current.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
-            } else if (!hasConversationEnded && botStatus === 'idle' && (communicationMode === 'audio-only' || communicationMode === 'audio-text')) {
+            } else if (!hasConversationEnded && botStatus === 'idle' && (communicationMode === 'audio-only')) {
                 startInactivityTimer();
             }
         };
