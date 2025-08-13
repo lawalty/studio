@@ -271,6 +271,43 @@ const generateChatResponseFlow = async ({
     if (!lastUserMessage) {
         return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
     }
+    
+    // Bypass planner for internal knowledge
+    if (lastUserMessage.toLowerCase().includes('knowledge base priority levels')) {
+        const internalKnowledgeContext = `
+            - **High Priority**: Core, essential documents that the AI should always prioritize. This is for critical information that needs to be accurate and readily available.
+            - **Medium Priority**: Standard informational documents that form the main body of knowledge. Most documents should be in this category.
+            - **Low Priority**: Supplementary or less critical information. This content is still searchable but is given less weight than Medium or High priority documents.
+            - **Spanish PDFs**: Spanish-language versions of English documents. This level is only searched when the user is conversing in Spanish.
+            - **Chat History**: Automatically archived conversations. This allows the AI to recall past discussions to provide context in future chats.
+            - **Archive**: Documents in this category are not searched by the AI and are effectively disabled.
+        `;
+
+        try {
+            const jsonStruct = await requestStructuredJSON({
+                modelName: 'googleai/gemini-1.5-flash',
+                outputType: 'table',
+                userMessage: lastUserMessage,
+                retrievedContext: internalKnowledgeContext,
+            });
+            const md = renderTableMD(jsonStruct as any);
+
+            return {
+                aiResponse: md,
+                isClarificationQuestion: false,
+                shouldEndConversation: false,
+                distanceThreshold: appConfig.distanceThreshold,
+                formality: appConfig.formality,
+                conciseness: appConfig.conciseness,
+                tone: appConfig.tone,
+                formatting: appConfig.formatting,
+            };
+        } catch (e: any) {
+             console.warn('[structured-output] schema/validation failed for internal knowledge, falling back:', e?.message);
+             // Fall through to the normal process if structured generation fails
+        }
+    }
+
 
     const plan = await plannerPrompt({ userMessage: lastUserMessage, historySummary: '' }, { model: 'googleai/gemini-1.5-flash' });
 
@@ -430,3 +467,4 @@ export async function generateChatResponse(
 }
   
 
+    
