@@ -10,6 +10,7 @@ import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
 import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
 import { indexDocument } from '@/ai/flows/index-document-flow';
+import { withRetry } from '@/ai/flows/index-document-flow';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mic, Power, DatabaseZap, Save, RotateCcw, Square, Loader2 } from 'lucide-react';
@@ -493,7 +494,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 language: language,
                 clarificationAttemptCount: clarificationAttemptCount,
             };
-            const result = await generateChatResponse(flowInput);
+            const result = await withRetry(() => generateChatResponse(flowInput));
 
             if (result.isClarificationQuestion) {
                 setClarificationAttemptCount(prev => prev + 1);
@@ -527,7 +528,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } catch (error: any) {
             console.error("Error in generateChatResponse:", error);
             await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-            const errorMessage = error.message || uiText.errorEncountered;
+            const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
             setBotStatus('idle');
             setStatusMessage('');
             addMessage({ text: errorMessage, sender: 'model'});
@@ -680,7 +681,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setBotStatus('idle');
                 setStatusMessage('');
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
-                await speakText(greetingText, fallbackMessage, () => {
+                await speakText(fallbackMessage, () => {
                     if (communicationMode === 'audio-only') {
                         toggleListening(true);
                     }
@@ -694,7 +695,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, toggleListening, communicationMode, uiText]);
     
     useEffect(() => {
-        if (!isReady || communicationMode === 'text-only' || recognitionRef.current) return;
+        if (!isReady || !['audio-only', 'audio-text'].includes(communicationMode) || recognitionRef.current) return;
 
         const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognitionAPI) return;
@@ -720,7 +721,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
 
             // Handle sending message only if there's content
-            const finalTranscript = inputValue.trim();
+            const finalTranscript = finalTranscriptRef.current.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
             } else if (!hasConversationEnded && botStatus === 'idle' && (communicationMode === 'audio-only' || communicationMode === 'audio-text')) {
@@ -742,18 +743,24 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
 
           let interimTranscript = '';
+          finalTranscriptRef.current = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
-             interimTranscript += event.results[i][0].transcript;
+             if (event.results[i].isFinal) {
+                finalTranscriptRef.current += event.results[i][0].transcript;
+             } else {
+                interimTranscript += event.results[i][0].transcript;
+             }
           }
           setInputValue(finalTranscriptRef.current + interimTranscript);
           
           // Set a timer to stop recognition if user pauses
           speechPauseTimerRef.current = setTimeout(() => {
-            finalTranscriptRef.current = inputValue;
-            recognition.stop();
+            if (recognitionRef.current) {
+                recognitionRef.current.stop();
+            }
           }, configRef.current.responsePauseTimeMs);
         };
-    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, botStatus, uiText, inputValue]);
+    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, botStatus, uiText]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
@@ -872,5 +879,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
