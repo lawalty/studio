@@ -146,10 +146,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
         animationSyncFactor: DEFAULT_ANIMATION_SYNC_FACTOR,
-        formality: DEFAULT_STYLE_VALUE,
-        conciseness: DEFAULT_STYLE_VALUE,
-        tone: DEFAULT_STYLE_VALUE,
-        formatting: DEFAULT_STYLE_VALUE,
         ttsApiKey: '',
         ttsVoiceId: '',
         useCustomTts: false,
@@ -463,10 +459,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 personaTraits, 
                 personalBio,
                 conversationalTopics,
-                formality,
-                conciseness,
-                tone,
-                formatting,
             } = configRef.current;
             const flowInput: GenerateChatResponseInput = {
                 personaTraits,
@@ -474,10 +466,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 conversationalTopics,
                 chatHistory: historyForGenkit,
                 language: language,
-                formality,
-                conciseness,
-                tone,
-                formatting,
             };
             const result = await generateChatResponse(flowInput);
             
@@ -594,10 +582,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
                     animationSyncFactor: assets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR,
-                    formality: assets.formality ?? DEFAULT_STYLE_VALUE,
-                    conciseness: assets.conciseness ?? DEFAULT_STYLE_VALUE,
-                    tone: assets.tone ?? DEFAULT_STYLE_VALUE,
-                    formatting: assets.formatting ?? DEFAULT_STYLE_VALUE,
                     ttsApiKey: appConfig.tts || '',
                     ttsVoiceId: appConfig.voiceId || '',
                     useCustomTts: typeof appConfig.useTtsApi === 'boolean' ? appConfig.useTtsApi : false,

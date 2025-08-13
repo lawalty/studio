@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -10,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
 import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info, Wrench } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
@@ -30,7 +31,8 @@ interface AppConfig {
   distanceThreshold: number;
 }
 
-const FIRESTORE_CONFIG_PATH = "configurations/app_config";
+const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 export default function ApiKeysPage() {
   const [config, setConfig] = useState<AppConfig>({
@@ -39,6 +41,8 @@ export default function ApiKeysPage() {
     useTtsApi: true,
     distanceThreshold: 0.8,
   });
+  
+  const [isSavingAppConfig, setIsSavingAppConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -56,7 +60,7 @@ export default function ApiKeysPage() {
     const fetchConfig = async () => {
       setIsLoading(true);
       try {
-        const docRef = doc(db, FIRESTORE_CONFIG_PATH);
+        const docRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -87,22 +91,23 @@ export default function ApiKeysPage() {
   const handleSwitchChange = (checked: boolean) => {
     setConfig({ ...config, useTtsApi: checked });
   };
-
-  const handleSave = async () => {
-    setIsLoading(true);
-    try {
-      const docRef = doc(db, FIRESTORE_CONFIG_PATH);
-      await setDoc(docRef, config, { merge: true }); 
-      toast({ title: "Settings Saved", description: "Your API Key and RAG settings have been saved to Firestore." });
-    } catch (error) {
-      console.error("Error saving config to Firestore:", error);
-      toast({
-        title: "Error Saving Settings",
-        description: "Could not save settings to the database.",
-        variant: "destructive",
-      });
-    }
-    setIsLoading(false);
+  
+  const handleSaveAppConfig = async () => {
+      setIsSavingAppConfig(true);
+      try {
+          const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
+          await setDoc(appConfigDocRef, config, { merge: true });
+          
+          toast({ title: "Settings Saved", description: "Your API Key and RAG settings have been saved to Firestore." });
+      } catch (error) {
+          console.error("Error saving config to Firestore:", error);
+          toast({
+              title: "Error Saving Settings",
+              description: "Could not save settings to the database.",
+              variant: "destructive",
+          });
+      }
+      setIsSavingAppConfig(false);
   };
   
   const handleTestTts = async () => {
@@ -324,8 +329,8 @@ export default function ApiKeysPage() {
           )}
         </CardContent>
         <CardFooter>
-          <Button onClick={handleSave} disabled={isLoading}>
-            <Save className="mr-2 h-4 w-4" /> {isLoading ? 'Saving...' : 'Save All Settings'}
+          <Button onClick={handleSaveAppConfig} disabled={isLoading || isSavingAppConfig}>
+            <Save className="mr-2 h-4 w-4" /> {isSavingAppConfig ? 'Saving...' : 'Save Settings'}
           </Button>
         </CardFooter>
       </Card>

@@ -26,10 +26,6 @@ const GenerateChatResponseInputSchema = z.object({
       text: z.string(),
     })),
   })).optional().describe('The history of the conversation so far, including the latest user message.'),
-  formality: z.number().optional().default(50),
-  conciseness: z.number().optional().default(50),
-  tone: z.number().optional().default(50),
-  formatting: z.number().optional().default(50),
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
@@ -154,10 +150,6 @@ const generateChatResponseFlow = async ({
     conversationalTopics, 
     chatHistory, 
     language,
-    formality = 50,
-    conciseness = 50,
-    tone = 50,
-    formatting = 50,
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     // 1. Fetch the dynamic application configuration from Firestore.
@@ -228,10 +220,10 @@ const generateChatResponseFlow = async ({
         language: language || 'English',
         chatHistory: `<history>${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}</history>`,
         retrievedContext: retrievedContext || 'NO_CONTEXT_FOUND',
-        formality,
-        conciseness,
-        tone,
-        formatting,
+        formality: appConfig.formality,
+        conciseness: appConfig.conciseness,
+        tone: appConfig.tone,
+        formatting: appConfig.formatting,
     };
     
     try {

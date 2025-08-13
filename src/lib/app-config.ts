@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileoverview Centralized application configuration management.
@@ -7,44 +8,68 @@
 
 import { db } from '@/lib/firebase-admin';
 
-const FIRESTORE_CONFIG_PATH = "configurations/app_config";
-const DEFAULT_DISTANCE_THRESHOLD = 0.8;
+const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
-interface AppConfig {
+const DEFAULTS = {
+    distanceThreshold: 0.8,
+    formality: 50,
+    conciseness: 50,
+    tone: 50,
+    formatting: 50,
+};
+
+export interface AppConfig {
   distanceThreshold: number;
+  formality: number;
+  conciseness: number;
+  tone: number;
+  formatting: number;
 }
 
 /**
- * Fetches the application configuration from Firestore.
- * Currently retrieves the RAG distance threshold.
+ * Fetches the application configuration from Firestore, merging settings
+ * from both app_config and site_display_assets.
  *
- * @returns {Promise<AppConfig>} A promise that resolves to the app configuration object.
- *          It defaults to a distanceThreshold of 0.8 if the document or field is not found.
+ * @returns {Promise<AppConfig>} A promise that resolves to the merged app configuration object.
  */
 export const getAppConfig = async (): Promise<AppConfig> => {
     try {
-        const docRef = db.doc(FIRESTORE_CONFIG_PATH);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) { // <-- CORRECTED: Changed from exists() to exists
-            const data = docSnap.data();
-            const threshold = typeof data?.distanceThreshold === 'number'
-                ? data.distanceThreshold
-                : DEFAULT_DISTANCE_THRESHOLD;
-            
-            // Success log: Log the threshold being used.
-            console.log(`[getAppConfig] Successfully loaded config. Using distanceThreshold: ${threshold}`);
+        const appConfigRef = db.doc(FIRESTORE_APP_CONFIG_PATH);
+        const siteAssetsRef = db.doc(FIRESTORE_SITE_ASSETS_PATH);
 
-            return {
-                distanceThreshold: threshold,
-            };
-        } else {
-            // Explicit warning if the document is not found.
-            console.warn(`[getAppConfig] Firestore document not found at '${FIRESTORE_CONFIG_PATH}'. Using default distanceThreshold: ${DEFAULT_DISTANCE_THRESHOLD}`);
-            return { distanceThreshold: DEFAULT_DISTANCE_THRESHOLD };
-        }
+        const [appConfigSnap, siteAssetsSnap] = await Promise.all([
+            appConfigRef.get(),
+            siteAssetsRef.get()
+        ]);
+
+        const appConfigData = appConfigSnap.exists ? appConfigSnap.data() : {};
+        const siteAssetsData = siteAssetsSnap.exists ? siteAssetsSnap.data() : {};
+
+        const config = {
+            distanceThreshold: typeof appConfigData?.distanceThreshold === 'number' 
+                ? appConfigData.distanceThreshold 
+                : DEFAULTS.distanceThreshold,
+            formality: typeof siteAssetsData?.formality === 'number' 
+                ? siteAssetsData.formality 
+                : DEFAULTS.formality,
+            conciseness: typeof siteAssetsData?.conciseness === 'number' 
+                ? siteAssetsData.conciseness 
+                : DEFAULTS.conciseness,
+            tone: typeof siteAssetsData?.tone === 'number' 
+                ? siteAssetsData.tone 
+                : DEFAULTS.tone,
+            formatting: typeof siteAssetsData?.formatting === 'number' 
+                ? siteAssetsData.formatting 
+                : DEFAULTS.formatting,
+        };
+        
+        console.log(`[getAppConfig] Successfully loaded config. Using:`, config);
+
+        return config;
+
     } catch (error) {
-        // Enhanced error logging.
-        console.error(`[getAppConfig] CRITICAL: Failed to fetch config from Firestore at '${FIRESTORE_CONFIG_PATH}'. Falling back to default.`, error);
-        return { distanceThreshold: DEFAULT_DISTANCE_THRESHOLD };
+        console.error(`[getAppConfig] CRITICAL: Failed to fetch config from Firestore. Falling back to all defaults.`, error);
+        return DEFAULTS;
     }
 };

@@ -32,7 +32,7 @@ const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?te
 const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const FIRESTORE_KEYS_PATH = "configurations/app_config";
+const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_PERSONAL_BIO_TEXT = "I am a new AI assistant, recently created to help with questions about the pawn industry. I am still learning and growing my knowledge base every day.";
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
@@ -187,7 +187,7 @@ export default function PersonaPage() {
     toast({ title: 'Generating Greeting Audio...', description: 'Please wait a moment.' });
     try {
       // Fetch custom TTS settings
-      const keysDocRef = doc(db, FIRESTORE_KEYS_PATH);
+      const keysDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
       const keysDocSnap = await getDoc(keysDocRef);
       const { tts: apiKey, voiceId, useTtsApi: useCustomTts } = keysDocSnap.exists() ? keysDocSnap.data() : { tts: '', voiceId: '', useTtsApi: false };
 
@@ -574,11 +574,6 @@ export default function PersonaPage() {
             </>
           )}
         </CardContent>
-        <CardFooter>
-          <Button onClick={handleSaveAllSettings} disabled={isSaving || isLoadingData} size="lg">
-            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Saving All Persona Settings...' : (isLoadingData ? 'Loading...' : 'Save All Persona Settings')}
-          </Button>
-        </CardFooter>
       </Card>
 
       <Card>
@@ -628,7 +623,7 @@ export default function PersonaPage() {
           </CardContent>
            <CardFooter>
              <Button onClick={handleSaveAllSettings} disabled={isSaving || isLoadingData}>
-               <Save className="mr-2 h-4 w-4" /> Save Style Settings
+               <Save className="mr-2 h-4 w-4" /> Save Settings
              </Button>
            </CardFooter>
       </Card>
