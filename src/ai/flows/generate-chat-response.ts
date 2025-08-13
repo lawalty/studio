@@ -264,7 +264,7 @@ const generateChatResponseFlow = async ({
 {
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
       return {
-        aiResponse: `DEBUG: An error occurred. Details: ${error.message || 'Unknown'}`,
+        aiResponse: "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.",
         isClarificationQuestion: false,
         shouldEndConversation: true,
       };
@@ -284,5 +284,3 @@ export async function generateChatResponse(
     
 
     
-
-
