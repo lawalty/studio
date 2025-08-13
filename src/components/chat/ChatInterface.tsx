@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
@@ -170,8 +170,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const { language, translate } = useLanguage();
     const { toast, dismiss: dismissAllToasts } = useToast();
     
-    // UI Text (static)
-    const uiText = {
+    // UI Text (static) - wrapped in useMemo to prevent re-renders
+    const uiText = useMemo(() => ({
         loadingConfig: "Loading Chat Configuration...",
         isPreparing: "is preparing",
         isListening: "is listening",
@@ -189,7 +189,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         inactivityPromptInitial: "Is anyone there?",
         inactivityPromptSecondary: "Hello, are you still there?",
         inactivityEndMessage: "It sounds like no one is available, so I'll end our conversation now. Feel free to start a new chat anytime!"
-    };
+    }), []);
 
     const isBotProcessing = botStatus === 'preparing';
     const isBotSpeaking = botStatus === 'speaking' || botStatus === 'typing';
@@ -401,7 +401,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } else {
             setHasConversationEnded(true);
         }
-    }, [clearInactivityTimer, botStatus, uiText.inactivityEndMessage, speakText, translate, toggleListening]);
+    }, [clearInactivityTimer, botStatus, uiText, speakText, translate, toggleListening]);
     
     const startInactivityTimer = useCallback(() => {
         if (communicationMode !== 'audio-only') return;
@@ -670,7 +670,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, toggleListening, communicationMode, uiText.isPreparing]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, toggleListening, communicationMode, uiText]);
     
     useEffect(() => {
         if (!isReady || communicationMode === 'text-only' || recognitionRef.current) return;
@@ -724,7 +724,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
           }
         };
-    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, botStatus, uiText.isListening]);
+    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, botStatus, uiText]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });

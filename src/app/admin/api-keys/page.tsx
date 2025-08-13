@@ -224,7 +224,7 @@ export default function ApiKeysPage() {
                   {diagnostics.totalChunksFound !== undefined && (
                       <p><span className="font-medium">Total Chunks Found in DB:</span> {diagnostics.totalChunksFound}</p>
                   )}
-                  <p><span className="font-medium">Preprocessed Query:</span> "{diagnostics.preprocessedQuery}"</p>
+                  <p><span className="font-medium">Preprocessed Query:</span> &quot;{diagnostics.preprocessedQuery}&quot;</p>
                   <p><span className="font-medium">Query Embedding Generated:</span> {diagnostics.embeddingGenerated ? 'Yes' : 'No'}</p>
                   {diagnostics.embeddingSnippet && <p><span className="font-medium">Embedding Snippet:</span> {diagnostics.embeddingSnippet}</p>}
               </div>
@@ -434,7 +434,7 @@ export default function ApiKeysPage() {
                       Vector Search Test (RAG)
                   </CardTitle>
                   <CardDescription className="text-xs">
-                      Tests the RAG pipeline using Firestore's native vector search. Uses the saved distance threshold.
+                      Tests the RAG pipeline using Firestore&apos;s native vector search. Uses the saved distance threshold.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -469,7 +469,7 @@ export default function ApiKeysPage() {
                                           {typeof res.pageNumber === 'number' && <p>Page: {res.pageNumber}</p>}
                                       </div>
                                       
-                                      <p className="text-muted-foreground mt-1 line-clamp-3 bg-slate-50 p-2 rounded">"{res.text}"</p>
+                                      <p className="text-muted-foreground mt-1 line-clamp-3 bg-slate-50 p-2 rounded">&quot;{res.text}&quot;</p>
                                       
                                   </div>
                                 ))}

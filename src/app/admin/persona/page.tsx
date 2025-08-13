@@ -419,7 +419,7 @@ export default function PersonaPage() {
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  This text will be used as the AI's own history when asked questions about itself.
+                  This text will be used as the AI&apos;s own history when asked questions about itself.
                 </p>
               </div>
 
@@ -630,5 +630,3 @@ export default function PersonaPage() {
     </div>
   );
 }
-
-    
