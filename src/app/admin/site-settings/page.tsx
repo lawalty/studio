@@ -24,6 +24,9 @@ const DEFAULT_BACKGROUND_IMAGE_SRC = TRANSPARENT_PIXEL;
 const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_MAINTENANCE_MESSAGE = "Exciting updates are on the way! We'll be back online shortly.";
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
+const BACKGROUND_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/background_image";
 
 
 export default function SiteSettingsPage() {
