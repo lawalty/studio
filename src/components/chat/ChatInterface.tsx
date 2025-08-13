@@ -133,6 +133,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [inputValue, setInputValue] = useState('');
     const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
     const [uiMessage, setUiMessage] = useState<string>('');
+    const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
     
     // Refs for stable storage across renders
     const messagesRef = useRef<Message[]>([]);
@@ -470,8 +471,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 conversationalTopics,
                 chatHistory: historyForGenkit,
                 language: language,
+                clarificationAttemptCount: clarificationAttemptCount,
             };
             const result = await generateChatResponse(flowInput);
+
+            if (result.isClarificationQuestion) {
+                setClarificationAttemptCount(prev => prev + 1);
+            } else {
+                setClarificationAttemptCount(0); // Reset on a direct answer
+            }
             
             const aiMessage: Message = {
                 id: uuidv4(),
@@ -507,7 +515,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 startInactivityTimer();
             }
         }
-    }, [addMessage, hasConversationEnded, botStatus, language, speakText, uiText, clearInactivityTimer, startInactivityTimer, logErrorToFirestore, toggleListening, communicationMode]);
+    }, [addMessage, hasConversationEnded, botStatus, language, speakText, uiText, clearInactivityTimer, startInactivityTimer, logErrorToFirestore, toggleListening, communicationMode, clarificationAttemptCount]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;

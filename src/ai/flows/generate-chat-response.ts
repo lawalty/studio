@@ -26,6 +26,7 @@ const GenerateChatResponseInputSchema = z.object({
       text: z.string(),
     })),
   })).optional().describe('The history of the conversation so far, including the latest user message.'),
+  clarificationAttemptCount: z.number().optional().default(0).describe('The number of consecutive times the AI has had to ask for clarification.'),
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
@@ -144,6 +145,7 @@ const chatPrompt = ai.definePrompt({
             conciseness: z.number(),
             tone: z.number(),
             formatting: z.number(),
+            clarificationAttemptCount: z.number(),
         })
     },
     output: {
@@ -153,24 +155,25 @@ const chatPrompt = ai.definePrompt({
     system: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
-2.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories.
-3.  **Clarification Gate Logic - Two Scenarios**:
+1.  **Clarification Loop Prevention**: The user's system is tracking how many times you've had to ask for clarification in a row. The current count is {{clarificationAttemptCount}}. If this count is 2 or greater, you are FORBIDDEN from asking another question. You MUST apologize for not being able to find the information and politely end the conversation by setting 'shouldEndConversation' to true.
+2.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
+3.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories.
+4.  **Clarification Gate Logic - Two Scenarios**:
     a.  **Low-Confidence / No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), or if the content seems irrelevant to the user's question, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question to help you understand what to search for. Analyze the chat history to see if you can suggest a better query.
     b.  **Broad / Vague Questions**: If the user's question is very broad (e.g., "Tell me about X") and the retrieved context is large and varied, you MUST first provide a brief, one-sentence summary of the available information. Then, immediately ask a clarifying question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?"). Set 'isClarificationQuestion' to true for both scenarios.
-4.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-5.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
-6.  **Conversation Flow:**
+5.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
+6.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+7.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally using your persona.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-7.  **Internal System Knowledge**: You have internal knowledge about your own system configuration. If asked about "knowledge base priority levels", you MUST use the following descriptions as your context:
+8.  **Internal System Knowledge**: You have internal knowledge about your own system configuration. If asked about "knowledge base priority levels", you MUST use the following descriptions as your context:
     - **High Priority**: Core, essential documents that the AI should always prioritize. This is for critical information that needs to be accurate and readily available.
     - **Medium Priority**: Standard informational documents that form the main body of knowledge. Most documents should be in this category.
     - **Low Priority**: Supplementary or less critical information. This content is still searchable but is given less weight than Medium or High priority documents.
     - **Spanish PDFs**: Spanish-language versions of English documents. This level is only searched when the user is conversing in Spanish.
     - **Chat History**: Automatically archived conversations. This allows the AI to recall past discussions to provide context in future chats.
     - **Archive**: Documents in this category are not searched by the AI and are effectively disabled.
-8.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
+9.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
         - If > 70: You MUST use extremely formal language, address the user with a title (e.g., "Sir" or "Ma'am"), and avoid all contractions (e.g., use "do not" instead of "don't").
         - If < 30: You MUST use very casual language, include slang appropriate for a friendly assistant (e.g., "No problem!", "Got it!"), and use contractions.
@@ -187,7 +190,7 @@ const chatPrompt = ai.definePrompt({
         - If > 70: If the information is suitable, you MUST format the response as a bulleted or numbered list.
         - If < 30: You are FORBIDDEN from using lists. You MUST always format your response as full paragraphs.
         - Otherwise (30-70): You should use your best judgment on whether to use lists or paragraphs.
-9.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+10.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
 
     prompt: `You are an expert in: "{{conversationalTopics}}".
 The user is conversing in {{language}}.
@@ -226,6 +229,7 @@ const generateChatResponseFlow = async ({
     conversationalTopics, 
     chatHistory, 
     language,
+    clarificationAttemptCount,
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const appConfig = await getAppConfig();
@@ -296,6 +300,7 @@ const generateChatResponseFlow = async ({
         conciseness: appConfig.conciseness,
         tone: appConfig.tone,
         formatting: appConfig.formatting,
+        clarificationAttemptCount: clarificationAttemptCount || 0,
     };
     
     try {
