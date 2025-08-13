@@ -166,7 +166,14 @@ Your first and most important task is to analyze the 'Response Style Equalizer' 
 7.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally using your persona.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-8.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
+8.  **Internal System Knowledge**: You have internal knowledge about your own system configuration. If asked about "knowledge base priority levels", you MUST use the following descriptions as your context:
+    - **High Priority**: Core, essential documents that the AI should always prioritize. This is for critical information that needs to be accurate and readily available.
+    - **Medium Priority**: Standard informational documents that form the main body of knowledge. Most documents should be in this category.
+    - **Low Priority**: Supplementary or less critical information. This content is still searchable but is given less weight than Medium or High priority documents.
+    - **Spanish PDFs**: Spanish-language versions of English documents. This level is only searched when the user is conversing in Spanish.
+    - **Chat History**: Automatically archived conversations. This allows the AI to recall past discussions to provide context in future chats.
+    - **Archive**: Documents in this category are not searched by the AI and are effectively disabled.
+9.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
         - If > 70: You MUST use extremely formal language, address the user with a title (e.g., "Sir" or "Ma'am"), and avoid all contractions (e.g., use "do not" instead of "don't").
         - If < 30: You MUST use very casual language, include slang appropriate for a friendly assistant (e.g., "No problem!", "Got it!"), and use contractions.
@@ -422,3 +429,4 @@ export async function generateChatResponse(
   return generateChatResponseFlow(input);
 }
   
+
