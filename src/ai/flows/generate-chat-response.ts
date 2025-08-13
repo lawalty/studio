@@ -13,6 +13,7 @@ import { ai } from '@/ai/genkit';
 import { db as adminDb } from '@/lib/firebase-admin';
 import { withRetry } from './index-document-flow';
 import { getAppConfig } from '@/lib/app-config';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 // Zod schema for the input of the generateChatResponse flow.
 const GenerateChatResponseInputSchema = z.object({
@@ -87,7 +88,7 @@ const chatPrompt = ai.definePrompt({
         format: 'json',
         schema: AiResponseJsonSchema,
     },
-    system: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
+    prompt: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
 1.  **Ending the Conversation**: If the user's last message is a simple negative response (e.g., 'No', 'Nope', 'That's all') in response to your question "Is there anything else I can help with?", you MUST interpret this as the end of the conversation. Respond with a polite closing remark (e.g., "Alright. Have a great day!") and set 'shouldEndConversation' to 'true'.
@@ -118,9 +119,9 @@ const chatPrompt = ai.definePrompt({
         - If > 70: If the information is suitable, you MUST format the response as a bulleted or numbered list.
         - If < 30: You are FORBIDDEN from using lists. You MUST always format your response as full paragraphs.
         - Otherwise (30-70): You should use your best judgment on whether to use lists or paragraphs.
-8.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.`,
+8.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
 
-    prompt: `You are an expert in: "{{conversationalTopics}}".
+You are an expert in: "{{conversationalTopics}}".
 The user is conversing in {{language}}.
 Here is the full conversation history:
 {{{chatHistory}}}
@@ -149,6 +150,19 @@ Analyze the user's query below. Identify the core intent and key entities.
 **Refined Search Query:**
 `,
 });
+
+const logErrorToFirestore = async (error: any, source: string) => {
+    try {
+        await addDoc(collection(adminDb, "site_errors"), {
+            message: error.message || "An unknown error occurred.",
+            source: source,
+            timestamp: serverTimestamp(),
+            details: JSON.stringify(error, Object.getOwnPropertyNames(error))
+        });
+    } catch (dbError) {
+        console.error("CRITICAL: Failed to log error to Firestore.", dbError);
+    }
+};
 
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ 
@@ -219,6 +233,7 @@ const generateChatResponseFlow = async ({
       }
     } catch (e: any) {
       console.error('[generateChatResponseFlow] Knowledge base search failed:', e);
+      await logErrorToFirestore(e, 'generateChatResponseFlow/searchKnowledgeBase');
       retrievedContext = `CONTEXT_SEARCH_FAILED: ${e.message}`;
     }
     
@@ -260,9 +275,9 @@ const generateChatResponseFlow = async ({
 
       return output;
 
-    } catch (error: any)
-{
+    } catch (error: any) {
       console.error('[generateChatResponseFlow] Error generating AI response:', error);
+      await logErrorToFirestore(error, 'generateChatResponseFlow/chatPrompt');
       return {
         aiResponse: "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.",
         isClarificationQuestion: false,

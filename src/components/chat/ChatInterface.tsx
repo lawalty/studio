@@ -214,26 +214,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
 
-    const toggleListening = useCallback(() => {
-        if (!recognitionRef.current || !isMountedRef.current) return;
-    
-        const isCurrentlyListening = botStatus === 'listening';
-    
-        if (isCurrentlyListening) {
-            recognitionRef.current.stop();
-        } else if (!hasConversationEnded && !isBotSpeaking) {
-            try {
-                setInputValue('');
-                finalTranscriptRef.current = ''; // Clear previous transcript
-                recognitionRef.current.start();
-            } catch (e: any) {
-                if (e.name !== 'invalid-state') { // Ignore error if already starting
-                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
-                }
-            }
-        }
-    }, [botStatus, hasConversationEnded, isBotSpeaking, logErrorToFirestore]);
-    
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.();
@@ -369,7 +349,28 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
-
+    
+    const toggleListening = useCallback(() => {
+        if (!recognitionRef.current || !isMountedRef.current) return;
+        
+        const isCurrentlyListening = botStatus === 'listening';
+    
+        if (isCurrentlyListening) {
+            recognitionRef.current.stop();
+        } else if (!hasConversationEnded && !isBotSpeaking) {
+            try {
+                setInputValue('');
+                finalTranscriptRef.current = ''; // Clear previous transcript
+                recognitionRef.current.start();
+            } catch (e: any) {
+                if (e.name !== 'invalid-state') { // Ignore error if already starting
+                    console.error("Mic start error:", e);
+                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
+                }
+            }
+        }
+    }, [botStatus, hasConversationEnded, isBotSpeaking, logErrorToFirestore]);
+    
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
         if (botStatus === 'listening') {
@@ -468,7 +469,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 language: language,
                 clarificationAttemptCount: clarificationAttemptCount,
             };
-            const result = await withRetry(() => generateChatResponse(flowInput));
+            const result = await generateChatResponse(flowInput);
 
             if (result.isClarificationQuestion) {
                 setClarificationAttemptCount(prev => prev + 1);
@@ -503,14 +504,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             console.error("Error in generateChatResponse:", error);
             await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
             const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
+            const translatedError = await translate(errorMessage);
             setBotStatus('idle');
             setStatusMessage('');
-            addMessage({ text: errorMessage, sender: 'model'});
+            addMessage({ text: translatedError, sender: 'model'});
             if (communicationMode === 'audio-only' && !hasConversationEnded) {
                 startInactivityTimer();
             }
         }
-    }, [addMessage, hasConversationEnded, botStatus, language, speakText, uiText, clearInactivityTimer, startInactivityTimer, logErrorToFirestore, toggleListening, communicationMode, clarificationAttemptCount]);
+    }, [addMessage, hasConversationEnded, botStatus, language, speakText, uiText, clearInactivityTimer, startInactivityTimer, logErrorToFirestore, toggleListening, communicationMode, clarificationAttemptCount, translate]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
