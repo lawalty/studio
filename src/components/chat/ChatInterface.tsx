@@ -375,19 +375,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setStatusMessage('');
                 onSpeechEnd?.();
             });
-        }
-        else if (communicationMode === 'text-only') {
-            // Text only mode doesn't play audio, so it relies on the typing animation to finish.
-            // The handleEnd() call is inside the typeCharacter function's completion block.
-        } else {
-             // This covers audio-text or audio-only mode where audio failed to generate.
-             if (communicationMode === 'audio-only') {
-                setBotStatus('idle'); 
-                setStatusMessage('');
-                onSpeechEnd?.();
-             } else {
-                handleEnd();
-             }
+        } else if (communicationMode !== 'text-only') {
+             // This covers audio-text mode where audio failed to generate.
+             handleEnd();
         }
     }, [communicationMode, addMessage, logErrorToFirestore, uiText]);
 
@@ -519,7 +509,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 if (result.shouldEndConversation) {
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
-                     if (communicationMode === 'audio-only') {
+                     if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
                         toggleListening(true);
                      }
                 }
