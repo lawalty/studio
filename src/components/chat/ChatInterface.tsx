@@ -353,26 +353,39 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             };
             typeCharacter();
         }
-
+        
         // 6. Play audio if applicable and cleanup
-        if (communicationMode !== 'text-only' && audioDataUri) {
+        if (communicationMode === 'audio-text' && audioDataUri) {
             audioPlayerRef.current!.onended = handleEnd;
             await audioPlayerRef.current!.play().catch(e => {
                 console.error("Audio playback failed:", e);
                 handleEnd();
             });
-        } else if (communicationMode === 'audio-only') {
-            // For audio-only, if audio was generated or not, the "speaking" is done.
-            // We just need to fire the callback.
-             setBotStatus('idle'); 
-             setStatusMessage('');
-             onSpeechEnd?.();
-        } else if (communicationMode === 'text-only') {
+        } else if (communicationMode === 'audio-only' && audioDataUri) {
+            audioPlayerRef.current!.onended = () => {
+                setBotStatus('idle');
+                setStatusMessage('');
+                onSpeechEnd?.();
+            };
+            await audioPlayerRef.current!.play().catch(e => {
+                console.error("Audio playback failed:", e);
+                setBotStatus('idle');
+                setStatusMessage('');
+                onSpeechEnd?.();
+            });
+        }
+        else if (communicationMode === 'text-only') {
             // Text only mode doesn't play audio, so it relies on the typing animation to finish.
             // The handleEnd() call is inside the typeCharacter function's completion block.
         } else {
-            // This covers audio-text mode where audio failed to generate.
-            handleEnd();
+             // This covers audio-text or audio-only mode where audio failed to generate.
+             if (communicationMode === 'audio-only') {
+                setBotStatus('idle'); 
+                setStatusMessage('');
+                onSpeechEnd?.();
+             } else {
+                handleEnd();
+             }
         }
     }, [communicationMode, addMessage, logErrorToFirestore, uiText]);
 
@@ -422,7 +435,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             let promptText;
             if (inactivityCheckLevelRef.current === 1) {
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
             } else if (inactivityCheckLevelRef.current === 2) {
                 promptText = uiText.inactivityPromptSecondary;
             } else {
