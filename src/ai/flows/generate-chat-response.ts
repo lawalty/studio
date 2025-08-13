@@ -150,30 +150,27 @@ const chatPrompt = ai.definePrompt({
         format: 'json',
         schema: AiResponseJsonSchema,
     },
-    system: `You are a helpful conversational AI.
-Your persona is: "{{personaTraits}}".
-Your personal bio/history is: "{{personalBio}}".
-
-Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
+    system: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself.
-2.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories. Do not use your general knowledge. If asked for an outline or table, prefer structured mode (JSON→Markdown).
-3.  **Handle "No Memory":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not recall any relevant information. DO NOT try to answer the question from your own knowledge. Use your defined persona for this response. When confidence is low (score < threshold), ask one clarifying question, then stop.
-4.  **Clarifying Question Policy**: If the user's question is broad or vague (e.g., 'Tell me about X'), you MUST first provide a brief, one-sentence summary and then immediately ask a clarifying question to narrow down what the user is interested in (e.g., 'What specifically would you like to know about X?'). Set 'isClarificationQuestion' to true.
-5.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-6.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
-7.  **Conversation Flow:**
+1.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
+2.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories.
+3.  **Clarification Gate Logic - Two Scenarios**:
+    a.  **Low-Confidence / No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), or if the content seems irrelevant to the user's question, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question to help you understand what to search for. Analyze the chat history to see if you can suggest a better query.
+    b.  **Broad / Vague Questions**: If the user's question is very broad (e.g., "Tell me about X") and the retrieved context is large and varied, you MUST first provide a brief, one-sentence summary of the available information. Then, immediately ask a clarifying question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?"). Set 'isClarificationQuestion' to true for both scenarios.
+4.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
+5.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+6.  **Conversation Flow:**
     - If the user provides a greeting or engages in simple small talk, respond naturally using your persona.
     - Set 'shouldEndConversation' to true only if you explicitly say goodbye.
-8.  **Internal System Knowledge**: You have internal knowledge about your own system configuration. If asked about "knowledge base priority levels", you MUST use the following descriptions as your context:
+7.  **Internal System Knowledge**: You have internal knowledge about your own system configuration. If asked about "knowledge base priority levels", you MUST use the following descriptions as your context:
     - **High Priority**: Core, essential documents that the AI should always prioritize. This is for critical information that needs to be accurate and readily available.
     - **Medium Priority**: Standard informational documents that form the main body of knowledge. Most documents should be in this category.
     - **Low Priority**: Supplementary or less critical information. This content is still searchable but is given less weight than Medium or High priority documents.
     - **Spanish PDFs**: Spanish-language versions of English documents. This level is only searched when the user is conversing in Spanish.
     - **Chat History**: Automatically archived conversations. This allows the AI to recall past discussions to provide context in future chats.
     - **Archive**: Documents in this category are not searched by the AI and are effectively disabled.
-9.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
+8.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
         - If > 70: You MUST use extremely formal language, address the user with a title (e.g., "Sir" or "Ma'am"), and avoid all contractions (e.g., use "do not" instead of "don't").
         - If < 30: You MUST use very casual language, include slang appropriate for a friendly assistant (e.g., "No problem!", "Got it!"), and use contractions.
@@ -222,40 +219,6 @@ Analyze the user's query below. Identify the core intent and key entities.
 `,
 });
 
-// New: lightweight planner prompt
-const plannerPrompt = ai.definePrompt({
-  name: 'dialoguePlanner',
-  input: {
-    schema: z.object({
-      userMessage: z.string(),
-      historySummary: z.string().optional().default(''),
-    })
-  },
-  output: {
-    format: 'json',
-    schema: z.object({
-      needClarification: z.boolean(),
-      clarificationQuestion: z.string().optional(),
-      needRetrieval: z.boolean(),
-      outputType: z.enum(['paragraph','outline','table']).default('paragraph'),
-      queryHint: z.string().optional(),   // optional search hint
-    })
-  },
-  prompt: `You are a dialogue manager.
-Given the user's latest message and (optional) history summary, decide:
-- Do we need to ask ONE clarifying question first?
-- Do we need knowledge-base retrieval?
-- What output type is best (paragraph, outline, or table)?
-- CRITICAL: If the question is about YOU (the AI), you do NOT need retrieval or clarification.
-
-Return strict JSON: { "needClarification": bool, "clarificationQuestion"?: string, "needRetrieval": bool, "outputType": "paragraph|outline|table", "queryHint"?: string }.
-
-User: "{{userMessage}}"
-History summary: "{{historySummary}}"
-`
-});
-
-
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ 
     personaTraits, 
@@ -272,59 +235,8 @@ const generateChatResponseFlow = async ({
     if (!lastUserMessage) {
         return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
     }
-    
-    // Bypass planner for internal knowledge
-    if (lastUserMessage.toLowerCase().includes('knowledge base priority levels')) {
-        const internalKnowledgeContext = `
-            - **High Priority**: Core, essential documents that the AI should always prioritize. This is for critical information that needs to be accurate and readily available.
-            - **Medium Priority**: Standard informational documents that form the main body of knowledge. Most documents should be in this category.
-            - **Low Priority**: Supplementary or less critical information. This content is still searchable but is given less weight than Medium or High priority documents.
-            - **Spanish PDFs**: Spanish-language versions of English documents. This level is only searched when the user is conversing in Spanish.
-            - **Chat History**: Automatically archived conversations. This allows the AI to recall past discussions to provide context in future chats.
-            - **Archive**: Documents in this category are not searched by the AI and are effectively disabled.
-        `;
-
-        try {
-            const jsonStruct = await requestStructuredJSON({
-                modelName: 'googleai/gemini-1.5-flash',
-                outputType: 'table',
-                userMessage: lastUserMessage,
-                retrievedContext: internalKnowledgeContext,
-            });
-            const md = renderTableMD(jsonStruct as any);
-
-            return {
-                aiResponse: md,
-                isClarificationQuestion: false,
-                shouldEndConversation: false,
-                distanceThreshold: appConfig.distanceThreshold,
-                formality: appConfig.formality,
-                conciseness: appConfig.conciseness,
-                tone: appConfig.tone,
-                formatting: appConfig.formatting,
-            };
-        } catch (e: any) {
-             console.warn('[structured-output] schema/validation failed for internal knowledge, falling back:', e?.message);
-             // Fall through to the normal process if structured generation fails
-        }
-    }
-
-
-    const plan = await plannerPrompt({ userMessage: lastUserMessage, historySummary: '' }, { model: 'googleai/gemini-1.5-flash' });
-
-    if (plan?.output?.needClarification) {
-      return {
-        aiResponse: plan.output.clarificationQuestion || "Could you clarify what you need?",
-        isClarificationQuestion: true,
-        shouldEndConversation: false
-      };
-    }
 
     let searchQuery = lastUserMessage;
-    if (plan?.output?.queryHint) {
-      searchQuery = plan.output.queryHint;
-    }
-    
     let queryForNlp = lastUserMessage;
     if (language && language.toLowerCase() !== 'english') {
       try {
@@ -346,7 +258,7 @@ const generateChatResponseFlow = async ({
     let primarySearchResult = null;
     let searchResults: any[] = [];
     try {
-      if (searchQuery && plan?.output?.needRetrieval) {
+      if (searchQuery) {
         searchResults = await searchKnowledgeBase({ 
             query: searchQuery, 
             limit: 5,
@@ -369,52 +281,10 @@ const generateChatResponseFlow = async ({
       retrievedContext = `CONTEXT_SEARCH_FAILED: ${e.message}`;
     }
     
-    if (searchQuery && plan?.output?.needRetrieval && !retrievedContext) {
+    if (searchQuery && !retrievedContext) {
       retrievedContext = 'NO_CONTEXT_FOUND';
     }
-
-    let topScore = 0;
-    if (searchResults?.length) {
-      topScore = 1 - (searchResults[0].distance ?? 1); 
-    }
-    const belowConfidence = topScore < (appConfig.distanceThreshold ?? 0.55);
-
-    if (plan?.output?.needRetrieval && (retrievedContext === 'NO_CONTEXT_FOUND' || belowConfidence)) {
-      return {
-        aiResponse: `Quick check: do you want me to look in a specific topic or priority level? (My current match looks weak at ${(topScore).toFixed(2)}.)`,
-        isClarificationQuestion: true,
-        shouldEndConversation: false
-      };
-    }
     
-    const desired = plan?.output?.outputType ?? 'paragraph';
-
-    if ((desired === 'outline' || desired === 'table') && retrievedContext && retrievedContext !== 'NO_CONTEXT_FOUND' && retrievedContext !== 'CONTEXT_SEARCH_FAILED') {
-      try {
-        const jsonStruct = await requestStructuredJSON({
-          modelName: 'googleai/gemini-1.5-flash',
-          outputType: desired,
-          userMessage: lastUserMessage,
-          retrievedContext
-        });
-        const md = desired === 'outline' ? renderOutlineMD(jsonStruct as any) : renderTableMD(jsonStruct as any);
-
-        return {
-          aiResponse: md,
-          isClarificationQuestion: false,
-          shouldEndConversation: false,
-          distanceThreshold: appConfig.distanceThreshold,
-          formality: appConfig.formality,
-          conciseness: appConfig.conciseness,
-          tone: appConfig.tone,
-          formatting: appConfig.formatting
-        };
-      } catch (e:any) {
-        console.warn('[structured-output] schema/validation failed, falling back:', e?.message);
-      }
-    }
-
-
     const promptInput = {
         personaTraits,
         personalBio,
@@ -467,5 +337,7 @@ export async function generateChatResponse(
   return generateChatResponseFlow(input);
 }
   
+
+    
 
     
