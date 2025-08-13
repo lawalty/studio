@@ -6,25 +6,29 @@ import { cn } from "@/lib/utils";
 import { User, Bot, Download, Thermometer } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import React, { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-// Helper function to parse basic markdown (**bold**) and newlines
 const renderTextWithMarkdown = (text: string): JSX.Element => {
-  const parts = text.split(/(\*\*.*?\*\*)/g);
   return (
-    <>
-      {parts.map((part, index) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={index}>{part.slice(2, -2)}</strong>;
-        }
-        // Handle newlines within normal text parts
-        return part.split('\n').map((line, lineIndex, arr) => (
-          <React.Fragment key={`${index}-${lineIndex}`}>
-            {line}
-            {lineIndex < arr.length - 1 && <br />}
-          </React.Fragment>
-        ));
-      })}
-    </>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        table: ({node, ...props}) => <table className="w-full text-left border-collapse my-2" {...props} />,
+        thead: ({node, ...props}) => <thead className="bg-muted/50" {...props} />,
+        tbody: ({node, ...props}) => <tbody {...props} />,
+        tr: ({node, ...props}) => <tr className="border-b border-muted last:border-b-0" {...props} />,
+        th: ({node, ...props}) => <th className="p-2 font-semibold" {...props} />,
+        td: ({node, ...props}) => <td className="p-2 align-top" {...props} />,
+        p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+        strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
+        ol: ({node, ...props}) => <ol className="list-decimal list-inside ml-2 space-y-1" {...props} />,
+        ul: ({node, ...props}) => <ul className="list-disc list-inside ml-2 space-y-1" {...props} />,
+        li: ({node, ...props}) => <li className="pl-1" {...props} />,
+      }}
+    >
+      {text}
+    </ReactMarkdown>
   );
 };
 
