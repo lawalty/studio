@@ -92,9 +92,12 @@ const chatPrompt = ai.definePrompt({
 **CRITICAL INSTRUCTIONS:**
 1.  **Ending the Conversation**: If the user's last message is a simple negative response (e.g., 'No', 'Nope', 'That's all') in response to your question "Is there anything else I can help with?", you MUST interpret this as the end of the conversation. Respond with a polite closing remark (e.g., "Alright. Have a great day!") and set 'shouldEndConversation' to 'true'.
 2.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
-3.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories.
+3.  **Knowledge Base vs. General Knowledge**:
+    - If the retrieved context inside <retrieved_context> is NOT empty, you MUST answer based *only* on the information inside those tags.
+    - If the retrieved context IS empty ('NO_CONTEXT_FOUND'), but the user's question is a common-sense workplace or business scenario (e.g., how to handle an employee issue, general advice), you MUST use your general knowledge to provide a helpful, practical response.
+    - If the context is empty and the question is not a common-sense scenario, proceed to the Clarification step.
 4.  **Clarification Gate Logic - Two Scenarios**:
-    a.  **Low-Confidence / No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), or if the content seems irrelevant to the user's question, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question to help you understand what to search for. Analyze the chat history to see if you can suggest a better query.
+    a.  **Low-Confidence / No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), and the user's question is not a general common-sense query you can answer, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question to help you understand what to search for. Analyze the chat history to see if you can suggest a better query.
     b.  **Broad / Vague Questions**: If the user's question is very broad (e.g., "Tell me about X") and the retrieved context is large and varied, you MUST first provide a brief, one-sentence summary of the available information. Then, immediately ask a clarifying question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?"). Set 'isClarificationQuestion' to true for both scenarios.
 5.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
 6.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
@@ -165,12 +168,12 @@ const generateChatResponseFlow = async ({
         return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
     }
 
-    // New: If clarification has failed too many times, exit gracefully.
+    // If clarification has failed too many times, exit gracefully.
     if (clarificationAttemptCount && clarificationAttemptCount >= 2) {
       return {
-        aiResponse: "I apologize, but I'm still unable to find the information you're looking for. Can I help with anything else?",
-        isClarificationQuestion: false, // This is not a clarification, but a final prompt.
-        shouldEndConversation: false, // Let the user decide to end it.
+        aiResponse: "I apologize, but I'm still unable to find the information you're looking for. Is there anything else I can help you with?",
+        isClarificationQuestion: false,
+        shouldEndConversation: false,
       };
     }
 
@@ -281,4 +284,5 @@ export async function generateChatResponse(
     
 
     
+
 
