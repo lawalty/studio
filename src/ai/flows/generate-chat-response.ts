@@ -38,6 +38,11 @@ const AiResponseJsonSchema = z.object({
     downloadURL: z.string(),
   }).optional(),
   distanceThreshold: z.number().optional(),
+  // Add style values to the output for diagnostics
+  formality: z.number().optional(),
+  conciseness: z.number().optional(),
+  tone: z.number().optional(),
+  formatting: z.number().optional(),
 });
 export type GenerateChatResponseOutput = z.infer<typeof AiResponseJsonSchema>;
 
@@ -239,8 +244,12 @@ const generateChatResponseFlow = async ({
           }
       }
       
-      // Add the used distance threshold to the output for debugging/display
+      // Add the used distance threshold and style values to the output for debugging/display
       output.distanceThreshold = appConfig.distanceThreshold;
+      output.formality = appConfig.formality;
+      output.conciseness = appConfig.conciseness;
+      output.tone = appConfig.tone;
+      output.formatting = appConfig.formatting;
 
       return output;
 

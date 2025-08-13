@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Message } from '@/components/chat/ChatInterface';
@@ -69,6 +70,26 @@ export default function ChatBubble({
     }
     return null;
   };
+  
+  const renderDiagnostics = () => {
+    if (message.sender === 'user') return null;
+
+    const hasDiagnostics = typeof message.formality === 'number' ||
+                           typeof message.conciseness === 'number' ||
+                           typeof message.tone === 'number' ||
+                           typeof message.formatting === 'number';
+
+    if (!hasDiagnostics) return null;
+
+    return (
+      <div className="mt-2 text-xs text-muted-foreground/80 space-x-2 border-t border-muted-foreground/20 pt-1">
+        {typeof message.formality === 'number' && <span>F:{message.formality}</span>}
+        {typeof message.conciseness === 'number' && <span>C:{message.conciseness}</span>}
+        {typeof message.tone === 'number' && <span>T:{message.tone}</span>}
+        {typeof message.formatting === 'number' && <span>M:{message.formatting}</span>}
+      </div>
+    );
+  };
 
   const finalContent = renderTextWithMarkdown(message.text);
 
@@ -107,6 +128,7 @@ export default function ChatBubble({
                 </div>
             )}
         </div>
+        {renderDiagnostics()}
       </div>
       {isUser && (
          <Avatar className="h-8 w-8 ml-2 self-start">

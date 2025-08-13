@@ -33,6 +33,10 @@ export interface Message {
     downloadURL: string;
   };
   distanceThreshold?: number;
+  formality?: number;
+  conciseness?: number;
+  tone?: number;
+  formatting?: number;
 }
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
@@ -190,8 +194,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const isBotSpeaking = botStatus === 'speaking' || botStatus === 'typing';
     const isListening = botStatus === 'listening';
 
-    const addMessage = useCallback((text: string, sender: 'user' | 'model', pdfReference?: Message['pdfReference'], distanceThreshold?: number) => {
-        const newMessage: Message = { id: uuidv4(), text, sender, timestamp: Date.now(), pdfReference, distanceThreshold };
+    const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
+        const newMessage: Message = { ...message, id: uuidv4(), timestamp: Date.now() };
         setMessages(prev => [...prev, newMessage]);
     }, []);
 
@@ -268,7 +272,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setStatusMessage('');
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             setAnimatedResponse(null);
-            addMessage(fullMessage.text, 'model', fullMessage.pdfReference, fullMessage.distanceThreshold);
+            addMessage(fullMessage);
             onSpeechEnd?.();
         };
 
@@ -444,7 +448,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
-        addMessage(text, 'user');
+        addMessage({ text, sender: 'user' });
         setInputValue('');
         setBotStatus('preparing');
         setStatusMessage(uiText.isPreparing);
@@ -476,6 +480,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 timestamp: Date.now(),
                 pdfReference: result.pdfReference,
                 distanceThreshold: result.distanceThreshold,
+                formality: result.formality,
+                conciseness: result.conciseness,
+                tone: result.tone,
+                formatting: result.formatting,
             };
             
             await speakText(result.aiResponse, aiMessage, () => {
@@ -494,7 +502,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const errorMessage = error.message || uiText.errorEncountered;
             setBotStatus('idle');
             setStatusMessage('');
-            addMessage(errorMessage, 'model');
+            addMessage({ text: errorMessage, sender: 'model'});
             if (communicationMode === 'audio-only' && !hasConversationEnded) {
                 startInactivityTimer();
             }
@@ -827,5 +835,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
