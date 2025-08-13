@@ -161,6 +161,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const recognitionRef = useRef<any | null>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
     const inactivityCheckLevelRef = useRef<number>(0);
+    const speechPauseTimerRef = useRef<NodeJS.Timeout | null>(null);
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isMountedRef = useRef(true);
@@ -226,7 +227,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } else if (turnOn && !isCurrentlyListening) {
             if (!hasConversationEnded && !isBotActive) {
                 try {
-                    finalTranscriptRef.current = '';
+                    setInputValue('');
                     recognitionRef.current.start();
                 } catch (e: any) {
                     if (e.name !== 'invalid-state') { 
@@ -239,7 +240,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 recognitionRef.current.stop();
             } else if (!hasConversationEnded && !isBotActive) {
                 try {
-                    finalTranscriptRef.current = '';
+                    setInputValue('');
                     recognitionRef.current.start();
                 } catch (e: any) {
                      if (e.name !== 'invalid-state') {
@@ -639,6 +640,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             dismissAllToasts();
             clearInactivityTimer();
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+            if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             if (recognitionRef.current) try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
             if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) window.speechSynthesis.cancel();
             if (audioPlayerRef.current) {
@@ -699,7 +701,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         const recognition = new SpeechRecognitionAPI();
         recognitionRef.current = recognition;
-        recognition.continuous = false; 
+        recognition.continuous = true; // Keep listening until explicitly stopped
         recognition.interimResults = true;
         recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
@@ -707,6 +709,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (!isMountedRef.current) return;
             setBotStatus('listening');
             setStatusMessage(uiText.isListening);
+            if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             clearInactivityTimer();
         };
         
@@ -714,9 +717,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (!isMountedRef.current) return;
             setBotStatus('idle');
             setStatusMessage('');
-            const finalTranscript = finalTranscriptRef.current.trim();
-            finalTranscriptRef.current = '';
+            if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
 
+            // Handle sending message only if there's content
+            const finalTranscript = inputValue.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
             } else if (!hasConversationEnded && botStatus === 'idle' && (communicationMode === 'audio-only' || communicationMode === 'audio-text')) {
@@ -734,16 +738,22 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
 
         recognition.onresult = (event: any) => {
+          if (!isMountedRef.current) return;
+          if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
+
           let interimTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-              finalTranscriptRef.current += event.results[i][0].transcript;
-            } else {
-              interimTranscript += event.results[i][0].transcript;
-            }
+             interimTranscript += event.results[i][0].transcript;
           }
+          setInputValue(finalTranscriptRef.current + interimTranscript);
+          
+          // Set a timer to stop recognition if user pauses
+          speechPauseTimerRef.current = setTimeout(() => {
+            finalTranscriptRef.current = inputValue;
+            recognition.stop();
+          }, configRef.current.responsePauseTimeMs);
         };
-    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, botStatus, uiText]);
+    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, botStatus, uiText, inputValue]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
@@ -862,3 +872,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
