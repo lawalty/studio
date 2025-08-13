@@ -246,6 +246,7 @@ Given the user's latest message and (optional) history summary, decide:
 - Do we need to ask ONE clarifying question first?
 - Do we need knowledge-base retrieval?
 - What output type is best (paragraph, outline, or table)?
+- CRITICAL: If the question is about YOU (the AI), you do NOT need retrieval or clarification.
 
 Return strict JSON: { "needClarification": bool, "clarificationQuestion"?: string, "needRetrieval": bool, "outputType": "paragraph|outline|table", "queryHint"?: string }.
 
@@ -345,7 +346,7 @@ const generateChatResponseFlow = async ({
     let primarySearchResult = null;
     let searchResults: any[] = [];
     try {
-      if (searchQuery) {
+      if (searchQuery && plan?.output?.needRetrieval) {
         searchResults = await searchKnowledgeBase({ 
             query: searchQuery, 
             limit: 5,
@@ -368,7 +369,7 @@ const generateChatResponseFlow = async ({
       retrievedContext = `CONTEXT_SEARCH_FAILED: ${e.message}`;
     }
     
-    if (searchQuery && !retrievedContext) {
+    if (searchQuery && plan?.output?.needRetrieval && !retrievedContext) {
       retrievedContext = 'NO_CONTEXT_FOUND';
     }
 

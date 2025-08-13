@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow to index a document by chunking its text, generating an
@@ -98,12 +99,13 @@ export async function indexDocument({
             return { chunksWritten: 0, sourceId, success: true };
         }
 
-        const chunksCollection = sourceDocRef.collection('kb_chunks'); 
-
         for (let index = 0; index < chunks.length; index++) {
           const originalChunkText = chunks[index];
-          const newChunkDocRef = chunksCollection.doc(); 
           
+          // Using sourceId and chunk index for a deterministic chunk ID
+          const chunkId = `${sourceId}_${index + 1}`;
+          const newChunkDocRef = db.collectionGroup('kb_chunks').doc(chunkId); 
+
           const processedChunkTextForEmbedding = preprocessText(originalChunkText);
           if (!processedChunkTextForEmbedding) continue;
           
@@ -136,7 +138,10 @@ export async function indexDocument({
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
           }
-          await newChunkDocRef.set(chunkData);
+          // The document ID for a chunk within a collection group needs a full path.
+          // This must write to the actual subcollection under the metadata document.
+          const actualChunkDocRef = db.collection('kb_meta').doc(sourceId).collection('kb_chunks').doc(chunkId);
+          await actualChunkDocRef.set(chunkData);
         }
         
         const finalMetadata: Record<string, any> = {
