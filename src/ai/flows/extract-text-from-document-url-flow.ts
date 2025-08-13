@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview This flow extracts text from a document available at a public URL.
@@ -34,7 +35,8 @@ export async function extractTextFromDocument(
             throw new Error(`Failed to fetch document from URL: ${response.statusText}`);
         }
         const fileBuffer = await response.arrayBuffer();
-        const fileDataUri = `data:${response.headers.get('content-type') || 'application/octet-stream'};base64,${Buffer.from(fileBuffer).toString('base64')}`;
+        const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+        const fileDataUri = `data:${mimeType};base64,${Buffer.from(fileBuffer).toString('base64')}`;
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ 
@@ -56,11 +58,12 @@ CRITICAL INSTRUCTIONS:
 4.  Do NOT add any commentary, preamble, or summary.
 5.  Your output MUST ONLY be the clean, extracted text.`;
 
-        // The Gemini API can infer the mimeType from the base64 data.
-        // By not specifying a mimeType, we avoid the "not supported" error for Word docs.
         const result = await model.generateContent([
             systemPrompt,
-            { inlineData: { data: fileDataUri.split(',')[1] } }
+            { inlineData: { 
+                data: fileDataUri.split(',')[1],
+                mimeType,
+             } }
         ]);
         
         const text = result.response.text()?.trim() ?? '';

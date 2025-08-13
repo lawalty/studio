@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
@@ -29,7 +30,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { extractTextFromDocument } from '@/ai/flows/extract-text-from-document-url-flow';
 
 export type KnowledgeBaseLevel = 'High' | 'Medium' | 'Low' | 'Spanish PDFs' | 'Chat History' | 'Archive';
-type SourceType = 'PDF / Word' | 'Text' | 'Audio' | 'Image';
+type SourceType = 'PDF' | 'Text' | 'Audio' | 'Image';
 
 interface KnowledgeSource {
   id: string;
@@ -270,7 +271,7 @@ export default function KnowledgeBasePage() {
   const [audioTranscription, setAudioTranscription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
-  const [sourceType, setSourceType] = useState<SourceType>('PDF / Word');
+  const [sourceType, setSourceType] = useState<SourceType>('PDF');
   const [isListeningForUpload, setIsListeningForUpload] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -442,7 +443,7 @@ export default function KnowledgeBasePage() {
 
     const handleFileUpload = async () => {
     let hasContent = false;
-    if (sourceType === 'PDF / Word' || sourceType === 'Image') hasContent = !!selectedFile;
+    if (sourceType === 'PDF' || sourceType === 'Image') hasContent = !!selectedFile;
     if (sourceType === 'Text') hasContent = !!rawTextContent || !!selectedFile;
     if (sourceType === 'Audio') hasContent = !!audioTranscription || !!selectedFile;
     
@@ -509,21 +510,12 @@ export default function KnowledgeBasePage() {
 
         await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text...' });
         
-        // Use client-side extraction for supported types, otherwise flag for server-side.
-        const isWordDoc = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileName.endsWith('.docx') || fileName.endsWith('.doc');
-
-        if (textToProcess === null && !isWordDoc && fileToUpload) {
+        if (textToProcess === null && fileToUpload) {
             const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
             if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
                 throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content.');
             }
             textToProcess = extractionResult.extractedText;
-        } else if (textToProcess === null && isWordDoc) {
-             const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-             if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-                 throw new Error(extractionResult?.error || 'Server-side text extraction failed for Word document.');
-             }
-             textToProcess = extractionResult.extractedText;
         }
 
         if (!textToProcess) {
@@ -613,8 +605,8 @@ export default function KnowledgeBasePage() {
   
     const getFileInputAccept = () => {
       switch (sourceType) {
-          case 'PDF / Word':
-              return '.pdf,.doc,.docx';
+          case 'PDF':
+              return '.pdf';
           case 'Text':
               return '.txt';
           case 'Audio':
@@ -698,8 +690,8 @@ export default function KnowledgeBasePage() {
                     <Label>Source Type</Label>
                     <RadioGroup defaultValue={sourceType} onValueChange={(value) => setSourceType(value as SourceType)} className="grid grid-cols-2 justify-items-center gap-4">
                         <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="PDF / Word" id="r-pdf" />
-                            <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF / Word</Label>
+                            <RadioGroupItem value="PDF" id="r-pdf" />
+                            <Label htmlFor="r-pdf" className="flex items-center gap-2"><FileText size={16}/> PDF</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                             <RadioGroupItem value="Text" id="r-text" />
@@ -760,7 +752,7 @@ export default function KnowledgeBasePage() {
                         {sourceType === 'Text' && 'Upload a .txt file'}
                         {sourceType === 'Audio' && 'Upload an Audio File'}
                         {sourceType === 'Image' && 'Upload an Image File'}
-                        {sourceType === 'PDF / Word' && 'Upload a PDF/Word Document'}
+                        {sourceType === 'PDF' && 'Upload a PDF Document'}
                     </Label>
                     <Input id="file-upload" type="file" ref={fileInputRef} onChange={(e) => e.target.files && setSelectedFile(e.target.files[0])} accept={getFileInputAccept()} />
                 </div>
@@ -840,3 +832,4 @@ export default function KnowledgeBasePage() {
     </div>
   );
 }
+

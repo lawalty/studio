@@ -1,3 +1,4 @@
+
 'use client';
 /**
  * @fileOverview Extracts clean, readable text from a local file object entirely on the client-side.
@@ -81,13 +82,7 @@ CRITICAL INSTRUCTIONS:
 6.  Your final output must ONLY be the clean, extracted text from the document. If the document is blank or contains no machine-readable text, you MUST return an empty response.`;
 
       const fileDataUri = await fileToDataUri(file);
-      let mimeType = file.type;
-
-      // FIX: The Gemini API does not support the official DOCX mime type.
-      // We replace it with a generic one that the API accepts for processing.
-      if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-          mimeType = 'application/octet-stream';
-      }
+      const mimeType = file.type;
 
       const result = await model.generateContent([
           systemPrompt,
