@@ -181,7 +181,7 @@ export default function ApiKeysPage() {
   const getSearchResultAlert = () => {
     if (!searchResult) return null;
     
-    let variant: "default" | "destructive" | "warning" = "default";
+    let variant: "default" | "destructive" = "default";
     let title = "";
     let icon = <CheckCircle className="h-4 w-4" />;
 
@@ -194,7 +194,7 @@ export default function ApiKeysPage() {
       title = "Search Failed";
       icon = <AlertTriangle className="h-4 w-4" />;
     } else {
-      variant = "warning" as any;
+      variant = "default";
       title = "No Results Found";
       icon = <Info className="h-4 w-4" />;
     }
