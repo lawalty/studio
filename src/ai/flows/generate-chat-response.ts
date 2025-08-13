@@ -46,6 +46,20 @@ const AiResponseJsonSchema = z.object({
 });
 export type GenerateChatResponseOutput = z.infer<typeof AiResponseJsonSchema>;
 
+// New: Structured output contracts
+const OutlineContract = z.object({
+  title: z.string(),
+  sections: z.array(z.object({
+    heading: z.string(),
+    bullets: z.array(z.string())
+  }))
+});
+
+const TableContract = z.object({
+  columns: z.array(z.string()).min(1),
+  rows: z.array(z.array(z.string()))
+});
+
 // Helper function to find the Spanish version of a document
 const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: string; downloadURL: string } | null> => {
     const spanishPdfQuery = adminDb.collection('kb_meta')
@@ -62,6 +76,58 @@ const findSpanishPdf = async (englishSourceId: string): Promise<{ fileName: stri
         downloadURL: spanishDoc.downloadURL,
     };
 };
+
+// New: small helper to ask the model for JSON matching the chosen contract
+async function requestStructuredJSON(params: {
+  modelName: string;
+  outputType: 'outline'|'table';
+  userMessage: string;
+  retrievedContext: string;
+}) {
+  const schema = params.outputType === 'outline' ? OutlineContract : TableContract;
+
+  const structuredPrompt = ai.definePrompt({
+    name: 'structuredMaker',
+    input: { schema: z.object({
+      outputType: z.enum(['outline','table']),
+      userMessage: z.string(),
+      retrievedContext: z.string()
+    }) },
+    output: { format: 'json', schema },
+    system: `Produce STRICT JSON for the requested outputType using only the provided context. No extra keys.`,
+    prompt: `OUTPUT TYPE: {{outputType}}
+USER: "{{userMessage}}"
+CONTEXT:
+{{{retrievedContext}}}
+`
+  });
+
+  const { output } = await structuredPrompt({
+    outputType: params.outputType,
+    userMessage: params.userMessage,
+    retrievedContext: params.retrievedContext
+  }, { model: params.modelName });
+
+  return schema.parse(output); // throws if invalid
+}
+
+// New: renderers
+function renderOutlineMD(o: z.infer<typeof OutlineContract>) {
+  const lines = [`# ${o.title}`];
+  for (const s of o.sections) {
+    lines.push(`\n## ${s.heading}`);
+    for (const b of s.bullets) lines.push(`- ${b}`);
+  }
+  return lines.join('\n');
+}
+
+function renderTableMD(t: z.infer<typeof TableContract>) {
+  const header = `| ${t.columns.join(' | ')} |`;
+  const sep    = `| ${t.columns.map(()=>'---').join(' | ')} |`;
+  const rows   = t.rows.map(r => `| ${r.join(' | ')} |`);
+  return [header, sep, ...rows].join('\n');
+}
+
 
 // Define the prompt using the stable ai.definePrompt pattern
 const chatPrompt = ai.definePrompt({
@@ -92,8 +158,8 @@ Your first and most important task is to analyze the 'Response Style Equalizer' 
 
 **CRITICAL INSTRUCTIONS:**
 1.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself.
-2.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories. Do not use your general knowledge.
-3.  **Handle "No Memory":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not recall any relevant information. DO NOT try to answer the question from your own knowledge. Use your defined persona for this response.
+2.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories. Do not use your general knowledge. If asked for an outline or table, prefer structured mode (JSON→Markdown).
+3.  **Handle "No Memory":** If the context is 'NO_CONTEXT_FOUND' or 'CONTEXT_SEARCH_FAILED', you MUST inform the user that you could not recall any relevant information. DO NOT try to answer the question from your own knowledge. Use your defined persona for this response. When confidence is low (score < threshold), ask one clarifying question, then stop.
 4.  **Clarifying Question Policy**: If the user's question is broad or vague (e.g., 'Tell me about X'), you MUST first provide a brief, one-sentence summary and then immediately ask a clarifying question to narrow down what the user is interested in (e.g., 'What specifically would you like to know about X?'). Set 'isClarificationQuestion' to true.
 5.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
 6.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
@@ -149,6 +215,38 @@ Analyze the user's query below. Identify the core intent and key entities.
 `,
 });
 
+// New: lightweight planner prompt
+const plannerPrompt = ai.definePrompt({
+  name: 'dialoguePlanner',
+  input: {
+    schema: z.object({
+      userMessage: z.string(),
+      historySummary: z.string().optional().default(''),
+    })
+  },
+  output: {
+    format: 'json',
+    schema: z.object({
+      needClarification: z.boolean(),
+      clarificationQuestion: z.string().optional(),
+      needRetrieval: z.boolean(),
+      outputType: z.enum(['paragraph','outline','table']).default('paragraph'),
+      queryHint: z.string().optional(),   // optional search hint
+    })
+  },
+  prompt: `You are a dialogue manager.
+Given the user's latest message and (optional) history summary, decide:
+- Do we need to ask ONE clarifying question first?
+- Do we need knowledge-base retrieval?
+- What output type is best (paragraph, outline, or table)?
+
+Return strict JSON: { "needClarification": bool, "clarificationQuestion"?: string, "needRetrieval": bool, "outputType": "paragraph|outline|table", "queryHint"?: string }.
+
+User: "{{userMessage}}"
+History summary: "{{historySummary}}"
+`
+});
+
 
 // Define the flow at the top level.
 const generateChatResponseFlow = async ({ 
@@ -159,18 +257,29 @@ const generateChatResponseFlow = async ({
     language,
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
-    // 1. Fetch the dynamic application configuration from Firestore.
     const appConfig = await getAppConfig();
-
     const historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
 
-    let searchQuery = lastUserMessage;
-    if (!searchQuery) {
+    if (!lastUserMessage) {
         return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
     }
 
-    // 2. (Optional) Translate and refine the user's query.
+    const plan = await plannerPrompt({ userMessage: lastUserMessage, historySummary: '' }, { model: 'googleai/gemini-1.5-flash' });
+
+    if (plan?.output?.needClarification) {
+      return {
+        aiResponse: plan.output.clarificationQuestion || "Could you clarify what you need?",
+        isClarificationQuestion: true,
+        shouldEndConversation: false
+      };
+    }
+
+    let searchQuery = lastUserMessage;
+    if (plan?.output?.queryHint) {
+      searchQuery = plan.output.queryHint;
+    }
+    
     let queryForNlp = lastUserMessage;
     if (language && language.toLowerCase() !== 'english') {
       try {
@@ -188,15 +297,15 @@ const generateChatResponseFlow = async ({
         searchQuery = queryForNlp;
     }
 
-    // 3. Search the knowledge base using the dynamic distance threshold.
     let retrievedContext = '';
     let primarySearchResult = null;
+    let searchResults: any[] = [];
     try {
       if (searchQuery) {
-        const searchResults = await searchKnowledgeBase({ 
+        searchResults = await searchKnowledgeBase({ 
             query: searchQuery, 
             limit: 5,
-            distanceThreshold: appConfig.distanceThreshold, // Use the fetched threshold
+            distanceThreshold: appConfig.distanceThreshold,
         });
         
         if (searchResults && searchResults.length > 0) {
@@ -219,7 +328,48 @@ const generateChatResponseFlow = async ({
       retrievedContext = 'NO_CONTEXT_FOUND';
     }
 
-    // 4. Construct the prompt and generate the final AI response.
+    let topScore = 0;
+    if (searchResults?.length) {
+      topScore = 1 - (searchResults[0].distance ?? 1); 
+    }
+    const belowConfidence = topScore < (appConfig.distanceThreshold ?? 0.55);
+
+    if (plan?.output?.needRetrieval && (retrievedContext === 'NO_CONTEXT_FOUND' || belowConfidence)) {
+      return {
+        aiResponse: `Quick check: do you want me to look in a specific topic or priority level? (My current match looks weak at ${(topScore).toFixed(2)}.)`,
+        isClarificationQuestion: true,
+        shouldEndConversation: false
+      };
+    }
+    
+    const desired = plan?.output?.outputType ?? 'paragraph';
+
+    if ((desired === 'outline' || desired === 'table') && retrievedContext && retrievedContext !== 'NO_CONTEXT_FOUND' && retrievedContext !== 'CONTEXT_SEARCH_FAILED') {
+      try {
+        const jsonStruct = await requestStructuredJSON({
+          modelName: 'googleai/gemini-1.5-flash',
+          outputType: desired,
+          userMessage: lastUserMessage,
+          retrievedContext
+        });
+        const md = desired === 'outline' ? renderOutlineMD(jsonStruct as any) : renderTableMD(jsonStruct as any);
+
+        return {
+          aiResponse: md,
+          isClarificationQuestion: false,
+          shouldEndConversation: false,
+          distanceThreshold: appConfig.distanceThreshold,
+          formality: appConfig.formality,
+          conciseness: appConfig.conciseness,
+          tone: appConfig.tone,
+          formatting: appConfig.formatting
+        };
+      } catch (e:any) {
+        console.warn('[structured-output] schema/validation failed, falling back:', e?.message);
+      }
+    }
+
+
     const promptInput = {
         personaTraits,
         personalBio,
@@ -246,7 +396,6 @@ const generateChatResponseFlow = async ({
           }
       }
       
-      // Add the used distance threshold and style values to the output for debugging/display
       output.distanceThreshold = appConfig.distanceThreshold;
       output.formality = appConfig.formality;
       output.conciseness = appConfig.conciseness;
@@ -272,5 +421,4 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    
+  
