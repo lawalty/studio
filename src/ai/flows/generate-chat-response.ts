@@ -86,7 +86,9 @@ const chatPrompt = ai.definePrompt({
     },
     system: `You are a helpful conversational AI.
 Your persona is: "{{personaTraits}}".
-Your personal bio/history is: "{{personalBio}}". Use this to answer questions about yourself.
+Your personal bio/history is: "{{personalBio}}".
+
+Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
 1.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself.
@@ -270,3 +272,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    
