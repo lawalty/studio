@@ -155,7 +155,7 @@ const chatPrompt = ai.definePrompt({
     system: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Clarification Loop Prevention**: The user's system is tracking how many times you've had to ask for clarification in a row. The current count is {{clarificationAttemptCount}}. If this count is 2 or greater, you are FORBIDDEN from asking another question. You MUST apologize for not being able to find the information and politely end the conversation by setting 'shouldEndConversation' to true.
+1.  **Clarification Loop Prevention**: The user's system is tracking how many times you've had to ask for clarification in a row. The current count is {{clarificationAttemptCount}}. If this count is 2 or greater, you are FORBIDDEN from asking another clarifying question about the same topic. You MUST apologize for not being able to find the information and then ask if you can help with anything else. Do not end the conversation unless the user says goodbye.
 2.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
 3.  **Use Your Memories for Other Questions**: For all other questions NOT about yourself, you MUST answer based *only* on the information inside the <retrieved_context> XML tags, which represent your memories.
 4.  **Clarification Gate Logic - Two Scenarios**:
@@ -342,6 +342,8 @@ export async function generateChatResponse(
   return generateChatResponseFlow(input);
 }
   
+
+    
 
     
 
