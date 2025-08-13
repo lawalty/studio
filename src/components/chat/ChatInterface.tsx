@@ -216,19 +216,19 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
-        
+    
         const isCurrentlyListening = botStatus === 'listening';
-
+    
         if (isCurrentlyListening) {
             recognitionRef.current.stop();
         } else if (!hasConversationEnded && !isBotSpeaking) {
             try {
                 setInputValue('');
+                finalTranscriptRef.current = ''; // Clear previous transcript
                 recognitionRef.current.start();
             } catch (e: any) {
-                // Ignore "invalid state" errors which can happen if start() is called when it's already starting.
-                if (e.name !== 'invalid-state') {
-                  logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
+                if (e.name !== 'invalid-state') { // Ignore error if already starting
+                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
                 }
             }
         }
@@ -372,7 +372,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
-        toggleListening(false);
+        if (botStatus === 'listening') {
+            recognitionRef.current?.stop();
+        }
         if (botStatus !== 'idle') {
             if (audioPlayerRef.current) audioPlayerRef.current.pause();
             if (typeof window !== 'undefined') window.speechSynthesis.cancel();
@@ -394,7 +396,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } else {
             setHasConversationEnded(true);
         }
-    }, [clearInactivityTimer, botStatus, uiText, speakText, translate, toggleListening]);
+    }, [clearInactivityTimer, botStatus, uiText, speakText, translate]);
     
     const startInactivityTimer = useCallback(() => {
         if (communicationMode !== 'audio-only') return;
@@ -491,7 +493,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 if (result.shouldEndConversation) {
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
-                     if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
+                     if (communicationMode === 'audio-only') {
                         toggleListening();
                      }
                 }
@@ -643,7 +645,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 greetingText = await translate(textToTranslate);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, greetingMessage, () => {
-                    if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
+                    if (communicationMode === 'audio-only') {
                         toggleListening();
                     }
                 });
@@ -653,8 +655,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setBotStatus('idle');
                 setStatusMessage('');
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
-                await speakText(fallbackMessage, () => {
-                    if (communicationMode === 'audio-only' || communicationMode === 'audio-text') {
+                await speakText(greetingText, fallbackMessage, () => {
+                    if (communicationMode === 'audio-only') {
                         toggleListening();
                     }
                 });
