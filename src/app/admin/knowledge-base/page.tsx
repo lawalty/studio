@@ -381,7 +381,7 @@ export default function KnowledgeBasePage() {
           await updateDoc(sourceDocRef, { indexingStatus: 'processing', indexingError: "Clearing old data...", chunksWritten: 0 });
   
           // Step 1: Delete existing chunks to prevent duplicates.
-          const chunksCollectionRef = sourceDocRef.collection('kb_chunks');
+          const chunksCollectionRef = collection(db, 'kb_meta', source.id, 'kb_chunks');
           const chunksSnapshot = await getDocs(chunksCollectionRef);
           if (!chunksSnapshot.empty) {
               const batch = writeBatch(db);
