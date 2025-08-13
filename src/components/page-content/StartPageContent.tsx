@@ -169,15 +169,16 @@ export default function StartPageContent() {
   useEffect(() => {
     let animationDelayTimer: NodeJS.Timeout | null = null;
     let typingTimer: NodeJS.Timeout | null = null;
+    const audioEl = audioRef.current;
 
     const playAudio = () => {
       // Check session storage to see if the audio has already been played.
       if (sessionStorage.getItem('hasPlayedWelcomeAudio') === 'true') {
         return; // Do not play if the flag is set.
       }
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(error => {
+      if (audioEl) {
+        audioEl.currentTime = 0;
+        audioEl.play().catch(error => {
           console.warn("Audio autoplay was prevented:", error);
         });
         // Set the flag in session storage after playing.
@@ -207,8 +208,8 @@ export default function StartPageContent() {
     return () => {
       if (animationDelayTimer) clearTimeout(animationDelayTimer);
       if (typingTimer) clearInterval(typingTimer);
-      if (audioRef.current) {
-        audioRef.current.pause();
+      if (audioEl) {
+        audioEl.pause();
       }
     };
   }, [isLoading, isImageLoaded, typingSpeedMs, uiText.typedAnim, configError]);

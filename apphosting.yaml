@@ -26,15 +26,9 @@ runConfig:
     # See the README for instructions.
     - variable: GEMINI_API_KEY
       secret: GEMINI_API_KEY
-    - variable: VERTEX_AI_INDEX_ID
-      secret: VERTEX_AI_INDEX_ID
-    - variable: VERTEX_AI_INDEX_ENDPOINT_ID
-      secret: VERTEX_AI_INDEX_ENDPOINT_ID
-    - variable: VERTEX_AI_DEPLOYED_INDEX_ID
-      secret: VERTEX_AI_DEPLOYED_INDEX_ID
-    - variable: VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN
-      secret: VERTEX_AI_PUBLIC_ENDPOINT_DOMAIN
-    - variable: ADMIN_PASSWORD
-      secret: ADMIN_PASSWORD
+    - variable: GCLOUD_PROJECT
+      secret: GCLOUD_PROJECT
+    - variable: LOCATION
+      secret: LOCATION
 # By default, App Hosting builds from the root directory.
 # For a standard Next.js app, this is often not needed.
