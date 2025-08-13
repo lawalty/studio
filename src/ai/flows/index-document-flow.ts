@@ -102,10 +102,8 @@ export async function indexDocument({
         for (let index = 0; index < chunks.length; index++) {
           const originalChunkText = chunks[index];
           
-          // Using sourceId and chunk index for a deterministic chunk ID
           const chunkId = `${sourceId}_${index + 1}`;
-          const newChunkDocRef = db.collectionGroup('kb_chunks').doc(chunkId); 
-
+          
           const processedChunkTextForEmbedding = preprocessText(originalChunkText);
           if (!processedChunkTextForEmbedding) continue;
           
