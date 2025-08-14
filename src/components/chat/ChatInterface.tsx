@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mic, Power, DatabaseZap, Save, RotateCcw, Square, Loader2 } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -208,7 +208,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             await addDoc(collection(db, "site_errors"), {
                 message: error.message || "An unknown error occurred.",
                 source: source,
-                timestamp: new Date().toISOString(),
+                timestamp: new Date(),
                 details: JSON.stringify(error, Object.getOwnPropertyNames(error))
             });
         } catch (dbError) {

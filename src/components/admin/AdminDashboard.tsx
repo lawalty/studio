@@ -9,7 +9,7 @@ import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recha
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription as AlertDescriptionComponent, AlertTitle } from '../ui/alert';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, doc, deleteDoc, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, doc, deleteDoc, orderBy, query, type Timestamp } from 'firebase/firestore';
 import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
@@ -19,7 +19,7 @@ interface SiteError {
     id: string;
     message: string;
     source: string;
-    timestamp: Date;
+    timestamp: Timestamp;
 }
 
 const topTopicsData = [
@@ -62,7 +62,6 @@ export default function AdminDashboard() {
         const errorsData = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            timestamp: doc.data().timestamp.toDate(),
         } as SiteError));
         setSiteErrors(errorsData);
         setIsLoadingErrors(false);
@@ -241,7 +240,9 @@ export default function AdminDashboard() {
                                             <div className="flex-1">
                                                 <AlertTitle>Error in: {error.source}</AlertTitle>
                                                 <AlertDescriptionComponent className="break-words mt-1">{error.message}</AlertDescriptionComponent>
-                                                <p className="text-xs text-destructive/80 mt-2">{formatDistanceToNow(error.timestamp, { addSuffix: true })}</p>
+                                                <p className="text-xs text-destructive/80 mt-2">
+                                                    {error.timestamp ? formatDistanceToNow(error.timestamp.toDate(), { addSuffix: true }) : 'Just now'}
+                                                </p>
                                             </div>
                                             <Button variant="ghost" size="icon" onClick={() => handleDeleteError(error.id)} className="h-6 w-6 ml-2 shrink-0">
                                                 <Trash2 className="h-4 w-4" />
