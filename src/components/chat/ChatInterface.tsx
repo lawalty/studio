@@ -196,8 +196,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const isBotSpeaking = botStatus === 'speaking' || botStatus === 'typing';
     const isListening = botStatus === 'listening';
 
-    // To fix ReferenceErrors, we need to define functions before they are used in useCallback dependency arrays.
-    // We will declare them here and then wrap them in useCallback later.
     let speakText: (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => Promise<void>;
     let startInactivityTimer: () => void;
     let handleEndChatManually: (reason?: "final-inactive" | undefined) => Promise<void>;
@@ -305,7 +303,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText, language, clarificationAttemptCount, translate, logErrorToFirestore, communicationMode]);
     
-    // Define the functions
     const speakTextFn = async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.();
@@ -403,22 +400,22 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
         
         if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
+            setBotStatus('speaking');
             audioPlayerRef.current.src = audioDataUri;
             audioPlayerRef.current.onended = handleEnd;
             audioPlayerRef.current.play().then(() => {
-                setBotStatus('speaking');
                 setStatusMessage('');
             }).catch(e => {
                 console.error("Audio playback failed:", e);
                 handleEnd();
             });
         } else if (communicationMode === 'audio-only' && audioDataUri && audioPlayerRef.current) {
+             setBotStatus('speaking');
              audioPlayerRef.current.src = audioDataUri;
              audioPlayerRef.current.onended = () => {
                  onSpeechEnd?.();
              };
              audioPlayerRef.current.play().then(() => {
-                 setBotStatus('speaking');
                  setStatusMessage('');
              }).catch(e => {
                 console.error("Audio playback failed:", e);
@@ -519,7 +516,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     };
     
-    // Now wrap them in useCallback
     speakText = useCallback(speakTextFn, [communicationMode, addMessage, logErrorToFirestore, uiText, configRef]);
     handleEndChatManually = useCallback(handleEndChatManuallyFn, [clearInactivityTimer, botStatus, uiText.inactivityEndMessage, speakText, translate]);
     startInactivityTimer = useCallback(startInactivityTimerFn, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, clearInactivityTimer]);
@@ -714,9 +710,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
             } else if (botStatus === 'listening') {
-                setBotStatus('idle');
-                setStatusMessage('');
-                startInactivityTimer();
+                // If onend fires without a transcript (e.g., silence), don't change state here.
+                // Let the inactivity timer handle the next step.
             }
         };
 
