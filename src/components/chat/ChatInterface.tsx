@@ -715,15 +715,16 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           inactivityCheckLevelRef.current = 0;
 
           let interim_transcript = '';
-          finalTranscriptRef.current = '';
+          let final_transcript = '';
 
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              finalTranscriptRef.current += event.results[i][0].transcript;
+              final_transcript += event.results[i][0].transcript;
             } else {
               interim_transcript += event.results[i][0].transcript;
             }
           }
+          finalTranscriptRef.current = final_transcript;
           
           setInputValue(finalTranscriptRef.current + interim_transcript);
           
@@ -788,10 +789,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-6">
           {!hasConversationEnded ? (
             <>
-              <Image {...imageProps} alt="AI Blair Avatar" />
               <h2 className="text-2xl font-bold font-headline text-primary">
-                {botStatus !== 'speaking' ? uiMessage : ""}
+                {uiMessage}
               </h2>
+              <Image {...imageProps} alt="AI Blair Avatar" />
               <div className="flex h-16 w-full items-center justify-center">
                  {statusMessage && (
                     <div className={cn("flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow", (isListening || isBotProcessing) && "animate-pulse")}>
