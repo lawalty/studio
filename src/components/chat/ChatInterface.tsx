@@ -322,9 +322,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (!isMountedRef.current) return;
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             setAnimatedResponse(null);
-            if (communicationMode !== 'audio-only') {
-                addMessage(fullMessage);
-            }
+            addMessage(fullMessage);
             onSpeechEnd?.();
         };
 
@@ -866,6 +864,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     );
 }
 
+
+    
 
     
 
