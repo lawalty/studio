@@ -196,12 +196,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const isBotSpeaking = botStatus === 'speaking' || botStatus === 'typing';
     const isListening = botStatus === 'listening';
 
-    // Forward declare functions
-    let speakText: (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => Promise<void>;
-    let startInactivityTimer: () => void;
-    let handleEndChatManually: (reason?: "final-inactive" | undefined) => Promise<void>;
-    let toggleListening: () => void;
-
+    // Forward declare functions to solve initialization errors
+    let speakTextFn: (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => Promise<void>;
+    let startInactivityTimerFn: () => void;
+    let handleEndChatManuallyFn: (reason?: "final-inactive" | undefined) => Promise<void>;
+    let toggleListeningFn: () => void;
+    
     const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
         const newMessage: Message = { ...message, id: uuidv4(), timestamp: Date.now() };
         setMessages(prev => [...prev, newMessage]);
@@ -277,12 +277,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 formatting: result.formatting,
             };
             
-            await speakText(result.aiResponse, aiMessage, () => {
+            await speakTextFn(result.aiResponse, aiMessage, () => {
                 if (result.shouldEndConversation) {
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
                     if (communicationMode === 'audio-only') {
-                        toggleListening();
+                        toggleListeningFn();
                     } else {
                         setBotStatus('idle');
                         setStatusMessage('');
@@ -299,13 +299,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('idle');
             setStatusMessage('');
             if (communicationMode === 'audio-only' && !hasConversationEnded) {
-                startInactivityTimer();
+                startInactivityTimerFn();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText, language, clarificationAttemptCount, translate, logErrorToFirestore, communicationMode]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode]);
     
-    // Plain function declarations to break dependency cycle
-    const speakTextFn = async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
+    // Define plain functions first to break dependency cycle
+    speakTextFn = async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.();
@@ -384,14 +384,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 };
                 typeCharacter();
             }
-
+            
             if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
                 setBotStatus(targetStatus);
                 setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
                 audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.onended = handleEnd;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
-            } else if (communicationMode === 'audio-only' && audioDataUri && audioPlayerRef.current) {
+            } else if (communicationMode === 'audio-only') {
                 setBotStatus(targetStatus);
                 setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
                 audioPlayerRef.current.src = audioDataUri;
@@ -406,7 +406,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         playAndAnimate();
     };
 
-    const handleEndChatManuallyFn = async (reason?: 'final-inactive') => {
+    handleEndChatManuallyFn = async (reason?: 'final-inactive') => {
         clearInactivityTimer();
         if (botStatus === 'listening') { recognitionRef.current?.stop(); }
         if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
@@ -418,7 +418,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         if (reason === 'final-inactive') {
             const translatedEndMessage = await translate(uiText.inactivityEndMessage);
             const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
-            await speakText(translatedEndMessage, finalMessage, () => {
+            await speakTextFn(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
         } else {
@@ -426,7 +426,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     };
     
-    const startInactivityTimerFn = () => {
+    startInactivityTimerFn = () => {
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
 
         clearInactivityTimer();
@@ -442,7 +442,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 promptText = uiText.inactivityPromptSecondary;
             } else {
                 inactivityCheckLevelRef.current = 0;
-                handleEndChatManually('final-inactive');
+                handleEndChatManuallyFn('final-inactive');
                 return;
             }
             
@@ -451,16 +451,16 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const translatedPrompt = await translate(promptText);
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
-            await speakText(translatedPrompt, promptMessage, () => {
+            await speakTextFn(translatedPrompt, promptMessage, () => {
                 if (isMountedRef.current && !hasConversationEnded) {
-                    toggleListening();
+                    toggleListeningFn();
                 }
             });
 
         }, configRef.current.inactivityTimeoutMs);
     };
 
-    const toggleListeningFn = () => {
+    toggleListeningFn = () => {
         if (!recognitionRef.current || !isMountedRef.current) return;
         const isCurrentlyListening = botStatus === 'listening';
     
@@ -484,10 +484,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     };
 
-    speakText = useCallback(speakTextFn, [communicationMode, addMessage, logErrorToFirestore, uiText, configRef]);
-    handleEndChatManually = useCallback(handleEndChatManuallyFn, [clearInactivityTimer, botStatus, uiText.inactivityEndMessage, speakText, translate]);
-    startInactivityTimer = useCallback(startInactivityTimerFn, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, clearInactivityTimer]);
-    toggleListening = useCallback(toggleListeningFn, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
+    // Now wrap them in useCallback
+    const speakText = useCallback(speakTextFn, [communicationMode, addMessage, logErrorToFirestore, uiText, configRef]);
+    const handleEndChatManually = useCallback(handleEndChatManuallyFn, [clearInactivityTimer, botStatus, uiText.inactivityEndMessage, speakText, translate]);
+    const startInactivityTimer = useCallback(startInactivityTimerFn, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, clearInactivityTimer]);
+    const toggleListening = useCallback(toggleListeningFn, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -832,13 +833,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-
-    
-
-    
-
-    
-
 
     

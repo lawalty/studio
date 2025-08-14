@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import { translateText } from './translate-text-flow';
 import { ai } from '@/ai/genkit';
-import { db as adminDb, admin } from '@/lib/firebase-admin';
+import { db as adminDb } from '@/lib/firebase-admin';
 import { withRetry } from './index-document-flow';
 import { getAppConfig } from '@/lib/app-config';
 
@@ -81,6 +81,7 @@ const chatPrompt = ai.definePrompt({
             conciseness: z.number(),
             tone: z.number(),
             formatting: z.number(),
+            clarificationAttemptCount: z.number(),
         })
     },
     output: {
@@ -90,18 +91,19 @@ const chatPrompt = ai.definePrompt({
     prompt: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
-1.  **Ending the Conversation**: If the user's last message is a simple negative response (e.g., 'No', 'Nope', 'That's all') in response to your question "Is there anything else I can help with?", you MUST interpret this as the end of the conversation. Respond with a polite closing remark (e.g., "Alright. Have a great day!") and set 'shouldEndConversation' to 'true'.
-2.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
-3.  **Knowledge Base vs. General Knowledge**:
+1.  **Clarification Limit**: The 'clarificationAttemptCount' is {{clarificationAttemptCount}}. If this count is 2 or greater, you are FORBIDDEN from asking another clarifying question. You MUST provide a direct answer using the best available information, even if the context is weak or empty. Set 'isClarificationQuestion' to 'false'.
+2.  **Ending the Conversation**: If the user's last message is a simple negative response (e.g., 'No', 'Nope', 'That's all') in response to your question "Is there anything else I can help with?", you MUST interpret this as the end of the conversation. Respond with a polite closing remark (e.g., "Alright. Have a great day!") and set 'shouldEndConversation' to 'true'.
+3.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
+4.  **Knowledge Base vs. General Knowledge**:
     - If the retrieved context inside <retrieved_context> is NOT empty, you MUST answer based *only* on the information inside those tags.
     - If the retrieved context IS empty ('NO_CONTEXT_FOUND'), but the user's question is a common-sense workplace or business scenario (e.g., how to handle an employee issue, general advice), you MUST use your general knowledge to provide a helpful, practical response.
     - If the context is empty and the question is not a common-sense scenario, proceed to the Clarification step.
-4.  **Clarification Gate Logic - Two Scenarios**:
+5.  **Clarification Gate Logic - Two Scenarios**: (Unless forbidden by the Clarification Limit)
     a.  **Low-Confidence / No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), and the user's question is not a general common-sense query you can answer, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question to help you understand what to search for. Analyze the chat history to see if you can suggest a better query.
     b.  **Broad / Vague Questions**: If the user's question is very broad (e.g., "Tell me about X") and the retrieved context is large and varied, you MUST first provide a brief, one-sentence summary of the available information. Then, immediately ask a clarifying question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?"). Set 'isClarificationQuestion' to true for both scenarios.
-5.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-6.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
-7.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
+6.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
+7.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+8.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
         - If > 70: You MUST use extremely formal language, address the user with a title (e.g., "Sir" or "Ma'am"), and avoid all contractions (e.g., use "do not" instead of "don't").
         - If < 30: You MUST use very casual language, include slang appropriate for a friendly assistant (e.g., "No problem!", "Got it!"), and use contractions.
@@ -118,7 +120,7 @@ const chatPrompt = ai.definePrompt({
         - If > 70: If the information is suitable, you MUST format the response as a bulleted or numbered list.
         - If < 30: You are FORBIDDEN from using lists. You MUST always format your response as full paragraphs.
         - Otherwise (30-70): You should use your best judgment on whether to use lists or paragraphs.
-8.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
+9.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
 
 You are an expert in: "{{conversationalTopics}}".
 The user is conversing in {{language}}.
@@ -155,7 +157,7 @@ const logErrorToFirestore = async (error: any, source: string) => {
         await adminDb.collection("site_errors").add({
             message: error.message || "An unknown error occurred.",
             source: source,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            timestamp: new Date().toISOString(),
             details: JSON.stringify(error, Object.getOwnPropertyNames(error))
         });
     } catch (dbError) {
@@ -170,7 +172,7 @@ const generateChatResponseFlow = async ({
     conversationalTopics, 
     chatHistory, 
     language,
-    clarificationAttemptCount,
+    clarificationAttemptCount = 0,
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const appConfig = await getAppConfig();
@@ -182,7 +184,8 @@ const generateChatResponseFlow = async ({
     }
 
     // If clarification has failed too many times, exit gracefully.
-    if (clarificationAttemptCount && clarificationAttemptCount >= 2) {
+    // This is a safeguard; the prompt should handle this, but we enforce it here too.
+    if (clarificationAttemptCount >= 3) {
       return {
         aiResponse: "I apologize, but I'm still unable to find the information you're looking for. Is there anything else I can help you with?",
         isClarificationQuestion: false,
@@ -254,6 +257,7 @@ const generateChatResponseFlow = async ({
         conciseness: appConfig.conciseness,
         tone: appConfig.tone,
         formatting: appConfig.formatting,
+        clarificationAttemptCount,
     };
     
     try {
