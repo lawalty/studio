@@ -213,159 +213,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             console.error("CRITICAL: Failed to log error to Firestore.", dbError);
         }
     }, []);
-
-    const toggleListening = useCallback(() => {
-        if (!recognitionRef.current || !isMountedRef.current) return;
     
-        const isCurrentlyListening = botStatus === 'listening';
-    
-        if (isCurrentlyListening) {
-            recognitionRef.current.stop();
-        } else if (!hasConversationEnded) {
-            try {
-                setBotStatus('listening');
-                setStatusMessage(uiText.isListening);
-                setInputValue('');
-                finalTranscriptRef.current = '';
-                recognitionRef.current.start();
-            } catch (e: any) {
-                if (e.name !== 'invalid-state') { 
-                    console.error("Mic start error:", e);
-                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
-                    setBotStatus('idle');
-                    setStatusMessage('');
-                }
-            }
-        }
-    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
-
-    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
-        if (!isMountedRef.current || !textToSpeak.trim()) {
-            onSpeechEnd?.();
-            return;
-        }
-
-        if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-        if (typeof window !== 'undefined') window.speechSynthesis.cancel();
-        if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-
-        const processedText = textToSpeak
-            .replace(/\bCOO\b/gi, 'Chief Operating Officer')
-            .replace(/\bEZCORP\b/gi, 'easy corp');
-
-        const handleEnd = () => {
-            if (!isMountedRef.current) return;
-            if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
-            setAnimatedResponse(null);
-            if (communicationMode !== 'audio-only') {
-                addMessage(fullMessage);
-            }
-            onSpeechEnd?.();
-        };
-
-        let audioDataUri = '';
-        if (communicationMode !== 'text-only') {
-            setBotStatus('speaking');
-            setStatusMessage('');
-            try {
-                const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
-                if (useCustomTts && ttsApiKey && ttsVoiceId) {
-                    const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
-                    if (result.error || !result.media) throw new Error(result.error || "Custom TTS failed to return media.");
-                    audioDataUri = result.media;
-                } else {
-                    const result = await googleTextToSpeech(processedText);
-                    audioDataUri = result.media;
-                }
-            } catch (ttsError: any) {
-                console.error("TTS API Error:", ttsError);
-                await logErrorToFirestore(ttsError, 'ChatInterface/speakText/TTS');
-                handleEnd();
-                return;
-            }
-        }
-        
-        const targetStatus = communicationMode === 'text-only' ? 'typing' : 'speaking';
-        setBotStatus(targetStatus);
-        setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
-
-        if (communicationMode !== 'audio-only') {
-            const getAnimationDuration = (): Promise<number> => {
-                return new Promise((resolve) => {
-                    if (communicationMode === 'text-only' || !audioDataUri) {
-                        resolve(fullMessage.text.length * configRef.current.typingSpeedMs);
-                        return;
-                    }
-                    
-                    if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-                    audioPlayerRef.current.src = audioDataUri;
-                    
-                    const resolveOnce = (duration: number) => {
-                        if (audioPlayerRef.current) {
-                            audioPlayerRef.current.onloadedmetadata = null;
-                            audioPlayerRef.current.onerror = null;
-                        }
-                        resolve(duration);
-                    };
-
-                    audioPlayerRef.current!.onloadedmetadata = () => {
-                        const durationInMs = (audioPlayerRef.current!.duration || 0) * 1000;
-                        const adjustedDuration = isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : (fullMessage.text.length * 50);
-                        resolveOnce(adjustedDuration);
-                    };
-
-                    audioPlayerRef.current!.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
-                    setTimeout(() => resolveOnce(fullMessage.text.length * 50), 5000); // Timeout fallback
-                });
-            };
-
-            const totalAnimationDuration = await getAnimationDuration();
-            const textLength = fullMessage.text.length;
-            const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
-            
-            let currentIndex = 0;
-            setAnimatedResponse({ ...fullMessage, text: '' });
-            
-            const typeCharacter = () => {
-                if (!isMountedRef.current) return;
-                if (currentIndex < textLength) {
-                    setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
-                    currentIndex++;
-                    animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-                } else if (communicationMode === 'text-only') {
-                    handleEnd();
-                }
-            };
-            typeCharacter();
-        }
-        
-        if (audioDataUri && communicationMode !== 'text-only') {
-            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-            audioPlayerRef.current.src = audioDataUri;
-            audioPlayerRef.current.onended = handleEnd;
-            await audioPlayerRef.current.play().catch(e => {
-                console.error("Audio playback failed:", e);
-                handleEnd();
-            });
-        } else if (communicationMode === 'audio-only' && audioDataUri) {
-             if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-             audioPlayerRef.current.src = audioDataUri;
-             audioPlayerRef.current!.onended = () => {
-                 setBotStatus('idle');
-                 setStatusMessage('');
-                 onSpeechEnd?.();
-             };
-             await audioPlayerRef.current.play().catch(e => {
-                console.error("Audio playback failed:", e);
-                setBotStatus('idle');
-                setStatusMessage('');
-                onSpeechEnd?.();
-            });
-        } else {
-             handleEnd();
-        }
-    }, [communicationMode, addMessage, logErrorToFirestore, uiText]);
-
     const clearInactivityTimer = useCallback(() => {
         if (inactivityTimerRef.current) {
             clearTimeout(inactivityTimerRef.current);
@@ -429,18 +277,162 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             
             await speakText(translatedPrompt, promptMessage, () => {
                 if (isMountedRef.current && !hasConversationEnded) {
-                    if (communicationMode === 'audio-only') {
-                        toggleListening(); // Immediately start listening after the prompt
-                    } else {
-                        setBotStatus('idle');
-                    }
-                    setStatusMessage('');
-                    startInactivityTimer(); // Restart the timer for the next check
+                    toggleListening();
                 }
             });
 
         }, configRef.current.inactivityTimeoutMs);
     }, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, clearInactivityTimer, toggleListening]);
+
+    const toggleListening = useCallback(() => {
+        if (!recognitionRef.current || !isMountedRef.current) return;
+    
+        const isCurrentlyListening = botStatus === 'listening';
+    
+        if (isCurrentlyListening) {
+            recognitionRef.current.stop();
+        } else if (!hasConversationEnded) {
+            try {
+                setBotStatus('listening');
+                setStatusMessage(uiText.isListening);
+                setInputValue('');
+                finalTranscriptRef.current = '';
+                recognitionRef.current.start();
+            } catch (e: any) {
+                if (e.name !== 'invalid-state') { 
+                    console.error("Mic start error:", e);
+                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
+                    setBotStatus('idle');
+                    setStatusMessage('');
+                }
+            }
+        }
+    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer]);
+
+    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
+        if (!isMountedRef.current || !textToSpeak.trim()) {
+            onSpeechEnd?.();
+            return;
+        }
+
+        if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+        if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+        if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+
+        const processedText = textToSpeak
+            .replace(/\bCOO\b/gi, 'Chief Operating Officer')
+            .replace(/\bEZCORP\b/gi, 'easy corp');
+
+        const handleEnd = () => {
+            if (!isMountedRef.current) return;
+            if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
+            setAnimatedResponse(null);
+            if (communicationMode !== 'audio-only') {
+                addMessage(fullMessage);
+            }
+            onSpeechEnd?.();
+        };
+
+        let audioDataUri = '';
+        if (communicationMode !== 'text-only') {
+            try {
+                const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
+                if (useCustomTts && ttsApiKey && ttsVoiceId) {
+                    const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
+                    if (result.error || !result.media) throw new Error(result.error || "Custom TTS failed to return media.");
+                    audioDataUri = result.media;
+                } else {
+                    const result = await googleTextToSpeech(processedText);
+                    audioDataUri = result.media;
+                }
+            } catch (ttsError: any) {
+                console.error("TTS API Error:", ttsError);
+                await logErrorToFirestore(ttsError, 'ChatInterface/speakText/TTS');
+                handleEnd();
+                return;
+            }
+        }
+        
+        const targetStatus = communicationMode === 'text-only' ? 'typing' : 'speaking';
+
+        if (communicationMode !== 'audio-only') {
+            const getAnimationDuration = (): Promise<number> => {
+                return new Promise((resolve) => {
+                    if (communicationMode === 'text-only' || !audioDataUri) {
+                        resolve(fullMessage.text.length * configRef.current.typingSpeedMs);
+                        return;
+                    }
+                    
+                    if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+                    audioPlayerRef.current.src = audioDataUri;
+                    
+                    const resolveOnce = (duration: number) => {
+                        if (audioPlayerRef.current) {
+                            audioPlayerRef.current.onloadedmetadata = null;
+                            audioPlayerRef.current.onerror = null;
+                        }
+                        resolve(duration);
+                    };
+
+                    audioPlayerRef.current!.onloadedmetadata = () => {
+                        const durationInMs = (audioPlayerRef.current!.duration || 0) * 1000;
+                        const adjustedDuration = isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : (fullMessage.text.length * 50);
+                        resolveOnce(adjustedDuration);
+                    };
+
+                    audioPlayerRef.current!.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
+                    setTimeout(() => resolveOnce(fullMessage.text.length * 50), 5000); // Timeout fallback
+                });
+            };
+
+            setBotStatus(targetStatus);
+            setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
+            const totalAnimationDuration = await getAnimationDuration();
+            const textLength = fullMessage.text.length;
+            const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
+            
+            let currentIndex = 0;
+            setAnimatedResponse({ ...fullMessage, text: '' });
+            
+            const typeCharacter = () => {
+                if (!isMountedRef.current) return;
+                if (currentIndex < textLength) {
+                    setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
+                    currentIndex++;
+                    animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
+                } else if (communicationMode === 'text-only') {
+                    handleEnd();
+                }
+            };
+            typeCharacter();
+        }
+        
+        if (audioDataUri && communicationMode !== 'text-only') {
+            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+            audioPlayerRef.current.src = audioDataUri;
+            audioPlayerRef.current.onended = handleEnd;
+            setBotStatus('speaking');
+            setStatusMessage('');
+            await audioPlayerRef.current.play().catch(e => {
+                console.error("Audio playback failed:", e);
+                handleEnd();
+            });
+        } else if (communicationMode === 'audio-only' && audioDataUri) {
+             if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+             audioPlayerRef.current.src = audioDataUri;
+             audioPlayerRef.current!.onended = handleEnd;
+             setBotStatus('speaking');
+             setStatusMessage('');
+             await audioPlayerRef.current.play().catch(e => {
+                console.error("Audio playback failed:", e);
+                handleEnd();
+            });
+        } else {
+             setBotStatus('typing');
+             setStatusMessage(uiText.isTyping);
+             handleEnd();
+        }
+    }, [communicationMode, addMessage, logErrorToFirestore, uiText]);
     
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -698,7 +690,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setStatusMessage(uiText.isListening);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             clearInactivityTimer();
-            if (communicationMode === 'audio-only') {
+            if (communicationMode === 'audio-only' && !hasConversationEnded) {
                 startInactivityTimer();
             }
         };
@@ -706,8 +698,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         recognition.onend = () => {
             if (!isMountedRef.current) return;
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
-            clearInactivityTimer();
-
+            
             const finalTranscript = finalTranscriptRef.current.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
@@ -870,3 +861,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+
+    
