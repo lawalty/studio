@@ -303,7 +303,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 startInactivityTimer();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, translate, logErrorToFirestore, communicationMode]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText, language, clarificationAttemptCount, translate, logErrorToFirestore, communicationMode]);
     
     // Define the functions
     const speakTextFn = async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
@@ -360,24 +360,22 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         return;
                     }
                     
-                    if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-                    audioPlayerRef.current.src = audioDataUri;
+                    const audioEl = new Audio();
+                    audioEl.src = audioDataUri;
                     
                     const resolveOnce = (duration: number) => {
-                        if (audioPlayerRef.current) {
-                            audioPlayerRef.current.onloadedmetadata = null;
-                            audioPlayerRef.current.onerror = null;
-                        }
+                        audioEl.onloadedmetadata = null;
+                        audioEl.onerror = null;
                         resolve(duration);
                     };
 
-                    audioPlayerRef.current!.onloadedmetadata = () => {
-                        const durationInMs = (audioPlayerRef.current!.duration || 0) * 1000;
+                    audioEl.onloadedmetadata = () => {
+                        const durationInMs = (audioEl.duration || 0) * 1000;
                         const adjustedDuration = isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : (fullMessage.text.length * 50);
                         resolveOnce(adjustedDuration);
                     };
 
-                    audioPlayerRef.current!.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
+                    audioEl.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
                     setTimeout(() => resolveOnce(fullMessage.text.length * 50), 5000); // Timeout fallback
                 });
             };
@@ -404,8 +402,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             typeCharacter();
         }
         
-        if (audioDataUri && communicationMode !== 'text-only') {
-            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+        if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
             audioPlayerRef.current.src = audioDataUri;
             audioPlayerRef.current.onended = handleEnd;
             audioPlayerRef.current.play().then(() => {
@@ -415,12 +412,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 console.error("Audio playback failed:", e);
                 handleEnd();
             });
-        } else if (communicationMode === 'audio-only' && audioDataUri) {
-             if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+        } else if (communicationMode === 'audio-only' && audioDataUri && audioPlayerRef.current) {
              audioPlayerRef.current.src = audioDataUri;
              audioPlayerRef.current.onended = () => {
-                 setBotStatus('idle');
-                 setStatusMessage('');
                  onSpeechEnd?.();
              };
              audioPlayerRef.current.play().then(() => {
@@ -466,11 +460,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
 
     const startInactivityTimerFn = () => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'idle') return;
+        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
 
         clearInactivityTimer();
         inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || botStatus !== 'idle') return;
+            if (!isMountedRef.current || botStatus !== 'listening') return;
 
             inactivityCheckLevelRef.current += 1;
             let promptText;
@@ -513,6 +507,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setInputValue('');
                 finalTranscriptRef.current = '';
                 recognitionRef.current.start();
+                startInactivityTimer();
             } catch (e: any) {
                 if (e.name !== 'invalid-state') { 
                     console.error("Mic start error:", e);
@@ -721,9 +716,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } else if (botStatus === 'listening') {
                 setBotStatus('idle');
                 setStatusMessage('');
-                if (communicationMode === 'audio-only' && !hasConversationEnded) {
-                    startInactivityTimer();
-                }
+                startInactivityTimer();
             }
         };
 
