@@ -715,16 +715,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           inactivityCheckLevelRef.current = 0;
 
           let interim_transcript = '';
-          let final_transcript = '';
+          finalTranscriptRef.current = '';
 
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              final_transcript += event.results[i][0].transcript;
+              finalTranscriptRef.current += event.results[i][0].transcript + ' ';
             } else {
               interim_transcript += event.results[i][0].transcript;
             }
           }
-          finalTranscriptRef.current = final_transcript;
           
           setInputValue(finalTranscriptRef.current + interim_transcript);
           
