@@ -304,19 +304,18 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText, language, clarificationAttemptCount, translate, logErrorToFirestore, communicationMode]);
     
+    // Plain function declarations to break dependency cycle
     const speakTextFn = async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
+        if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.();
             return;
         }
-
-        if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+        
         if (typeof window !== 'undefined') window.speechSynthesis.cancel();
         if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
 
-        const processedText = textToSpeak
-            .replace(/\bCOO\b/gi, 'Chief Operating Officer')
-            .replace(/\bEZCORP\b/gi, 'easy corp');
+        const processedText = textToSpeak.replace(/\bCOO\b/gi, 'Chief Operating Officer').replace(/\bEZCORP\b/gi, 'easy corp');
 
         const handleEnd = () => {
             if (!isMountedRef.current) return;
@@ -345,108 +344,77 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 return;
             }
         }
-        
+
         const targetStatus = communicationMode === 'text-only' ? 'typing' : 'speaking';
-
-        if (communicationMode !== 'audio-only') {
-            const getAnimationDuration = (): Promise<number> => {
-                return new Promise((resolve) => {
-                    if (communicationMode === 'text-only' || !audioDataUri) {
-                        resolve(fullMessage.text.length * configRef.current.typingSpeedMs);
-                        return;
-                    }
-                    
-                    const audioEl = new Audio();
-                    audioEl.src = audioDataUri;
-                    
-                    const resolveOnce = (duration: number) => {
-                        audioEl.onloadedmetadata = null;
-                        audioEl.onerror = null;
-                        resolve(duration);
-                    };
-
-                    audioEl.onloadedmetadata = () => {
-                        const durationInMs = (audioEl.duration || 0) * 1000;
-                        const adjustedDuration = isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : (fullMessage.text.length * 50);
-                        resolveOnce(adjustedDuration);
-                    };
-
-                    audioEl.onerror = () => resolveOnce(fullMessage.text.length * 50); // Fallback on error
-                    setTimeout(() => resolveOnce(fullMessage.text.length * 50), 5000); // Timeout fallback
-                });
-            };
-
-            setBotStatus(targetStatus);
-            setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
-            const totalAnimationDuration = await getAnimationDuration();
-            const textLength = fullMessage.text.length;
-            const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
-            
-            let currentIndex = 0;
-            setAnimatedResponse({ ...fullMessage, text: '' });
-            
-            const typeCharacter = () => {
-                if (!isMountedRef.current) return;
-                if (currentIndex < textLength) {
-                    setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
-                    currentIndex++;
-                    animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-                } else if (communicationMode === 'text-only') {
-                    handleEnd();
-                }
-            };
-            typeCharacter();
-        }
         
-        if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
-            audioPlayerRef.current.src = audioDataUri;
-            audioPlayerRef.current.onended = handleEnd;
-            audioPlayerRef.current.play().then(() => {
-                setBotStatus('speaking');
-                setStatusMessage('');
-            }).catch(e => {
-                console.error("Audio playback failed:", e);
-                handleEnd();
-            });
-        } else if (communicationMode === 'audio-only' && audioDataUri && audioPlayerRef.current) {
-             audioPlayerRef.current.src = audioDataUri;
-             audioPlayerRef.current.onended = () => {
-                 onSpeechEnd?.();
-             };
-             audioPlayerRef.current.play().then(() => {
-                 setBotStatus('speaking');
-                 setStatusMessage('');
-             }).catch(e => {
-                console.error("Audio playback failed:", e);
-                setBotStatus('idle');
-                setStatusMessage('');
-                onSpeechEnd?.();
-            });
-        } else if (communicationMode === 'text-only') {
-             setBotStatus('typing');
-             setStatusMessage(uiText.isTyping);
-        }
+        const playAndAnimate = async () => {
+            if (communicationMode !== 'audio-only') {
+                const getAnimationDuration = (): Promise<number> => {
+                    return new Promise((resolve) => {
+                        if (communicationMode === 'text-only' || !audioDataUri) {
+                            resolve(fullMessage.text.length * configRef.current.typingSpeedMs); return;
+                        }
+                        const audioEl = new Audio(); audioEl.src = audioDataUri;
+                        const resolveOnce = (duration: number) => { audioEl.onloadedmetadata = null; audioEl.onerror = null; resolve(duration); };
+                        audioEl.onloadedmetadata = () => {
+                            const durationInMs = (audioEl.duration || 0) * 1000;
+                            const adjustedDuration = isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : (fullMessage.text.length * 50);
+                            resolveOnce(adjustedDuration);
+                        };
+                        audioEl.onerror = () => resolveOnce(fullMessage.text.length * 50);
+                        setTimeout(() => resolveOnce(fullMessage.text.length * 50), 5000);
+                    });
+                };
+
+                setAnimatedResponse({ ...fullMessage, text: '' });
+                const totalAnimationDuration = await getAnimationDuration();
+                const textLength = fullMessage.text.length;
+                const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
+                
+                let currentIndex = 0;
+                const typeCharacter = () => {
+                    if (!isMountedRef.current) return;
+                    if (currentIndex < textLength) {
+                        setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
+                        currentIndex++;
+                        animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
+                    } else if (communicationMode === 'text-only') {
+                        handleEnd();
+                    }
+                };
+                typeCharacter();
+            }
+
+            if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
+                audioPlayerRef.current.src = audioDataUri;
+                audioPlayerRef.current.onended = handleEnd;
+                audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
+            } else if (communicationMode === 'audio-only' && audioDataUri && audioPlayerRef.current) {
+                audioPlayerRef.current.src = audioDataUri;
+                audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(); };
+                audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(); });
+            } else if (communicationMode === 'text-only') {
+                // Animation handles the end state
+            }
+        };
+
+        setBotStatus(targetStatus);
+        setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
+        playAndAnimate();
     };
 
     const handleEndChatManuallyFn = async (reason?: 'final-inactive') => {
         clearInactivityTimer();
-        if (botStatus === 'listening') {
-            recognitionRef.current?.stop();
-        }
-        if (audioPlayerRef.current) audioPlayerRef.current.pause();
-        if (typeof window !== 'undefined') window.speechSynthesis.cancel();
+        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
+        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
+        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
         
         setBotStatus('idle');
         setStatusMessage('');
         
         if (reason === 'final-inactive') {
             const translatedEndMessage = await translate(uiText.inactivityEndMessage);
-            const finalMessage: Message = { 
-                id: uuidv4(), 
-                text: translatedEndMessage, 
-                sender: 'model', 
-                timestamp: Date.now() 
-            };
+            const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
             await speakText(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
@@ -454,7 +422,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setHasConversationEnded(true);
         }
     };
-
+    
     const startInactivityTimerFn = () => {
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
 
@@ -488,10 +456,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         }, configRef.current.inactivityTimeoutMs);
     };
-    
+
     const toggleListeningFn = () => {
         if (!recognitionRef.current || !isMountedRef.current) return;
-    
         const isCurrentlyListening = botStatus === 'listening';
     
         if (isCurrentlyListening) {
@@ -503,7 +470,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setInputValue('');
                 finalTranscriptRef.current = '';
                 recognitionRef.current.start();
-                startInactivityTimer();
             } catch (e: any) {
                 if (e.name !== 'invalid-state') { 
                     console.error("Mic start error:", e);
@@ -514,11 +480,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
         }
     };
-    
+
     speakText = useCallback(speakTextFn, [communicationMode, addMessage, logErrorToFirestore, uiText, configRef]);
     handleEndChatManually = useCallback(handleEndChatManuallyFn, [clearInactivityTimer, botStatus, uiText.inactivityEndMessage, speakText, translate]);
     startInactivityTimer = useCallback(startInactivityTimerFn, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, clearInactivityTimer]);
-    toggleListening = useCallback(toggleListeningFn, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer]);
+    toggleListening = useCallback(toggleListeningFn, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -816,7 +782,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                </Button>
             </>
           ) : (
-            <div className="w-full max-w-2xl mt-2 mb-4 flex-grow">
+            <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
                  <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
                  <ConversationLog messages={messages} avatarSrc={configRef.current.avatarSrc} />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
