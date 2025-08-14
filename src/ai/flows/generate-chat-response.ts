@@ -10,10 +10,9 @@ import { z } from 'zod';
 import { searchKnowledgeBase } from '@/ai/retrieval/vector-search';
 import { translateText } from './translate-text-flow';
 import { ai } from '@/ai/genkit';
-import { db as adminDb } from '@/lib/firebase-admin';
+import { db as adminDb, admin } from '@/lib/firebase-admin';
 import { withRetry } from './index-document-flow';
 import { getAppConfig } from '@/lib/app-config';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 // Zod schema for the input of the generateChatResponse flow.
 const GenerateChatResponseInputSchema = z.object({
@@ -153,10 +152,10 @@ Analyze the user's query below. Identify the core intent and key entities.
 
 const logErrorToFirestore = async (error: any, source: string) => {
     try {
-        await addDoc(collection(adminDb, "site_errors"), {
+        await adminDb.collection("site_errors").add({
             message: error.message || "An unknown error occurred.",
             source: source,
-            timestamp: serverTimestamp(),
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
             details: JSON.stringify(error, Object.getOwnPropertyNames(error))
         });
     } catch (dbError) {
@@ -295,3 +294,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    

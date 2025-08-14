@@ -386,20 +386,23 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
 
             if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
+                setBotStatus(targetStatus);
+                setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
                 audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.onended = handleEnd;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
             } else if (communicationMode === 'audio-only' && audioDataUri && audioPlayerRef.current) {
+                setBotStatus(targetStatus);
+                setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
                 audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(); };
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(); });
             } else if (communicationMode === 'text-only') {
-                // Animation handles the end state
+                 setBotStatus(targetStatus);
+                 setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
             }
         };
-
-        setBotStatus(targetStatus);
-        setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
+        
         playAndAnimate();
     };
 
@@ -834,5 +837,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
 
     
+
+    
+
 
     
