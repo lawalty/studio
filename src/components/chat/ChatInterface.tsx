@@ -139,6 +139,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const messagesRef = useRef<Message[]>([]);
     useEffect(() => { messagesRef.current = messages; }, [messages]);
 
+    const inactivityCheckLevelRef = useRef<number>(0);
+
     const configRef = useRef({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
@@ -161,7 +163,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const recognitionRef = useRef<any | null>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const inactivityCheckLevelRef = useRef<number>(0);
     const speechPauseTimerRef = useRef<NodeJS.Timeout | null>(null);
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -221,44 +222,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
-
-    const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'listening') return;
-
-        clearInactivityTimer();
-        inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || botStatus !== 'listening') return;
-
-            inactivityCheckLevelRef.current += 1;
-            let promptText;
-            if (inactivityCheckLevelRef.current === 1) {
-                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
-            } else if (inactivityCheckLevelRef.current === 2) {
-                promptText = uiText.inactivityPromptSecondary;
-            } else {
-                inactivityCheckLevelRef.current = 0;
-                // This will be defined by the time it's called
-                // @ts-ignore
-                handleEndChatManually('final-inactive');
-                return;
-            }
-            
-            setBotStatus('preparing');
-            setStatusMessage(uiText.isPreparing);
-            const translatedPrompt = await translate(promptText);
-            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
-            
-            // This will be defined by the time it's called
-            // @ts-ignore
-            await speakText(translatedPrompt, promptMessage, () => {
-                // This will be defined by the time it's called
-                // @ts-ignore
-                if (isMountedRef.current && !hasConversationEnded) toggleListening();
-            });
-
-        }, configRef.current.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate]);
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -336,10 +299,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('idle');
             setStatusMessage('');
             if (communicationMode === 'audio-only' && !hasConversationEnded) {
+                 // @ts-ignore
                 startInactivityTimer();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
@@ -462,6 +426,40 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [botStatus, clearInactivityTimer, speakText, translate, uiText.inactivityEndMessage]);
     
+    const startInactivityTimer = useCallback(() => {
+        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'listening') return;
+
+        clearInactivityTimer();
+        inactivityTimerRef.current = setTimeout(async () => {
+            if (!isMountedRef.current || botStatus !== 'listening') return;
+
+            inactivityCheckLevelRef.current += 1;
+            let promptText;
+            if (inactivityCheckLevelRef.current === 1) {
+                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+            } else if (inactivityCheckLevelRef.current === 2) {
+                promptText = uiText.inactivityPromptSecondary;
+            } else {
+                inactivityCheckLevelRef.current = 0;
+                handleEndChatManually('final-inactive');
+                return;
+            }
+            
+            setBotStatus('preparing');
+            setStatusMessage(uiText.isPreparing);
+            const translatedPrompt = await translate(promptText);
+            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
+            
+            // @ts-ignore
+            await speakText(translatedPrompt, promptMessage, () => {
+                // @ts-ignore
+                if (isMountedRef.current && !hasConversationEnded) toggleListening();
+            });
+
+        }, configRef.current.inactivityTimeoutMs);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, handleEndChatManually, speakText]);
+
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
         const isCurrentlyListening = botStatus === 'listening';
@@ -475,6 +473,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setInputValue('');
                 finalTranscriptRef.current = '';
                 recognitionRef.current.start();
+                startInactivityTimer();
             } catch (e: any) {
                 if (e.name !== 'invalid-state') { 
                     console.error("Mic start error:", e);
@@ -484,7 +483,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             }
         }
-    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
+    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -647,27 +646,43 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, uiText, toggleListening]);
     
+    // This effect is responsible for setting up and tearing down the speech recognition object.
     useEffect(() => {
-        if (!isReady || !['audio-only', 'audio-text'].includes(communicationMode) || recognitionRef.current) return;
+        if (!isReady || !['audio-only', 'audio-text'].includes(communicationMode)) return;
 
         const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognitionAPI) return;
+        if (!SpeechRecognitionAPI) {
+            console.warn("Speech Recognition API is not supported in this browser.");
+            return;
+        }
         
-        const recognition = new SpeechRecognitionAPI();
-        recognitionRef.current = recognition;
+        recognitionRef.current = new SpeechRecognitionAPI();
+        const recognition = recognitionRef.current;
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
-        recognition.onstart = () => {
+        return () => {
+            if (recognitionRef.current) {
+                recognitionRef.current.abort();
+            }
+        };
+    }, [isReady, communicationMode]);
+    
+    // This effect updates the recognition object's event handlers whenever their dependencies change.
+    // This prevents stale closures.
+    useEffect(() => {
+        if (!recognitionRef.current) return;
+
+        recognitionRef.current.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
+
+        recognitionRef.current.onstart = () => {
             if (!isMountedRef.current) return;
             setBotStatus('listening');
             setStatusMessage(uiText.isListening);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
-            startInactivityTimer();
         };
         
-        recognition.onend = () => {
+        recognitionRef.current.onend = () => {
             if (!isMountedRef.current) return;
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             setBotStatus('idle'); 
@@ -676,10 +691,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const finalTranscript = finalTranscriptRef.current.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
+            } else if (botStatus === 'listening') {
+                 startInactivityTimer();
             }
         };
 
-        recognition.onerror = (event: any) => {
+        recognitionRef.current.onerror = (event: any) => {
           if (!isMountedRef.current) return;
           setBotStatus('idle');
           setStatusMessage('');
@@ -688,7 +705,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           }
         };
 
-        recognition.onresult = (event: any) => {
+        recognitionRef.current.onresult = (event: any) => {
           if (!isMountedRef.current) return;
           
           if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
@@ -696,17 +713,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           inactivityCheckLevelRef.current = 0;
 
           let interim_transcript = '';
-          let final_transcript = '';
+          finalTranscriptRef.current = '';
 
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              final_transcript += event.results[i][0].transcript;
+              finalTranscriptRef.current += event.results[i][0].transcript;
             } else {
               interim_transcript += event.results[i][0].transcript;
             }
           }
-          finalTranscriptRef.current = final_transcript;
-          setInputValue(final_transcript + interim_transcript);
+          
+          setInputValue(finalTranscriptRef.current + interim_transcript);
           
           speechPauseTimerRef.current = setTimeout(() => {
             if (recognitionRef.current && botStatus === 'listening') {
@@ -714,7 +731,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
           }, configRef.current.responsePauseTimeMs);
         };
-    }, [isReady, communicationMode, language, handleSendMessage, startInactivityTimer, clearInactivityTimer, logErrorToFirestore, hasConversationEnded, botStatus, uiText.isListening]);
+    }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
