@@ -664,10 +664,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('listening');
             setStatusMessage(uiText.isListening);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
-            clearInactivityTimer();
-            if (communicationMode === 'audio-only') {
-                startInactivityTimer();
-            }
+            startInactivityTimer();
         };
         
         recognition.onend = () => {
@@ -693,20 +690,23 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         recognition.onresult = (event: any) => {
           if (!isMountedRef.current) return;
+          
           if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
           clearInactivityTimer();
           inactivityCheckLevelRef.current = 0;
 
-          let interimTranscript = '';
-          finalTranscriptRef.current = '';
+          let interim_transcript = '';
+          let final_transcript = '';
+
           for (let i = event.resultIndex; i < event.results.length; ++i) {
-             if (event.results[i].isFinal) {
-                finalTranscriptRef.current += event.results[i][0].transcript;
-             } else {
-                interimTranscript += event.results[i][0].transcript;
-             }
+            if (event.results[i].isFinal) {
+              final_transcript += event.results[i][0].transcript;
+            } else {
+              interim_transcript += event.results[i][0].transcript;
+            }
           }
-          setInputValue(finalTranscriptRef.current + interimTranscript);
+          finalTranscriptRef.current = final_transcript;
+          setInputValue(final_transcript + interim_transcript);
           
           speechPauseTimerRef.current = setTimeout(() => {
             if (recognitionRef.current && botStatus === 'listening') {
