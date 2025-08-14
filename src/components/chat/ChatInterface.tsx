@@ -428,7 +428,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.onended = handleEnd;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
-            } else if (communicationMode === 'audio-only' && audioPlayerRef.current) {
+            } else if (audioDataUri && communicationMode === 'audio-only' && audioPlayerRef.current) {
                 audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(); };
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(); });
