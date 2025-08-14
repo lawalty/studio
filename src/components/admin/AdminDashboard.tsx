@@ -19,7 +19,7 @@ interface SiteError {
     id: string;
     message: string;
     source: string;
-    timestamp: Timestamp;
+    timestamp: Date;
 }
 
 const topTopicsData = [
@@ -59,10 +59,18 @@ export default function AdminDashboard() {
     // Fetch site errors
     const errorsQuery = query(collection(db, 'site_errors'), orderBy('timestamp', 'desc'));
     const unsubscribeErrors = onSnapshot(errorsQuery, (snapshot) => {
-        const errorsData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-        } as SiteError));
+        const errorsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const timestamp = data.timestamp;
+            // Robustly convert Firestore timestamp to JS Date
+            const date = timestamp && typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date();
+            return {
+                id: doc.id,
+                message: data.message,
+                source: data.source,
+                timestamp: date,
+            } as SiteError;
+        });
         setSiteErrors(errorsData);
         setIsLoadingErrors(false);
     }, (error) => {
@@ -241,7 +249,7 @@ export default function AdminDashboard() {
                                                 <AlertTitle>Error in: {error.source}</AlertTitle>
                                                 <AlertDescriptionComponent className="break-words mt-1">{error.message}</AlertDescriptionComponent>
                                                 <p className="text-xs text-destructive/80 mt-2">
-                                                    {error.timestamp ? formatDistanceToNow(error.timestamp.toDate(), { addSuffix: true }) : 'Just now'}
+                                                    {error.timestamp ? formatDistanceToNow(error.timestamp, { addSuffix: true }) : 'Just now'}
                                                 </p>
                                             </div>
                                             <Button variant="ghost" size="icon" onClick={() => handleDeleteError(error.id)} className="h-6 w-6 ml-2 shrink-0">
