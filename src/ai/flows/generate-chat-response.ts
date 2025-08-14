@@ -201,12 +201,15 @@ const generateChatResponseFlow = async ({
         console.error("[generateChatResponseFlow] Failed to translate user query, proceeding with original text.", e);
       }
     }
-    try {
-        const { output } = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-flash' });
-        searchQuery = output || queryForNlp;
-    } catch (e) {
-        console.error('[generateChatResponseFlow] NLP query refinement failed:', e);
-        searchQuery = queryForNlp;
+    
+    if (queryForNlp) {
+      try {
+          const { output } = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-flash' });
+          searchQuery = output || queryForNlp;
+      } catch (e) {
+          console.error('[generateChatResponseFlow] NLP query refinement failed:', e);
+          searchQuery = queryForNlp;
+      }
     }
 
     let retrievedContext = '';
