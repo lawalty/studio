@@ -120,6 +120,25 @@ interface ChatInterfaceProps {
 
 type BotStatus = 'idle' | 'listening' | 'preparing' | 'speaking' | 'typing';
 
+interface ChatConfig {
+    avatarSrc: string;
+    animatedAvatarSrc: string;
+    personaTraits: string;
+    personalBio: string;
+    conversationalTopics: string;
+    splashScreenWelcomeMessage: string;
+    responsePauseTimeMs: number;
+    inactivityTimeoutMs: number;
+    customGreetingMessage: string;
+    useKnowledgeInGreeting: boolean;
+    typingSpeedMs: number;
+    animationSyncFactor: number;
+    ttsApiKey: string;
+    ttsVoiceId: string;
+    useCustomTts: boolean;
+    archiveChatHistoryEnabled: boolean;
+}
+
 export default function ChatInterface({ communicationMode }: ChatInterfaceProps) {
     // Component readiness state
     const [isReady, setIsReady] = useState(false);
@@ -134,18 +153,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
     const [uiMessage, setUiMessage] = useState<string>('');
     const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
-    
-    // Refs for stable storage across renders
-    const messagesRef = useRef<Message[]>([]);
-    useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-    const inactivityCheckLevelRef = useRef<number>(0);
-
-    const configRef = useRef({
+    const [config, setConfig] = useState<ChatConfig>({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
-        personaTraits: "You are IA Blair v2, a knowledgeable and helpful assistant.",
-        personalBio: "I am an AI assistant.",
+        personaTraits: "",
+        personalBio: "",
         conversationalTopics: "",
         splashScreenWelcomeMessage: "Welcome to AI Chat",
         responsePauseTimeMs: 750,
@@ -159,6 +172,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         useCustomTts: false,
         archiveChatHistoryEnabled: true,
     });
+    
+    // Refs for stable storage across renders
+    const messagesRef = useRef<Message[]>([]);
+    useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+    const inactivityCheckLevelRef = useRef<number>(0);
     
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const recognitionRef = useRef<any | null>(null);
@@ -243,7 +262,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 personaTraits, 
                 personalBio,
                 conversationalTopics,
-            } = configRef.current;
+            } = config;
             const flowInput: GenerateChatResponseInput = {
                 personaTraits,
                 personalBio,
@@ -303,7 +322,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 startInactivityTimer();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, config]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
@@ -328,7 +347,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         let audioDataUri = '';
         if (communicationMode !== 'text-only') {
             try {
-                const { useCustomTts, ttsApiKey, ttsVoiceId } = configRef.current;
+                const { useCustomTts, ttsApiKey, ttsVoiceId } = config;
                 if (useCustomTts && ttsApiKey && ttsVoiceId) {
                     const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
                     if (result.error || !result.media) throw new Error(result.error || "Custom TTS failed to return media.");
@@ -355,13 +374,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const getAnimationDuration = (): Promise<number> => {
                     return new Promise((resolve) => {
                         if (communicationMode === 'text-only' || !audioDataUri) {
-                            resolve(fullMessage.text.length * configRef.current.typingSpeedMs); return;
+                            resolve(fullMessage.text.length * config.typingSpeedMs); return;
                         }
                         const audioEl = new Audio(); audioEl.src = audioDataUri;
                         const resolveOnce = (duration: number) => { audioEl.onloadedmetadata = null; audioEl.onerror = null; resolve(duration); };
                         audioEl.onloadedmetadata = () => {
                             const durationInMs = (audioEl.duration || 0) * 1000;
-                            const adjustedDuration = isFinite(durationInMs) ? durationInMs * configRef.current.animationSyncFactor : (fullMessage.text.length * 50);
+                            const adjustedDuration = isFinite(durationInMs) ? durationInMs * config.animationSyncFactor : (fullMessage.text.length * 50);
                             resolveOnce(adjustedDuration);
                         };
                         audioEl.onerror = () => resolveOnce(fullMessage.text.length * 50);
@@ -404,7 +423,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         
         playAndAnimate();
-    }, [communicationMode, addMessage, logErrorToFirestore, uiText]);
+    }, [communicationMode, addMessage, logErrorToFirestore, uiText, config]);
 
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
@@ -457,8 +476,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 if (isMountedRef.current && !hasConversationEnded) toggleListening();
             });
 
-        }, configRef.current.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, handleEndChatManually, speakText]);
+        }, config.inactivityTimeoutMs);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, handleEndChatManually, speakText, config]);
 
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
@@ -488,7 +507,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer, communicationMode]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
-        if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
+        if (msgs.length === 0 || !config.archiveChatHistoryEnabled) return;
         toast({ title: "Archiving Conversation..." });
         
         try {
@@ -496,7 +515,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const { default: html2canvas } = await import('html2canvas');
             const tempContainer = document.createElement('div');
             tempContainer.style.width = '700px'; tempContainer.style.position = 'absolute'; tempContainer.style.left = '-9999px'; tempContainer.style.fontFamily = 'Inter, sans-serif';
-            tempContainer.innerHTML = generateChatLogHtml(msgs, configRef.current.avatarSrc, "Chat Transcript");
+            tempContainer.innerHTML = generateChatLogHtml(msgs, config.avatarSrc, "Chat Transcript");
             document.body.appendChild(tempContainer);
             await new Promise(resolve => setTimeout(resolve, 500));
             const canvas = await html2canvas(tempContainer, { scale: 2, useCORS: true, backgroundColor: '#FFFFFF', logging: false });
@@ -536,7 +555,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             await logErrorToFirestore(error, 'ChatInterface/archiveAndIndexChat');
             toast({ title: "Archiving Failed", variant: "destructive" });
         }
-    }, [toast, logErrorToFirestore]);
+    }, [toast, logErrorToFirestore, config]);
     
     useEffect(() => {
         if (hasConversationEnded) {
@@ -554,27 +573,28 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
             if (isMountedRef.current) {
                 const assets = siteAssetsSnap.exists() ? siteAssetsSnap.data() : {};
-                const appConfig = appConfigSnap.exists() ? appConfigSnap.data() : {};
+                const appConfigData = appConfigSnap.exists() ? appConfigSnap.data() : {};
 
-                configRef.current = {
+                const newConfig = {
                     avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
                     animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
-                    personaTraits: assets.personaTraits || configRef.current.personaTraits,
+                    personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
                     personalBio: assets.personalBio || "I am an AI assistant.",
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
-                    responsePauseTimeMs: assets.responsePauseTimeMs ?? configRef.current.responsePauseTimeMs,
-                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? configRef.current.inactivityTimeoutMs,
+                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || "Welcome to AI Chat",
+                    responsePauseTimeMs: assets.responsePauseTimeMs ?? 750,
+                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
                     animationSyncFactor: assets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR,
-                    ttsApiKey: appConfig.tts || '',
-                    ttsVoiceId: appConfig.voiceId || '',
-                    useCustomTts: typeof appConfig.useTtsApi === 'boolean' ? appConfig.useTtsApi : false,
+                    ttsApiKey: appConfigData.tts || '',
+                    ttsVoiceId: appConfigData.voiceId || '',
+                    useCustomTts: typeof appConfigData.useTtsApi === 'boolean' ? appConfigData.useTtsApi : false,
                     archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
                 };
-                setUiMessage(configRef.current.splashScreenWelcomeMessage);
+                setConfig(newConfig);
+                setUiMessage(newConfig.splashScreenWelcomeMessage);
             }
           } catch (e: any) {
             await logErrorToFirestore(e, 'ChatInterface/fetchAllData');
@@ -611,7 +631,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setStatusMessage(uiText.isPreparing);
             let greetingText = "Hello! How can I help you today?"; 
             try {
-                const { customGreetingMessage, useKnowledgeInGreeting, personaTraits, conversationalTopics } = configRef.current;
+                const { customGreetingMessage, useKnowledgeInGreeting, personaTraits, conversationalTopics } = config;
                 let textToTranslate = customGreetingMessage || "Hello! How can I help you today?";
                 if (!customGreetingMessage) {
                     const result = await generateInitialGreeting({ personaTraits, conversationalTopics, useKnowledgeInGreeting, language: 'English' });
@@ -646,7 +666,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, uiText, toggleListening]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, uiText, toggleListening, config]);
     
     // This effect is responsible for setting up and tearing down the speech recognition object.
     useEffect(() => {
@@ -731,9 +751,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (recognitionRef.current && botStatus === 'listening') {
                 recognitionRef.current.stop();
             }
-          }, configRef.current.responsePauseTimeMs);
+          }, config.responsePauseTimeMs);
         };
-    }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore, communicationMode]);
+    }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore, communicationMode, config]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
@@ -742,7 +762,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const { default: html2canvas } = await import('html2canvas');
             const tempContainer = document.createElement('div');
             tempContainer.style.width = '700px'; tempContainer.style.position = 'absolute'; tempContainer.style.left = '-9999px'; tempContainer.style.fontFamily = 'Inter, sans-serif';
-            tempContainer.innerHTML = generateChatLogHtml(messages, configRef.current.avatarSrc, uiText.chatLogTitle);
+            tempContainer.innerHTML = generateChatLogHtml(messages, config.avatarSrc, uiText.chatLogTitle);
             document.body.appendChild(tempContainer);
             await new Promise(resolve => setTimeout(resolve, 500));
             const canvas = await html2canvas(tempContainer, { scale: 2, useCORS: true, backgroundColor: '#FFFFFF', logging: false });
@@ -768,7 +788,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
     
     const imageProps: React.ComponentProps<typeof Image> = {
-      src: (isBotSpeaking && configRef.current.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? configRef.current.animatedAvatarSrc : configRef.current.avatarSrc,
+      src: (isBotSpeaking && config.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? config.animatedAvatarSrc : config.avatarSrc,
       alt: "AI Blair Avatar",
       width: communicationMode === 'audio-only' ? 200 : 120,
       height: communicationMode === 'audio-only' ? 200 : 120,
@@ -807,7 +827,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           ) : (
             <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
                  <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
-                 <ConversationLog messages={messages} avatarSrc={configRef.current.avatarSrc} />
+                 <ConversationLog messages={messages} avatarSrc={config.avatarSrc} />
                  <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                     <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
                     <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
@@ -832,7 +852,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           </Card>
         </div>
         <div className="md:col-span-2 flex flex-col h-full">
-          <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={configRef.current.avatarSrc} />
+          <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={config.avatarSrc} />
           <MessageInput
             onSendMessage={(text) => handleSendMessage(text)} isSending={isBotProcessing || isBotSpeaking} isSpeaking={isBotSpeaking}
             showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
