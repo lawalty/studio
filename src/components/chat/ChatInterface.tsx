@@ -349,7 +349,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         const playAndAnimate = async () => {
             setBotStatus(targetStatus);
-            setStatusMessage(targetStatus === 'speaking' ? '' : uiText.isTyping);
+            setStatusMessage(targetStatus === 'speaking' ? uiText.isSpeaking : uiText.isTyping);
             
             if (communicationMode !== 'audio-only') {
                 const getAnimationDuration = (): Promise<number> => {
@@ -473,7 +473,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setInputValue('');
                 finalTranscriptRef.current = '';
                 recognitionRef.current.start();
-                startInactivityTimer();
+                if (communicationMode === 'audio-only') {
+                    startInactivityTimer();
+                }
             } catch (e: any) {
                 if (e.name !== 'invalid-state') { 
                     console.error("Mic start error:", e);
@@ -483,7 +485,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             }
         }
-    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer]);
+    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer, communicationMode]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -691,7 +693,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const finalTranscript = finalTranscriptRef.current.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
-            } else if (botStatus === 'listening') {
+            } else if (botStatus === 'listening' && communicationMode === 'audio-only') {
                  startInactivityTimer();
             }
         };
@@ -731,7 +733,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
           }, configRef.current.responsePauseTimeMs);
         };
-    }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore]);
+    }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore, communicationMode]);
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
