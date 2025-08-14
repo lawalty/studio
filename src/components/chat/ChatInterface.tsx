@@ -196,6 +196,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const isBotSpeaking = botStatus === 'speaking' || botStatus === 'typing';
     const isListening = botStatus === 'listening';
 
+    // Forward declare functions
     let speakText: (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => Promise<void>;
     let startInactivityTimer: () => void;
     let handleEndChatManually: (reason?: "final-inactive" | undefined) => Promise<void>;
@@ -400,22 +401,22 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
         
         if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
-            setBotStatus('speaking');
             audioPlayerRef.current.src = audioDataUri;
             audioPlayerRef.current.onended = handleEnd;
             audioPlayerRef.current.play().then(() => {
+                setBotStatus('speaking');
                 setStatusMessage('');
             }).catch(e => {
                 console.error("Audio playback failed:", e);
                 handleEnd();
             });
         } else if (communicationMode === 'audio-only' && audioDataUri && audioPlayerRef.current) {
-             setBotStatus('speaking');
              audioPlayerRef.current.src = audioDataUri;
              audioPlayerRef.current.onended = () => {
                  onSpeechEnd?.();
              };
              audioPlayerRef.current.play().then(() => {
+                 setBotStatus('speaking');
                  setStatusMessage('');
              }).catch(e => {
                 console.error("Audio playback failed:", e);
@@ -709,9 +710,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const finalTranscript = finalTranscriptRef.current.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
-            } else if (botStatus === 'listening') {
-                // If onend fires without a transcript (e.g., silence), don't change state here.
-                // Let the inactivity timer handle the next step.
+            } else if (botStatus === 'listening' && !hasConversationEnded) {
+                startInactivityTimer();
             }
         };
 
@@ -866,5 +866,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     );
 }
 
+
+    
 
     
