@@ -95,7 +95,7 @@ const chatPrompt = ai.definePrompt({
 2.  **Ending the Conversation**: If the user's last message is a simple negative response (e.g., 'No', 'Nope', 'That's all') in response to your question "Is there anything else I can help with?", you MUST interpret this as the end of the conversation. Respond with a polite closing remark (e.g., "Alright. Have a great day!") and set 'shouldEndConversation' to 'true'.
 3.  **Adopt Persona & Bio**: When the user asks "you" a question (e.g., "When did you join?" or "Tell me about yourself"), you MUST answer from your own perspective, using your defined persona and personal bio. Use "I" to refer to yourself. Do not ask for clarification for these types of questions.
 4.  **Knowledge Base vs. General Knowledge**:
-    - If the retrieved context inside <retrieved_context> is NOT empty, you MUST answer based *only* on the information inside those tags.
+    - If the retrieved context inside <retrieved_context> is NOT empty, you MUST use it as your primary source of truth. Synthesize the information from the context into a natural, conversational response that matches your persona. Do not simply copy the text.
     - If the retrieved context IS empty ('NO_CONTEXT_FOUND'), but the user's question is a common-sense workplace or business scenario (e.g., how to handle an employee issue, general advice), you MUST use your general knowledge to provide a helpful, practical response.
     - If the context is empty and the question is not a common-sense scenario, proceed to the Clarification step.
 5.  **Clarification Gate Logic - Two Scenarios**: (Unless forbidden by the Clarification Limit)
@@ -206,7 +206,7 @@ const generateChatResponseFlow = async ({
     
     if (queryForNlp) {
       try {
-          const { output } = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-flash' });
+          const { output } = await queryRefinementPrompt(queryForNlp, { model: 'googleai/gemini-1.5-pro' });
           searchQuery = output || queryForNlp;
       } catch (e) {
           console.error('[generateChatResponseFlow] NLP query refinement failed:', e);
