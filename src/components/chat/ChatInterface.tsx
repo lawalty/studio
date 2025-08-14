@@ -220,8 +220,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             return;
         }
 
-        // 1. Cancel any ongoing playback/synthesis
-        if (audioPlayerRef.current) audioPlayerRef.current.pause();
+        // 1. Ensure audio player exists and cancel any ongoing playback/synthesis
+        if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
+        audioPlayerRef.current.pause();
         if (typeof window !== 'undefined') window.speechSynthesis.cancel();
         if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
 
@@ -268,8 +269,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         // 5. Start typing animation if applicable
         if (communicationMode !== 'audio-only') {
-            if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
-            
             const getAnimationDuration = (): Promise<number> => {
                 return new Promise((resolve) => {
                     if (communicationMode === 'text-only' || !audioDataUri) {
@@ -352,15 +351,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
-        
+
         const isCurrentlyListening = botStatus === 'listening';
-    
+
         if (isCurrentlyListening) {
             recognitionRef.current.stop();
-        } else if (!hasConversationEnded && !isBotSpeaking) {
+        } else if (!hasConversationEnded) {
             try {
                 setInputValue('');
-                finalTranscriptRef.current = ''; // Clear previous transcript
+                finalTranscriptRef.current = '';
                 recognitionRef.current.start();
             } catch (e: any) {
                 if (e.name !== 'invalid-state') { // Ignore error if already starting
@@ -369,7 +368,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             }
         }
-    }, [botStatus, hasConversationEnded, isBotSpeaking, logErrorToFirestore]);
+    }, [botStatus, hasConversationEnded, logErrorToFirestore]);
     
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
