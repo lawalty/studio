@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser, History } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -38,6 +38,7 @@ const DEFAULT_PERSONAL_BIO_TEXT = "I am a new AI assistant, recently created to 
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 30000;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 const DEFAULT_STYLE_VALUE = 50;
 
@@ -53,6 +54,7 @@ export default function PersonaPage() {
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
   const [responsePauseTime, setResponsePauseTime] = useState<string>(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
+  const [inactivityTimeout, setInactivityTimeout] = useState<string>(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
   const [animationSyncFactor, setAnimationSyncFactor] = useState<string>(String(DEFAULT_ANIMATION_SYNC_FACTOR));
 
   // Response Style Sliders State
@@ -92,6 +94,7 @@ export default function PersonaPage() {
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
+          setInactivityTimeout(data?.inactivityTimeoutMs === undefined ? String(DEFAULT_INACTIVITY_TIMEOUT_MS) : String(data.inactivityTimeoutMs));
           setAnimationSyncFactor(data?.animationSyncFactor === undefined ? String(DEFAULT_ANIMATION_SYNC_FACTOR) : String(data.animationSyncFactor));
           // Load slider values
           setFormality([data?.formality ?? DEFAULT_STYLE_VALUE]);
@@ -108,6 +111,7 @@ export default function PersonaPage() {
           setUseKnowledgeInGreeting(true);
           setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
           setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
+          setInactivityTimeout(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
           setAnimationSyncFactor(String(DEFAULT_ANIMATION_SYNC_FACTOR));
           setFormality([DEFAULT_STYLE_VALUE]);
           setConciseness([DEFAULT_STYLE_VALUE]);
@@ -125,6 +129,7 @@ export default function PersonaPage() {
         setUseKnowledgeInGreeting(true);
         setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
         setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
+        setInactivityTimeout(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
         setAnimationSyncFactor(String(DEFAULT_ANIMATION_SYNC_FACTOR));
         setFormality([DEFAULT_STYLE_VALUE]);
         setConciseness([DEFAULT_STYLE_VALUE]);
@@ -174,8 +179,11 @@ export default function PersonaPage() {
   };
 
   const handleResponsePauseTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Correctly and simply update the state. Validation happens on save.
     setResponsePauseTime(e.target.value);
+  };
+  
+  const handleInactivityTimeoutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInactivityTimeout(e.target.value);
   };
   
   const handleAnimationSyncFactorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -298,6 +306,9 @@ export default function PersonaPage() {
 
     const pauseTimeMs = parseInt(responsePauseTime, 10);
     const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
+    
+    const inactivityMs = parseInt(inactivityTimeout, 10);
+    const validInactivityTimeout = isNaN(inactivityMs) || inactivityMs < 0 ? DEFAULT_INACTIVITY_TIMEOUT_MS : inactivityMs;
 
     const syncFactor = parseFloat(animationSyncFactor);
     const validSyncFactor = isNaN(syncFactor) || syncFactor <= 0 ? DEFAULT_ANIMATION_SYNC_FACTOR : syncFactor;
@@ -313,6 +324,7 @@ export default function PersonaPage() {
         useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
         responsePauseTimeMs: validPauseTime,
+        inactivityTimeoutMs: validInactivityTimeout,
         animationSyncFactor: validSyncFactor,
         formality: formality[0],
         conciseness: conciseness[0],
@@ -480,7 +492,7 @@ export default function PersonaPage() {
               </Button>
 
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
                       <Timer className="h-4 w-4" />
@@ -498,6 +510,26 @@ export default function PersonaPage() {
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                       Pause after user stops speaking before AI processes input (Audio Only mode). Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="inactivityTimeout" className="font-medium flex items-center gap-1.5">
+                      <History className="h-4 w-4" />
+                      Inactivity Timeout (ms)
+                  </Label>
+                  <Input
+                      id="inactivityTimeout"
+                      type="number"
+                      value={inactivityTimeout}
+                      onChange={handleInactivityTimeoutChange}
+                      placeholder="e.g., 30000"
+                      min="5000"
+                      step="1000"
+                      className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                      In Audio Only mode, how long to wait for a response before checking in. Default: {DEFAULT_INACTIVITY_TIMEOUT_MS}ms.
                   </p>
                 </div>
 

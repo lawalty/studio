@@ -147,6 +147,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         conversationalTopics: "",
         splashScreenWelcomeMessage: "Welcome to AI Chat",
         responsePauseTimeMs: 750,
+        inactivityTimeoutMs: 30000,
         customGreetingMessage: "",
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
@@ -345,31 +346,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
     
-    const toggleListening = useCallback(() => {
-        if (!recognitionRef.current || !isMountedRef.current) return;
-    
-        const isCurrentlyListening = botStatus === 'listening';
-    
-        if (isCurrentlyListening) {
-            recognitionRef.current.stop();
-        } else if (!hasConversationEnded) {
-            try {
-                setBotStatus('listening');
-                setStatusMessage(uiText.isListening);
-                setInputValue('');
-                finalTranscriptRef.current = '';
-                recognitionRef.current.start();
-            } catch (e: any) {
-                if (e.name !== 'invalid-state') { 
-                    console.error("Mic start error:", e);
-                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
-                    setBotStatus('idle');
-                    setStatusMessage('');
-                }
-            }
-        }
-    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
-    
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
         if (botStatus === 'listening') {
@@ -425,18 +401,40 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
             await speakText(translatedPrompt, promptMessage, () => {
-                if (!hasConversationEnded) {
+                if (isMountedRef.current && !hasConversationEnded) {
                     setBotStatus('idle');
                     setStatusMessage('');
-                    toggleListening();
-                } else {
-                    setBotStatus('idle');
-                    setStatusMessage('');
+                    startInactivityTimer(); // Restart the timer for the next check
                 }
             });
 
-        }, 30000); // 30 seconds
-    }, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, toggleListening, clearInactivityTimer]);
+        }, configRef.current.inactivityTimeoutMs);
+    }, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, clearInactivityTimer]);
+    
+    const toggleListening = useCallback(() => {
+        if (!recognitionRef.current || !isMountedRef.current) return;
+    
+        const isCurrentlyListening = botStatus === 'listening';
+    
+        if (isCurrentlyListening) {
+            recognitionRef.current.stop();
+        } else if (!hasConversationEnded) {
+            try {
+                setBotStatus('listening');
+                setStatusMessage(uiText.isListening);
+                setInputValue('');
+                finalTranscriptRef.current = '';
+                recognitionRef.current.start();
+            } catch (e: any) {
+                if (e.name !== 'invalid-state') { 
+                    console.error("Mic start error:", e);
+                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
+                    setBotStatus('idle');
+                    setStatusMessage('');
+                }
+            }
+        }
+    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
     
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -493,7 +491,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
                     if (communicationMode === 'audio-only') {
-                        toggleListening();
+                        setBotStatus('idle');
+                        setStatusMessage('');
+                        startInactivityTimer();
                     } else {
                         setBotStatus('idle');
                         setStatusMessage('');
@@ -513,7 +513,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 startInactivityTimer();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, translate, speakText, logErrorToFirestore, communicationMode, startInactivityTimer, toggleListening]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, translate, speakText, logErrorToFirestore, communicationMode, startInactivityTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -592,6 +592,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     conversationalTopics: assets.conversationalTopics || "",
                     splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || configRef.current.splashScreenWelcomeMessage,
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? configRef.current.responsePauseTimeMs,
+                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? configRef.current.inactivityTimeoutMs,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
@@ -651,7 +652,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     if (communicationMode === 'audio-only') {
                         setBotStatus('idle');
                         setStatusMessage('');
-                        toggleListening();
+                        startInactivityTimer();
                     } else {
                         setBotStatus('idle');
                         setStatusMessage('');
@@ -665,7 +666,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                      if (communicationMode === 'audio-only') {
                         setBotStatus('idle');
                         setStatusMessage('');
-                        toggleListening();
+                        startInactivityTimer();
                     } else {
                         setBotStatus('idle');
                         setStatusMessage('');
@@ -677,7 +678,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, toggleListening, communicationMode, uiText]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, uiText, startInactivityTimer]);
     
     useEffect(() => {
         if (!isReady || !['audio-only', 'audio-text'].includes(communicationMode) || recognitionRef.current) return;
