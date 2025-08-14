@@ -59,7 +59,7 @@ Confirmation:`,
     });
 
     try {
-      const response = await withRetry(() => prompt(flowInput, { model: 'googleai/gemini-1.5-flash' }));
+      const response = await withRetry(() => prompt(flowInput, { model: 'googleai/gemini-1.5-pro' }));
       const output = response.output;
 
       if (!output || typeof output.updatedPersonaDescription !== 'string') {

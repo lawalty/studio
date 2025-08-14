@@ -258,7 +258,7 @@ const generateChatResponseFlow = async ({
     };
     
     try {
-      const { output } = await withRetry(() => chatPrompt(promptInput, { model: 'googleai/gemini-1.5-flash' }));
+      const { output } = await withRetry(() => chatPrompt(promptInput, { model: 'googleai/gemini-1.5-pro' }));
       if (!output) {
         throw new Error('AI model returned an empty or invalid response.');
       }
