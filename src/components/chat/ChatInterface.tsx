@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mic, Power, DatabaseZap, Save, RotateCcw, Square, Loader2 } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -209,10 +209,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     const logErrorToFirestore = useCallback(async (error: any, source: string) => {
         try {
-            await addDoc(collection(db, "site_errors"), {
+            await collection(db, "site_errors").add({
                 message: error.message || "An unknown error occurred.",
                 source: source,
-                timestamp: serverTimestamp(),
+                timestamp: new Date().toISOString(),
                 details: JSON.stringify(error, Object.getOwnPropertyNames(error))
             });
         } catch (dbError) {
@@ -473,6 +473,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setInputValue('');
                 finalTranscriptRef.current = '';
                 recognitionRef.current.start();
+                startInactivityTimerFn();
             } catch (e: any) {
                 if (e.name !== 'invalid-state') { 
                     console.error("Mic start error:", e);
@@ -488,7 +489,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const speakText = useCallback(speakTextFn, [communicationMode, addMessage, logErrorToFirestore, uiText, configRef]);
     const handleEndChatManually = useCallback(handleEndChatManuallyFn, [clearInactivityTimer, botStatus, uiText.inactivityEndMessage, speakText, translate]);
     const startInactivityTimer = useCallback(startInactivityTimerFn, [communicationMode, hasConversationEnded, botStatus, translate, uiText, speakText, handleEndChatManually, clearInactivityTimer]);
-    const toggleListening = useCallback(toggleListeningFn, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
+    const toggleListening = useCallback(toggleListeningFn, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !configRef.current.archiveChatHistoryEnabled) return;
@@ -678,8 +679,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const finalTranscript = finalTranscriptRef.current.trim();
             if (finalTranscript) {
                 handleSendMessage(finalTranscript);
-            } else if (botStatus === 'listening' && !hasConversationEnded) {
-                startInactivityTimer();
             }
         };
 
@@ -833,5 +832,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
