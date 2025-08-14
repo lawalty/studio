@@ -51,8 +51,10 @@ Generate the greeting now. Do not include any preamble or extra text.
     // Compile and execute the Handlebars template
     const template = Handlebars.compile(promptTemplateText);
     const finalPrompt = template({
+        personaTraits,
         useKnowledgeInGreeting: useKnowledgeInGreeting,
         conversationalTopics: conversationalTopics,
+        language,
     });
 
 

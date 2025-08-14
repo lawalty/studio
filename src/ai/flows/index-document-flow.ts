@@ -61,6 +61,7 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
         } catch (error: any) {
             lastError = error;
             const errorMessage = (error.message || '').toLowerCase();
+            // Check for common retriable error messages or status codes
             if (errorMessage.includes('quota') || errorMessage.includes('rate limit') || errorMessage.includes('service unavailable') || (error.status && [429, 503].includes(error.status))) {
                 if (i < retries - 1) {
                     const delay = initialDelay * Math.pow(2, i) + Math.random() * 1000;
@@ -68,12 +69,13 @@ export async function withRetry<T>(fn: () => Promise<T>, retries = 3, initialDel
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
             } else {
+                // If it's not a retriable error, throw it immediately.
                 throw error;
             }
         }
     }
     console.error(`[withRetry] Failed after ${retries} attempts.`);
-    throw lastError;
+    throw lastError; // Throw the last error after all retries have failed.
 }
 
 export async function indexDocument({ 
