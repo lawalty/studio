@@ -249,8 +249,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearInactivityTimer();
         inactivityTimerRef.current = setTimeout(async () => {
             if (!isMountedRef.current || botStatus !== 'listening') return;
-
-            // Stop current listening to speak
+            
             recognitionRef.current?.stop();
             
             inactivityCheckLevelRef.current += 1;
@@ -262,8 +261,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 promptText = uiText.inactivityPromptSecondary;
             } else {
                 inactivityCheckLevelRef.current = 0;
-                // @ts-ignore
-                handleEndChatManually('final-inactive');
+                await handleEndChatManually('final-inactive');
                 return;
             }
             
@@ -272,14 +270,16 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const translatedPrompt = await translate(promptText);
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
-            // @ts-ignore
             await speakText(translatedPrompt, promptMessage, () => {
-                // @ts-ignore
-                if (isMountedRef.current && !hasConversationEnded) toggleListening();
+                if (isMountedRef.current && !hasConversationEnded) {
+                    setBotStatus('idle'); // Force reset before toggling
+                    toggleListening();
+                }
             });
 
         }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config]);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText, toggleListening]);
+
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -332,15 +332,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 formatting: result.formatting,
             };
             
-            // This will be defined by the time it's called
-            // @ts-ignore
             await speakText(result.aiResponse, aiMessage, () => {
                 if (result.shouldEndConversation) {
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
                     if (communicationMode === 'audio-only') {
-                        // This will be defined by the time it's called
-                        // @ts-ignore
                         toggleListening();
                     } else {
                         setBotStatus('idle');
@@ -361,7 +357,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                  startInactivityTimer();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config, speakText, toggleListening]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
@@ -583,7 +579,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
                     personalBio: assets.personalBio || "I am an AI assistant.",
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashWelcomeMessage || "",
+                    splashScreenWelcomeMessage: assets.splashWelcomeMessage || "Welcome to AI Chat",
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
                     inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
                     customGreetingMessage: assets.customGreetingMessage || "",
@@ -719,10 +715,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                   setStatusMessage('');
                   handleSendMessage(finalTranscript);
               } else {
-                  // Don't change status if inactivity timer is about to fire
-                  if (!inactivityTimerRef.current) {
-                      setBotStatus('idle');
-                      setStatusMessage('');
+                  if (inactivityTimerRef.current) {
+                    // Do nothing, let the inactivity timer handle it.
+                  } else {
+                    setBotStatus('idle');
+                    setStatusMessage('');
                   }
               }
           }
