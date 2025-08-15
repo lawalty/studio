@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
-import { collection, query, where, getDocs, Timestamp,getCountFromServer } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, getCountFromServer } from 'firebase/firestore';
 
 const UsageStatsSchema = z.object({
     totalChats: z.number(),
@@ -23,7 +23,7 @@ export async function getUsageStats(): Promise<UsageStats> {
         const kbMetaRef = db.collection('kb_meta');
 
         // Total Chats
-        const totalChatsSnapshot = await getCountFromServer(sessionsRef);
+        const totalChatsSnapshot = await getCountFromServer(query(sessionsRef));
         const totalChats = totalChatsSnapshot.data().count;
 
         // Chats Today
@@ -43,7 +43,7 @@ export async function getUsageStats(): Promise<UsageStats> {
         const weekSnapshot = await getCountFromServer(weekQuery);
         const chatsThisWeek = weekSnapshot.data().count;
 
-        // Chat History Count - This now correctly queries the database.
+        // Chat History Count
         const chatHistoryQuery = query(kbMetaRef, where('level', '==', 'Chat History'));
         const chatHistorySnapshot = await getCountFromServer(chatHistoryQuery);
         const chatHistoryCount = chatHistorySnapshot.data().count;
