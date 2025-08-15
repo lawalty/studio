@@ -161,7 +161,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         personaTraits: "",
         personalBio: "",
         conversationalTopics: "",
-        splashScreenWelcomeMessage: "",
+        splashScreenWelcomeMessage: "Welcome to AI Chat",
         responsePauseTimeMs: 1500,
         inactivityTimeoutMs: 3000,
         customGreetingMessage: "",
@@ -845,8 +845,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         <div className="md:col-span-1 flex flex-col items-center md:items-start space-y-4">
           <Card className="w-full shadow-xl">
             <CardContent className="pt-6 flex flex-col items-center">
+               <h2 className="mb-4 text-2xl font-bold text-center font-headline text-primary">{uiMessage}</h2>
               <Image {...imageProps} alt="AI Blair Avatar" />
-              <h2 className="mt-4 text-2xl font-bold text-center font-headline text-primary">{uiMessage}</h2>
                 {statusMessage && (
                   <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">{statusMessage}</p>
                 )}
@@ -874,5 +874,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
