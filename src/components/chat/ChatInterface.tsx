@@ -150,6 +150,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [botStatus, setBotStatus] = useState<BotStatus>('idle');
     const [statusMessage, setStatusMessage] = useState('');
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
+    const [endedDueToInactivity, setEndedDueToInactivity] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
     const [uiMessage, setUiMessage] = useState<string>('');
@@ -344,7 +345,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         playAndAnimate();
     }, [communicationMode, addMessage, logErrorToFirestore, uiText, config]);
-
+    
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
         if (botStatus === 'listening') { recognitionRef.current?.stop(); }
@@ -355,12 +356,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setStatusMessage('');
         
         if (reason === 'final-inactive') {
+            setEndedDueToInactivity(true);
             const translatedEndMessage = await translate(uiText.inactivityEndMessage);
             const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
             await speakText(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
         } else {
+            setEndedDueToInactivity(false);
             setHasConversationEnded(true);
         }
     }, [botStatus, clearInactivityTimer, speakText, translate, uiText.inactivityEndMessage]);
@@ -390,11 +393,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
 
     const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
+        if (communicationMode !== 'audio-only' || hasConversationEnded || isListening) return;
 
         clearInactivityTimer();
         inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || botStatus !== 'listening') return;
+            if (!isMountedRef.current || botStatus !== 'idle') return;
             
             recognitionRef.current?.stop();
             
@@ -422,7 +425,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             });
 
         }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
+    }, [communicationMode, hasConversationEnded, botStatus, isListening, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -480,6 +483,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
                     if (communicationMode === 'audio-only') {
+                        // The onend handler for listening will now call startInactivityTimer
                         toggleListening();
                     } else {
                         setBotStatus('idle');
@@ -556,9 +560,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     useEffect(() => {
         if (hasConversationEnded) {
             clearInactivityTimer();
-            archiveAndIndexChat(messages);
+            if (!endedDueToInactivity) {
+                archiveAndIndexChat(messages);
+            }
         }
-    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer]);
+    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, endedDueToInactivity]);
     
     useEffect(() => {
         isMountedRef.current = true;
@@ -638,7 +644,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 
                 await speakText(greetingText, greetingMessage, () => {
                     if (communicationMode === 'audio-only') {
-                        toggleListening();
+                        setBotStatus('idle');
                     } else {
                         setBotStatus('idle');
                         setStatusMessage('');
@@ -650,7 +656,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, fallbackMessage, () => {
                      if (communicationMode === 'audio-only') {
-                        toggleListening();
+                        setBotStatus('idle');
                     } else {
                         setBotStatus('idle');
                         setStatusMessage('');
@@ -699,12 +705,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setStatusMessage(uiText.isListening);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             if (communicationMode === 'audio-only') {
-                 startInactivityTimer();
+                 // Inactivity timer is now started when bot status becomes idle after speaking
             }
         };
         
         recognitionRef.current.onend = () => {
-          if (!isMountedRef.current || botStatus === 'preparing' || wasInactivityPrompt.current) return;
+          if (!isMountedRef.current || botStatus === 'preparing') return;
           
           if (botStatus === 'listening') {
               const finalTranscript = finalTranscriptRef.current.trim();
@@ -766,8 +772,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (!hasConversationEnded) {
                 toggleListening();
             }
+        } else if (botStatus === 'idle' && communicationMode === 'audio-only' && !hasConversationEnded && isInitialized) {
+             startInactivityTimer();
         }
-    }, [botStatus, hasConversationEnded, toggleListening]);
+    }, [botStatus, hasConversationEnded, toggleListening, communicationMode, startInactivityTimer, isInitialized]);
 
 
     const handleSaveConversationAsPdf = async () => {
@@ -887,3 +895,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
