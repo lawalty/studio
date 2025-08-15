@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Performs a vector-based semantic search by manually iterating
  * through all chunks in the knowledge base and calculating the distance. This
@@ -115,32 +116,35 @@ export async function searchKnowledgeBase({
       
       // Calculate Cosine Distance
       const distance = cosineDistance(queryEmbedding, storedEmbedding);
-
-      // Only include results that are within the specified threshold.
-      // A smaller distance means a better match.
-      if (distance <= distanceThreshold) {
-        results.push({
-          distance: distance,
-          sourceId: data.sourceId,
-          text: data.text,
-          sourceName: data.sourceName,
-          level: data.level,
-          topic: data.topic,
-          downloadURL: data.downloadURL,
-          pageNumber: data.pageNumber,
-          title: data.title,
-          header: data.header,
-        });
-      }
+      
+      // We gather all potential results first, regardless of the initial threshold.
+      // The filtering will happen after sorting by priority.
+      results.push({
+        distance: distance,
+        sourceId: data.sourceId,
+        text: data.text,
+        sourceName: data.sourceName,
+        level: data.level,
+        topic: data.topic,
+        downloadURL: data.downloadURL,
+        pageNumber: data.pageNumber,
+        title: data.title,
+        header: data.header,
+      });
   });
 
   // Sort results first by priority level (High > Medium > Low), then by distance.
-  return results.sort((a, b) => {
+  const sortedResults = results.sort((a, b) => {
     const priorityA = LEVEL_PRIORITY[a.level] || 99;
     const priorityB = LEVEL_PRIORITY[b.level] || 99;
     if (priorityA !== priorityB) {
         return priorityA - priorityB;
     }
     return a.distance - b.distance;
-  }).slice(0, limit);
+  });
+  
+  // Now, filter the correctly sorted results by the distance threshold.
+  const finalResults = sortedResults.filter(result => result.distance <= distanceThreshold);
+
+  return finalResults.slice(0, limit);
 }
