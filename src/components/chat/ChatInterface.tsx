@@ -32,6 +32,7 @@ export interface Message {
     fileName: string;
     downloadURL: string;
   };
+  distance?: number;
   distanceThreshold?: number;
   formality?: number;
   conciseness?: number;
@@ -285,6 +286,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 sender: 'model',
                 timestamp: Date.now(),
                 pdfReference: result.pdfReference,
+                distance: result.distance,
                 distanceThreshold: result.distanceThreshold,
                 formality: result.formality,
                 conciseness: result.conciseness,
@@ -806,11 +808,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-6">
+          <h2 className="text-2xl font-bold font-headline text-primary">
+            {uiMessage}
+          </h2>
           {!hasConversationEnded ? (
             <>
-              <h2 className="text-2xl font-bold font-headline text-primary">
-                {uiMessage}
-              </h2>
               <Image {...imageProps} alt="AI Blair Avatar" />
               <div className="flex h-16 w-full items-center justify-center">
                  {statusMessage && (

@@ -125,10 +125,10 @@ export default function ChatBubble({
             <p className={cn("text-xs", isUser ? "text-primary-foreground/70" : "text-muted-foreground")}>
                 {formattedTime}
             </p>
-            {message.sender === 'model' && typeof message.distanceThreshold === 'number' && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground" title={`RAG Distance Threshold: ${message.distanceThreshold.toFixed(3)}`}>
+            {message.sender === 'model' && typeof message.distance === 'number' && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground" title={`Cosine Distance: ${message.distance.toFixed(4)}`}>
                     <Thermometer className="h-3 w-3" />
-                    <span>{message.distanceThreshold.toFixed(2)}</span>
+                    <span>{message.distance.toFixed(2)}</span>
                 </div>
             )}
         </div>

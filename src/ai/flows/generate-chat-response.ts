@@ -38,6 +38,7 @@ const AiResponseJsonSchema = z.object({
     fileName: z.string(),
     downloadURL: z.string(),
   }).optional(),
+  distance: z.number().optional().describe('The cosine distance of the most relevant search result.'),
   distanceThreshold: z.number().optional(),
   // Add style values to the output for diagnostics
   formality: z.number().optional(),
@@ -273,6 +274,7 @@ const generateChatResponseFlow = async ({
           }
       }
       
+      output.distance = primarySearchResult?.distance;
       output.distanceThreshold = appConfig.distanceThreshold;
       output.formality = appConfig.formality;
       output.conciseness = appConfig.conciseness;
