@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Mic, Power, DatabaseZap, Save, RotateCcw, Square, Loader2 } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useLanguage } from '@/context/LanguageContext';
 import { v4 as uuidv4 } from 'uuid';
@@ -161,9 +161,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         personaTraits: "",
         personalBio: "",
         conversationalTopics: "",
-        splashScreenWelcomeMessage: "Welcome to AI Chat",
-        responsePauseTimeMs: 750,
-        inactivityTimeoutMs: 30000,
+        splashScreenWelcomeMessage: "",
+        responsePauseTimeMs: 1500,
+        inactivityTimeoutMs: 3000,
         customGreetingMessage: "",
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
@@ -583,9 +583,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
                     personalBio: assets.personalBio || "I am an AI assistant.",
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || "Welcome to AI Chat",
-                    responsePauseTimeMs: assets.responsePauseTimeMs ?? 750,
-                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
+                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || "",
+                    responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
+                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 3000,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,

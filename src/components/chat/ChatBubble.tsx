@@ -3,7 +3,7 @@
 
 import type { Message } from '@/components/chat/ChatInterface';
 import { cn } from "@/lib/utils";
-import { User, Bot, Download, Thermometer } from 'lucide-react';
+import { User, Bot, Download, Thermometer, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import React, { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -76,21 +76,20 @@ export default function ChatBubble({
   };
   
   const renderDiagnostics = () => {
-    if (message.sender === 'user') return null;
-
-    const hasDiagnostics = typeof message.formality === 'number' ||
-                           typeof message.conciseness === 'number' ||
-                           typeof message.tone === 'number' ||
-                           typeof message.formatting === 'number';
-
-    if (!hasDiagnostics) return null;
+    if (message.sender === 'user' || message.distance === undefined) return null;
 
     return (
-      <div className="mt-2 text-xs text-muted-foreground/80 space-x-2 border-t border-muted-foreground/20 pt-1">
-        {typeof message.formality === 'number' && <span>F:{message.formality}</span>}
-        {typeof message.conciseness === 'number' && <span>C:{message.conciseness}</span>}
-        {typeof message.tone === 'number' && <span>T:{message.tone}</span>}
-        {typeof message.formatting === 'number' && <span>M:{message.formatting}</span>}
+      <div className="mt-2 text-xs text-muted-foreground/80 space-y-1 border-t border-muted-foreground/20 pt-1">
+        {message.pdfReference?.fileName && (
+           <div className="flex items-center gap-1.5" title="Top matched document from knowledge base">
+               <FileText className="h-3 w-3" />
+               <span className="truncate">{message.pdfReference.fileName}</span>
+           </div>
+        )}
+        <div className="flex items-center gap-1.5" title={`Match Distance / Threshold`}>
+            <Thermometer className="h-3 w-3" />
+            <span>{message.distance.toFixed(3)} / {message.distanceThreshold?.toFixed(2)}</span>
+        </div>
       </div>
     );
   };
@@ -125,12 +124,6 @@ export default function ChatBubble({
             <p className={cn("text-xs", isUser ? "text-primary-foreground/70" : "text-muted-foreground")}>
                 {formattedTime}
             </p>
-            {message.sender === 'model' && typeof message.distance === 'number' && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground" title={`Cosine Distance: ${message.distance.toFixed(4)}`}>
-                    <Thermometer className="h-3 w-3" />
-                    <span>{message.distance.toFixed(2)}</span>
-                </div>
-            )}
         </div>
         {renderDiagnostics()}
       </div>

@@ -39,7 +39,7 @@ const AiResponseJsonSchema = z.object({
     downloadURL: z.string(),
   }).optional(),
   distance: z.number().optional().describe('The cosine distance of the most relevant search result.'),
-  distanceThreshold: z.number().optional(),
+  distanceThreshold: z.number().optional().describe('The distance threshold used for this search query.'),
   // Add style values to the output for diagnostics
   formality: z.number().optional(),
   conciseness: z.number().optional(),
@@ -265,6 +265,15 @@ const generateChatResponseFlow = async ({
       const { output } = await withRetry(() => chatPrompt(promptInput, { model: 'googleai/gemini-1.5-pro' }));
       if (!output) {
         throw new Error('AI model returned an empty or invalid response.');
+      }
+      
+      // If the AI didn't suggest a PDF, but we have a good search result,
+      // populate the file name for diagnostic purposes.
+      if (!output.pdfReference && primarySearchResult) {
+          output.pdfReference = {
+              fileName: primarySearchResult.sourceName,
+              downloadURL: primarySearchResult.downloadURL || '',
+          };
       }
       
       if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
