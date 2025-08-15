@@ -32,10 +32,10 @@ const firestore = admin.firestore();
 // Define a priority order for the knowledge base levels.
 const LEVEL_PRIORITY: Record<string, number> = {
     'High': 1,
-    'Medium': 2,
-    'Low': 3,
-    'Spanish PDFs': 4,
-    'Chat History': 5,
+    'Chat History': 2,
+    'Medium': 3,
+    'Low': 4,
+    'Spanish PDFs': 5,
     // 'Archive' is filtered out and won't be searched.
 };
 
