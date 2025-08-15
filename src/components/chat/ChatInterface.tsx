@@ -831,7 +831,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     if (communicationMode === 'audio-only') {
       return (
-        <div className="flex flex-col items-center h-full text-center py-8">
+        <div className="flex flex-col h-full items-center justify-center text-center">
           <div className="space-y-6">
             <h2 className="text-2xl font-bold font-headline text-primary">
               {uiMessage}
