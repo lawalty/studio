@@ -103,7 +103,9 @@ const chatPrompt = ai.definePrompt({
     a.  **Low-Confidence / No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), and the user's question is not a general common-sense query you can answer, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question to help you understand what to search for. Analyze the chat history to see if you can suggest a better query.
     b.  **Broad / Vague Questions**: If the user's question is very broad (e.g., "Tell me about X") and the retrieved context is large and varied, you MUST first provide a brief, one-sentence summary of the available information. Then, immediately ask a clarifying question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?"). Set 'isClarificationQuestion' to true for both scenarios.
 6.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
-7.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+7.  **Citations & PDF Generation**:
+    - If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+    - If your response is a table or a complex list, you MUST include a sentence like, "You can download this summary in a document I made for you when our chat has ended."
 8.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
         - If > 70: You MUST use extremely formal language. Only address the user with a gendered title (e.g., "Sir" or "Ma'am") if the user has explicitly provided their gender in the conversation history. Otherwise, do not use a title. You MUST avoid all contractions (e.g., use "do not" instead of "don't").
@@ -309,3 +311,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    
