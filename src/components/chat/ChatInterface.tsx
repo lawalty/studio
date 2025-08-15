@@ -244,12 +244,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, []);
 
     const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'listening') return;
+        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
 
         clearInactivityTimer();
         inactivityTimerRef.current = setTimeout(async () => {
             if (!isMountedRef.current || botStatus !== 'listening') return;
 
+            // Stop current listening to speak
+            recognitionRef.current?.stop();
+            
             inactivityCheckLevelRef.current += 1;
             let promptText;
             if (inactivityCheckLevelRef.current === 1) {
@@ -494,9 +497,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 setInputValue('');
                 finalTranscriptRef.current = '';
                 recognitionRef.current.start();
-                if (communicationMode === 'audio-only') {
-                    startInactivityTimer();
-                }
             } catch (e: any) {
                 if (e.name !== 'invalid-state') { 
                     console.error("Mic start error:", e);
@@ -506,7 +506,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             }
         }
-    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening, startInactivityTimer, communicationMode]);
+    }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !config.archiveChatHistoryEnabled) return;
@@ -583,7 +583,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
                     personalBio: assets.personalBio || "I am an AI assistant.",
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || "",
+                    splashScreenWelcomeMessage: assets.splashWelcomeMessage || "",
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
                     inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
                     customGreetingMessage: assets.customGreetingMessage || "",
@@ -704,20 +704,28 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('listening');
             setStatusMessage(uiText.isListening);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
+            if (communicationMode === 'audio-only') {
+                 startInactivityTimer();
+            }
         };
         
         recognitionRef.current.onend = () => {
-            if (!isMountedRef.current) return;
-            if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
-            setBotStatus('idle'); 
-            setStatusMessage('');
-            
-            const finalTranscript = finalTranscriptRef.current.trim();
-            if (finalTranscript) {
-                handleSendMessage(finalTranscript);
-            } else if (botStatus === 'listening' && communicationMode === 'audio-only') {
-                 startInactivityTimer();
-            }
+          if (!isMountedRef.current) return;
+          
+          if (botStatus === 'listening') {
+              const finalTranscript = finalTranscriptRef.current.trim();
+              if (finalTranscript) {
+                  setBotStatus('idle'); 
+                  setStatusMessage('');
+                  handleSendMessage(finalTranscript);
+              } else {
+                  // Don't change status if inactivity timer is about to fire
+                  if (!inactivityTimerRef.current) {
+                      setBotStatus('idle');
+                      setStatusMessage('');
+                  }
+              }
+          }
         };
 
         recognitionRef.current.onerror = (event: any) => {
