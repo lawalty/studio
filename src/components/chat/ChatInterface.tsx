@@ -245,6 +245,63 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
     
+    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
+        clearInactivityTimer();
+        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
+        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
+        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
+        
+        setBotStatus('idle');
+        setStatusMessage('');
+        
+        if (reason === 'final-inactive') {
+            setEndedDueToInactivity(true);
+            const translatedEndMessage = await translate(uiText.inactivityEndMessage);
+            const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
+            speakText(translatedEndMessage, finalMessage, () => {
+                setHasConversationEnded(true);
+            });
+        } else {
+            setEndedDueToInactivity(false);
+            setHasConversationEnded(true);
+        }
+    }, [botStatus, clearInactivityTimer, translate, uiText.inactivityEndMessage]); // speakText dependency removed to break cycle
+    
+    const startInactivityTimer = useCallback(() => {
+        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'idle') return;
+
+        clearInactivityTimer();
+        inactivityTimerRef.current = setTimeout(async () => {
+            if (!isMountedRef.current || botStatus !== 'idle') return;
+            
+            recognitionRef.current?.stop();
+            
+            inactivityCheckLevelRef.current += 1;
+            let promptText;
+            if (inactivityCheckLevelRef.current === 1) {
+                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+            } else if (inactivityCheckLevelRef.current === 2) {
+                promptText = uiText.inactivityPromptSecondary;
+            } else {
+                inactivityCheckLevelRef.current = 0;
+                await handleEndChatManually('final-inactive');
+                return;
+            }
+            
+            wasInactivityPrompt.current = true;
+            setBotStatus('preparing');
+            setStatusMessage(uiText.isPreparing);
+            const translatedPrompt = await translate(promptText);
+            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
+            
+            speakText(translatedPrompt, promptMessage, () => {
+                setBotStatus('idle');
+            });
+
+        }, config.inactivityTimeoutMs);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually]); // speakText dependency removed to break cycle
+
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
@@ -370,65 +427,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
 
-    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
-        clearInactivityTimer();
-        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
-        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
-        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
-        
-        setBotStatus('idle');
-        setStatusMessage('');
-        
-        if (reason === 'final-inactive') {
-            setEndedDueToInactivity(true);
-            const translatedEndMessage = await translate(uiText.inactivityEndMessage);
-            const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
-            speakText(translatedEndMessage, finalMessage, () => {
-                setHasConversationEnded(true);
-            });
-        } else {
-            setEndedDueToInactivity(false);
-            setHasConversationEnded(true);
-        }
-    }, [botStatus, clearInactivityTimer, translate, uiText.inactivityEndMessage, speakText]);
-
-    const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'idle') return;
-
-        clearInactivityTimer();
-        inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || botStatus !== 'idle') return;
-            
-            recognitionRef.current?.stop();
-            
-            inactivityCheckLevelRef.current += 1;
-            let promptText;
-            if (inactivityCheckLevelRef.current === 1) {
-                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
-            } else if (inactivityCheckLevelRef.current === 2) {
-                promptText = uiText.inactivityPromptSecondary;
-            } else {
-                inactivityCheckLevelRef.current = 0;
-                await handleEndChatManually('final-inactive');
-                return;
+    useEffect(() => {
+        if (wasInactivityPrompt.current && botStatus === 'idle') {
+            wasInactivityPrompt.current = false;
+            if (!hasConversationEnded) {
+                toggleListening();
             }
-            
-            wasInactivityPrompt.current = true;
-            setBotStatus('preparing');
-            setStatusMessage(uiText.isPreparing);
-            const translatedPrompt = await translate(promptText);
-            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
-            
-            await speakText(translatedPrompt, promptMessage, () => {
-                 if (isMountedRef.current) {
-                    setBotStatus('idle');
-                 }
-            });
-
-        }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
-
+        }
+    }, [botStatus, hasConversationEnded, toggleListening]);
+    
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
 
@@ -644,24 +651,16 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 
                 await speakText(greetingText, greetingMessage, () => {
-                    if (communicationMode === 'audio-only') {
-                        setBotStatus('idle');
-                    } else {
-                        setBotStatus('idle');
-                        setStatusMessage('');
-                    }
+                    setBotStatus('idle');
+                    setStatusMessage('');
                 });
             } catch (error: any) {
                 console.error("Error generating or sending initial greeting:", error);
                 await logErrorToFirestore(error, 'ChatInterface/sendInitialGreeting');
                 const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 await speakText(greetingText, fallbackMessage, () => {
-                     if (communicationMode === 'audio-only') {
-                        setBotStatus('idle');
-                    } else {
-                        setBotStatus('idle');
-                        setStatusMessage('');
-                    }
+                     setBotStatus('idle');
+                     setStatusMessage('');
                 });
             }
         };
@@ -764,15 +763,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore, communicationMode, config]);
     
     useEffect(() => {
-        if (botStatus === 'idle' && wasInactivityPrompt.current) {
-            wasInactivityPrompt.current = false;
-            if (!hasConversationEnded) {
-                toggleListening();
-            }
-        } else if (botStatus === 'idle' && communicationMode === 'audio-only' && !hasConversationEnded && isInitialized) {
-            startInactivityTimer();
+        if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
+            toggleListening();
         }
-    }, [botStatus, hasConversationEnded, toggleListening, communicationMode, startInactivityTimer, isInitialized]);
+    }, [botStatus, isInitialized, communicationMode, hasConversationEnded, toggleListening]);
 
 
     const handleSaveConversationAsPdf = async () => {
@@ -826,36 +820,36 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col h-full items-center justify-center text-center">
-          <div className="flex flex-col items-center space-y-6">
-            <h2 className="text-2xl font-bold font-headline text-primary">
-              {uiMessage}
-            </h2>
-            {!hasConversationEnded ? (
-              <>
-                <Image {...imageProps} alt="AI Blair Avatar" />
-                <div className="flex h-16 w-full items-center justify-center">
-                   {statusMessage && (
-                      <div className={cn("flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow", (isListening || isBotProcessing) && "animate-pulse")}>
-                          {isListening ? <Mic size={20} className="mr-2" /> : <Loader2 size={20} className="mr-2 animate-spin" />}
-                          {statusMessage}
-                      </div>
-                   )}
+            <div className="flex flex-col items-center space-y-6">
+                <h2 className="text-2xl font-bold font-headline text-primary">
+                {uiMessage}
+                </h2>
+                {!hasConversationEnded ? (
+                <>
+                    <Image {...imageProps} alt="AI Blair Avatar" />
+                    <div className="flex h-16 w-full items-center justify-center">
+                    {statusMessage && (
+                        <div className={cn("flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow", (isListening || isBotProcessing) && "animate-pulse")}>
+                            {isListening ? <Mic size={20} className="mr-2" /> : <Loader2 size={20} className="mr-2 animate-spin" />}
+                            {statusMessage}
+                        </div>
+                    )}
+                    </div>
+                    <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isBotProcessing || isBotSpeaking}>
+                    <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
+                    </Button>
+                </>
+                ) : (
+                <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
+                    <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
+                    <ConversationLog messages={messages} avatarSrc={config.avatarSrc} />
+                    <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
+                        <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
+                        <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
+                    </div>
                 </div>
-                 <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isBotProcessing || isBotSpeaking}>
-                   <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
-                 </Button>
-              </>
-            ) : (
-              <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
-                   <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
-                   <ConversationLog messages={messages} avatarSrc={config.avatarSrc} />
-                   <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
-                      <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
-                      <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
-                   </div>
-              </div>
-            )}
-          </div>
+                )}
+            </div>
         </div>
       );
     }
@@ -894,3 +888,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
