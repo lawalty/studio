@@ -163,7 +163,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         conversationalTopics: "",
         splashScreenWelcomeMessage: "Welcome to AI Chat",
         responsePauseTimeMs: 1500,
-        inactivityTimeoutMs: 3000,
+        inactivityTimeoutMs: 30000,
         customGreetingMessage: "",
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
@@ -243,6 +243,41 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
 
+    const startInactivityTimer = useCallback(() => {
+        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'listening') return;
+
+        clearInactivityTimer();
+        inactivityTimerRef.current = setTimeout(async () => {
+            if (!isMountedRef.current || botStatus !== 'listening') return;
+
+            inactivityCheckLevelRef.current += 1;
+            let promptText;
+            if (inactivityCheckLevelRef.current === 1) {
+                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+            } else if (inactivityCheckLevelRef.current === 2) {
+                promptText = uiText.inactivityPromptSecondary;
+            } else {
+                inactivityCheckLevelRef.current = 0;
+                // @ts-ignore
+                handleEndChatManually('final-inactive');
+                return;
+            }
+            
+            setBotStatus('preparing');
+            setStatusMessage(uiText.isPreparing);
+            const translatedPrompt = await translate(promptText);
+            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
+            
+            // @ts-ignore
+            await speakText(translatedPrompt, promptMessage, () => {
+                // @ts-ignore
+                if (isMountedRef.current && !hasConversationEnded) toggleListening();
+            });
+
+        }, config.inactivityTimeoutMs);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config]);
+
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
 
@@ -320,11 +355,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('idle');
             setStatusMessage('');
             if (communicationMode === 'audio-only' && !hasConversationEnded) {
-                 // @ts-ignore
-                startInactivityTimer();
+                 startInactivityTimer();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, config]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
@@ -446,40 +480,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setHasConversationEnded(true);
         }
     }, [botStatus, clearInactivityTimer, speakText, translate, uiText.inactivityEndMessage]);
-    
-    const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'listening') return;
-
-        clearInactivityTimer();
-        inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || botStatus !== 'listening') return;
-
-            inactivityCheckLevelRef.current += 1;
-            let promptText;
-            if (inactivityCheckLevelRef.current === 1) {
-                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
-            } else if (inactivityCheckLevelRef.current === 2) {
-                promptText = uiText.inactivityPromptSecondary;
-            } else {
-                inactivityCheckLevelRef.current = 0;
-                handleEndChatManually('final-inactive');
-                return;
-            }
-            
-            setBotStatus('preparing');
-            setStatusMessage(uiText.isPreparing);
-            const translatedPrompt = await translate(promptText);
-            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
-            
-            // @ts-ignore
-            await speakText(translatedPrompt, promptMessage, () => {
-                // @ts-ignore
-                if (isMountedRef.current && !hasConversationEnded) toggleListening();
-            });
-
-        }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, handleEndChatManually, speakText, config]);
 
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
@@ -585,7 +585,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     conversationalTopics: assets.conversationalTopics || "",
                     splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || "",
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
-                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 3000,
+                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
