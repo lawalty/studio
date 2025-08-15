@@ -40,7 +40,7 @@ export default function ConversationLog({
   return (
     <ScrollArea
       ref={scrollAreaRef}
-      className="h-[calc(100vh-280px)] md:h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
+      className="h-full max-h-[calc(100vh-240px)] w-full rounded-md border border-border p-4 shadow-inner bg-card"
       data-testid="conversation-log-scroll-area"
     >
         <div className="h-full">

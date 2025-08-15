@@ -133,14 +133,14 @@ export async function searchKnowledgeBase({
       });
   });
 
-  // Sort results first by priority level (High > Medium > Low), then by distance.
+  // Sort results first by distance, then by priority level as a tie-breaker.
   const sortedResults = results.sort((a, b) => {
+    if (a.distance !== b.distance) {
+        return a.distance - b.distance;
+    }
     const priorityA = LEVEL_PRIORITY[a.level] || 99;
     const priorityB = LEVEL_PRIORITY[b.level] || 99;
-    if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-    }
-    return a.distance - b.distance;
+    return priorityA - priorityB;
   });
   
   // Now, filter the correctly sorted results by the distance threshold.
