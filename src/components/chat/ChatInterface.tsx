@@ -508,8 +508,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, config, speakText, handleEndChatManually]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
-        if (msgs.length === 0 || !config.archiveChatHistoryEnabled) return;
-        toast({ title: "Archiving Conversation..." });
+        // Do not archive if no user messages, or if archiving is disabled.
+        const hasUserMessages = msgs.some(m => m.sender === 'user');
+        if (msgs.length === 0 || !config.archiveChatHistoryEnabled || !hasUserMessages) return;
         
         try {
             const { default: jsPDF } = await import('jspdf');
@@ -550,7 +551,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const indexingResult = await indexDocument({ sourceId, sourceName: fileName, text: textContentForIndexing, level: 'Chat History', topic: 'Chat History', downloadURL });
             if (!indexingResult.success) throw new Error(indexingResult.error || 'Indexing failed.');
 
-            toast({ title: "Conversation Archived" });
         } catch (error: any) {
             console.error("Failed to archive chat:", error);
             await logErrorToFirestore(error, 'ChatInterface/archiveAndIndexChat');

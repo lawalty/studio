@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle, Trash2, ServerCrash, Download } from 'lucide-react';
+import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle, Trash2, ServerCrash, Download, RotateCcw, Loader2 } from 'lucide-react';
 import AdminNavLinkCard from '@/components/admin/AdminNavLinkCard';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,6 +14,10 @@ import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { getUsageStats, type UsageStats } from '@/ai/flows/get-usage-stats-flow';
+import { clearUsageStats } from '@/ai/flows/clear-usage-stats-flow';
+import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface SiteError {
     id: string;
@@ -22,47 +26,34 @@ interface SiteError {
     timestamp: Date;
 }
 
-const topTopicsData = [
-  { topic: "General Inquiry", chats: 120 },
-  { topic: "Product Help", chats: 98 },
-  { topic: "Sales Question", chats: 75 },
-  { topic: "Support", chats: 50 },
-  { topic: "Feedback", chats: 32 },
-];
-
-const topDocumentsData = [
-    { name: "Welcome_Guide.pdf", references: 89, lastAccessed: "1h ago" },
-    { name: "FAQ_v2.pdf", references: 72, lastAccessed: "3h ago" },
-    { name: "Company_Policy.docx", references: 45, lastAccessed: "2d ago" },
-    { name: "Onboarding_Process.pdf", references: 31, lastAccessed: "5h ago" },
-    { name: "Product_Catalog.pdf", references: 15, lastAccessed: "1w ago" },
-];
-
 export default function AdminDashboard() {
-  const [realtimeUsers, setRealtimeUsers] = useState(0);
+  const [stats, setStats] = useState<UsageStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [siteErrors, setSiteErrors] = useState<SiteError[]>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(true);
+  const [isClearingStats, setIsClearingStats] = useState(false);
+  const { toast } = useToast();
+
+  const fetchStats = useCallback(async () => {
+    setIsLoadingStats(true);
+    try {
+        const usageStats = await getUsageStats();
+        setStats(usageStats);
+    } catch (error) {
+        console.error("Failed to fetch usage stats:", error);
+    } finally {
+        setIsLoadingStats(false);
+    }
+  }, []);
 
   useEffect(() => {
-    // Simulate real-time user count fluctuations
-    const initialUsers = Math.floor(Math.random() * 5);
-    setRealtimeUsers(initialUsers);
+    fetchStats(); // Initial fetch
 
-    const interval = setInterval(() => {
-      setRealtimeUsers(prev => {
-        const change = Math.random() > 0.5 ? 1 : -1;
-        const newCount = prev + change;
-        return Math.max(0, newCount);
-      });
-    }, 5000);
-
-    // Fetch site errors
     const errorsQuery = query(collection(db, 'site_errors'), orderBy('timestamp', 'desc'));
     const unsubscribeErrors = onSnapshot(errorsQuery, (snapshot) => {
         const errorsData = snapshot.docs.map(doc => {
             const data = doc.data();
             const timestamp = data.timestamp;
-            // Robustly convert Firestore timestamp to JS Date
             const date = timestamp && typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date();
             return {
                 id: doc.id,
@@ -79,35 +70,106 @@ export default function AdminDashboard() {
     });
 
     return () => {
-        clearInterval(interval);
         unsubscribeErrors();
     };
-  }, []);
+  }, [fetchStats]);
 
   const handleDeleteError = async (errorId: string) => {
       await deleteDoc(doc(db, 'site_errors', errorId));
   };
+  
+  const handleClearStats = async () => {
+      setIsClearingStats(true);
+      toast({ title: 'Clearing usage statistics...' });
+      try {
+          const result = await clearUsageStats();
+          if (result.success) {
+              toast({ title: 'Success', description: `${result.deletedCount} chat session records have been deleted.` });
+              fetchStats(); // Refresh stats after clearing
+          } else {
+              throw new Error(result.error || 'An unknown error occurred.');
+          }
+      } catch (error: any) {
+          console.error('Failed to clear stats:', error);
+          toast({ title: 'Error', description: `Could not clear stats. ${error.message}`, variant: 'destructive' });
+      } finally {
+          setIsClearingStats(false);
+      }
+  };
+  
+    const handleDownloadReport = () => {
+        if (!stats) return;
+
+        const reportContent = `
+Usage Statistics Report
+Generated on: ${new Date().toLocaleString()}
+
+--- Totals ---
+Total Chat Sessions: ${stats.totalChats}
+Chats Today: ${stats.chatsToday}
+Chats This Week: ${stats.chatsThisWeek}
+Archived Chat Histories (KB): ${stats.chatHistoryCount}
+
+--- Top Topics ---
+${stats.topTopics.map(t => `${t.topic}: ${t.chats} chats`).join('\n')}
+
+--- Top Documents Referenced ---
+${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n')}
+        `;
+        
+        const blob = new Blob([reportContent.trim()], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `usage_stats_report_${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
 
   return (
     <div className="space-y-8">
-      {/* Usage Statistics */}
       <section>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold tracking-tight">Usage Statistics</h2>
-          <Button variant="outline" size="icon" disabled>
-              <Download className="h-4 w-4" />
-              <span className="sr-only">Download Report</span>
-          </Button>
+            <div className="flex items-center gap-2">
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="destructive" size="sm" disabled={isClearingStats}>
+                           <Trash2 className="mr-2 h-4 w-4" /> Clear Statistics
+                       </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will permanently delete all chat session records used for statistics. This action cannot be undone and will reset the dashboard counters. It will NOT affect the Chat History KB.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleClearStats} disabled={isClearingStats}>
+                                {isClearingStats ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                Yes, clear stats
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                <Button variant="outline" size="sm" onClick={handleDownloadReport} disabled={!stats}>
+                    <Download className="mr-2 h-4 w-4" /> Download Report
+                </Button>
+            </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Real-time Users</CardTitle>
+                    <CardTitle className="text-sm font-medium">Archived Chats (KB)</CardTitle>
                     <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{realtimeUsers}</div>
-                    <p className="text-xs text-muted-foreground">Users currently in a chat session</p>
+                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatHistoryCount ?? 0}</div>
+                    <p className="text-xs text-muted-foreground">Conversations in Chat History KB</p>
                 </CardContent>
             </Card>
              <Card>
@@ -116,8 +178,8 @@ export default function AdminDashboard() {
                     <MessageCircle className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">142</div>
-                    <p className="text-xs text-muted-foreground">+15% from yesterday</p>
+                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatsToday ?? 0}</div>
+                    <p className="text-xs text-muted-foreground">New conversations started</p>
                 </CardContent>
             </Card>
             <Card>
@@ -126,8 +188,8 @@ export default function AdminDashboard() {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">893</div>
-                    <p className="text-xs text-muted-foreground">+5.2% from last week</p>
+                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatsThisWeek ?? 0}</div>
+                    <p className="text-xs text-muted-foreground">Past 7 days</p>
                 </CardContent>
             </Card>
             <Card>
@@ -136,14 +198,13 @@ export default function AdminDashboard() {
                     <Database className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">25,304</div>
+                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.totalChats ?? 0}</div>
                     <p className="text-xs text-muted-foreground">Since project inception</p>
                 </CardContent>
             </Card>
         </div>
       </section>
 
-      {/* Topics and Documents */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card>
             <CardHeader>
@@ -151,21 +212,23 @@ export default function AdminDashboard() {
                 <CardDescription>Most frequently discussed topics in chat sessions.</CardDescription>
             </CardHeader>
             <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={topTopicsData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                        <XAxis dataKey="topic" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                        <Tooltip
-                          cursor={{fill: 'hsl(var(--muted))'}}
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--background))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: 'var(--radius)',
-                          }}
-                        />
-                        <Bar dataKey="chats" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
+                {isLoadingStats ? <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
+                    <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={stats?.topTopics} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                            <XAxis dataKey="topic" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                            <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
+                            <Tooltip
+                            cursor={{fill: 'hsl(var(--muted))'}}
+                            contentStyle={{
+                                backgroundColor: 'hsl(var(--background))',
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: 'var(--radius)',
+                            }}
+                            />
+                            <Bar dataKey="chats" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                )}
             </CardContent>
         </Card>
         <Card>
@@ -174,33 +237,32 @@ export default function AdminDashboard() {
                 <CardDescription>Knowledge base files referenced most by the AI.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Document Name</TableHead>
-                            <TableHead className="text-center">References</TableHead>
-                            <TableHead className="text-right">Last Accessed</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {topDocumentsData.map((doc) => (
-                        <TableRow key={doc.name}>
-                            <TableCell className="font-medium truncate max-w-xs">{doc.name}</TableCell>
-                            <TableCell className="text-center">{doc.references}</TableCell>
-                            <TableCell className="text-right text-muted-foreground">{doc.lastAccessed}</TableCell>
-                        </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                {isLoadingStats ? <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Document Name</TableHead>
+                                <TableHead className="text-center">References</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {stats?.topDocuments.map((doc) => (
+                            <TableRow key={doc.name}>
+                                <TableCell className="font-medium truncate max-w-xs">{doc.name}</TableCell>
+                                <TableCell className="text-center">{doc.references}</TableCell>
+                            </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
             </CardContent>
         </Card>
       </section>
       
-      {/* Placeholder for future feature */}
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <CardDescription>
-            Note: The analytics data displayed on this dashboard is currently placeholder data for demonstration purposes.
+          Note: Top Documents & Top Topics analytics are currently placeholders. Other stats are live.
         </CardDescription>
       </Alert>
       
