@@ -245,6 +245,28 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
     
+    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
+        clearInactivityTimer();
+        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
+        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
+        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
+        
+        setBotStatus('idle');
+        setStatusMessage('');
+        
+        if (reason === 'final-inactive') {
+            setEndedDueToInactivity(true);
+            const translatedEndMessage = await translate(uiText.inactivityEndMessage);
+            const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
+            await speakText(translatedEndMessage, finalMessage, () => {
+                setHasConversationEnded(true);
+            });
+        } else {
+            setEndedDueToInactivity(false);
+            setHasConversationEnded(true);
+        }
+    }, [botStatus, clearInactivityTimer, translate, uiText.inactivityEndMessage]);
+    
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
@@ -345,28 +367,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         playAndAnimate();
     }, [communicationMode, addMessage, logErrorToFirestore, uiText, config]);
-    
-    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
-        clearInactivityTimer();
-        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
-        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
-        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
-        
-        setBotStatus('idle');
-        setStatusMessage('');
-        
-        if (reason === 'final-inactive') {
-            setEndedDueToInactivity(true);
-            const translatedEndMessage = await translate(uiText.inactivityEndMessage);
-            const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
-            await speakText(translatedEndMessage, finalMessage, () => {
-                setHasConversationEnded(true);
-            });
-        } else {
-            setEndedDueToInactivity(false);
-            setHasConversationEnded(true);
-        }
-    }, [botStatus, clearInactivityTimer, speakText, translate, uiText.inactivityEndMessage]);
     
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
@@ -828,35 +828,37 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     if (communicationMode === 'audio-only') {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-center py-8 space-y-6">
-          <h2 className="text-2xl font-bold font-headline text-primary">
-            {uiMessage}
-          </h2>
-          {!hasConversationEnded ? (
-            <>
-              <Image {...imageProps} alt="AI Blair Avatar" />
-              <div className="flex h-16 w-full items-center justify-center">
-                 {statusMessage && (
-                    <div className={cn("flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow", (isListening || isBotProcessing) && "animate-pulse")}>
-                        {isListening ? <Mic size={20} className="mr-2" /> : <Loader2 size={20} className="mr-2 animate-spin" />}
-                        {statusMessage}
-                    </div>
-                 )}
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold font-headline text-primary">
+              {uiMessage}
+            </h2>
+            {!hasConversationEnded ? (
+              <>
+                <Image {...imageProps} alt="AI Blair Avatar" />
+                <div className="flex h-16 w-full items-center justify-center">
+                   {statusMessage && (
+                      <div className={cn("flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow", (isListening || isBotProcessing) && "animate-pulse")}>
+                          {isListening ? <Mic size={20} className="mr-2" /> : <Loader2 size={20} className="mr-2 animate-spin" />}
+                          {statusMessage}
+                      </div>
+                   )}
+                </div>
+                 <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isBotProcessing || isBotSpeaking}>
+                   <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
+                 </Button>
+              </>
+            ) : (
+              <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
+                   <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
+                   <ConversationLog messages={messages} avatarSrc={config.avatarSrc} />
+                   <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
+                      <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
+                      <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
+                   </div>
               </div>
-               <Button onClick={() => handleEndChatManually()} variant="outline" size="sm" disabled={isBotProcessing || isBotSpeaking}>
-                 <Power className="mr-2 h-4 w-4" /> {uiText.endChat}
-               </Button>
-            </>
-          ) : (
-            <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
-                 <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
-                 <ConversationLog messages={messages} avatarSrc={config.avatarSrc} />
-                 <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
-                    <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
-                    <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
-                 </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       );
     }
@@ -895,5 +897,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
