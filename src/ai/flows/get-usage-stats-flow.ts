@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 import { db } from '@/lib/firebase-admin';
-import { collection, query, where, getDocs, Timestamp, getCountFromServer } from 'firebase/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 
 const UsageStatsSchema = z.object({
     totalChats: z.number(),
@@ -23,15 +23,15 @@ export async function getUsageStats(): Promise<UsageStats> {
         const kbMetaRef = db.collection('kb_meta');
 
         // Total Chats
-        const totalChatsSnapshot = await getCountFromServer(query(sessionsRef));
+        const totalChatsSnapshot = await sessionsRef.count().get();
         const totalChats = totalChatsSnapshot.data().count;
 
         // Chats Today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayTimestamp = Timestamp.fromDate(today);
-        const todayQuery = query(sessionsRef, where('startTime', '>=', todayTimestamp));
-        const todaySnapshot = await getCountFromServer(todayQuery);
+        const todayQuery = sessionsRef.where('startTime', '>=', todayTimestamp);
+        const todaySnapshot = await todayQuery.count().get();
         const chatsToday = todaySnapshot.data().count;
 
         // Chats This Week
@@ -39,13 +39,13 @@ export async function getUsageStats(): Promise<UsageStats> {
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         oneWeekAgo.setHours(0, 0, 0, 0);
         const oneWeekAgoTimestamp = Timestamp.fromDate(oneWeekAgo);
-        const weekQuery = query(sessionsRef, where('startTime', '>=', oneWeekAgoTimestamp));
-        const weekSnapshot = await getCountFromServer(weekQuery);
+        const weekQuery = sessionsRef.where('startTime', '>=', oneWeekAgoTimestamp);
+        const weekSnapshot = await weekQuery.count().get();
         const chatsThisWeek = weekSnapshot.data().count;
 
         // Chat History Count
-        const chatHistoryQuery = query(kbMetaRef, where('level', '==', 'Chat History'));
-        const chatHistorySnapshot = await getCountFromServer(chatHistoryQuery);
+        const chatHistoryQuery = kbMetaRef.where('level', '==', 'Chat History');
+        const chatHistorySnapshot = await chatHistoryQuery.count().get();
         const chatHistoryCount = chatHistorySnapshot.data().count;
         
         // Placeholder data for charts, as real aggregation is complex for this demo
