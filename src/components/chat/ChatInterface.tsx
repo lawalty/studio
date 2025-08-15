@@ -394,7 +394,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
 
     const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded || isListening) return;
+        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'idle') return;
 
         clearInactivityTimer();
         inactivityTimerRef.current = setTimeout(async () => {
@@ -428,7 +428,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             });
 
         }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, isListening, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -486,8 +486,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     setHasConversationEnded(true);
                 } else if (!hasConversationEnded) {
                     if (communicationMode === 'audio-only') {
-                        // The onend handler for listening will now call startInactivityTimer
-                        toggleListening();
+                        setBotStatus('idle');
                     } else {
                         setBotStatus('idle');
                         setStatusMessage('');
@@ -507,7 +506,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                  startInactivityTimer();
             }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config, speakText, toggleListening]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config, speakText]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !config.archiveChatHistoryEnabled) return;
@@ -671,7 +670,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, uiText, toggleListening, config]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, uiText, config]);
     
     // This effect is responsible for setting up and tearing down the speech recognition object.
     useEffect(() => {
@@ -708,7 +707,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setStatusMessage(uiText.isListening);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             if (communicationMode === 'audio-only') {
-                 // Inactivity timer is now started when bot status becomes idle after speaking
+                 startInactivityTimer();
             }
         };
         
@@ -724,9 +723,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               } else {
                   setBotStatus('idle');
                   setStatusMessage('');
-                  if (communicationMode === 'audio-only') {
-                    startInactivityTimer();
-                  }
               }
           }
         };
@@ -801,7 +797,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
             heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
             while (heightLeft > 0) {
-                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
+                position -= (pdf.internal.pageSize.getHeight() - pageMargin);
                 pdf.addPage();
                 pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
                 heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
