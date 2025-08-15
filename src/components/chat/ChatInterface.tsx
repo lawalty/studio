@@ -187,6 +187,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
     const isMountedRef = useRef(true);
+    const wasInactivityPrompt = useRef(false);
 
     // Hooks
     const router = useRouter();
@@ -363,7 +364,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setHasConversationEnded(true);
         }
     }, [botStatus, clearInactivityTimer, speakText, translate, uiText.inactivityEndMessage]);
-
+    
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
         const isCurrentlyListening = botStatus === 'listening';
@@ -410,20 +411,18 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 return;
             }
             
+            wasInactivityPrompt.current = true;
             setBotStatus('preparing');
             setStatusMessage(uiText.isPreparing);
             const translatedPrompt = await translate(promptText);
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
             await speakText(translatedPrompt, promptMessage, () => {
-                if (isMountedRef.current && !hasConversationEnded) {
-                    setBotStatus('idle'); // Force reset before toggling
-                    toggleListening();
-                }
+                 if (isMountedRef.current) setBotStatus('idle');
             });
 
         }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText, toggleListening]);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -705,7 +704,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         
         recognitionRef.current.onend = () => {
-          if (!isMountedRef.current) return;
+          if (!isMountedRef.current || botStatus === 'preparing' || wasInactivityPrompt.current) return;
           
           if (botStatus === 'listening') {
               const finalTranscript = finalTranscriptRef.current.trim();
@@ -714,11 +713,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                   setStatusMessage('');
                   handleSendMessage(finalTranscript);
               } else {
-                  if (inactivityTimerRef.current) {
-                    // Do nothing, let the inactivity timer handle it.
-                  } else {
-                    setBotStatus('idle');
-                    setStatusMessage('');
+                  setBotStatus('idle');
+                  setStatusMessage('');
+                  if (communicationMode === 'audio-only') {
+                    startInactivityTimer();
                   }
               }
           }
@@ -760,6 +758,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           }, config.responsePauseTimeMs);
         };
     }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore, communicationMode, config]);
+    
+    // New effect to handle re-toggling listening after an inactivity prompt
+    useEffect(() => {
+        if (botStatus === 'idle' && wasInactivityPrompt.current) {
+            wasInactivityPrompt.current = false; // Reset the flag
+            if (!hasConversationEnded) {
+                toggleListening();
+            }
+        }
+    }, [botStatus, hasConversationEnded, toggleListening]);
+
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
