@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -5,7 +6,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Mic, Bot, MessageSquareText, AlertTriangle, UploadCloud, Loader2 } from 'lucide-react';
+import { Mic, Bot, MessageSquareText, AlertTriangle, Cog, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
@@ -337,6 +338,14 @@ export default function StartPageContent() {
 
   return (
     <div className="relative flex flex-col items-center justify-center flex-grow p-4">
+       <div className="absolute top-4 right-4 z-10">
+         <Button asChild variant="ghost" size="icon" aria-label="Admin Settings">
+           <Link href="/admin">
+             <Cog className="h-6 w-6 text-white mix-blend-difference" />
+           </Link>
+         </Button>
+       </div>
+
        {backgroundUrl && backgroundUrl !== DEFAULT_BACKGROUND_IMAGE_SRC && (
         <Image
           src={backgroundUrl}
@@ -349,9 +358,6 @@ export default function StartPageContent() {
         />
       )}
       {renderContent()}
-      <p className="mt-4 rounded-md bg-white/80 p-2 text-center text-xs text-foreground shadow-lg backdrop-blur-sm dark:bg-black/60 dark:text-white">
-        Press Ctrl + Shift + A to access the admin panel.
-      </p>
     </div>
   );
 }
