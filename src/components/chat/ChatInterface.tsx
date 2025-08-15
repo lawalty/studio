@@ -244,28 +244,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
-
-    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
-        clearInactivityTimer();
-        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
-        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
-        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
-        
-        setBotStatus('idle');
-        setStatusMessage('');
-        
-        if (reason === 'final-inactive') {
-            setEndedDueToInactivity(true);
-            const translatedEndMessage = await translate(uiText.inactivityEndMessage);
-            const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
-            speakText(translatedEndMessage, finalMessage, () => {
-                setHasConversationEnded(true);
-            });
-        } else {
-            setEndedDueToInactivity(false);
-            setHasConversationEnded(true);
-        }
-    }, [botStatus, clearInactivityTimer, translate, uiText.inactivityEndMessage]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
@@ -392,6 +370,28 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
 
+    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
+        clearInactivityTimer();
+        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
+        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
+        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
+        
+        setBotStatus('idle');
+        setStatusMessage('');
+        
+        if (reason === 'final-inactive') {
+            setEndedDueToInactivity(true);
+            const translatedEndMessage = await translate(uiText.inactivityEndMessage);
+            const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
+            speakText(translatedEndMessage, finalMessage, () => {
+                setHasConversationEnded(true);
+            });
+        } else {
+            setEndedDueToInactivity(false);
+            setHasConversationEnded(true);
+        }
+    }, [botStatus, clearInactivityTimer, translate, uiText.inactivityEndMessage, speakText]);
+
     const startInactivityTimer = useCallback(() => {
         if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'idle') return;
 
@@ -423,7 +423,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             await speakText(translatedPrompt, promptMessage, () => {
                  if (isMountedRef.current) {
                     setBotStatus('idle');
-                    // This is now handled by the useEffect watching botStatus
                  }
             });
 
@@ -821,7 +820,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
     
     if (!isReady) {
-        return ( <div className="flex flex-col items-center justify-center h-full text-center py-8"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2></div> );
+        return ( <div className="flex flex-col items-center justify-center h-full text-center"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2></div> );
     }
 
     if (communicationMode === 'audio-only') {
@@ -895,5 +894,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
