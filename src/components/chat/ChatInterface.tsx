@@ -217,7 +217,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const isBotSpeaking = botStatus === 'speaking' || botStatus === 'typing';
     const isListening = botStatus === 'listening';
 
-    // Forward declare functions to solve initialization errors
+    // Functions are declared here
     const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
         const newMessage: Message = { ...message, id: uuidv4(), timestamp: Date.now() };
         setMessages(prev => [...prev, newMessage]);
@@ -242,122 +242,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
-
-    const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
-
-        clearInactivityTimer();
-        inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || botStatus !== 'listening') return;
-            
-            recognitionRef.current?.stop();
-            
-            inactivityCheckLevelRef.current += 1;
-            let promptText;
-            if (inactivityCheckLevelRef.current === 1) {
-                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
-                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
-            } else if (inactivityCheckLevelRef.current === 2) {
-                promptText = uiText.inactivityPromptSecondary;
-            } else {
-                inactivityCheckLevelRef.current = 0;
-                await handleEndChatManually('final-inactive');
-                return;
-            }
-            
-            setBotStatus('preparing');
-            setStatusMessage(uiText.isPreparing);
-            const translatedPrompt = await translate(promptText);
-            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
-            
-            await speakText(translatedPrompt, promptMessage, () => {
-                if (isMountedRef.current && !hasConversationEnded) {
-                    setBotStatus('idle'); // Force reset before toggling
-                    toggleListening();
-                }
-            });
-
-        }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText, toggleListening]);
-
-
-    const handleSendMessage = useCallback(async (text: string) => {
-        if (!text.trim() || hasConversationEnded || isBotProcessing) return;
-
-        clearInactivityTimer();
-        inactivityCheckLevelRef.current = 0;
-        addMessage({ text, sender: 'user' });
-        setInputValue('');
-        setBotStatus('preparing');
-        setStatusMessage(uiText.isPreparing);
-        
-        const historyForGenkit = [...messagesRef.current, {id: 'temp', text, sender: 'user', timestamp: Date.now()}].map(msg => ({ 
-            role: msg.sender as 'user' | 'model', 
-            parts: [{ text: msg.text }] 
-        }));
-
-        try {
-            const { 
-                personaTraits, 
-                personalBio,
-                conversationalTopics,
-            } = config;
-            const flowInput: GenerateChatResponseInput = {
-                personaTraits,
-                personalBio,
-                conversationalTopics,
-                chatHistory: historyForGenkit,
-                language: language,
-                clarificationAttemptCount: clarificationAttemptCount,
-            };
-            const result = await generateChatResponse(flowInput);
-
-            if (result.isClarificationQuestion) {
-                setClarificationAttemptCount(prev => prev + 1);
-            } else {
-                setClarificationAttemptCount(0); // Reset on a direct answer
-            }
-            
-            const aiMessage: Message = {
-                id: uuidv4(),
-                text: result.aiResponse,
-                sender: 'model',
-                timestamp: Date.now(),
-                pdfReference: result.pdfReference,
-                distance: result.distance,
-                distanceThreshold: result.distanceThreshold,
-                formality: result.formality,
-                conciseness: result.conciseness,
-                tone: result.tone,
-                formatting: result.formatting,
-            };
-            
-            await speakText(result.aiResponse, aiMessage, () => {
-                if (result.shouldEndConversation) {
-                    setHasConversationEnded(true);
-                } else if (!hasConversationEnded) {
-                    if (communicationMode === 'audio-only') {
-                        toggleListening();
-                    } else {
-                        setBotStatus('idle');
-                        setStatusMessage('');
-                    }
-                }
-            });
-
-        } catch (error: any) {
-            console.error("Error in generateChatResponse:", error);
-            await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-            const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
-            const translatedError = await translate(errorMessage);
-            addMessage({ text: translatedError, sender: 'model'});
-            setBotStatus('idle');
-            setStatusMessage('');
-            if (communicationMode === 'audio-only' && !hasConversationEnded) {
-                 startInactivityTimer();
-            }
-        }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config, speakText, toggleListening]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
@@ -503,6 +387,121 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
         }
     }, [botStatus, hasConversationEnded, logErrorToFirestore, uiText.isListening]);
+
+    const startInactivityTimer = useCallback(() => {
+        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
+
+        clearInactivityTimer();
+        inactivityTimerRef.current = setTimeout(async () => {
+            if (!isMountedRef.current || botStatus !== 'listening') return;
+            
+            recognitionRef.current?.stop();
+            
+            inactivityCheckLevelRef.current += 1;
+            let promptText;
+            if (inactivityCheckLevelRef.current === 1) {
+                const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
+                promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
+            } else if (inactivityCheckLevelRef.current === 2) {
+                promptText = uiText.inactivityPromptSecondary;
+            } else {
+                inactivityCheckLevelRef.current = 0;
+                await handleEndChatManually('final-inactive');
+                return;
+            }
+            
+            setBotStatus('preparing');
+            setStatusMessage(uiText.isPreparing);
+            const translatedPrompt = await translate(promptText);
+            const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
+            
+            await speakText(translatedPrompt, promptMessage, () => {
+                if (isMountedRef.current && !hasConversationEnded) {
+                    setBotStatus('idle'); // Force reset before toggling
+                    toggleListening();
+                }
+            });
+
+        }, config.inactivityTimeoutMs);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText, toggleListening]);
+
+    const handleSendMessage = useCallback(async (text: string) => {
+        if (!text.trim() || hasConversationEnded || isBotProcessing) return;
+
+        clearInactivityTimer();
+        inactivityCheckLevelRef.current = 0;
+        addMessage({ text, sender: 'user' });
+        setInputValue('');
+        setBotStatus('preparing');
+        setStatusMessage(uiText.isPreparing);
+        
+        const historyForGenkit = [...messagesRef.current, {id: 'temp', text, sender: 'user', timestamp: Date.now()}].map(msg => ({ 
+            role: msg.sender as 'user' | 'model', 
+            parts: [{ text: msg.text }] 
+        }));
+
+        try {
+            const { 
+                personaTraits, 
+                personalBio,
+                conversationalTopics,
+            } = config;
+            const flowInput: GenerateChatResponseInput = {
+                personaTraits,
+                personalBio,
+                conversationalTopics,
+                chatHistory: historyForGenkit,
+                language: language,
+                clarificationAttemptCount: clarificationAttemptCount,
+            };
+            const result = await generateChatResponse(flowInput);
+
+            if (result.isClarificationQuestion) {
+                setClarificationAttemptCount(prev => prev + 1);
+            } else {
+                setClarificationAttemptCount(0); // Reset on a direct answer
+            }
+            
+            const aiMessage: Message = {
+                id: uuidv4(),
+                text: result.aiResponse,
+                sender: 'model',
+                timestamp: Date.now(),
+                pdfReference: result.pdfReference,
+                distance: result.distance,
+                distanceThreshold: result.distanceThreshold,
+                formality: result.formality,
+                conciseness: result.conciseness,
+                tone: result.tone,
+                formatting: result.formatting,
+            };
+            
+            await speakText(result.aiResponse, aiMessage, () => {
+                if (result.shouldEndConversation) {
+                    setHasConversationEnded(true);
+                } else if (!hasConversationEnded) {
+                    if (communicationMode === 'audio-only') {
+                        toggleListening();
+                    } else {
+                        setBotStatus('idle');
+                        setStatusMessage('');
+                    }
+                }
+            });
+
+        } catch (error: any) {
+            console.error("Error in generateChatResponse:", error);
+            await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+            const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
+            const translatedError = await translate(errorMessage);
+            addMessage({ text: translatedError, sender: 'model'});
+            setBotStatus('idle');
+            setStatusMessage('');
+            if (communicationMode === 'audio-only' && !hasConversationEnded) {
+                 startInactivityTimer();
+            }
+        }
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config, speakText, toggleListening]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !config.archiveChatHistoryEnabled) return;
