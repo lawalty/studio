@@ -58,6 +58,7 @@ export default function ChatBubble({
   }, [message.timestamp]);
 
   const renderPdfLink = () => {
+    // Only render the download link if the URL is present and valid.
     if (message.sender === 'model' && message.pdfReference?.downloadURL) {
       return (
         <a
@@ -135,5 +136,3 @@ export default function ChatBubble({
     </div>
   );
 }
-
-    

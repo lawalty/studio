@@ -104,7 +104,8 @@ const chatPrompt = ai.definePrompt({
     b.  **Broad / Vague Questions**: If the user's question is very broad (e.g., "Tell me about X") and the retrieved context is large and varied, you MUST first provide a brief, one-sentence summary of the available information. Then, immediately ask a clarifying question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?"). Set 'isClarificationQuestion' to true for both scenarios.
 6.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
 7.  **Citations & PDF Generation**:
-    - If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+    - If, and only if, the retrieved context is directly relevant to the user's question AND you use that information in your answer, you MAY populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
+    - If the context is NOT relevant, you are FORBIDDEN from populating the 'pdfReference' object, even if a file was retrieved.
     - If your response is a table or a complex list, you MUST include a sentence like, "You can download this summary in a document I made for you when our chat has ended."
 8.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
@@ -269,13 +270,11 @@ const generateChatResponseFlow = async ({
         throw new Error('AI model returned an empty or invalid response.');
       }
       
-      // If the AI didn't suggest a PDF, but we have a good search result,
-      // populate the file name for diagnostic purposes.
+      // If the AI didn't suggest a PDF, but we have a good search result that was IGNORED,
+      // we still want to show the file for diagnostic purposes, but only if no relevant PDF was chosen by the AI.
       if (!output.pdfReference && primarySearchResult) {
-          output.pdfReference = {
-              fileName: primarySearchResult.sourceName,
-              downloadURL: primarySearchResult.downloadURL || '',
-          };
+          // Do nothing here, let the AI's decision to omit the reference stand.
+          // We will, however, pass the diagnostic data back.
       }
       
       if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
@@ -291,6 +290,16 @@ const generateChatResponseFlow = async ({
       output.conciseness = appConfig.conciseness;
       output.tone = appConfig.tone;
       output.formatting = appConfig.formatting;
+
+      // Ensure the file name in the final output matches the AI's chosen PDF reference,
+      // or show the primary search result file name for diagnostics if no reference was chosen.
+      if (!output.pdfReference && primarySearchResult) {
+        output.pdfReference = {
+            fileName: `(Closest match: ${primarySearchResult.sourceName})`,
+            downloadURL: '',
+        };
+      }
+
 
       return output;
 
@@ -311,5 +320,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    
