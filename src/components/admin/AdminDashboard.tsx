@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle, Trash2, ServerCrash, Download, RotateCcw, Loader2 } from 'lucide-react';
+import { Bot, Database, KeyRound, Cog, BarChart2, Users, Clock, FileText, MessageCircle, AlertTriangle, ServerCrash, Download, Loader2 } from 'lucide-react';
 import AdminNavLinkCard from '@/components/admin/AdminNavLinkCard';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,9 +15,6 @@ import { ScrollArea } from '../ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getUsageStats, type UsageStats } from '@/ai/flows/get-usage-stats-flow';
-import { clearUsageStats } from '@/ai/flows/clear-usage-stats-flow';
-import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface SiteError {
     id: string;
@@ -31,8 +28,6 @@ export default function AdminDashboard() {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [siteErrors, setSiteErrors] = useState<SiteError[]>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(true);
-  const [isClearingStats, setIsClearingStats] = useState(false);
-  const { toast } = useToast();
 
   const fetchStats = useCallback(async () => {
     setIsLoadingStats(true);
@@ -78,25 +73,6 @@ export default function AdminDashboard() {
       await deleteDoc(doc(db, 'site_errors', errorId));
   };
   
-  const handleClearStats = async () => {
-      setIsClearingStats(true);
-      toast({ title: 'Clearing usage statistics...' });
-      try {
-          const result = await clearUsageStats();
-          if (result.success) {
-              toast({ title: 'Success', description: `${result.deletedCount} chat session records have been deleted.` });
-              fetchStats(); // Refresh stats after clearing
-          } else {
-              throw new Error(result.error || 'An unknown error occurred.');
-          }
-      } catch (error: any) {
-          console.error('Failed to clear stats:', error);
-          toast({ title: 'Error', description: `Could not clear stats. ${error.message}`, variant: 'destructive' });
-      } finally {
-          setIsClearingStats(false);
-      }
-  };
-  
     const handleDownloadReport = () => {
         if (!stats) return;
 
@@ -134,28 +110,6 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold tracking-tight">Usage Statistics</h2>
             <div className="flex items-center gap-2">
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                       <Button variant="destructive" size="sm" disabled={isClearingStats}>
-                           <Trash2 className="mr-2 h-4 w-4" /> Clear Statistics
-                       </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will permanently delete all chat session records used for statistics. This action cannot be undone and will reset the dashboard counters. It will NOT affect the Chat History KB.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleClearStats} disabled={isClearingStats}>
-                                {isClearingStats ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                Yes, clear stats
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
                 <Button variant="outline" size="sm" onClick={handleDownloadReport} disabled={!stats}>
                     <Download className="mr-2 h-4 w-4" /> Download Report
                 </Button>

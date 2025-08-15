@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,13 +9,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive } from 'lucide-react';
+import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2 } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import AdminNav from '@/components/admin/AdminNav';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { clearUsageStats } from '@/ai/flows/clear-usage-stats-flow';
 
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -44,6 +46,7 @@ export default function SiteSettingsPage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isClearingStats, setIsClearingStats] = useState(false);
   const splashImageInputRef = useRef<HTMLInputElement>(null);
   const backgroundImageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -290,6 +293,24 @@ Please check your environment variables and Google Cloud Console settings.`;
     setArchiveChatHistoryEnabled(true);
     toast({ title: "Chat Archiving Reset", description: "Click 'Save Site Settings' to make it permanent." });
   };
+
+  const handleClearStats = useCallback(async () => {
+      setIsClearingStats(true);
+      toast({ title: 'Clearing usage statistics...' });
+      try {
+          const result = await clearUsageStats();
+          if (result.success) {
+              toast({ title: 'Success', description: `${result.deletedCount} chat session records have been deleted.` });
+          } else {
+              throw new Error(result.error || 'An unknown error occurred.');
+          }
+      } catch (error: any) {
+          console.error('Failed to clear stats:', error);
+          toast({ title: 'Error', description: `Could not clear stats. ${error.message}`, variant: 'destructive' });
+      } finally {
+          setIsClearingStats(false);
+      }
+  }, [toast]);
 
   return (
     <div className="space-y-6">
@@ -574,6 +595,42 @@ Please check your environment variables and Google Cloud Console settings.`;
                 <RotateCcw className="mr-2 h-4 w-4" /> Reset Typing Speed
               </Button>
             </CardFooter>
+          </Card>
+
+          <Card className="border-destructive">
+              <CardHeader>
+                  <CardTitle className="font-headline text-destructive flex items-center gap-2"><AlertTriangle /> Danger Zone</CardTitle>
+                  <CardDescription>
+                      These are destructive actions. Be certain before proceeding.
+                  </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                         <Button variant="destructive" disabled={isClearingStats}>
+                             <Trash2 className="mr-2 h-4 w-4" /> Clear All Usage Statistics
+                         </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                          <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                  This will permanently delete all chat session records used for statistics from the database. This action cannot be undone and will reset the dashboard counters to zero. It will NOT affect the Chat History KB.
+                              </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleClearStats} disabled={isClearingStats}>
+                                  {isClearingStats ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                  Yes, clear all stats
+                              </AlertDialogAction>
+                          </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+                  <p className="text-xs text-muted-foreground mt-2">
+                      This action will wipe all records from the `chat_sessions` collection.
+                  </p>
+              </CardContent>
           </Card>
 
           <div className="flex justify-start py-4 mt-4 border-t pt-6">
