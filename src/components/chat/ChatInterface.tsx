@@ -258,7 +258,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setEndedDueToInactivity(true);
             const translatedEndMessage = await translate(uiText.inactivityEndMessage);
             const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
-            await speakText(translatedEndMessage, finalMessage, () => {
+            // Await is removed here because speakText manages its own lifecycle
+            speakText(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
         } else {
@@ -421,7 +422,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
             await speakText(translatedPrompt, promptMessage, () => {
-                 if (isMountedRef.current) setBotStatus('idle');
+                 if (isMountedRef.current) {
+                    setBotStatus('idle');
+                 }
             });
 
         }, config.inactivityTimeoutMs);
@@ -798,7 +801,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
             heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
             while (heightLeft > 0) {
-                position -= (pdf.internal.pageSize.getHeight() - pageMargin);
+                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
                 pdf.addPage();
                 pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
                 heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
@@ -828,7 +831,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     if (communicationMode === 'audio-only') {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-center">
+        <div className="flex flex-col items-center h-full text-center py-8">
           <div className="space-y-6">
             <h2 className="text-2xl font-bold font-headline text-primary">
               {uiMessage}
