@@ -428,7 +428,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             });
 
         }, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, isListening, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
+    }, [communicationMode, hasConversationEnded, isListening, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
 
     const handleSendMessage = useCallback(async (text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
@@ -832,7 +832,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     if (communicationMode === 'audio-only') {
       return (
         <div className="flex flex-col h-full items-center justify-center text-center">
-          <div className="space-y-6">
+          <div className="flex flex-col items-center space-y-6">
             <h2 className="text-2xl font-bold font-headline text-primary">
               {uiMessage}
             </h2>
