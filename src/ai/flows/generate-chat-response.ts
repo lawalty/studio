@@ -106,7 +106,7 @@ const chatPrompt = ai.definePrompt({
 7.  **Citations:** If, and only if, you believe offering the source file would be helpful to the user, you MUST populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
 8.  **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
-        - If > 70: You MUST use extremely formal language, address the user with a title (e.g., "Sir" or "Ma'am"), and avoid all contractions (e.g., use "do not" instead of "don't").
+        - If > 70: You MUST use extremely formal language. Only address the user with a gendered title (e.g., "Sir" or "Ma'am") if the user has explicitly provided their gender in the conversation history. Otherwise, do not use a title. You MUST avoid all contractions (e.g., use "do not" instead of "don't").
         - If < 30: You MUST use very casual language, include slang appropriate for a friendly assistant (e.g., "No problem!", "Got it!"), and use contractions.
         - Otherwise (30-70): You MUST use a standard, professional, and friendly style.
     - **Conciseness ({{conciseness}}):**
