@@ -268,11 +268,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [botStatus, clearInactivityTimer, translate, uiText.inactivityEndMessage]); // speakText dependency removed to break cycle
     
     const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded || botStatus !== 'idle') return;
+        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
 
         clearInactivityTimer();
         inactivityTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || botStatus !== 'idle') return;
+            if (!isMountedRef.current || botStatus !== 'listening') return;
             
             recognitionRef.current?.stop();
             
@@ -508,11 +508,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             addMessage({ text: translatedError, sender: 'model'});
             setBotStatus('idle');
             setStatusMessage('');
-            if (communicationMode === 'audio-only' && !hasConversationEnded) {
-                 startInactivityTimer();
-            }
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, startInactivityTimer, config, speakText]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, config, speakText]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (msgs.length === 0 || !config.archiveChatHistoryEnabled) return;
@@ -888,5 +885,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
