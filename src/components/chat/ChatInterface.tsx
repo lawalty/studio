@@ -244,7 +244,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
-    
+
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
         if (botStatus === 'listening') { recognitionRef.current?.stop(); }
@@ -258,7 +258,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setEndedDueToInactivity(true);
             const translatedEndMessage = await translate(uiText.inactivityEndMessage);
             const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
-            // Await is removed here because speakText manages its own lifecycle
             speakText(translatedEndMessage, finalMessage, () => {
                 setHasConversationEnded(true);
             });
@@ -424,6 +423,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             await speakText(translatedPrompt, promptMessage, () => {
                  if (isMountedRef.current) {
                     setBotStatus('idle');
+                    // This is now handled by the useEffect watching botStatus
                  }
             });
 
@@ -764,15 +764,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
     }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, uiText.isListening, logErrorToFirestore, communicationMode, config]);
     
-    // New effect to handle re-toggling listening after an inactivity prompt
     useEffect(() => {
         if (botStatus === 'idle' && wasInactivityPrompt.current) {
-            wasInactivityPrompt.current = false; // Reset the flag
+            wasInactivityPrompt.current = false;
             if (!hasConversationEnded) {
                 toggleListening();
             }
         } else if (botStatus === 'idle' && communicationMode === 'audio-only' && !hasConversationEnded && isInitialized) {
-             startInactivityTimer();
+            startInactivityTimer();
         }
     }, [botStatus, hasConversationEnded, toggleListening, communicationMode, startInactivityTimer, isInitialized]);
 
@@ -896,3 +895,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
