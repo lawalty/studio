@@ -716,7 +716,7 @@ export default function PersonaPage() {
       
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Splash Screen Welcome Message</CardTitle>
+          <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Welcome Message</CardTitle>
           <CardDescription>
             Customize the main welcome message displayed on the application&apos;s splash screen.
           </CardDescription>
