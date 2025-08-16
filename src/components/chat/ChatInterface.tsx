@@ -572,7 +572,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
                     personalBio: assets.personalBio || "I am an AI assistant.",
                     conversationalTopics: assets.conversationalTopics || "",
-                    splashScreenWelcomeMessage: assets.splashScreenWelcomeMessage || "Welcome to AI Chat",
+                    splashScreenWelcomeMessage: assets.welcomeMessage || "Welcome to AI Chat",
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
                     inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
                     customGreetingMessage: assets.customGreetingMessage || "",
