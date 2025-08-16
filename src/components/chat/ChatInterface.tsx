@@ -373,8 +373,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 audioPlayerRef.current.onended = handleEnd;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
             } else if (audioDataUri && communicationMode === 'audio-only' && audioPlayerRef.current) {
-                audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(); };
+                audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(); });
             } else if (communicationMode === 'text-only') {
                  // Already handled by animation end
@@ -403,10 +403,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } else if (inactivityCheckLevelRef.current === 2) {
                 promptText = uiText.inactivityPromptSecondary;
             } else {
-                await handleEndChatManually('final-inactive');
                 const translatedEndMessage = await translate(uiText.inactivityEndMessage);
                 const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
-                speakText(translatedEndMessage, finalMessage);
+                
+                speakText(translatedEndMessage, finalMessage, () => {
+                    handleEndChatManually('final-inactive');
+                });
                 return;
             }
             
