@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser, History, ImageIcon, RotateCcw } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquare, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser, History, ImageIcon, RotateCcw } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
