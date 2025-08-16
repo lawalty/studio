@@ -783,12 +783,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     };
     
     const imageProps: React.ComponentProps<typeof Image> = {
-      src: (isBotSpeaking && config.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? config.animatedAvatarSrc : config.avatarSrc,
+      src: (isBotSpeaking && communicationMode !== 'text-only' && config.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? config.animatedAvatarSrc : config.avatarSrc,
       alt: "AI Blair Avatar",
       width: communicationMode === 'audio-only' ? 200 : 120,
       height: communicationMode === 'audio-only' ? 200 : 120,
       className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", 
-        (isBotSpeaking) && "animate-pulse-speak"
+        (isBotSpeaking && communicationMode !== 'text-only') && "animate-pulse-speak"
       ),
       priority: true,
       unoptimized: true
