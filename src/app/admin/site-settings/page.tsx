@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Image as ImageIcon, MessageSquare, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2 } from 'lucide-react';
+import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2 } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -21,22 +21,16 @@ import { clearUsageStats } from '@/ai/flows/clear-usage-stats-flow';
 
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
 const DEFAULT_BACKGROUND_IMAGE_SRC = TRANSPARENT_PIXEL;
-const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_MAINTENANCE_MESSAGE = "Exciting updates are on the way! We'll be back online shortly.";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
-const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 const BACKGROUND_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/background_image";
 
 
 export default function SiteSettingsPage() {
-  const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
-  const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
   const [backgroundImagePreview, setBackgroundImagePreview] = useState<string>(DEFAULT_BACKGROUND_IMAGE_SRC);
   const [selectedBackgroundFile, setSelectedBackgroundFile] = useState<File | null>(null);
-  const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
   const [typingSpeedMs, setTypingSpeedMs] = useState<string>(String(DEFAULT_TYPING_SPEED_MS));
   const [maintenanceModeEnabled, setMaintenanceModeEnabled] = useState(false);
   const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
@@ -47,7 +41,6 @@ export default function SiteSettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isClearingStats, setIsClearingStats] = useState(false);
-  const splashImageInputRef = useRef<HTMLInputElement>(null);
   const backgroundImageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -60,9 +53,7 @@ export default function SiteSettingsPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setSplashImagePreview(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
           setBackgroundImagePreview(data.backgroundUrl || DEFAULT_BACKGROUND_IMAGE_SRC);
-          setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
           setTypingSpeedMs(data.typingSpeedMs === undefined ? String(DEFAULT_TYPING_SPEED_MS) : String(data.typingSpeedMs));
           setMaintenanceModeEnabled(data.maintenanceModeEnabled === undefined ? false : data.maintenanceModeEnabled);
           setMaintenanceModeMessage(data.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE);
@@ -71,9 +62,7 @@ export default function SiteSettingsPage() {
         } else {
           // On first run, create the doc with defaults
           const defaultSettings = {
-            splashImageUrl: DEFAULT_SPLASH_IMAGE_SRC,
             backgroundUrl: DEFAULT_BACKGROUND_IMAGE_SRC,
-            splashWelcomeMessage: DEFAULT_SPLASH_WELCOME_MESSAGE,
             typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
             maintenanceModeEnabled: false,
             maintenanceModeMessage: DEFAULT_MAINTENANCE_MESSAGE,
@@ -82,9 +71,7 @@ export default function SiteSettingsPage() {
           };
           await setDoc(docRef, defaultSettings, { merge: true });
           // Set state to defaults
-          setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
           setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC);
-          setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
           setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
           setMaintenanceModeEnabled(false);
           setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
@@ -109,15 +96,6 @@ Please check your environment variables and Google Cloud Console settings.`;
     fetchSiteAssets();
   }, [toast]);
 
-  const handleSplashImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      setSelectedSplashFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => { setSplashImagePreview(reader.result as string); };
-      reader.readAsDataURL(file);
-    }
-  };
   
   const handleBackgroundImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -127,10 +105,6 @@ Please check your environment variables and Google Cloud Console settings.`;
       reader.onloadend = () => { setBackgroundImagePreview(reader.result as string); };
       reader.readAsDataURL(file);
     }
-  };
-
-  const handleSplashWelcomeMessageChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setSplashWelcomeMessage(event.target.value);
   };
   
   const handleTypingSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,22 +119,8 @@ Please check your environment variables and Google Cloud Console settings.`;
     setIsSaving(true);
 
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
-    let newSplashImageUrl = splashImagePreview;
     let newBackgroundUrl = backgroundImagePreview;
-    let splashImageUpdated = false;
     let backgroundImageUpdated = false;
-
-    if (selectedSplashFile) {
-      const fileRef = storageRef(storage, SPLASH_IMAGE_FIREBASE_STORAGE_PATH);
-      try {
-        await uploadBytes(fileRef, selectedSplashFile);
-        newSplashImageUrl = await getDownloadURL(fileRef);
-        splashImageUpdated = true;
-      } catch (uploadError: any) {
-        toast({ title: "Splash Image Error", description: `Could not upload splash image: ${uploadError.message}.`, variant: "destructive" });
-        setIsSaving(false); return;
-      }
-    }
     
     if (selectedBackgroundFile) {
       const fileRef = storageRef(storage, BACKGROUND_IMAGE_FIREBASE_STORAGE_PATH);
@@ -184,18 +144,8 @@ Please check your environment variables and Google Cloud Console settings.`;
 
       let changesMade = false;
       
-      if (splashImageUpdated || newSplashImageUrl !== currentData.splashImageUrl) {
-        dataToUpdate.splashImageUrl = newSplashImageUrl;
-        changesMade = true;
-      }
-      
       if (backgroundImageUpdated || newBackgroundUrl !== currentData.backgroundUrl) {
         dataToUpdate.backgroundUrl = newBackgroundUrl;
-        changesMade = true;
-      }
-
-      if (splashWelcomeMessage !== (currentData.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE)) {
-        dataToUpdate.splashWelcomeMessage = splashWelcomeMessage;
         changesMade = true;
       }
       
@@ -229,13 +179,6 @@ Please check your environment variables and Google Cloud Console settings.`;
         
         toast({ title: "Site Settings Saved", description: "Your site display settings have been updated." });
         
-        if (splashImageUpdated) {
-          setSplashImagePreview(newSplashImageUrl);
-          setSelectedSplashFile(null);
-        } else if (dataToUpdate.splashImageUrl === DEFAULT_SPLASH_IMAGE_SRC) {
-          setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
-        }
-        
         if (backgroundImageUpdated) {
           setBackgroundImagePreview(newBackgroundUrl);
           setSelectedBackgroundFile(null);
@@ -253,24 +196,12 @@ Please check your environment variables and Google Cloud Console settings.`;
     setIsSaving(false);
   };
 
-
-  const handleResetSplashImage = () => {
-    setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
-    setSelectedSplashFile(null);
-    if(splashImageInputRef.current) splashImageInputRef.current.value = "";
-    toast({ title: "Splash Image Preview Reset", description: "Click 'Save Site Settings' to make it permanent."});
-  };
   
   const handleResetBackgroundImage = () => {
     setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC);
     setSelectedBackgroundFile(null);
     if(backgroundImageInputRef.current) backgroundImageInputRef.current.value = "";
     toast({ title: "Background Image Preview Reset", description: "Click 'Save Site Settings' to make it permanent."});
-  };
-
-  const handleResetSplashWelcomeMessage = () => {
-    setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
-    toast({ title: "Welcome Message Reset", description: "Click 'Save Site Settings' to make it permanent."});
   };
   
   const handleResetTypingSpeed = () => {
@@ -371,78 +302,6 @@ Please check your environment variables and Google Cloud Console settings.`;
                 <Button variant="outline" onClick={handleResetBackgroundImage} disabled={isLoadingData}>
                   <RotateCcw className="mr-2 h-4 w-4" /> Reset Background
                 </Button>
-            </CardFooter>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><ImageIcon /> Splash Screen Image</CardTitle>
-              <CardDescription>
-                Upload the image for the splash screen card. Stored in Firebase Storage.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="flex flex-col items-center space-y-4">
-                  <Label htmlFor="splash-image-upload" className="font-medium self-start sr-only">Splash Image Preview &amp; Upload</Label>
-                  <Image
-                    src={splashImagePreview}
-                    alt="Splash Screen Preview"
-                    width={400}
-                    height={267}
-                    className="rounded-lg border-2 border-primary shadow-md object-cover"
-                    data-ai-hint={splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
-                    unoptimized={splashImagePreview.startsWith('data:image/')}
-                    onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)}
-                  />
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    ref={splashImageInputRef}
-                    onChange={handleSplashImageChange}
-                    className="hidden"
-                    id="splash-image-upload"
-                  />
-                  <Button variant="outline" onClick={() => splashImageInputRef.current?.click()} className="w-full max-w-xs" disabled={isLoadingData}>
-                    <UploadCloud className="mr-2 h-4 w-4" /> Choose Image
-                  </Button>
-                  {selectedSplashFile && <p className="text-xs text-muted-foreground">New: {selectedSplashFile.name}</p>}
-                  <p className="text-xs text-muted-foreground">Recommended: Image with good visibility for text overlay.</p>
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button variant="outline" onClick={handleResetSplashImage} disabled={isLoadingData}>
-                  <RotateCcw className="mr-2 h-4 w-4" /> Reset Splash Image
-                </Button>
-            </CardFooter>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Splash Screen Welcome Message</CardTitle>
-              <CardDescription>
-                Customize the main welcome message displayed on the application&apos;s splash screen.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <>
-                  <Label htmlFor="splashWelcomeMessage" className="font-medium">Welcome Message</Label>
-                  <Textarea
-                    id="splashWelcomeMessage"
-                    value={splashWelcomeMessage}
-                    onChange={handleSplashWelcomeMessageChange}
-                    placeholder="Enter your custom welcome message..."
-                    rows={3}
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Default: &quot;{DEFAULT_SPLASH_WELCOME_MESSAGE}&quot;
-                  </p>
-                </>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" onClick={handleResetSplashWelcomeMessage} disabled={isLoadingData}>
-                <RotateCcw className="mr-2 h-4 w-4" /> Reset Message
-              </Button>
             </CardFooter>
           </Card>
 

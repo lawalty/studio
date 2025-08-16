@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser, History } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser, History, ImageIcon, RotateCcw } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -27,12 +27,15 @@ import { Slider } from '@/components/ui/slider';
 import AdminNav from '@/components/admin/AdminNav';
 
 
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png";
 const DEFAULT_ANIMATED_AVATAR_PLACEHOLDER = "https://placehold.co/150x150.png?text=GIF";
 const AVATAR_FIREBASE_STORAGE_PATH = "site_assets/avatar_image";
 const ANIMATED_AVATAR_FIREBASE_STORAGE_PATH = "site_assets/animated_avatar_image";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
+const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
+
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_PERSONAL_BIO_TEXT = "I am a new AI assistant, recently created to help with questions about the pawn industry. I am still learning and growing my knowledge base every day.";
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
@@ -41,6 +44,8 @@ const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 30000;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 const DEFAULT_STYLE_VALUE = 50;
+const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
+const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
 
 
 export default function PersonaPage() {
@@ -57,6 +62,12 @@ export default function PersonaPage() {
   const [inactivityTimeout, setInactivityTimeout] = useState<string>(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
   const [animationSyncFactor, setAnimationSyncFactor] = useState<string>(String(DEFAULT_ANIMATION_SYNC_FACTOR));
 
+  // Splash Screen State
+  const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
+  const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
+  const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
+
+
   // Response Style Sliders State
   const [formality, setFormality] = useState([DEFAULT_STYLE_VALUE]);
   const [conciseness, setConciseness] = useState([DEFAULT_STYLE_VALUE]);
@@ -69,6 +80,7 @@ export default function PersonaPage() {
   const [isTestingGreeting, setIsTestingGreeting] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const animatedAvatarInputRef = useRef<HTMLInputElement>(null);
+  const splashImageInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   
@@ -101,6 +113,9 @@ export default function PersonaPage() {
           setConciseness([data?.conciseness ?? DEFAULT_STYLE_VALUE]);
           setTone([data?.tone ?? DEFAULT_STYLE_VALUE]);
           setFormatting([data?.formatting ?? DEFAULT_STYLE_VALUE]);
+          // Load splash screen values
+          setSplashImagePreview(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
+          setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
         } else {
           // If doc doesn't exist, set all to defaults
           setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
@@ -117,6 +132,8 @@ export default function PersonaPage() {
           setConciseness([DEFAULT_STYLE_VALUE]);
           setTone([DEFAULT_STYLE_VALUE]);
           setFormatting([DEFAULT_STYLE_VALUE]);
+          setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
+          setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
         }
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
@@ -135,6 +152,8 @@ export default function PersonaPage() {
         setConciseness([DEFAULT_STYLE_VALUE]);
         setTone([DEFAULT_STYLE_VALUE]);
         setFormatting([DEFAULT_STYLE_VALUE]);
+        setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
+        setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -188,6 +207,20 @@ export default function PersonaPage() {
   
   const handleAnimationSyncFactorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAnimationSyncFactor(e.target.value);
+  };
+
+  const handleSplashImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      setSelectedSplashFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => { setSplashImagePreview(reader.result as string); };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSplashWelcomeMessageChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setSplashWelcomeMessage(event.target.value);
   };
   
   const handleTestGreeting = async () => {
@@ -263,8 +296,10 @@ export default function PersonaPage() {
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     let newAvatarUrl = avatarPreview;
     let newAnimatedAvatarUrl = animatedAvatarPreview;
+    let newSplashImageUrl = splashImagePreview;
     let avatarUpdated = false;
     let animatedAvatarUpdated = false;
+    let splashImageUpdated = false;
 
     // Handle static avatar upload/reset
     if (selectedAvatarFile) {
@@ -302,6 +337,18 @@ export default function PersonaPage() {
        newAnimatedAvatarUrl = DEFAULT_ANIMATED_AVATAR_PLACEHOLDER;
        animatedAvatarUpdated = true; 
     }
+    
+    if (selectedSplashFile) {
+      const fileRef = storageRef(storage, SPLASH_IMAGE_FIREBASE_STORAGE_PATH);
+      try {
+        await uploadBytes(fileRef, selectedSplashFile);
+        newSplashImageUrl = await getDownloadURL(fileRef);
+        splashImageUpdated = true;
+      } catch (uploadError: any) {
+        toast({ title: "Splash Image Error", description: `Could not upload splash image: ${uploadError.message}.`, variant: "destructive" });
+        setIsSaving(false); return;
+      }
+    }
 
 
     const pauseTimeMs = parseInt(responsePauseTime, 10);
@@ -330,6 +377,7 @@ export default function PersonaPage() {
         conciseness: conciseness[0],
         tone: tone[0],
         formatting: formatting[0],
+        splashWelcomeMessage,
       };
 
       if (avatarUpdated || newAvatarUrl !== currentData.avatarUrl) {
@@ -337,6 +385,9 @@ export default function PersonaPage() {
       }
       if (animatedAvatarUpdated || newAnimatedAvatarUrl !== currentData.animatedAvatarUrl) {
         dataToSave.animatedAvatarUrl = newAnimatedAvatarUrl;
+      }
+       if (splashImageUpdated || newSplashImageUrl !== currentData.splashImageUrl) {
+        dataToSave.splashImageUrl = newSplashImageUrl;
       }
 
       await setDoc(siteAssetsDocRef, dataToSave, { merge: true });
@@ -368,6 +419,19 @@ export default function PersonaPage() {
     if (animatedAvatarInputRef.current) animatedAvatarInputRef.current.value = ""; 
     toast({ title: "Animated Avatar Preview Reset", description: "Click 'Save All Settings' to make it permanent."});
   };
+
+  const handleResetSplashImage = () => {
+    setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
+    setSelectedSplashFile(null);
+    if(splashImageInputRef.current) splashImageInputRef.current.value = "";
+    toast({ title: "Splash Image Preview Reset", description: "Click 'Save All Settings' to make it permanent."});
+  };
+
+  const handleResetSplashWelcomeMessage = () => {
+    setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
+    toast({ title: "Welcome Message Reset", description: "Click 'Save All Settings' to make it permanent."});
+  };
+
 
   const handleRunTextGenTest = async () => {
     setIsTesting(prev => ({ ...prev, textGen: true }));
@@ -607,6 +671,79 @@ export default function PersonaPage() {
           )}
         </CardContent>
       </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><ImageIcon /> Splash Screen Image</CardTitle>
+          <CardDescription>
+            Upload the image for the splash screen card. Stored in Firebase Storage.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="flex flex-col items-center space-y-4">
+              <Label htmlFor="splash-image-upload" className="font-medium self-start sr-only">Splash Image Preview &amp; Upload</Label>
+              <Image
+                src={splashImagePreview}
+                alt="Splash Screen Preview"
+                width={400}
+                height={267}
+                className="rounded-lg border-2 border-primary shadow-md object-cover"
+                data-ai-hint={splashImagePreview === DEFAULT_SPLASH_IMAGE_SRC ? undefined : "technology abstract welcome"}
+                unoptimized={splashImagePreview.startsWith('data:image/')}
+                onError={() => setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC)}
+              />
+              <Input
+                type="file"
+                accept="image/*"
+                ref={splashImageInputRef}
+                onChange={handleSplashImageChange}
+                className="hidden"
+                id="splash-image-upload"
+              />
+              <Button variant="outline" onClick={() => splashImageInputRef.current?.click()} className="w-full max-w-xs" disabled={isLoadingData}>
+                <UploadCloud className="mr-2 h-4 w-4" /> Choose Image
+              </Button>
+              {selectedSplashFile && <p className="text-xs text-muted-foreground">New: {selectedSplashFile.name}</p>}
+              <p className="text-xs text-muted-foreground">Recommended: Image with good visibility for text overlay.</p>
+            </div>
+        </CardContent>
+        <CardFooter>
+            <Button variant="outline" onClick={handleResetSplashImage} disabled={isLoadingData}>
+              <RotateCcw className="mr-2 h-4 w-4" /> Reset Splash Image
+            </Button>
+        </CardFooter>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><MessageSquare /> Splash Screen Welcome Message</CardTitle>
+          <CardDescription>
+            Customize the main welcome message displayed on the application&apos;s splash screen.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+            <>
+              <Label htmlFor="splashWelcomeMessage" className="font-medium">Welcome Message</Label>
+              <Textarea
+                id="splashWelcomeMessage"
+                value={splashWelcomeMessage}
+                onChange={handleSplashWelcomeMessageChange}
+                placeholder="Enter your custom welcome message..."
+                rows={3}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Default: &quot;{DEFAULT_SPLASH_WELCOME_MESSAGE}&quot;
+              </p>
+            </>
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" onClick={handleResetSplashWelcomeMessage} disabled={isLoadingData}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset Message
+          </Button>
+        </CardFooter>
+      </Card>
+
 
       <Card>
           <CardHeader>
