@@ -7,46 +7,34 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, Speech, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Volume2, Bookmark, Heading2, SlidersHorizontal, Info, Wrench } from 'lucide-react';
+import { Save, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Bookmark, Heading2, SlidersHorizontal, Info, Wrench } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
 import { testSearch, type TestSearchOutput, type SearchResult } from '@/ai/flows/test-search-flow';
-import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
-import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import AdminNav from '@/components/admin/AdminNav';
 
 interface AppConfig {
-  tts: string;
-  voiceId: string;
-  useTtsApi: boolean;
   distanceThreshold: number;
 }
 
 const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
-const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 
 export default function ApiKeysPage() {
   const [config, setConfig] = useState<AppConfig>({
-    tts: '',
-    voiceId: '',
-    useTtsApi: true,
     distanceThreshold: 0.8,
   });
   
   const [isSavingAppConfig, setIsSavingAppConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isTestingTts, setIsTestingTts] = useState(false);
 
   // State for diagnostics
   const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
@@ -65,9 +53,6 @@ export default function ApiKeysPage() {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setConfig({
-            tts: data.tts || '',
-            voiceId: data.voiceId || '',
-            useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true,
             distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.8,
           });
         }
@@ -83,22 +68,17 @@ export default function ApiKeysPage() {
     };
     fetchConfig();
   }, [toast]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setConfig({ ...config, [e.target.name]: e.target.value });
-  };
-
-  const handleSwitchChange = (checked: boolean) => {
-    setConfig({ ...config, useTtsApi: checked });
-  };
   
   const handleSaveAppConfig = async () => {
       setIsSavingAppConfig(true);
       try {
           const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
-          await setDoc(appConfigDocRef, config, { merge: true });
+          // Only save distanceThreshold from this page
+          await setDoc(appConfigDocRef, { 
+            distanceThreshold: config.distanceThreshold 
+          }, { merge: true });
           
-          toast({ title: "Settings Saved", description: "Your API Key and RAG settings have been saved to Firestore." });
+          toast({ title: "Settings Saved", description: "Your RAG settings have been saved to Firestore." });
       } catch (error) {
           console.error("Error saving config to Firestore:", error);
           toast({
@@ -108,38 +88,6 @@ export default function ApiKeysPage() {
           });
       }
       setIsSavingAppConfig(false);
-  };
-  
-  const handleTestTts = async () => {
-    setIsTestingTts(true);
-    toast({ title: 'Generating TTS Audio...', description: 'Please wait a moment.' });
-    
-    const testText = "This is a test of the custom text-to-speech voice.";
-
-    try {
-      let audioDataUri = '';
-      if (config.useTtsApi && config.tts && config.voiceId) {
-          const result = await elevenLabsTextToSpeech({ text: testText, apiKey: config.tts, voiceId: config.voiceId });
-          if(result.error) throw new Error(result.error);
-          audioDataUri = result.media;
-      } else {
-          const result = await googleTextToSpeech(testText);
-          audioDataUri = result.media;
-          toast({ title: 'Using Default Voice', description: 'Custom TTS is disabled or misconfigured. Testing the default Google voice.'})
-      }
-
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-      }
-      audioRef.current.src = audioDataUri;
-      await audioRef.current.play();
-      
-    } catch (error: any) {
-      console.error('Error testing TTS:', error);
-      toast({ title: 'Error', description: `Could not play audio. ${error.message}`, variant: 'destructive' });
-    } finally {
-      setIsTestingTts(false);
-    }
   };
 
   const handleRunTextGenTest = async () => {
@@ -261,41 +209,6 @@ export default function ApiKeysPage() {
                     </ul>
                 </AlertDescription>
               </Alert>
-
-              <Separator className="my-6" />
-              
-              <div className="flex items-center gap-2 mb-2">
-                  <Speech className="h-5 w-5 text-primary" />
-                  <h3 className="text-lg font-semibold">Custom Text-to-Speech (TTS)</h3>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ttsKey" className="font-medium">Custom TTS API Key (e.g., Elevenlabs)</Label>
-                <Input id="ttsKey" name="tts" type="password" value={config.tts} onChange={handleChange} placeholder="Enter TTS API Key" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="voiceId" className="font-medium">Custom TTS Voice ID</Label>
-                <Input id="voiceId" name="voiceId" value={config.voiceId} onChange={handleChange} placeholder="Enter Voice ID for TTS" />
-              </div>
-                <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
-                  <div className="flex-1 space-y-1">
-                      <Label htmlFor="useTtsApi" className="font-medium">
-                          Use Custom TTS API
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                          If ON, uses the custom TTS. If OFF, uses the default Google voice.
-                      </p>
-                  </div>
-                  <Switch
-                      id="useTtsApi"
-                      checked={config.useTtsApi}
-                      onCheckedChange={handleSwitchChange}
-                      aria-label="Toggle Custom TTS API usage"
-                  />
-              </div>
-              <Button onClick={handleTestTts} disabled={isLoading || isTestingTts} variant="outline" size="sm">
-                  {isTestingTts ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
-                  Test TTS Voice
-              </Button>
 
               <Separator className="my-6" />
 

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, Bot, MessageSquare, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, Activity, Terminal, DatabaseZap, KeyRound, CheckCircle, AlertTriangle, SlidersHorizontal, BookUser, History, ImageIcon, RotateCcw } from 'lucide-react';
+import { Save, UploadCloud, Bot, MessageSquareText, Type, Timer, Film, ListOrdered, Link2, Volume2, Loader2, SlidersHorizontal, BookUser, History, ImageIcon, RotateCcw, MessageSquare, Speech } from 'lucide-react';
 import { adjustAiPersonaAndPersonality, type AdjustAiPersonaAndPersonalityInput } from '@/ai/flows/persona-personality-tuning';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
@@ -18,11 +18,6 @@ import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/test-text-generation-flow';
-import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
-import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
-import { Separator } from '@/components/ui/separator';
 import { Slider } from '@/components/ui/slider';
 import AdminNav from '@/components/admin/AdminNav';
 
@@ -45,7 +40,7 @@ const DEFAULT_INACTIVITY_TIMEOUT_MS = 30000;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 const DEFAULT_STYLE_VALUE = 50;
 const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
-const DEFAULT_SPLASH_WELCOME_MESSAGE = "Welcome to AI Chat";
+const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
 
 
 export default function PersonaPage() {
@@ -65,7 +60,11 @@ export default function PersonaPage() {
   // Splash Screen State
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
   const [selectedSplashFile, setSelectedSplashFile] = useState<File | null>(null);
-  const [splashWelcomeMessage, setSplashWelcomeMessage] = useState<string>(DEFAULT_SPLASH_WELCOME_MESSAGE);
+  const [welcomeMessage, setWelcomeMessage] = useState<string>(DEFAULT_WELCOME_MESSAGE);
+
+  // TTS State
+  const [ttsConfig, setTtsConfig] = useState({ tts: '', voiceId: '', useTtsApi: true });
+  const [isTestingTts, setIsTestingTts] = useState(false);
 
 
   // Response Style Sliders State
@@ -83,21 +82,21 @@ export default function PersonaPage() {
   const splashImageInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
-  
-  // State for diagnostics
-  const [isTesting, setIsTesting] = useState<Record<string, boolean>>({});
-  const [textGenResult, setTextGenResult] = useState<TestTextGenerationOutput | null>(null);
-  const [embeddingResult, setEmbeddingResult] = useState<TestEmbeddingOutput | null>(null);
-  const [firestoreResult, setFirestoreResult] = useState<TestFirestoreWriteOutput | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoadingData(true);
       try {
-        const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+        const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
+
+        const [siteAssetsSnap, appConfigSnap] = await Promise.all([
+          getDoc(siteAssetsDocRef),
+          getDoc(appConfigDocRef)
+        ]);
+        
+        if (siteAssetsSnap.exists()) {
+          const data = siteAssetsSnap.data();
           setAvatarPreview(data?.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER);
           setAnimatedAvatarPreview(data?.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
@@ -115,45 +114,20 @@ export default function PersonaPage() {
           setFormatting([data?.formatting ?? DEFAULT_STYLE_VALUE]);
           // Load splash screen values
           setSplashImagePreview(data.splashImageUrl || DEFAULT_SPLASH_IMAGE_SRC);
-          setSplashWelcomeMessage(data.splashWelcomeMessage || DEFAULT_SPLASH_WELCOME_MESSAGE);
-        } else {
-          // If doc doesn't exist, set all to defaults
-          setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
-          setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
-          setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
-          setPersonalBio(DEFAULT_PERSONAL_BIO_TEXT);
-          setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS);
-          setUseKnowledgeInGreeting(true);
-          setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
-          setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
-          setInactivityTimeout(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
-          setAnimationSyncFactor(String(DEFAULT_ANIMATION_SYNC_FACTOR));
-          setFormality([DEFAULT_STYLE_VALUE]);
-          setConciseness([DEFAULT_STYLE_VALUE]);
-          setTone([DEFAULT_STYLE_VALUE]);
-          setFormatting([DEFAULT_STYLE_VALUE]);
-          setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
-          setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
+          setWelcomeMessage(data.welcomeMessage || DEFAULT_WELCOME_MESSAGE);
         }
+
+        if (appConfigSnap.exists()) {
+            const data = appConfigSnap.data();
+            setTtsConfig({
+                tts: data.tts || '',
+                voiceId: data.voiceId || '',
+                useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : true
+            });
+        }
+
       } catch (error) {
         console.error("Error fetching site assets from Firestore:", error);
-        // Fallback to defaults on error
-        setAvatarPreview(DEFAULT_AVATAR_PLACEHOLDER);
-        setAnimatedAvatarPreview(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
-        setPersonaTraits(DEFAULT_PERSONA_TRAITS_TEXT);
-        setPersonalBio(DEFAULT_PERSONAL_BIO_TEXT);
-        setConversationalTopics(DEFAULT_CONVERSATIONAL_TOPICS);
-        setUseKnowledgeInGreeting(true);
-        setCustomGreetingMessage(DEFAULT_CUSTOM_GREETING);
-        setResponsePauseTime(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
-        setInactivityTimeout(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
-        setAnimationSyncFactor(String(DEFAULT_ANIMATION_SYNC_FACTOR));
-        setFormality([DEFAULT_STYLE_VALUE]);
-        setConciseness([DEFAULT_STYLE_VALUE]);
-        setTone([DEFAULT_STYLE_VALUE]);
-        setFormatting([DEFAULT_STYLE_VALUE]);
-        setSplashImagePreview(DEFAULT_SPLASH_IMAGE_SRC);
-        setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
         toast({
           title: "Error Loading Data",
           description: "Could not fetch persona data from the database. Using defaults.",
@@ -219,19 +193,14 @@ export default function PersonaPage() {
     }
   };
 
-  const handleSplashWelcomeMessageChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setSplashWelcomeMessage(event.target.value);
+  const handleWelcomeMessageChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setWelcomeMessage(event.target.value);
   };
   
   const handleTestGreeting = async () => {
     setIsTestingGreeting(true);
     toast({ title: 'Generating Greeting Audio...', description: 'Please wait a moment.' });
     try {
-      // Fetch custom TTS settings
-      const keysDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
-      const keysDocSnap = await getDoc(keysDocRef);
-      const { tts: apiKey, voiceId, useTtsApi: useCustomTts } = keysDocSnap.exists() ? keysDocSnap.data() : { tts: '', voiceId: '', useTtsApi: false };
-
       let greetingText = customGreetingMessage.trim();
       
       if (!greetingText) {
@@ -244,14 +213,13 @@ export default function PersonaPage() {
         greetingText = result.greeting;
       }
       
-      // Pre-process text for correct pronunciation before sending to any API.
       const processedGreetingText = greetingText
         .replace(/\bCOO\b/gi, 'Chief Operating Officer')
         .replace(/\bEZCORP\b/gi, 'easy corp');
 
       let audioDataUri = '';
-      if (useCustomTts && apiKey && voiceId) {
-          const result = await elevenLabsTextToSpeech({ text: processedGreetingText, apiKey, voiceId });
+      if (ttsConfig.useTtsApi && ttsConfig.tts && ttsConfig.voiceId) {
+          const result = await elevenLabsTextToSpeech({ text: processedGreetingText, apiKey: ttsConfig.tts, voiceId: ttsConfig.voiceId });
           if(result.error) throw new Error(result.error);
           audioDataUri = result.media;
       } else {
@@ -270,6 +238,38 @@ export default function PersonaPage() {
       toast({ title: 'Error', description: `Could not play greeting. ${error.message}`, variant: 'destructive' });
     } finally {
       setIsTestingGreeting(false);
+    }
+  };
+
+  const handleTestTts = async () => {
+    setIsTestingTts(true);
+    toast({ title: 'Generating TTS Audio...', description: 'Please wait a moment.' });
+    
+    const testText = "This is a test of the custom text-to-speech voice.";
+
+    try {
+      let audioDataUri = '';
+      if (ttsConfig.useTtsApi && ttsConfig.tts && ttsConfig.voiceId) {
+          const result = await elevenLabsTextToSpeech({ text: testText, apiKey: ttsConfig.tts, voiceId: ttsConfig.voiceId });
+          if(result.error) throw new Error(result.error);
+          audioDataUri = result.media;
+      } else {
+          const result = await googleTextToSpeech(testText);
+          audioDataUri = result.media;
+          toast({ title: 'Using Default Voice', description: 'Custom TTS is disabled or misconfigured. Testing the default Google voice.'})
+      }
+
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+      audioRef.current.src = audioDataUri;
+      await audioRef.current.play();
+      
+    } catch (error: any) {
+      console.error('Error testing TTS:', error);
+      toast({ title: 'Error', description: `Could not play audio. ${error.message}`, variant: 'destructive' });
+    } finally {
+      setIsTestingTts(false);
     }
   };
 
@@ -301,14 +301,13 @@ export default function PersonaPage() {
     let animatedAvatarUpdated = false;
     let splashImageUpdated = false;
 
-    // Handle static avatar upload/reset
     if (selectedAvatarFile) {
       const fileRef = storageRef(storage, AVATAR_FIREBASE_STORAGE_PATH);
       try {
         await uploadBytes(fileRef, selectedAvatarFile);
         newAvatarUrl = await getDownloadURL(fileRef);
-        setAvatarPreview(newAvatarUrl); // Update preview with Firebase URL
-        setSelectedAvatarFile(null); // Clear selected file
+        setAvatarPreview(newAvatarUrl);
+        setSelectedAvatarFile(null);
         avatarUpdated = true;
       } catch (uploadError: any) {
         toast({ title: "Static Avatar Upload Failed", description: `Could not upload: ${uploadError.message}`, variant: "destructive" });
@@ -319,15 +318,13 @@ export default function PersonaPage() {
        avatarUpdated = true; 
     }
 
-
-    // Handle animated avatar upload/reset
     if (selectedAnimatedAvatarFile) {
       const animatedFileRef = storageRef(storage, ANIMATED_AVATAR_FIREBASE_STORAGE_PATH);
       try {
         await uploadBytes(animatedFileRef, selectedAnimatedAvatarFile);
         newAnimatedAvatarUrl = await getDownloadURL(animatedFileRef);
-        setAnimatedAvatarPreview(newAnimatedAvatarUrl); // Update preview with Firebase URL
-        setSelectedAnimatedAvatarFile(null); // Clear selected file
+        setAnimatedAvatarPreview(newAnimatedAvatarUrl);
+        setSelectedAnimatedAvatarFile(null);
         animatedAvatarUpdated = true;
       } catch (uploadError: any) {
         toast({ title: "Animated Avatar Upload Failed", description: `Could not upload GIF: ${uploadError.message}`, variant: "destructive" });
@@ -350,7 +347,6 @@ export default function PersonaPage() {
       }
     }
 
-
     const pauseTimeMs = parseInt(responsePauseTime, 10);
     const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
     
@@ -361,36 +357,31 @@ export default function PersonaPage() {
     const validSyncFactor = isNaN(syncFactor) || syncFactor <= 0 ? DEFAULT_ANIMATION_SYNC_FACTOR : syncFactor;
 
     try {
-      const currentDocSnap = await getDoc(siteAssetsDocRef);
-      const currentData = currentDocSnap.data() || {};
+      const currentSiteAssetsSnap = await getDoc(siteAssetsDocRef);
+      const currentSiteAssets = currentSiteAssetsSnap.data() || {};
+      
+      const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
 
-      const dataToSave: { [key: string]: any } = {
-        personaTraits,
-        personalBio,
-        conversationalTopics,
-        useKnowledgeInGreeting,
+      const siteAssetsToSave: { [key: string]: any } = {
+        personaTraits, personalBio, conversationalTopics, useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
-        responsePauseTimeMs: validPauseTime,
-        inactivityTimeoutMs: validInactivityTimeout,
-        animationSyncFactor: validSyncFactor,
-        formality: formality[0],
-        conciseness: conciseness[0],
-        tone: tone[0],
-        formatting: formatting[0],
-        splashWelcomeMessage,
+        responsePauseTimeMs: validPauseTime, inactivityTimeoutMs: validInactivityTimeout, animationSyncFactor: validSyncFactor,
+        formality: formality[0], conciseness: conciseness[0], tone: tone[0], formatting: formatting[0], welcomeMessage,
       };
 
-      if (avatarUpdated || newAvatarUrl !== currentData.avatarUrl) {
-        dataToSave.avatarUrl = newAvatarUrl;
+      if (avatarUpdated || newAvatarUrl !== currentSiteAssets.avatarUrl) {
+        siteAssetsToSave.avatarUrl = newAvatarUrl;
       }
-      if (animatedAvatarUpdated || newAnimatedAvatarUrl !== currentData.animatedAvatarUrl) {
-        dataToSave.animatedAvatarUrl = newAnimatedAvatarUrl;
+      if (animatedAvatarUpdated || newAnimatedAvatarUrl !== currentSiteAssets.animatedAvatarUrl) {
+        siteAssetsToSave.animatedAvatarUrl = newAnimatedAvatarUrl;
       }
-       if (splashImageUpdated || newSplashImageUrl !== currentData.splashImageUrl) {
-        dataToSave.splashImageUrl = newSplashImageUrl;
+      if (splashImageUpdated || newSplashImageUrl !== currentSiteAssets.splashImageUrl) {
+        siteAssetsToSave.splashImageUrl = newSplashImageUrl;
       }
 
-      await setDoc(siteAssetsDocRef, dataToSave, { merge: true });
+      await setDoc(siteAssetsDocRef, siteAssetsToSave, { merge: true });
+      await setDoc(appConfigDocRef, ttsConfig, { merge: true });
+
 
       if(personaUpdatedSuccessfully) {
         toast({ title: "Persona Settings Saved", description: "Your settings have been saved to Firestore." });
@@ -427,34 +418,9 @@ export default function PersonaPage() {
     toast({ title: "Splash Image Preview Reset", description: "Click 'Save All Settings' to make it permanent."});
   };
 
-  const handleResetSplashWelcomeMessage = () => {
-    setSplashWelcomeMessage(DEFAULT_SPLASH_WELCOME_MESSAGE);
+  const handleResetWelcomeMessage = () => {
+    setWelcomeMessage(DEFAULT_WELCOME_MESSAGE);
     toast({ title: "Welcome Message Reset", description: "Click 'Save All Settings' to make it permanent."});
-  };
-
-
-  const handleRunTextGenTest = async () => {
-    setIsTesting(prev => ({ ...prev, textGen: true }));
-    setTextGenResult(null);
-    const result = await testTextGeneration();
-    setTextGenResult(result);
-    setIsTesting(prev => ({ ...prev, textGen: false }));
-  };
-
-  const handleRunEmbeddingTest = async () => {
-    setIsTesting(prev => ({ ...prev, embedding: true }));
-    setEmbeddingResult(null);
-    const result = await testEmbedding();
-    setEmbeddingResult(result);
-    setIsTesting(prev => ({ ...prev, embedding: false }));
-  };
-
-  const handleRunFirestoreTest = async () => {
-    setIsTesting(prev => ({ ...prev, firestore: true }));
-    setFirestoreResult(null);
-    const result = await testFirestoreWrite();
-    setFirestoreResult(result);
-    setIsTesting(prev => ({ ...prev, firestore: false }));
   };
 
   return (
@@ -674,6 +640,47 @@ export default function PersonaPage() {
       
       <Card>
         <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2"><Speech /> Custom Text-to-Speech (TTS)</CardTitle>
+          <CardDescription>
+            Configure a custom voice using a third-party service like ElevenLabs. This overrides the default Google voice.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="space-y-2">
+                <Label htmlFor="ttsKey" className="font-medium">Custom TTS API Key (e.g., Elevenlabs)</Label>
+                <Input id="ttsKey" name="tts" type="password" value={ttsConfig.tts} onChange={(e) => setTtsConfig({...ttsConfig, tts: e.target.value})} placeholder="Enter TTS API Key" />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="voiceId" className="font-medium">Custom TTS Voice ID</Label>
+                <Input id="voiceId" name="voiceId" value={ttsConfig.voiceId} onChange={(e) => setTtsConfig({...ttsConfig, voiceId: e.target.value})} placeholder="Enter Voice ID for TTS" />
+            </div>
+            <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
+                <div className="flex-1 space-y-1">
+                    <Label htmlFor="useTtsApi" className="font-medium">
+                        Use Custom TTS API
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                        If ON, uses the custom TTS. If OFF, uses the default Google voice.
+                    </p>
+                </div>
+                <Switch
+                    id="useTtsApi"
+                    checked={ttsConfig.useTtsApi}
+                    onCheckedChange={(checked) => setTtsConfig({...ttsConfig, useTtsApi: checked})}
+                    aria-label="Toggle Custom TTS API usage"
+                />
+            </div>
+        </CardContent>
+        <CardFooter>
+            <Button onClick={handleTestTts} disabled={isLoadingData || isTestingTts} variant="outline" size="sm">
+                {isTestingTts ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
+                Test TTS Voice
+            </Button>
+        </CardFooter>
+      </Card>
+      
+      <Card>
+        <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2"><ImageIcon /> Splash Screen Image</CardTitle>
           <CardDescription>
             Upload the image for the splash screen card. Stored in Firebase Storage.
@@ -723,22 +730,22 @@ export default function PersonaPage() {
         </CardHeader>
         <CardContent>
             <>
-              <Label htmlFor="splashWelcomeMessage" className="font-medium">Welcome Message</Label>
+              <Label htmlFor="welcomeMessage" className="font-medium">Welcome Message</Label>
               <Textarea
-                id="splashWelcomeMessage"
-                value={splashWelcomeMessage}
-                onChange={handleSplashWelcomeMessageChange}
+                id="welcomeMessage"
+                value={welcomeMessage}
+                onChange={handleWelcomeMessageChange}
                 placeholder="Enter your custom welcome message..."
                 rows={3}
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Default: &quot;{DEFAULT_SPLASH_WELCOME_MESSAGE}&quot;
+                Default: &quot;{DEFAULT_WELCOME_MESSAGE}&quot;
               </p>
             </>
         </CardContent>
         <CardFooter>
-          <Button variant="outline" onClick={handleResetSplashWelcomeMessage} disabled={isLoadingData}>
+          <Button variant="outline" onClick={handleResetWelcomeMessage} disabled={isLoadingData}>
             <RotateCcw className="mr-2 h-4 w-4" /> Reset Message
           </Button>
         </CardFooter>
@@ -792,7 +799,7 @@ export default function PersonaPage() {
           </CardContent>
            <CardFooter>
              <Button onClick={handleSaveAllSettings} disabled={isSaving || isLoadingData}>
-               <Save className="mr-2 h-4 w-4" /> Save Settings
+               <Save className="mr-2 h-4 w-4" /> Save All Persona Settings
              </Button>
            </CardFooter>
       </Card>
