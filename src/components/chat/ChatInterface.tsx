@@ -179,7 +179,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const messagesRef = useRef<Message[]>([]);
     useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-    const wasInactivityPrompt = useRef(false);
+    const inactivityCheckLevelRef = useRef(0);
     
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const recognitionRef = useRef<any | null>(null);
@@ -285,13 +285,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setHasConversationEnded(true);
     }, [botStatus, clearInactivityTimer]);
     
-    useEffect(() => {
-        if (wasInactivityPrompt.current && botStatus === 'idle' && !hasConversationEnded) {
-            wasInactivityPrompt.current = false;
-            toggleListening();
-        }
-    }, [botStatus, hasConversationEnded, toggleListening]);
-    
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
@@ -395,8 +388,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     const startInactivityTimer = useCallback(() => {
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
-    
-        let inactivityCheckLevel = 0;
         clearInactivityTimer();
     
         const runCheck = async () => {
@@ -404,12 +395,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             
             recognitionRef.current?.stop();
             
-            inactivityCheckLevel += 1;
+            inactivityCheckLevelRef.current += 1;
             let promptText;
-            if (inactivityCheckLevel === 1) {
+            if (inactivityCheckLevelRef.current === 1) {
                 const hasUserResponded = messagesRef.current.some(m => m.sender === 'user');
                 promptText = hasUserResponded ? uiText.inactivityPrompt : uiText.inactivityPromptInitial;
-            } else if (inactivityCheckLevel === 2) {
+            } else if (inactivityCheckLevelRef.current === 2) {
                 promptText = uiText.inactivityPromptSecondary;
             } else {
                 await handleEndChatManually('final-inactive');
@@ -425,7 +416,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
             speakText(translatedPrompt, promptMessage, () => {
-                wasInactivityPrompt.current = true;
                 setBotStatus('idle');
             });
         };
@@ -437,6 +427,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
 
         clearInactivityTimer();
+        inactivityCheckLevelRef.current = 0; // Reset on user activity
         addMessage({ text, sender: 'user' });
         setInputValue('');
         setBotStatus('preparing');
@@ -487,12 +478,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 if (result.shouldEndConversation) {
                     handleEndChatManually();
                 } else if (!hasConversationEnded) {
-                    if (communicationMode === 'audio-only') {
-                        setBotStatus('idle');
-                    } else {
-                        setBotStatus('idle');
-                        setStatusMessage('');
-                    }
+                    setBotStatus('idle');
+                    setStatusMessage('');
                 }
             });
 
@@ -505,7 +492,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('idle');
             setStatusMessage('');
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, communicationMode, config, speakText, handleEndChatManually]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         // Do not archive if no user messages, or if archiving is disabled.
@@ -554,9 +541,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } catch (error: any) {
             console.error("Failed to archive chat:", error);
             await logErrorToFirestore(error, 'ChatInterface/archiveAndIndexChat');
-            toast({ title: "Archiving Failed", variant: "destructive" });
         }
-    }, [toast, logErrorToFirestore, config]);
+    }, [logErrorToFirestore, config]);
     
     useEffect(() => {
         if (hasConversationEnded) {
@@ -732,6 +718,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           
           if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
           clearInactivityTimer();
+          inactivityCheckLevelRef.current = 0; // Reset on any speech result
 
           let interim_transcript = '';
           finalTranscriptRef.current = '';
