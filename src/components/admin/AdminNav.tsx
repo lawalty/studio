@@ -1,8 +1,9 @@
+
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, Database, KeyRound, Cog } from 'lucide-react';
+import { Bot, Database, KeyRound, Cog, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +12,7 @@ const navLinks = [
   { href: '/admin/knowledge-base', label: 'Knowledge Base', Icon: Database },
   { href: '/admin/api-keys', label: 'API Keys & RAG', Icon: KeyRound },
   { href: '/admin/site-settings', label: 'Site Settings', Icon: Cog },
+  { href: '/admin/test-chat', label: 'Test Chat', Icon: MessageSquare },
 ];
 
 export default function AdminNav() {
@@ -18,7 +20,7 @@ export default function AdminNav() {
 
   return (
     <div className="mb-8 flex justify-center border-b pb-4">
-      <div className="flex items-center gap-2 rounded-lg bg-muted p-1">
+      <div className="flex items-center gap-2 rounded-lg bg-muted p-1 flex-wrap justify-center">
         {navLinks.map(({ href, label, Icon }) => {
           const isActive = pathname.startsWith(href);
           return (
