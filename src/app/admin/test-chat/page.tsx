@@ -51,6 +51,7 @@ export default function TestChatPage() {
         conversationalTopics: "General",
         chatHistory: historyForGenkit,
         language: 'English',
+        communicationMode: 'text-only',
         clarificationAttemptCount: 0,
       };
       
