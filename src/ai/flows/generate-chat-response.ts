@@ -143,15 +143,18 @@ const chatPrompt = ai.definePrompt({
     - If the retrieved context IS empty ('NO_CONTEXT_FOUND'), but the user's question is a common-sense workplace or business scenario (e.g., how to handle an employee issue, general advice), you MUST use your general knowledge to provide a helpful, practical response.
     - If the context is empty and the question is not a common-sense scenario, proceed to the Clarification step.
 7.  **Recalling Chat History**: If the retrieved context contains a document with the attribute 'priority="Chat History"', you MUST begin your response with a phrase that indicates you are recalling a past conversation, such as "I remember we discussed..." or "In a previous conversation...". This is mandatory when using information from a chat history document.
-8.  **Clarification Gate Logic - Two Scenarios**: (Unless forbidden by the Clarification Limit)
-    a.  **Low-Confidence / No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), and the user's question is not a general common-sense query you can answer, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question to help you understand what to search for. Analyze the chat history to see if you can suggest a better query.
-    b.  **Broad / Vague Questions**: If the user's question is very broad (e.g., "Tell me about X") and the retrieved context is large and varied, you MUST first provide a brief, one-sentence summary of the available information. Then, immediately ask a clarifying question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?"). Set 'isClarificationQuestion' to true for both scenarios.
+8.  **Clarification Gate Logic**:
+    a.  **High-Confidence Answer**: If the retrieved context is NOT empty and contains a document with a low distance score (e.g., distance < 0.4), this indicates a strong match. In this case, you are FORBIDDEN from asking a clarifying question. You MUST provide a direct, confident answer based on this strong match.
+    b.  **Low-Confidence / Broad Question**: If the user's question is broad OR if the best document match has a high distance score (e.g., distance > 0.4), you MAY ask a clarifying question. First, provide a brief, one-sentence summary of the available information. Then, immediately ask a question to narrow down what the user is interested in (e.g., "I have information on X's history, products, and services. What specifically would you like to know?").
+    c.  **No Context**: If the retrieved context is empty ('NO_CONTEXT_FOUND'), and the user's question is not a common-sense query you can answer, do NOT try to answer. Instead, you MUST ask a single, targeted clarifying question.
+    d.  For all clarification questions (b and c), you MUST set 'isClarificationQuestion' to true. This is only allowed if not overruled by the Clarification Limit.
 9.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
 10. **Citations & PDF Generation**:
     - If, and only if, the retrieved context is directly relevant to the user's question AND you use that information in your answer, you MAY populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
     - If the context is NOT relevant, you are FORBIDDEN from populating the 'pdfReference' object, even if a file was retrieved.
     - If your response is a table or a complex list, you MUST include a sentence like, "You can download this summary in a document I made for you when our chat has ended."
-11. **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
+11. **Structured Answer Formatting**: If you are providing a list, a step-by-step guide, or a detailed explanation, you MUST first provide a brief, one-sentence introduction (e.g., "Here are the steps for the closing procedure:"). After providing the structured answer, you MUST end your response with a polite follow-up question, such as "Is there anything else I can help with?" or "Does that answer your question?".
+12. **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
         - If > 70: You MUST use extremely formal language. Only address the user with a gendered title (e.g., "Sir" or "Ma'am") if the user has explicitly provided their gender in the conversation history. Otherwise, do not use a title. You MUST avoid all contractions (e.g., use "do not" instead of "don't").
         - If < 30: You MUST use very casual language, include slang appropriate for a friendly assistant (e.g., "No problem!", "Got it!"), and use contractions.
@@ -168,7 +171,7 @@ const chatPrompt = ai.definePrompt({
         - If > 70: If the information is suitable, you MUST format the response as a bulleted or numbered list.
         - If < 30: You are FORBIDDEN from using lists. You MUST always format your response as full paragraphs.
         - Otherwise (30-70): You should use your best judgment on whether to use lists or paragraphs.
-12.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
+13.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
 
 You are an expert in: "{{conversationalTopics}}".
 The user is conversing in {{language}}.
@@ -367,3 +370,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    
