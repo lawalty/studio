@@ -118,7 +118,7 @@ export async function searchKnowledgeBase({
       const distance = cosineDistance(queryEmbedding, storedEmbedding);
       
       // We gather all potential results first, regardless of the initial threshold.
-      // The filtering will happen after sorting by priority.
+      // The filtering will happen after sorting.
       results.push({
         distance: distance,
         sourceId: data.sourceId,
