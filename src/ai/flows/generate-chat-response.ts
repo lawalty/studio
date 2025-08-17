@@ -34,7 +34,7 @@ export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInput
 const AiResponseJsonSchema = z.object({
   aiResponse: z.string(),
   isClarificationQuestion: z.boolean().describe('Set to true if you are asking the user a question to clarify their request.'),
-  shouldEndConversation: z.boolean(),
+  shouldEndConversation: z.boolean().optional(),
   pdfReference: z.object({
     fileName: z.string(),
     downloadURL: z.string(),
@@ -43,7 +43,8 @@ const AiResponseJsonSchema = z.object({
 type AiResponseJson = z.infer<typeof AiResponseJsonSchema>;
 
 // The final output includes the parsed AI response plus diagnostic data.
-export type GenerateChatResponseOutput = AiResponseJson & {
+export type GenerateChatResponseOutput = Omit<AiResponseJson, 'shouldEndConversation'> & {
+    shouldEndConversation: boolean;
     debugClosestMatch?: {
         fileName: string,
         downloadURL?: string,
@@ -339,7 +340,18 @@ Corrected JSON:
           }
       }
       
-      const finalOutput: GenerateChatResponseOutput = { ...output };
+      let shouldEndConversation = output.shouldEndConversation;
+      if (shouldEndConversation === undefined) {
+        // This is a safety check. If the model fails to return the flag, default to false.
+        shouldEndConversation = false;
+        console.warn('[generateChatResponseFlow] AI model did not return the `shouldEndConversation` flag. Defaulting to false.');
+        await logErrorToFirestore(
+            new Error('AI model did not return the `shouldEndConversation` flag.'),
+            'generateChatResponseFlow/parsing'
+        );
+      }
+
+      const finalOutput: GenerateChatResponseOutput = { ...output, shouldEndConversation };
       finalOutput.distance = primarySearchResult?.distance;
       finalOutput.distanceThreshold = appConfig.distanceThreshold;
       finalOutput.formality = appConfig.formality;
