@@ -38,6 +38,11 @@ export interface Message {
   conciseness?: number;
   tone?: number;
   formatting?: number;
+  // Add the debug field to the message for potential UI display
+  debugClosestMatch?: {
+    fileName: string;
+    downloadURL?: string;
+  }
 }
 
 const DEFAULT_AVATAR_PLACEHOLDER_URL = "https://placehold.co/150x150.png";
@@ -454,7 +459,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 language: language,
                 clarificationAttemptCount: clarificationAttemptCount,
             };
-            const result = await generateChatResponse(flowInput);
+            const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
 
             if (result.isClarificationQuestion) {
                 setClarificationAttemptCount(prev => prev + 1);
@@ -474,6 +479,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 conciseness: result.conciseness,
                 tone: result.tone,
                 formatting: result.formatting,
+                debugClosestMatch: result.debugClosestMatch,
             };
             
             await speakText(result.aiResponse, aiMessage, () => {
@@ -787,7 +793,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       alt: "AI Blair Avatar",
       width: communicationMode === 'audio-only' ? 200 : 120,
       height: communicationMode === 'audio-only' ? 200 : 120,
-      className: cn("rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", 
+      className: cn(
+        "rounded-full border-4 border-primary shadow-md object-cover transition-all duration-300", 
         (isBotSpeaking && communicationMode !== 'text-only') && "animate-pulse-speak"
       ),
       priority: true,

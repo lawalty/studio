@@ -77,20 +77,27 @@ export default function ChatBubble({
   };
   
   const renderDiagnostics = () => {
-    if (message.sender === 'user' || message.distance === undefined) return null;
+    if (message.sender === 'user') return null;
+
+    const fileToDisplay = message.pdfReference?.fileName || message.debugClosestMatch?.fileName;
+    
+    // Do not render diagnostics if distance is not present, unless there's a debug match to show.
+    if (message.distance === undefined && !fileToDisplay) return null;
 
     return (
       <div className="mt-2 text-xs text-muted-foreground/80 space-y-1 border-t border-muted-foreground/20 pt-1">
-        {message.pdfReference?.fileName && (
+        {fileToDisplay && (
            <div className="flex items-center gap-1.5" title="Top matched document from knowledge base">
                <FileText className="h-3 w-3" />
-               <span className="truncate">{message.pdfReference.fileName}</span>
+               <span className="truncate">{fileToDisplay}</span>
            </div>
         )}
-        <div className="flex items-center gap-1.5" title={`Match Distance / Threshold`}>
-            <Thermometer className="h-3 w-3" />
-            <span>{message.distance.toFixed(3)} / {message.distanceThreshold?.toFixed(2)}</span>
-        </div>
+        {typeof message.distance === 'number' && (
+          <div className="flex items-center gap-1.5" title={`Match Distance / Threshold`}>
+              <Thermometer className="h-3 w-3" />
+              <span>{message.distance.toFixed(3)} / {message.distanceThreshold?.toFixed(2)}</span>
+          </div>
+        )}
       </div>
     );
   };
