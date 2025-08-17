@@ -73,3 +73,5 @@ export const getAppConfig = async (): Promise<AppConfig> => {
         return DEFAULTS;
     }
 };
+
+    

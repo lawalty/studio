@@ -159,17 +159,17 @@ const chatPrompt = ai.definePrompt({
 11. **Structured Answer Formatting**: If you are providing a list, a step-by-step guide, or a detailed explanation, you MUST first provide a brief, one-sentence introduction (e.g., "Here are the steps for the closing procedure:"). After providing the structured answer, you MUST end your response with a polite follow-up question, such as "Is there anything else I can help with?" or "Does that answer your question?".
 12. **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
-        - If > 70: You MUST use extremely formal language. Only address the user with a gendered title (e.g., "Sir" or "Ma'am") if the user has explicitly provided their gender in the conversation history. Otherwise, do not use a title. You MUST avoid all contractions (e.g., use "do not" instead of "don't").
-        - If < 30: You MUST use very casual language, include slang appropriate for a friendly assistant (e.g., "No problem!", "Got it!"), and use contractions.
-        - Otherwise (30-70): You MUST use a standard, professional, and friendly style.
+        - If > 70: Use formal language. Avoid contractions (e.g., "do not").
+        - If < 30: Use casual language and slang (e.g., "No problem!", "Got it!").
+        - Otherwise: Use a standard, professional, and friendly style.
     - **Conciseness ({{conciseness}}):**
-        - If > 70: Your response MUST be a single, direct sentence. No exceptions.
-        - If < 30: Your response MUST be highly detailed, elaborate, and consist of at least three full paragraphs.
-        - Otherwise (30-70): You MUST provide a balanced, standard-length response of one or two paragraphs.
+        - If > 70: Response must be a single, direct sentence.
+        - If < 30: Response must be highly detailed and at least three paragraphs.
+        - Otherwise: Provide a balanced, one or two paragraph response.
     - **Tone ({{tone}}):**
-        - If > 70: You MUST be very enthusiastic and upbeat. Use positive adjectives and exclamation points.
-        - If < 30: You MUST adopt a strictly neutral, direct, and objective tone. Do not use any emotive language, exclamation points, or conversational filler. Your response should be like a technical document.
-        - Otherwise (30-70): You MUST maintain a helpful and friendly, but not overly-enthusiastic, tone.
+        - If > 70: Be very enthusiastic and upbeat. Use positive adjectives and exclamation points.
+        - If < 30: Adopt a strictly neutral, direct, and objective tone.
+        - Otherwise: Maintain a helpful and friendly tone.
     - **Formatting ({{formatting}}):**
         - If > 70: If the information is suitable, you MUST format the response as a bulleted or numbered list.
         - If < 30: You are FORBIDDEN from using lists. You MUST always format your response as full paragraphs.
@@ -375,3 +375,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    

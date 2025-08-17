@@ -761,7 +761,7 @@ export default function PersonaPage() {
           </CardHeader>
           <CardContent className="space-y-8 pt-2">
               <div className="space-y-3">
-                  <Label>Formality: <span className="font-bold text-primary">{formality[0]}</span></Label>
+                  <Label>Formality</Label>
                   <Slider value={formality} onValueChange={setFormality} max={100} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Casual / Slang</span>
@@ -770,7 +770,7 @@ export default function PersonaPage() {
                   </div>
               </div>
               <div className="space-y-3">
-                  <Label>Conciseness: <span className="font-bold text-primary">{conciseness[0]}</span></Label>
+                  <Label>Conciseness</Label>
                   <Slider value={conciseness} onValueChange={setConciseness} max={100} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Detailed / Elaborate</span>
@@ -779,7 +779,7 @@ export default function PersonaPage() {
                   </div>
               </div>
               <div className="space-y-3">
-                  <Label>Tone: <span className="font-bold text-primary">{tone[0]}</span></Label>
+                  <Label>Tone</Label>
                   <Slider value={tone} onValueChange={setTone} max={100} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Neutral / Direct</span>
@@ -788,7 +788,7 @@ export default function PersonaPage() {
                   </div>
               </div>
               <div className="space-y-3">
-                  <Label>Formatting: <span className="font-bold text-primary">{formatting[0]}</span></Label>
+                  <Label>Formatting</Label>
                   <Slider value={formatting} onValueChange={setFormatting} max={100} step={1} />
                   <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Paragraphs</span>
@@ -806,3 +806,5 @@ export default function PersonaPage() {
     </div>
   );
 }
+
+    
