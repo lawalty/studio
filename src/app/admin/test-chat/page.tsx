@@ -51,6 +51,7 @@ export default function TestChatPage() {
         conversationalTopics: "General",
         chatHistory: historyForGenkit,
         language: 'English',
+        clarificationAttemptCount: 0,
       };
       
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
