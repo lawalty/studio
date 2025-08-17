@@ -20,6 +20,7 @@ const GenerateChatResponseInputSchema = z.object({
   personalBio: z.string().describe("The AI's personal history and backstory."),
   conversationalTopics: z.string().describe("A comma-separated list of topics the AI is an expert in."),
   language: z.string().optional().default('English').describe('The language the user is speaking in and expects a response in.'),
+  communicationMode: z.enum(['audio-only', 'audio-text', 'text-only']).optional().default('text-only').describe('The communication mode of the chat interface.'),
   chatHistory: z.array(z.object({
     role: z.enum(['user', 'model']),
     parts: z.array(z.object({
@@ -124,6 +125,7 @@ const chatPrompt = ai.definePrompt({
             tone: z.number(),
             formatting: z.number(),
             clarificationAttemptCount: z.number(),
+            communicationMode: z.string(),
         })
     },
     output: {
@@ -151,7 +153,8 @@ const chatPrompt = ai.definePrompt({
 9.  **Language:** You MUST respond in {{language}}. All of your output, including chit-chat and error messages, must be in this language.
 10. **Citations & PDF Generation**:
     - If, and only if, you use information from the retrieved context to answer the user's question, you MAY populate the 'pdfReference' object. Use the 'source' attribute for 'fileName' and 'downloadURL' from the document tag in the context.
-    - If you populate the 'pdfReference' object, you should also naturally weave a comment into your response informing the user that they can download the source document for more details. For example: "...and you can download the full document I'm referencing for more details." or "I've attached the full guide for your reference."
+    - If you populate the 'pdfReference' object, you should also naturally weave a comment into your response informing the user that they can download the source document for more details.
+    - **Audio-Only Mode Logic**: The user is in '{{communicationMode}}' mode. If the mode is 'audio-only' AND you are providing a 'pdfReference', you MUST explicitly state that the document will be available for download in the chat transcript after the conversation has ended. For other modes, you can refer to the link being available now.
     - If the context is NOT relevant, you are FORBIDDEN from populating the 'pdfReference' object, even if a file was retrieved.
 11. **Structured Answer Formatting**: If you are providing a list, a step-by-step guide, or a detailed explanation, you MUST first provide a brief, one-sentence introduction (e.g., "Here are the steps for the closing procedure:"). After providing the structured answer, you MUST end your response with a polite follow-up question, such as "Is there anything else I can help with?" or "Does that answer your question?".
 12. **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
@@ -223,6 +226,7 @@ const generateChatResponseFlow = async ({
     conversationalTopics, 
     chatHistory, 
     language,
+    communicationMode = 'text-only',
     clarificationAttemptCount = 0,
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
@@ -303,6 +307,7 @@ const generateChatResponseFlow = async ({
         tone: appConfig.tone,
         formatting: appConfig.formatting,
         clarificationAttemptCount,
+        communicationMode,
     };
     
     try {

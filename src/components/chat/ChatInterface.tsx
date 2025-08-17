@@ -457,6 +457,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 conversationalTopics,
                 chatHistory: historyForGenkit,
                 language: language,
+                communicationMode: communicationMode,
                 clarificationAttemptCount: clarificationAttemptCount,
             };
             const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
@@ -500,7 +501,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('idle');
             setStatusMessage('');
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         // Do not archive if no user messages, or if archiving is disabled.
