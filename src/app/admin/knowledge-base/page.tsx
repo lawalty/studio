@@ -288,6 +288,7 @@ const RenderKnowledgeBaseLevel = ({
 export default function KnowledgeBasePage() {
   const [sources, setSources] = useState<KnowledgeSource[]>([]);
   const [englishSources, setEnglishSources] = useState<KnowledgeSource[]>([]);
+  const [pdfSources, setPdfSources] = useState<KnowledgeSource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
@@ -298,6 +299,7 @@ export default function KnowledgeBasePage() {
   const [audioTranscription, setAudioTranscription] = useState('');
   const [selectedLevelForUpload, setSelectedLevelForUpload] = useState<KnowledgeBaseLevel>('High');
   const [linkedEnglishSourceIdForUpload, setLinkedEnglishSourceIdForUpload] = useState<string>('');
+  const [linkedPdfSourceIdForUpload, setLinkedPdfSourceIdForUpload] = useState<string>('');
   const [sourceType, setSourceType] = useState<SourceType>('PDF');
   const [isListeningForUpload, setIsListeningForUpload] = useState(false);
 
@@ -367,6 +369,9 @@ export default function KnowledgeBasePage() {
       const english = sortedSources.filter(s => ['High', 'Medium', 'Low'].includes(s.level)).sort((a,b) => a.sourceName.localeCompare(b.sourceName));
       setEnglishSources(english);
 
+      const pdfs = sortedSources.filter(s => s.mimeType === 'application/pdf').sort((a,b) => a.sourceName.localeCompare(b.sourceName));
+      setPdfSources(pdfs);
+
       setIsLoading(false);
     }, (error) => {
       console.error(`Error fetching sources:`, error);
@@ -421,7 +426,7 @@ export default function KnowledgeBasePage() {
               throw new Error("Source is missing a download URL, cannot re-process.");
           }
           
-          await updateDoc(sourceDocRef, { indexingError: `This may take a moment. Extracting text...` });
+          await updateDoc(sourceDocRef, { indexingError: `This may take a moment. Extracting text using ${mode} mode...` });
 
           const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL, extractionMode: mode });
   
@@ -469,18 +474,20 @@ export default function KnowledgeBasePage() {
     const handleFileUpload = async () => {
         let textToProcess: string | null = null;
         let fileToUpload: File | null = selectedFile;
-        let fileName: string = '';
+        let finalSourceName: string = '';
         let mimeType: string = '';
+        let sourceId = uuidv4();
+        let downloadURL: string | undefined = undefined;
 
         if (sourceType === 'Text' && rawTextContent) {
             textToProcess = rawTextContent;
-            fileName = `${selectedTopicForUpload.replace(/\s+/g, '-')}-${uuidv4().substring(0, 8)}.txt`;
-            fileToUpload = new File([rawTextContent], fileName, { type: 'text/plain' });
+            finalSourceName = `${selectedTopicForUpload.replace(/\s+/g, '-')}-${uuidv4().substring(0, 8)}.txt`;
+            fileToUpload = new File([rawTextContent], finalSourceName, { type: 'text/plain' });
             mimeType = 'text/plain';
         } else if (sourceType === 'Audio' && audioTranscription) {
             textToProcess = audioTranscription;
-            fileName = `Live-Transcription-${uuidv4().substring(0, 8)}.txt`;
-            fileToUpload = new File([audioTranscription], fileName, { type: 'text/plain' });
+            finalSourceName = `Live-Transcription-${uuidv4().substring(0, 8)}.txt`;
+            fileToUpload = new File([audioTranscription], finalSourceName, { type: 'text/plain' });
             mimeType = 'text/plain';
         }
 
@@ -489,7 +496,7 @@ export default function KnowledgeBasePage() {
             return;
         }
 
-        if (!fileName) fileName = fileToUpload.name;
+        if (!finalSourceName) finalSourceName = fileToUpload.name;
         if (!mimeType) mimeType = fileToUpload.type || 'application/octet-stream';
         
         if (!selectedTopicForUpload || !selectedLevelForUpload) {
@@ -502,26 +509,51 @@ export default function KnowledgeBasePage() {
             return;
         }
 
-        const sourceId = uuidv4();
         setOperationStatus(sourceId, true);
         setIsCurrentlyUploading(true);
 
         const topic = selectedTopicForUpload;
         const description = uploadDescription;
         const targetLevel = selectedLevelForUpload;
+        
+        // This is the new logic for text uploads linked to a PDF
+        if (sourceType === 'Text' && linkedPdfSourceIdForUpload) {
+            const linkedPdfSource = sources.find(s => s.id === linkedPdfSourceIdForUpload);
+            if (!linkedPdfSource) {
+                toast({ title: "Link Error", description: "The selected PDF to link to could not be found.", variant: "destructive" });
+                setIsCurrentlyUploading(false);
+                setOperationStatus(sourceId, false);
+                return;
+            }
+            // Overwrite with linked PDF's metadata
+            sourceId = linkedPdfSource.id;
+            finalSourceName = linkedPdfSource.sourceName;
+            downloadURL = linkedPdfSource.downloadURL;
+            mimeType = linkedPdfSource.mimeType || 'application/pdf';
+        }
+        
         const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
         try {
+            // Initial document creation or update with 'processing' status
             await setDoc(sourceDocRef, {
-                sourceName: fileName, description, createdAt: new Date().toISOString(),
+                sourceName: finalSourceName, description, createdAt: new Date().toISOString(),
                 indexingStatus: 'processing', indexingError: 'Extracting text...',
                 mimeType, level: targetLevel, topic: topic,
-            });
+            }, { merge: true });
 
-            if (textToProcess === null) {
-                const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
+            if (!textToProcess) {
+                // Upload file to get URL for server-side extraction
+                const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${finalSourceName}`;
+                const fileRef = storageRef(storage, storagePath);
+                await uploadBytes(fileRef, fileToUpload);
+                downloadURL = await getDownloadURL(fileRef);
+                await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text from document...' });
+
+                // Use robust server-side extraction
+                const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
                 if (extractionResult.error || !extractionResult.extractedText) {
-                    throw new Error(extractionResult.error || 'Client-side text extraction failed.');
+                    throw new Error(extractionResult.error || 'Server-side text extraction failed.');
                 }
                 textToProcess = extractionResult.extractedText;
             }
@@ -530,17 +562,13 @@ export default function KnowledgeBasePage() {
                 throw new Error("Could not determine text content for indexing.");
             }
             
-            await updateDoc(sourceDocRef, { indexingError: 'Uploading file and indexing...' });
-
-            const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileName}`;
-            const fileRef = storageRef(storage, storagePath);
-            await uploadBytes(fileRef, fileToUpload);
-            const downloadURL = await getDownloadURL(fileRef);
+            await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
             
             const indexInput: Parameters<typeof indexDocument>[0] = {
-                sourceId, sourceName: fileName, text: textToProcess,
+                sourceId, sourceName: finalSourceName, text: textToProcess,
                 level: targetLevel, topic, downloadURL
             };
+
             if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
                 indexInput.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
             }
@@ -551,13 +579,14 @@ export default function KnowledgeBasePage() {
                 throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
             }
             
-            toast({ title: "Success!", description: `"${fileName}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
+            toast({ title: "Success!", description: `"${finalSourceName}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
             
             setSelectedFile(null);
             setRawTextContent('');
             setAudioTranscription('');
             setUploadDescription('');
             setLinkedEnglishSourceIdForUpload('');
+            setLinkedPdfSourceIdForUpload('');
             if (fileInputRef.current) fileInputRef.current.value = '';
 
         } catch (e: any) {
@@ -796,6 +825,22 @@ export default function KnowledgeBasePage() {
                             )}
                         </SelectContent>
                     </Select>
+                </div>
+              )}
+               {sourceType === 'Text' && (
+                <div className="space-y-2">
+                    <Label className="flex items-center gap-2"><LinkIcon className="h-4 w-4" /> Link Text Content to an Existing PDF (Optional)</Label>
+                    <Select value={linkedPdfSourceIdForUpload} onValueChange={setLinkedPdfSourceIdForUpload}>
+                        <SelectTrigger><SelectValue placeholder="Select original PDF..." /></SelectTrigger>
+                        <SelectContent>
+                            {pdfSources.length > 0 ? (
+                                pdfSources.map(source => <SelectItem key={source.id} value={source.id}>{source.sourceName}</SelectItem>)
+                            ) : (
+                                <SelectItem value="" disabled>No PDFs found in KB</SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">Use this if you extracted text from a PDF and want to link it back.</p>
                 </div>
               )}
               <div className="space-y-2">
