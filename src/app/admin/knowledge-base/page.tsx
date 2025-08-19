@@ -40,7 +40,7 @@ interface KnowledgeSource {
   level: KnowledgeBaseLevel;
   createdAt: string;
   createdAtDate: Date;
-  indexingStatus: 'pending' | 'processing' | 'success' | 'failed';
+  indexingStatus: 'pending' | 'processing' | 'success' | 'failed' | 'n/a';
   indexingError?: string;
   downloadURL?: string;
   chunksWritten?: number;
@@ -55,7 +55,7 @@ const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { title: string; description: str
   'High': { title: 'High Priority', description: 'Manage high priority sources.' },
   'Medium': { title: 'Medium Priority', description: 'Manage medium priority sources.' },
   'Low': { title: 'Low Priority', description: 'Manage low priority sources.' },
-  'Spanish PDFs': { title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. Searched only for Spanish-speaking users.' },
+  'Spanish PDFs': { title: 'Spanish Version of English Documents', description: 'Spanish versions of English documents. These are not indexed but are linked to an English source.' },
   'Chat History': { title: 'Chat History', description: 'Automatically archived and indexed conversations. The AI can search these.' },
   'Archive': { title: 'Archive', description: 'Archived sources are not used by the AI.' },
 };
@@ -109,7 +109,7 @@ const RenderKnowledgeBaseLevel = ({
                             <TableRow>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Status</TableHead>
-                                <TableHead>Topic</TableHead>
+                                <TableHead>Topic/Link</TableHead>
                                 <TableHead>Added</TableHead>
                                 <TableHead className="text-right w-auto">Actions</TableHead>
                             </TableRow>
@@ -136,6 +136,7 @@ const RenderKnowledgeBaseLevel = ({
                                                             {source.indexingStatus === 'success' && <CheckCircle size={16} className="text-green-500" />}
                                                             {(source.indexingStatus === 'processing' || source.indexingStatus === 'pending' || isOpInProgress) && <Loader2 size={16} className="animate-spin" />}
                                                             {source.indexingStatus === 'failed' && <AlertTriangle size={16} className="text-destructive" />}
+                                                            {source.indexingStatus === 'n/a' && <LinkIcon size={16} className="text-muted-foreground" />}
                                                             <span className="capitalize">{isOpInProgress ? 'Processing' : source.indexingStatus}</span>
                                                         </div>
                                                     </TooltipTrigger>
@@ -144,11 +145,18 @@ const RenderKnowledgeBaseLevel = ({
                                                         {source.indexingStatus === 'failed' && <p>Error: {source.indexingError}</p>}
                                                         {source.indexingStatus === 'processing' && <p>{source.indexingError || 'File is being processed...'}</p>}
                                                         {source.indexingStatus === 'pending' && <p>Waiting for server to start processing.</p>}
+                                                        {source.indexingStatus === 'n/a' && <p>This document is not indexed.</p>}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
                                         </TableCell>
-                                        <TableCell>{source.topic}</TableCell>
+                                        <TableCell>
+                                          {source.linkedEnglishSourceId ? (
+                                              <span className="text-xs text-muted-foreground italic">Linked to English source</span>
+                                          ) : (
+                                              source.topic
+                                          )}
+                                        </TableCell>
                                         <TableCell>{source.createdAt}</TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
@@ -216,8 +224,8 @@ const RenderKnowledgeBaseLevel = ({
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
                                                                 <AlertDialogTrigger asChild>
-                                                                    <Button variant="ghost" size="icon" disabled={anyOperationGloballyInProgress}>
-                                                                        <RotateCcw size={16} className="text-primary" />
+                                                                    <Button variant="ghost" size="icon" disabled={anyOperationGloballyInProgress || source.level === 'Spanish PDFs'}>
+                                                                        <RotateCcw size={16} className={cn("text-primary", source.level === 'Spanish PDFs' && 'text-muted-foreground/50')} />
                                                                     </Button>
                                                                 </AlertDialogTrigger>
                                                             </TooltipTrigger>
@@ -352,7 +360,7 @@ export default function KnowledgeBasePage() {
           level: data.level || 'Archive',
           createdAt: createdAtDate.toLocaleString(),
           createdAtDate: createdAtDate,
-          indexingStatus: data.indexingStatus || 'failed',
+          indexingStatus: data.indexingStatus || 'n/a',
           indexingError: data.indexingError || 'No status available.',
           downloadURL: data.downloadURL,
           chunksWritten: data.chunksWritten,
@@ -406,6 +414,10 @@ export default function KnowledgeBasePage() {
   }, [toast, setOperationStatus]);
   
   const handleReindexSource = useCallback(async (source: KnowledgeSource, mode: 'standard' | 'deep') => {
+      if (source.level === 'Spanish PDFs') {
+        toast({ title: "Action Not Allowed", description: "Spanish PDFs are not indexed and cannot be re-processed.", variant: "destructive" });
+        return;
+      }
       setOperationStatus(source.id, true);
       const sourceDocRef = doc(db, 'kb_meta', source.id);
       
@@ -499,7 +511,7 @@ export default function KnowledgeBasePage() {
         if (!finalSourceName) finalSourceName = fileToUpload.name;
         if (!mimeType) mimeType = fileToUpload.type || 'application/octet-stream';
         
-        if (!selectedTopicForUpload || !selectedLevelForUpload) {
+        if (selectedLevelForUpload !== 'Spanish PDFs' && (!selectedTopicForUpload || !selectedLevelForUpload)) {
             toast({ title: "Missing Information", description: "Please provide a topic and priority level.", variant: "destructive" });
             return;
         }
@@ -535,51 +547,64 @@ export default function KnowledgeBasePage() {
         const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
         try {
-            // Initial document creation or update with 'processing' status
-            await setDoc(sourceDocRef, {
-                sourceName: finalSourceName, description, createdAt: new Date().toISOString(),
-                indexingStatus: 'processing', indexingError: 'Extracting text...',
-                mimeType, level: targetLevel, topic: topic,
-            }, { merge: true });
+            // Special handling for Spanish PDFs - no indexing
+            if (targetLevel === 'Spanish PDFs') {
+                await setDoc(sourceDocRef, {
+                    sourceName: finalSourceName, description, createdAt: new Date().toISOString(),
+                    indexingStatus: 'n/a', mimeType, level: targetLevel, topic: 'Spanish Content',
+                    linkedEnglishSourceId: linkedEnglishSourceIdForUpload
+                }, { merge: true });
 
-            if (!textToProcess) {
-                // Upload file to get URL for server-side extraction
                 const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${finalSourceName}`;
                 const fileRef = storageRef(storage, storagePath);
                 await uploadBytes(fileRef, fileToUpload);
                 downloadURL = await getDownloadURL(fileRef);
-                await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text from document...' });
+                await updateDoc(sourceDocRef, { downloadURL });
 
-                // Use robust server-side extraction
-                const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-                if (extractionResult.error || !extractionResult.extractedText) {
-                    throw new Error(extractionResult.error || 'Server-side text extraction failed.');
+                toast({ title: "Success!", description: `"${finalSourceName}" has been uploaded and linked.` });
+
+            } else { // Standard indexing process
+                await setDoc(sourceDocRef, {
+                    sourceName: finalSourceName, description, createdAt: new Date().toISOString(),
+                    indexingStatus: 'processing', indexingError: 'Extracting text...',
+                    mimeType, level: targetLevel, topic: topic,
+                }, { merge: true });
+
+                if (!textToProcess) {
+                    const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${finalSourceName}`;
+                    const fileRef = storageRef(storage, storagePath);
+                    await uploadBytes(fileRef, fileToUpload);
+                    downloadURL = await getDownloadURL(fileRef);
+                    await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text from document...' });
+
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for storage propagation
+
+                    const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+                    if (extractionResult.error || !extractionResult.extractedText) {
+                        throw new Error(extractionResult.error || 'Server-side text extraction failed.');
+                    }
+                    textToProcess = extractionResult.extractedText;
                 }
-                textToProcess = extractionResult.extractedText;
-            }
 
-            if (!textToProcess) {
-                throw new Error("Could not determine text content for indexing.");
-            }
-            
-            await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
-            
-            const indexInput: Parameters<typeof indexDocument>[0] = {
-                sourceId, sourceName: finalSourceName, text: textToProcess,
-                level: targetLevel, topic, downloadURL
-            };
+                if (!textToProcess) {
+                    throw new Error("Could not determine text content for indexing.");
+                }
+                
+                await updateDoc(sourceDocRef, { indexingError: 'Indexing document chunks...' });
+                
+                const indexInput: Parameters<typeof indexDocument>[0] = {
+                    sourceId, sourceName: finalSourceName, text: textToProcess,
+                    level: targetLevel, topic, downloadURL
+                };
+                
+                const indexingResult = await indexDocument(indexInput);
 
-            if (targetLevel === 'Spanish PDFs' && linkedEnglishSourceIdForUpload) {
-                indexInput.linkedEnglishSourceId = linkedEnglishSourceIdForUpload;
+                if (!indexingResult.success || indexingResult.chunksWritten === 0) {
+                    throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
+                }
+                
+                toast({ title: "Success!", description: `"${finalSourceName}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
             }
-            
-            const indexingResult = await indexDocument(indexInput);
-
-            if (!indexingResult.success || indexingResult.chunksWritten === 0) {
-                throw new Error(indexingResult.error || "Indexing process failed to write any chunks to the database. The document may be empty.");
-            }
-            
-            toast({ title: "Success!", description: `"${finalSourceName}" has been fully processed and indexed with ${indexingResult.chunksWritten} chunks.` });
             
             setSelectedFile(null);
             setRawTextContent('');
@@ -787,19 +812,6 @@ export default function KnowledgeBasePage() {
                 </div>
 
                <div className="space-y-2">
-                  <Label>Topic</Label>
-                  <Select value={selectedTopicForUpload} onValueChange={setSelectedTopicForUpload}>
-                      <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
-                      <SelectContent>
-                        {availableTopics.length > 0 ? (
-                           availableTopics.map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)
-                        ) : (
-                           <SelectItem value="General" disabled>No topics configured</SelectItem>
-                        )}
-                      </SelectContent>
-                  </Select>
-               </div>
-               <div className="space-y-2">
                   <Label>Priority Level</Label>
                   <Select value={selectedLevelForUpload} onValueChange={(value) => setSelectedLevelForUpload(value as KnowledgeBaseLevel)}>
                       <SelectTrigger><SelectValue placeholder="Select a priority level..." /></SelectTrigger>
@@ -812,7 +824,8 @@ export default function KnowledgeBasePage() {
                       </SelectContent>
                   </Select>
                </div>
-              {selectedLevelForUpload === 'Spanish PDFs' && (
+
+              {selectedLevelForUpload === 'Spanish PDFs' ? (
                 <div className="space-y-2">
                     <Label className="flex items-center gap-2"><LinkIcon className="h-4 w-4" /> Link to English Source</Label>
                     <Select value={linkedEnglishSourceIdForUpload} onValueChange={setLinkedEnglishSourceIdForUpload}>
@@ -826,6 +839,20 @@ export default function KnowledgeBasePage() {
                         </SelectContent>
                     </Select>
                 </div>
+              ) : (
+                 <div className="space-y-2">
+                    <Label>Topic</Label>
+                    <Select value={selectedTopicForUpload} onValueChange={setSelectedTopicForUpload}>
+                        <SelectTrigger><SelectValue placeholder="Select a topic..." /></SelectTrigger>
+                        <SelectContent>
+                          {availableTopics.length > 0 ? (
+                             availableTopics.map(topic => <SelectItem key={topic} value={topic}>{topic}</SelectItem>)
+                          ) : (
+                             <SelectItem value="General" disabled>No topics configured</SelectItem>
+                          )}
+                        </SelectContent>
+                    </Select>
+                 </div>
               )}
                {sourceType === 'Text' && (
                 <div className="space-y-2">
@@ -849,7 +876,7 @@ export default function KnowledgeBasePage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={handleFileUpload} disabled={anyOperationGloballyInProgress || !selectedTopicForUpload || isCurrentlyUploading}>
+              <Button onClick={handleFileUpload} disabled={anyOperationGloballyInProgress || (selectedLevelForUpload !== 'Spanish PDFs' && !selectedTopicForUpload) || isCurrentlyUploading}>
                 {isCurrentlyUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
                 Upload and Process
               </Button>

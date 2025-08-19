@@ -35,7 +35,7 @@ const LEVEL_PRIORITY: Record<string, number> = {
     'Chat History': 2,
     'Medium': 3,
     'Low': 4,
-    'Spanish PDFs': 5,
+    // 'Spanish PDFs' are not indexed and therefore not part of this priority list.
     // 'Archive' is filtered out and won't be searched.
 };
 
@@ -102,8 +102,8 @@ export async function searchKnowledgeBase({
   chunksSnapshot.forEach(doc => {
       const data = doc.data();
       
-      // Exclude documents from the 'Archive' level from the search
-      if (data.level === 'Archive') {
+      // Exclude documents from the 'Archive' and 'Spanish PDFs' levels from the search
+      if (data.level === 'Archive' || data.level === 'Spanish PDFs') {
           return; // Skip this chunk
       }
 
