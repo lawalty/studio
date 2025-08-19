@@ -579,7 +579,7 @@ export default function KnowledgeBasePage() {
 
                     await new Promise(resolve => setTimeout(resolve, 3000)); // Wait for storage propagation
 
-                    const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
+                    const extractionResult = await extractTextFromDocument({ documentUrl: downloadURL, extractionMode: 'standard' });
                     if (extractionResult.error || !extractionResult.extractedText) {
                         throw new Error(extractionResult.error || 'Server-side text extraction failed.');
                     }
