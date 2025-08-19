@@ -68,6 +68,7 @@ export async function extractTextFromLocalFile(
         ],
         generationConfig: {
           temperature: 0.1,
+          maxOutputTokens: 8192,
         }
       });
 

@@ -46,7 +46,10 @@ export async function extractTextFromDocument(
                 { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
                 { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
             ],
-            generationConfig: { temperature: 0.1 }
+            generationConfig: { 
+              temperature: 0.1,
+              maxOutputTokens: 8192,
+            }
         });
 
         const systemPrompt = `Your task is to extract all human-readable text from the provided document.

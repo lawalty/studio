@@ -83,6 +83,7 @@ export async function indexDocument({
     linkedEnglishSourceId, pageNumber, title, header
 }: IndexDocumentInput): Promise<IndexDocumentOutput> {
       const sourceDocRef = db.collection('kb_meta').doc(sourceId);
+      let successfulChunks = 0;
 
       try {
         const chunks = simpleSplitter(text, { chunkSize: 1000, chunkOverlap: 100 });
@@ -142,10 +143,11 @@ export async function indexDocument({
           // This must write to the actual subcollection under the metadata document.
           const actualChunkDocRef = db.collection('kb_meta').doc(sourceId).collection('kb_chunks').doc(chunkId);
           await actualChunkDocRef.set(chunkData);
+          successfulChunks++;
         }
         
         const finalMetadata: Record<string, any> = {
-          indexingStatus: 'success', chunksWritten: chunks.length,
+          indexingStatus: 'success', chunksWritten: successfulChunks,
           indexedAt: new Date().toISOString(), indexingError: null,
           sourceName, downloadURL: downloadURL || null,
           level, topic,
@@ -155,7 +157,7 @@ export async function indexDocument({
         }
         await sourceDocRef.set(finalMetadata, { merge: true });
         
-        return { chunksWritten: chunks.length, sourceId, success: true };
+        return { chunksWritten: successfulChunks, sourceId, success: true };
 
       } catch (e: any) {
         console.error(`[indexDocument] Raw error for source '${sourceName}':`, e);
