@@ -819,8 +819,8 @@ export default function KnowledgeBasePage() {
                          <SelectItem value="High">High Priority</SelectItem>
                          <SelectItem value="Medium">Medium Priority</SelectItem>
                          <SelectItem value="Low">Low Priority</SelectItem>
-                         <SelectItem value="Spanish PDFs">Spanish PDFs</SelectItem>
-                         <SelectItem value="Archive">Archive</SelectItem>
+                         <SelectItem value="Spanish PDFs">Spanish PDFs (No Indexing)</SelectItem>
+                         <SelectItem value="Archive">Archive (No Indexing)</SelectItem>
                       </SelectContent>
                   </Select>
                </div>
