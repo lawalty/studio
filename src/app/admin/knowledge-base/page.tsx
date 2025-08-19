@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromLocalFile } from '@/ai/flows/extract-text-from-local-file-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye, Type, AudioLines, Image as ImageIcon, Mic, Square } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye, Type, AudioLines, Image as ImageIcon, Mic, Square, Zap, FileCog } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -81,7 +81,7 @@ const RenderKnowledgeBaseLevel = ({
     anyOperationGloballyInProgress: boolean,
     handleDeleteSource: (source: KnowledgeSource) => void,
     handleMoveSource: (source: KnowledgeSource, newLevel: KnowledgeBaseLevel) => void,
-    handleReindexSource: (source: KnowledgeSource) => void,
+    handleReindexSource: (source: KnowledgeSource, mode: 'standard' | 'deep') => void,
 }) => {
     const config = LEVEL_CONFIG[level];
     const filteredSources = sources.filter(s => s.level === level);
@@ -111,7 +111,7 @@ const RenderKnowledgeBaseLevel = ({
                                 <TableHead>Status</TableHead>
                                 <TableHead>Topic</TableHead>
                                 <TableHead>Added</TableHead>
-                                <TableHead className="text-right w-[210px]">Actions</TableHead>
+                                <TableHead className="text-right w-auto">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -119,7 +119,7 @@ const RenderKnowledgeBaseLevel = ({
                                 const isOpInProgress = operationInProgress[source.id] || false;
                                 return (
                                     <TableRow key={source.id} className={cn(isOpInProgress && "opacity-50 pointer-events-none")}>
-                                        <TableCell className="font-medium">
+                                        <TableCell className="font-medium max-w-xs truncate">
                                           <div className="flex items-center gap-2">
                                             <FileText size={16} className="text-muted-foreground" />
                                             <div className="flex flex-col">
@@ -212,14 +212,41 @@ const RenderKnowledgeBaseLevel = ({
                                                       </DropdownMenuContent>
                                                     </DropdownMenu>
                                                     
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button variant="ghost" size="icon" onClick={() => handleReindexSource(source)} disabled={anyOperationGloballyInProgress}>
-                                                                <RotateCcw size={16} className="text-primary" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent><p>Re-process Source</p></TooltipContent>
-                                                    </Tooltip>
+                                                     <AlertDialog>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" disabled={anyOperationGloballyInProgress}>
+                                                                        <RotateCcw size={16} className="text-primary" />
+                                                                    </Button>
+                                                                </AlertDialogTrigger>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent><p>Re-process Source</p></TooltipContent>
+                                                        </Tooltip>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Choose Re-processing Method</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Select a method for re-extracting text and re-indexing the document.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <div className="grid grid-cols-2 gap-4 py-4">
+                                                                <AlertDialogAction onClick={() => handleReindexSource(source, 'standard')} className="h-auto flex flex-col gap-2 p-4">
+                                                                    <FileCog className="h-8 w-8" />
+                                                                    <span className="font-bold">Standard Re-process</span>
+                                                                    <p className="text-xs text-center text-muted-foreground">Balanced text extraction. Good for most documents.</p>
+                                                                </AlertDialogAction>
+                                                                <AlertDialogAction onClick={() => handleReindexSource(source, 'deep')} className="h-auto flex flex-col gap-2 p-4">
+                                                                    <Zap className="h-8 w-8" />
+                                                                    <span className="font-bold">Deep Extraction</span>
+                                                                    <p className="text-xs text-center text-muted-foreground">Aggressive extraction. Best for dense, text-heavy PDFs.</p>
+                                                                </AlertDialogAction>
+                                                            </div>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
                                                     
                                                     <AlertDialog>
                                                         <Tooltip>
@@ -373,7 +400,7 @@ export default function KnowledgeBasePage() {
     }
   }, [toast, setOperationStatus]);
   
-  const handleReindexSource = useCallback(async (source: KnowledgeSource) => {
+  const handleReindexSource = useCallback(async (source: KnowledgeSource, mode: 'standard' | 'deep') => {
       setOperationStatus(source.id, true);
       const sourceDocRef = doc(db, 'kb_meta', source.id);
       
@@ -396,7 +423,7 @@ export default function KnowledgeBasePage() {
           
           await updateDoc(sourceDocRef, { indexingError: `This may take a moment. Extracting text...` });
 
-          const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL });
+          const extractionResult = await extractTextFromDocument({ documentUrl: source.downloadURL, extractionMode: mode });
   
           if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
               throw new Error(extractionResult?.error || 'Text extraction failed to produce any readable content. The document may be empty or an image-only PDF.');
@@ -499,18 +526,15 @@ export default function KnowledgeBasePage() {
 
             await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text...' });
             
-            // Use robust server-side extraction for all file types
             if (textToProcess === null) {
-                await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3s for storage propagation
-
                 let extractionResult;
+                await new Promise(resolve => setTimeout(resolve, 3000));
                 try {
                     extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
                 } catch (retryError) {
-                    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s more and retry
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                     extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
                 }
-
                 if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
                     throw new Error(extractionResult?.error || 'Server-side text extraction failed to produce any readable content.');
                 }

@@ -11,6 +11,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 
 const ExtractTextFromDocumentInputSchema = z.object({
   documentUrl: z.string().url().describe("The public URL of the document to process."),
+  extractionMode: z.enum(['standard', 'deep']).optional().default('standard').describe("The extraction method to use. 'deep' is for text-heavy documents."),
 });
 export type ExtractTextFromDocumentInput = z.infer<typeof ExtractTextFromDocumentInputSchema>;
 
@@ -20,8 +21,27 @@ const ExtractTextFromDocumentOutputSchema = z.object({
 });
 export type ExtractTextFromDocumentOutput = z.infer<typeof ExtractTextFromDocumentOutputSchema>;
 
+const DEEP_EXTRACTION_PROMPT = `Your task is to perform a deep and exhaustive text extraction from the provided document.
+CRITICAL INSTRUCTIONS:
+1.  Your single most important goal is to extract ALL text, including text within any images (OCR).
+2.  You MUST process the entire document from start to finish.
+3.  Preserve all paragraph breaks, lists, and essential formatting. Every line break might be important.
+4.  You are FORBIDDEN from summarizing, analyzing, or altering the content.
+5.  You MUST NOT add any commentary, preamble, or notes.
+6.  Your output MUST be ONLY the clean, raw, extracted text from the document.
+7.  If the document is blank or unreadable, return an empty response.`;
+
+const STANDARD_EXTRACTION_PROMPT = `Your task is to extract all human-readable text from the provided document.
+CRITICAL INSTRUCTIONS:
+1.  Perform OCR to extract all text, including text within images.
+2.  Preserve paragraph breaks and essential formatting.
+3.  Ignore headers, footers, and page numbers.
+4.  Do NOT add any commentary, preamble, or summary.
+5.  Your output MUST ONLY be the clean, extracted text.`;
+
+
 export async function extractTextFromDocument(
-  { documentUrl }: ExtractTextFromDocumentInput
+  { documentUrl, extractionMode }: ExtractTextFromDocumentInput
 ): Promise<ExtractTextFromDocumentOutput> {
     try {
         const apiKey = process.env.GEMINI_API_KEY;
@@ -52,13 +72,7 @@ export async function extractTextFromDocument(
             }
         });
 
-        const systemPrompt = `Your task is to extract all human-readable text from the provided document.
-CRITICAL INSTRUCTIONS:
-1.  Perform OCR to extract all text, including text within images.
-2.  Preserve paragraph breaks and essential formatting.
-3.  Ignore headers, footers, and page numbers.
-4.  Do NOT add any commentary, preamble, or summary.
-5.  Your output MUST ONLY be the clean, extracted text.`;
+        const systemPrompt = extractionMode === 'deep' ? DEEP_EXTRACTION_PROMPT : STANDARD_EXTRACTION_PROMPT;
 
         const result = await model.generateContent([
             systemPrompt,
