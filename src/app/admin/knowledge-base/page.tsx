@@ -430,6 +430,7 @@ export default function KnowledgeBasePage() {
           }
           
           await updateDoc(sourceDocRef, { indexingError: 'Re-indexing document chunks...' });
+          
           const indexInput: Parameters<typeof indexDocument>[0] = {
               sourceId: source.id,
               sourceName: source.sourceName,
@@ -466,17 +467,36 @@ export default function KnowledgeBasePage() {
   }, [toast, setOperationStatus]);
 
     const handleFileUpload = async () => {
-        let hasContent = false;
-        if (sourceType === 'PDF' || sourceType === 'Image' || sourceType === 'Audio') {
-            hasContent = !!selectedFile;
-        } else if (sourceType === 'Text') {
-            hasContent = !!rawTextContent || !!selectedFile;
+        let textToProcess: string | null = null;
+        let fileToUpload: File | null = selectedFile;
+        let fileName: string = '';
+        let mimeType: string = '';
+
+        if (sourceType === 'Text' && rawTextContent) {
+            textToProcess = rawTextContent;
+            fileName = `${selectedTopicForUpload.replace(/\s+/g, '-')}-${uuidv4().substring(0, 8)}.txt`;
+            fileToUpload = new File([rawTextContent], fileName, { type: 'text/plain' });
+            mimeType = 'text/plain';
+        } else if (sourceType === 'Audio' && audioTranscription) {
+            textToProcess = audioTranscription;
+            fileName = `Live-Transcription-${uuidv4().substring(0, 8)}.txt`;
+            fileToUpload = new File([audioTranscription], fileName, { type: 'text/plain' });
+            mimeType = 'text/plain';
         }
-        
-        if (!hasContent || !selectedTopicForUpload || !selectedLevelForUpload) {
-            toast({ title: "Missing Information", description: "Please provide a source (file or text), topic, and priority level.", variant: "destructive" });
+
+        if (!fileToUpload) {
+            toast({ title: "No Source Provided", description: "Please select a file, paste text, or use the microphone to create a source.", variant: "destructive" });
             return;
         }
+
+        if (!fileName) fileName = fileToUpload.name;
+        if (!mimeType) mimeType = fileToUpload.type || 'application/octet-stream';
+        
+        if (!selectedTopicForUpload || !selectedLevelForUpload) {
+            toast({ title: "Missing Information", description: "Please provide a topic and priority level.", variant: "destructive" });
+            return;
+        }
+
         if (selectedLevelForUpload === 'Spanish PDFs' && !linkedEnglishSourceIdForUpload) {
             toast({ title: "Missing Information", description: "Please link the Spanish PDF to its English source document.", variant: "destructive" });
             return;
@@ -492,51 +512,16 @@ export default function KnowledgeBasePage() {
         const sourceDocRef = doc(db, 'kb_meta', sourceId);
 
         try {
-            let fileToUpload: File;
-            let fileName: string;
-            let mimeType: string;
-            let textToProcess: string | null = null;
-            
-            if (sourceType === 'Text' && rawTextContent && !selectedFile) {
-                fileName = `${topic.replace(/\s+/g, '-')}-${sourceId.substring(0, 8)}.txt`;
-                fileToUpload = new File([rawTextContent], fileName, { type: 'text/plain' });
-                textToProcess = rawTextContent;
-                mimeType = 'text/plain';
-            } else {
-                if (!selectedFile) {
-                    toast({ title: "File Not Selected", description: "Please select a file to upload.", variant: "destructive" });
-                    setIsCurrentlyUploading(false); setOperationStatus(sourceId, false); return;
-                }
-                fileToUpload = selectedFile;
-                fileName = fileToUpload.name;
-                mimeType = fileToUpload.type || 'application/octet-stream';
-            }
-            
-            const newSourceData: Partial<KnowledgeSource> & { createdAt: string } = {
+            await setDoc(sourceDocRef, {
                 sourceName: fileName, description, createdAt: new Date().toISOString(),
-                indexingStatus: 'processing', indexingError: 'Uploading file to storage...',
+                indexingStatus: 'processing', indexingError: 'Extracting text...',
                 mimeType, level: targetLevel, topic: topic,
-            };
-            await setDoc(sourceDocRef, newSourceData);
+            });
 
-            const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileName}`;
-            const fileRef = storageRef(storage, storagePath);
-            await uploadBytes(fileRef, fileToUpload);
-            const downloadURL = await getDownloadURL(fileRef);
-
-            await updateDoc(sourceDocRef, { downloadURL, indexingError: 'Extracting text...' });
-            
             if (textToProcess === null) {
-                let extractionResult;
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                try {
-                    extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-                } catch (retryError) {
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    extractionResult = await extractTextFromDocument({ documentUrl: downloadURL });
-                }
-                if (!extractionResult || extractionResult.error || !extractionResult.extractedText || extractionResult.extractedText.trim() === '') {
-                    throw new Error(extractionResult?.error || 'Server-side text extraction failed to produce any readable content.');
+                const extractionResult = await extractTextFromLocalFile({ file: fileToUpload });
+                if (extractionResult.error || !extractionResult.extractedText) {
+                    throw new Error(extractionResult.error || 'Client-side text extraction failed.');
                 }
                 textToProcess = extractionResult.extractedText;
             }
@@ -545,7 +530,13 @@ export default function KnowledgeBasePage() {
                 throw new Error("Could not determine text content for indexing.");
             }
             
-            await updateDoc(sourceDocRef, { indexingError: 'Indexing content...' });
+            await updateDoc(sourceDocRef, { indexingError: 'Uploading file and indexing...' });
+
+            const storagePath = `knowledge_base_files/${targetLevel}/${sourceId}-${fileName}`;
+            const fileRef = storageRef(storage, storagePath);
+            await uploadBytes(fileRef, fileToUpload);
+            const downloadURL = await getDownloadURL(fileRef);
+            
             const indexInput: Parameters<typeof indexDocument>[0] = {
                 sourceId, sourceName: fileName, text: textToProcess,
                 level: targetLevel, topic, downloadURL

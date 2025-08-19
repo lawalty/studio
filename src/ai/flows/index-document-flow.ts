@@ -128,18 +128,25 @@ export async function indexDocument({
             chunkNumber: index + 1,
             createdAt: new Date().toISOString(),
             downloadURL: downloadURL || null,
-            pageNumber: pageNumber || null,
-            title: title || null,
-            header: header || null,
             embedding: embeddingVector,
             level,
             topic,
           };
 
+          // Conditionally add optional fields only if they have a value.
+          if (pageNumber !== undefined && pageNumber !== null) {
+              chunkData.pageNumber = pageNumber;
+          }
+          if (title) {
+              chunkData.title = title;
+          }
+          if (header) {
+              chunkData.header = header;
+          }
           if (linkedEnglishSourceId) {
               chunkData.linkedEnglishSourceId = linkedEnglishSourceId;
           }
-          // The document ID for a chunk within a collection group needs a full path.
+          
           // This must write to the actual subcollection under the metadata document.
           const actualChunkDocRef = db.collection('kb_meta').doc(sourceId).collection('kb_chunks').doc(chunkId);
           await actualChunkDocRef.set(chunkData);
