@@ -21,15 +21,7 @@ const ExtractTextFromDocumentOutputSchema = z.object({
 });
 export type ExtractTextFromDocumentOutput = z.infer<typeof ExtractTextFromDocumentOutputSchema>;
 
-const DEEP_EXTRACTION_PROMPT = `Your task is to perform a deep and exhaustive text extraction from the provided document.
-CRITICAL INSTRUCTIONS:
-1.  Your single most important goal is to extract ALL text, including text within any images (OCR).
-2.  You MUST process the entire document from start to finish.
-3.  Preserve all paragraph breaks, lists, and essential formatting. Every line break might be important.
-4.  You are FORBIDDEN from summarizing, analyzing, or altering the content.
-5.  You MUST NOT add any commentary, preamble, or notes.
-6.  Your output MUST be ONLY the clean, raw, extracted text from the document.
-7.  If the document is blank or unreadable, return an empty response.`;
+const DEEP_EXTRACTION_PROMPT = `Your single task is to extract every piece of text from this document, including from images. Do not add any commentary. Return only the raw text.`;
 
 const STANDARD_EXTRACTION_PROMPT = `Your task is to extract all human-readable text from the provided document.
 CRITICAL INSTRUCTIONS:
