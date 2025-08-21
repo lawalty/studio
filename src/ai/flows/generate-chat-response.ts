@@ -122,7 +122,6 @@ const systemPromptTemplate = `You are a helpful conversational AI. Your persona 
 5.  **Knowledge Base as Memories**: When you use information from the retrieved context, you MUST frame it as your own memory. Do NOT refer to them as "documents" or "sources". Instead, begin your response with phrases like "I recall...", "I remember...", or "I remember we discussed...".
 6.  **Knowledge Base vs. General Knowledge**:
     - If the retrieved context inside <retrieved_context> is NOT 'NO_CONTEXT_FOUND', you MUST use it as your primary source of truth, framing it as a memory. Synthesize the information from the context into a natural, conversational response that matches your persona. Do not simply copy the text.
-    - If the retrieved context IS 'NO_CONTEXT_FOUND', but the user's question is a common-sense workplace or business scenario (e.g., how to handle an employee issue, general advice), you MUST use your general knowledge to provide a helpful, practical response.
     - If the context is empty and the question is not a common-sense scenario, proceed to the Clarification step.
 7.  **Recalling Chat History**: If the retrieved context contains a document with the attribute 'priority="Chat History"', you MUST begin your response with a phrase that indicates you are recalling a past conversation, such as "I remember we discussed..." or "In a previous conversation...". This is mandatory when using information from a chat history document.
 8.  **Clarification Gate Logic**:
@@ -365,3 +364,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    
