@@ -170,7 +170,7 @@ const queryRefinementPrompt = ai.definePrompt({
     name: 'queryRefinementPrompt',
     input: { schema: z.string().describe('The raw user query.') },
     output: { schema: z.string().describe('A refined, keyword-focused query for vector search.') },
-    prompt: `You are an expert search query refiner for a vector database. Your sole job is to distill a user's question into a concise, keyword-focused query.
+    prompt: `You are an expert search query refiner. Your sole job is to distill the user's question into a concise, keyword-focused query.
 
 CRITICAL INSTRUCTIONS:
 - Analyze the user's query below to identify the core intent and key entities.
@@ -293,10 +293,8 @@ const generateChatResponseFlow = async ({
     try {
       const { text: rawText } = await withRetry(() => ai.generate({ 
           model: googleAI.model(appConfig.conversationalModel),
-          messages: [
-            { role: 'system', parts: [{ text: systemInstruction }] },
-            ...historyForRAG
-          ],
+          system: systemInstruction,
+          messages: historyForRAG,
       }));
       
       let output: AiResponseJson = { aiResponse: '', isClarificationQuestion: false, shouldEndConversation: false };
