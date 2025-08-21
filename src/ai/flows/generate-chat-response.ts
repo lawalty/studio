@@ -14,6 +14,7 @@ import { db as adminDb, admin } from '@/lib/firebase-admin';
 import { withRetry } from './index-document-flow';
 import { getAppConfig } from '@/lib/app-config';
 import { googleAI } from '@genkit-ai/googleai';
+import Handlebars from 'handlebars';
 
 // Zod schema for the input of the generateChatResponse flow.
 const GenerateChatResponseInputSchema = z.object({
@@ -111,27 +112,7 @@ const buildRetrievedContext = (results: any[], budgetChars = 6000) => {
   return chunks.join('\n\n') || 'NO_CONTEXT_FOUND';
 };
 
-
-// Define the prompt using the stable ai.definePrompt pattern
-const chatPrompt = ai.definePrompt({
-    name: 'chatRAGPrompt',
-    input: {
-        schema: z.object({
-            personaTraits: z.string(),
-            personalBio: z.string(),
-            conversationalTopics: z.string(),
-            language: z.string(),
-            chatHistory: z.string(),
-            retrievedContext: z.string(),
-            formality: z.number(),
-            conciseness: z.number(),
-            tone: z.number(),
-            formatting: z.number(),
-            clarificationAttemptCount: z.number(),
-            communicationMode: z.string(),
-        })
-    },
-    prompt: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
+const systemPromptTemplate = `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
 1.  **Clarification Loop Prevention**: If your last turn was a question offering specific choices (e.g., "Do you want to know about A or B?") and the user's latest response is a simple affirmation (e.g., "Yes", "Correct", "Sure"), you MUST NOT repeat your question. Instead, you MUST ask for the specific choice again (e.g., "Great. To proceed, please specify which topic you're interested in: A or B?").
@@ -177,16 +158,12 @@ const chatPrompt = ai.definePrompt({
 Example: I remember that the policy for returns is 30 days.|||{"pdfReference":{"fileName":"return-policy.pdf","downloadURL":"https://..."}, "isClarificationQuestion":false, "shouldEndConversation":false}
 
 You are an expert in: "{{conversationalTopics}}".
-The user is conversing in {{language}}.
-Here is the full conversation history:
-{{{chatHistory}}}
-
 Here is the context retrieved from your memories to answer the user's latest message.
 <retrieved_context>
 {{{retrievedContext}}}
 </retrieved_context>
-`
-});
+`;
+
 
 // NLP Pre-processing prompt to refine the user's query for better search results.
 const queryRefinementPrompt = ai.definePrompt({
@@ -298,12 +275,12 @@ const generateChatResponseFlow = async ({
       retrievedContext = 'NO_CONTEXT_FOUND';
     }
     
-    const promptInput = {
+    const template = Handlebars.compile(systemPromptTemplate);
+    const systemInstruction = template({
         personaTraits,
         personalBio,
         conversationalTopics,
         language: language || 'English',
-        chatHistory: `<history>${historyForRAG.map((msg: any) => `${msg.role}: ${msg.parts?.[0]?.text || ''}`).join('\n')}</history>`,
         retrievedContext: retrievedContext,
         formality: appConfig.formality,
         conciseness: appConfig.conciseness,
@@ -311,13 +288,15 @@ const generateChatResponseFlow = async ({
         formatting: appConfig.formatting,
         clarificationAttemptCount,
         communicationMode,
-    };
+    });
     
     try {
       const { text: rawText } = await withRetry(() => ai.generate({ 
           model: googleAI.model(appConfig.conversationalModel),
-          prompt: chatPrompt.prompt,
-          context: [promptInput],
+          messages: [
+            { role: 'system', parts: [{ text: systemInstruction }] },
+            ...historyForRAG
+          ],
       }));
       
       let output: AiResponseJson = { aiResponse: '', isClarificationQuestion: false, shouldEndConversation: false };
