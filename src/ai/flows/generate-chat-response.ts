@@ -217,8 +217,6 @@ const generateChatResponseFlow = async ({
         return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
     }
 
-    // If clarification has failed too many times, exit gracefully.
-    // This is a safeguard; the prompt should handle this, but we enforce it here too.
     if (clarificationAttemptCount >= 3) {
       return {
         aiResponse: "I apologize, but I'm still unable to find the information you're looking for. Is there anything else I can help you with?",
@@ -274,27 +272,58 @@ const generateChatResponseFlow = async ({
       retrievedContext = 'NO_CONTEXT_FOUND';
     }
     
-    const template = Handlebars.compile(systemPromptTemplate);
-    const systemInstruction = template({
-        personaTraits,
-        personalBio,
-        conversationalTopics,
-        language: language || 'English',
-        retrievedContext: retrievedContext,
-        formality: appConfig.formality,
-        conciseness: appConfig.conciseness,
-        tone: appConfig.tone,
-        formatting: appConfig.formatting,
-        clarificationAttemptCount,
-        communicationMode,
-    });
-    
     try {
-      const { text: rawText } = await withRetry(() => ai.generate({ 
-          model: googleAI.model(appConfig.conversationalModel),
-          system: systemInstruction,
-          messages: historyForRAG,
-      }));
+      let rawText = '';
+      const isNewModel = appConfig.conversationalModel.includes('2.5');
+
+      if (isNewModel) {
+        const template = Handlebars.compile(systemPromptTemplate);
+        const systemInstruction = template({
+            personaTraits,
+            personalBio,
+            conversationalTopics,
+            language: language || 'English',
+            retrievedContext: retrievedContext,
+            formality: appConfig.formality,
+            conciseness: appConfig.conciseness,
+            tone: appConfig.tone,
+            formatting: appConfig.formatting,
+            clarificationAttemptCount,
+            communicationMode,
+        });
+        const { text } = await withRetry(() => ai.generate({
+            model: googleAI.model(appConfig.conversationalModel, { apiVersion: 'v1beta' }),
+            system: systemInstruction,
+            messages: historyForRAG,
+        }));
+        rawText = text;
+      } else {
+        const fullPromptTemplate = `${systemPromptTemplate}
+
+Here is the full conversation history:
+<history>{{#each chatHistory}}{{this.role}}: {{this.parts.0.text}}{{/each}}</history>
+`;
+        const template = Handlebars.compile(fullPromptTemplate);
+        const compiledPrompt = template({
+          personaTraits,
+          personalBio,
+          conversationalTopics,
+          language: language || 'English',
+          retrievedContext: retrievedContext,
+          formality: appConfig.formality,
+          conciseness: appConfig.conciseness,
+          tone: appConfig.tone,
+          formatting: appConfig.formatting,
+          clarificationAttemptCount,
+          communicationMode,
+          chatHistory: historyForRAG,
+        });
+        const { text } = await withRetry(() => ai.generate({ 
+            model: googleAI.model(appConfig.conversationalModel),
+            prompt: compiledPrompt,
+        }));
+        rawText = text;
+      }
       
       let output: AiResponseJson = { aiResponse: '', isClarificationQuestion: false, shouldEndConversation: false };
 
@@ -310,11 +339,9 @@ const generateChatResponseFlow = async ({
           try {
               const parsedMetadata = JSON.parse(parts[1]);
               const validatedMetadata = AiResponseSchema.parse(parsedMetadata);
-              // Safely merge the parsed metadata into the output
               output = { ...output, ...validatedMetadata, aiResponse: aiResponseText };
           } catch (e) {
               console.warn(`[generateChatResponseFlow] Failed to parse AI metadata. Raw metadata: "${parts[1]}"`, e);
-              // Don't log to firestore, as this is a common, recoverable error.
           }
       }
       
@@ -335,8 +362,7 @@ const generateChatResponseFlow = async ({
           formality: appConfig.formality,
           conciseness: appConfig.conciseness,
           tone: appConfig.tone,
-  
-formatting: appConfig.formatting,
+          formatting: appConfig.formatting,
       };
 
       if (!output.pdfReference && primarySearchResult) {
@@ -365,4 +391,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
