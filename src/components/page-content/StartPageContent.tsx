@@ -339,7 +339,7 @@ export default function StartPageContent() {
             </div>
           </CardContent>
           {modelDisplayName && (
-            <CardFooter className="p-0 justify-end">
+            <CardFooter className="p-0 justify-center">
               <p className="text-xs text-muted-foreground/70">Powered by {modelDisplayName}</p>
             </CardFooter>
           )}
