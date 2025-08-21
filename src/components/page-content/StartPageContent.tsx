@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Mic, Bot, MessageSquareText, AlertTriangle, Cog, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { db } from '@/lib/firebase';
@@ -15,6 +15,7 @@ import Link from 'next/link';
 import LanguageSelector from '@/components/layout/LanguageSelector';
 import { useLanguage } from '@/context/LanguageContext';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
+import { getAppConfig } from '@/lib/app-config';
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
@@ -42,6 +43,7 @@ export default function StartPageContent() {
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean | null>(null);
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [modelDisplayName, setModelDisplayName] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { language, translate } = useLanguage();
@@ -69,6 +71,11 @@ export default function StartPageContent() {
 
   // Firestore listener for dynamic settings
   useEffect(() => {
+    // Fetch the model name once on component mount
+    getAppConfig().then(config => {
+      setModelDisplayName(config.modelDisplayName);
+    });
+
     const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
     const unsubscribe = onSnapshot(docRef, async (docSnap) => {
       setConfigError(null);
@@ -331,6 +338,11 @@ export default function StartPageContent() {
               </Button>
             </div>
           </CardContent>
+          {modelDisplayName && (
+            <CardFooter className="p-0 justify-end">
+              <p className="text-xs text-muted-foreground/70">Powered by {modelDisplayName}</p>
+            </CardFooter>
+          )}
         </Card>
       </>
     );

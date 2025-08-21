@@ -20,6 +20,13 @@ const DEFAULTS = {
     conversationalModel: 'gemini-1.5-pro-latest',
 };
 
+const MODEL_DISPLAY_NAMES: Record<string, string> = {
+    'gemini-1.5-flash-latest': 'Gemini 1.5 Flash',
+    'gemini-1.5-pro-latest': 'Gemini 1.5 Pro',
+    'gemini-2.5-flash-latest': 'Gemini 2.5 Flash',
+    'gemini-2.5-pro-latest': 'Gemini 2.5 Pro',
+};
+
 export interface AppConfig {
   distanceThreshold: number;
   formality: number;
@@ -27,6 +34,7 @@ export interface AppConfig {
   tone: number;
   formatting: number;
   conversationalModel: string;
+  modelDisplayName: string;
 }
 
 /**
@@ -48,6 +56,10 @@ export const getAppConfig = async (): Promise<AppConfig> => {
         const appConfigData = appConfigSnap.exists ? appConfigSnap.data() : {};
         const siteAssetsData = siteAssetsSnap.exists ? siteAssetsSnap.data() : {};
 
+        const conversationalModel = typeof appConfigData?.conversationalModel === 'string'
+                ? appConfigData.conversationalModel
+                : DEFAULTS.conversationalModel;
+        
         const config = {
             distanceThreshold: typeof appConfigData?.distanceThreshold === 'number' 
                 ? appConfigData.distanceThreshold 
@@ -64,19 +76,18 @@ export const getAppConfig = async (): Promise<AppConfig> => {
             formatting: typeof siteAssetsData?.formatting === 'number' 
                 ? siteAssetsData.formatting 
                 : DEFAULTS.formatting,
-            conversationalModel: typeof appConfigData?.conversationalModel === 'string'
-                ? appConfigData.conversationalModel
-                : DEFAULTS.conversationalModel,
+            conversationalModel: conversationalModel,
+            modelDisplayName: MODEL_DISPLAY_NAMES[conversationalModel] || conversationalModel,
         };
         
-        console.log(`[getAppConfig] Successfully loaded config. Using:`, config);
-
         return config;
 
     } catch (error) {
         console.error(`[getAppConfig] CRITICAL: Failed to fetch config from Firestore. Falling back to all defaults.`, error);
-        return DEFAULTS;
+        const model = DEFAULTS.conversationalModel;
+        return {
+            ...DEFAULTS,
+            modelDisplayName: MODEL_DISPLAY_NAMES[model] || model,
+        };
     }
 };
-
-    

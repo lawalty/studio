@@ -15,6 +15,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { formatDistanceToNow } from 'date-fns';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { getUsageStats, type UsageStats } from '@/ai/flows/get-usage-stats-flow';
+import { getAppConfig } from '@/lib/app-config';
 
 interface SiteError {
     id: string;
@@ -25,24 +26,29 @@ interface SiteError {
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<UsageStats | null>(null);
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentModel, setCurrentModel] = useState('');
   const [siteErrors, setSiteErrors] = useState<SiteError[]>([]);
   const [isLoadingErrors, setIsLoadingErrors] = useState(true);
 
-  const fetchStats = useCallback(async () => {
-    setIsLoadingStats(true);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
     try {
-        const usageStats = await getUsageStats();
+        const [usageStats, appConfig] = await Promise.all([
+            getUsageStats(),
+            getAppConfig()
+        ]);
         setStats(usageStats);
+        setCurrentModel(appConfig.modelDisplayName);
     } catch (error) {
-        console.error("Failed to fetch usage stats:", error);
+        console.error("Failed to fetch dashboard data:", error);
     } finally {
-        setIsLoadingStats(false);
+        setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchStats(); // Initial fetch
+    fetchData(); // Initial fetch
 
     const errorsQuery = query(collection(db, 'site_errors'), orderBy('timestamp', 'desc'));
     const unsubscribeErrors = onSnapshot(errorsQuery, (snapshot) => {
@@ -67,7 +73,7 @@ export default function AdminDashboard() {
     return () => {
         unsubscribeErrors();
     };
-  }, [fetchStats]);
+  }, [fetchData]);
 
   const handleDeleteError = async (errorId: string) => {
       await deleteDoc(doc(db, 'site_errors', errorId));
@@ -79,6 +85,9 @@ export default function AdminDashboard() {
         const reportContent = `
 Usage Statistics Report
 Generated on: ${new Date().toLocaleString()}
+
+--- Current Model ---
+${currentModel}
 
 --- Totals ---
 Total Chat Sessions: ${stats.totalChats}
@@ -110,19 +119,29 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold tracking-tight">Usage Statistics</h2>
             <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleDownloadReport} disabled={!stats}>
+                <Button variant="outline" size="sm" onClick={handleDownloadReport} disabled={!stats || isLoading}>
                     <Download className="mr-2 h-4 w-4" /> Download Report
                 </Button>
             </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Current Model</CardTitle>
+                    <Bot className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : currentModel}</div>
+                    <p className="text-xs text-muted-foreground">Active conversational model</p>
+                </CardContent>
+            </Card>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Archived Chats (KB)</CardTitle>
                     <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatHistoryCount ?? 0}</div>
+                    <div className="text-2xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatHistoryCount ?? 0}</div>
                     <p className="text-xs text-muted-foreground">Conversations in Chat History KB</p>
                 </CardContent>
             </Card>
@@ -132,7 +151,7 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
                     <MessageCircle className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatsToday ?? 0}</div>
+                    <div className="text-2xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatsToday ?? 0}</div>
                     <p className="text-xs text-muted-foreground">New conversations started</p>
                 </CardContent>
             </Card>
@@ -142,7 +161,7 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
                     <Clock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatsThisWeek ?? 0}</div>
+                    <div className="text-2xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.chatsThisWeek ?? 0}</div>
                     <p className="text-xs text-muted-foreground">Past 7 days</p>
                 </CardContent>
             </Card>
@@ -152,7 +171,7 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
                     <Database className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{isLoadingStats ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.totalChats ?? 0}</div>
+                    <div className="text-2xl font-bold">{isLoading ? <Loader2 className="h-6 w-6 animate-spin"/> : stats?.totalChats ?? 0}</div>
                     <p className="text-xs text-muted-foreground">Since project inception</p>
                 </CardContent>
             </Card>
@@ -166,7 +185,7 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
                 <CardDescription>Most frequently discussed topics in chat sessions.</CardDescription>
             </CardHeader>
             <CardContent>
-                {isLoadingStats ? <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
+                {isLoading ? <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
                     <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={stats?.topTopics} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                             <XAxis dataKey="topic" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
@@ -191,7 +210,7 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
                 <CardDescription>Knowledge base files referenced most by the AI.</CardDescription>
             </CardHeader>
             <CardContent>
-                {isLoadingStats ? <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
+                {isLoading ? <div className="h-[300px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
                     <Table>
                         <TableHeader>
                             <TableRow>
