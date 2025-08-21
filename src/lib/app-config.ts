@@ -17,6 +17,7 @@ const DEFAULTS = {
     conciseness: 50,
     tone: 50,
     formatting: 50,
+    conversationalModel: 'gemini-1.5-pro-latest',
 };
 
 export interface AppConfig {
@@ -25,6 +26,7 @@ export interface AppConfig {
   conciseness: number;
   tone: number;
   formatting: number;
+  conversationalModel: string;
 }
 
 /**
@@ -62,6 +64,9 @@ export const getAppConfig = async (): Promise<AppConfig> => {
             formatting: typeof siteAssetsData?.formatting === 'number' 
                 ? siteAssetsData.formatting 
                 : DEFAULTS.formatting,
+            conversationalModel: typeof appConfigData?.conversationalModel === 'string'
+                ? appConfigData.conversationalModel
+                : DEFAULTS.conversationalModel,
         };
         
         console.log(`[getAppConfig] Successfully loaded config. Using:`, config);

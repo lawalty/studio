@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2 } from 'lucide-react';
+import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -18,15 +18,40 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import AdminNav from '@/components/admin/AdminNav';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { clearUsageStats } from '@/ai/flows/clear-usage-stats-flow';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 const DEFAULT_BACKGROUND_IMAGE_SRC = TRANSPARENT_PIXEL;
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_MAINTENANCE_MESSAGE = "Exciting updates are on the way! We'll be back online shortly.";
+const DEFAULT_CONVERSATIONAL_MODEL = 'gemini-1.5-pro-latest';
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
 const BACKGROUND_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/background_image";
 
+const modelOptions = [
+    {
+        name: 'Gemini 1.5 Flash',
+        value: 'gemini-1.5-flash-latest',
+        description: "The speed-and-cost optimized model from the previous generation. It's a reliable workhorse for tasks that need to be fast and efficient."
+    },
+    {
+        name: 'Gemini 1.5 Pro',
+        value: 'gemini-1.5-pro-latest',
+        description: "The previous generation's flagship model. It remains an extremely powerful and popular choice, especially known for its very large context window."
+    },
+    {
+        name: 'Gemini 2.5 Flash',
+        value: 'gemini-2.5-flash-latest',
+        description: "The newest high-efficiency model. It offers a powerful balance of speed, quality, and cost, making it ideal for high-volume or latency-sensitive tasks."
+    },
+    {
+        name: 'Gemini 2.5 Pro',
+        value: 'gemini-2.5-pro-latest',
+        description: "This is the most powerful and capable flagship model, designed for the highest level of complex reasoning and performance."
+    }
+];
 
 export default function SiteSettingsPage() {
   const [backgroundImagePreview, setBackgroundImagePreview] = useState<string>(DEFAULT_BACKGROUND_IMAGE_SRC);
@@ -36,6 +61,7 @@ export default function SiteSettingsPage() {
   const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
   const [archiveChatHistoryEnabled, setArchiveChatHistoryEnabled] = useState(true);
+  const [conversationalModel, setConversationalModel] = useState(DEFAULT_CONVERSATIONAL_MODEL);
   const [configError, setConfigError] = useState<string | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -45,14 +71,21 @@ export default function SiteSettingsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchSiteAssets = async () => {
+    const fetchSettings = async () => {
       setIsLoadingData(true);
       setConfigError(null);
-      const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+      
+      const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+      const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
+      
       try {
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const [siteAssetsSnap, appConfigSnap] = await Promise.all([
+          getDoc(siteAssetsDocRef),
+          getDoc(appConfigDocRef)
+        ]);
+
+        if (siteAssetsSnap.exists()) {
+          const data = siteAssetsSnap.data();
           setBackgroundImagePreview(data.backgroundUrl || DEFAULT_BACKGROUND_IMAGE_SRC);
           setTypingSpeedMs(data.typingSpeedMs === undefined ? String(DEFAULT_TYPING_SPEED_MS) : String(data.typingSpeedMs));
           setMaintenanceModeEnabled(data.maintenanceModeEnabled === undefined ? false : data.maintenanceModeEnabled);
@@ -69,16 +102,16 @@ export default function SiteSettingsPage() {
             showLanguageSelector: true,
             archiveChatHistoryEnabled: true,
           };
-          await setDoc(docRef, defaultSettings, { merge: true });
-          // Set state to defaults
-          setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC);
-          setTypingSpeedMs(String(DEFAULT_TYPING_SPEED_MS));
-          setMaintenanceModeEnabled(false);
-          setMaintenanceModeMessage(DEFAULT_MAINTENANCE_MESSAGE);
-          setShowLanguageSelector(true);
-          setArchiveChatHistoryEnabled(true);
-          toast({ title: "Initial Settings Created", description: "Default site settings have been saved." });
+          await setDoc(siteAssetsDocRef, defaultSettings, { merge: true });
         }
+        
+        if (appConfigSnap.exists()) {
+            const data = appConfigSnap.data();
+            setConversationalModel(data.conversationalModel || DEFAULT_CONVERSATIONAL_MODEL);
+        } else {
+            await setDoc(appConfigDocRef, { conversationalModel: DEFAULT_CONVERSATIONAL_MODEL }, { merge: true });
+        }
+
       } catch (error: any) {
         console.error("Error fetching/initializing site assets from Firestore:", error);
         const detailedMessage = `Could not fetch site settings. This is often caused by an issue with your Firebase connection or permissions.
@@ -93,8 +126,8 @@ Please check your environment variables and Google Cloud Console settings.`;
       }
       setIsLoadingData(false);
     };
-    fetchSiteAssets();
-  }, [toast]);
+    fetchSettings();
+  }, []);
 
   
   const handleBackgroundImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,6 +152,8 @@ Please check your environment variables and Google Cloud Console settings.`;
     setIsSaving(true);
 
     const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+    const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
+
     let newBackgroundUrl = backgroundImagePreview;
     let backgroundImageUpdated = false;
     
@@ -138,57 +173,57 @@ Please check your environment variables and Google Cloud Console settings.`;
     const validTypingSpeed = isNaN(speedMs) || speedMs <= 0 ? DEFAULT_TYPING_SPEED_MS : speedMs;
 
     try {
-      const dataToUpdate: { [key: string]: any } = {};
-      const currentDocSnap = await getDoc(siteAssetsDocRef);
-      const currentData = currentDocSnap.data() || {};
-
-      let changesMade = false;
+      // Data for site_display_assets
+      const siteAssetsUpdate: { [key: string]: any } = {};
+      const currentSiteAssetsSnap = await getDoc(siteAssetsDocRef);
+      const currentSiteAssets = currentSiteAssetsSnap.data() || {};
       
-      if (backgroundImageUpdated || newBackgroundUrl !== currentData.backgroundUrl) {
-        dataToUpdate.backgroundUrl = newBackgroundUrl;
-        changesMade = true;
+      let siteAssetsChanged = false;
+      if (backgroundImageUpdated || newBackgroundUrl !== currentSiteAssets.backgroundUrl) {
+        siteAssetsUpdate.backgroundUrl = newBackgroundUrl; siteAssetsChanged = true;
+      }
+      if (validTypingSpeed !== (currentSiteAssets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS)) {
+        siteAssetsUpdate.typingSpeedMs = validTypingSpeed; siteAssetsChanged = true;
+      }
+      if (maintenanceModeEnabled !== (currentSiteAssets.maintenanceModeEnabled ?? false)) {
+        siteAssetsUpdate.maintenanceModeEnabled = maintenanceModeEnabled; siteAssetsChanged = true;
+      }
+      if (maintenanceModeMessage !== (currentSiteAssets.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE)) {
+          siteAssetsUpdate.maintenanceModeMessage = maintenanceModeMessage; siteAssetsChanged = true;
+      }
+      if (showLanguageSelector !== (currentSiteAssets.showLanguageSelector ?? true)) {
+        siteAssetsUpdate.showLanguageSelector = showLanguageSelector; siteAssetsChanged = true;
+      }
+      if (archiveChatHistoryEnabled !== (currentSiteAssets.archiveChatHistoryEnabled ?? true)) {
+        siteAssetsUpdate.archiveChatHistoryEnabled = archiveChatHistoryEnabled; siteAssetsChanged = true;
+      }
+
+      // Data for app_config
+      const appConfigUpdate: { [key: string]: any } = {};
+      const currentAppConfigSnap = await getDoc(appConfigDocRef);
+      const currentAppConfig = currentAppConfigSnap.data() || {};
+      
+      let appConfigChanged = false;
+      if (conversationalModel !== (currentAppConfig.conversationalModel || DEFAULT_CONVERSATIONAL_MODEL)) {
+          appConfigUpdate.conversationalModel = conversationalModel;
+          appConfigChanged = true;
       }
       
-      if (validTypingSpeed !== (currentData.typingSpeedMs === undefined ? DEFAULT_TYPING_SPEED_MS : currentData.typingSpeedMs)) {
-        dataToUpdate.typingSpeedMs = validTypingSpeed;
-        changesMade = true;
+      const updatePromises = [];
+      if (siteAssetsChanged) {
+        updatePromises.push(updateDoc(siteAssetsDocRef, siteAssetsUpdate));
       }
-      
-      if (maintenanceModeEnabled !== (currentData.maintenanceModeEnabled === undefined ? false : currentData.maintenanceModeEnabled)) {
-        dataToUpdate.maintenanceModeEnabled = maintenanceModeEnabled;
-        changesMade = true;
+      if (appConfigChanged) {
+        updatePromises.push(updateDoc(appConfigDocRef, appConfigUpdate));
       }
 
-      if (maintenanceModeMessage !== (currentData.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE)) {
-          dataToUpdate.maintenanceModeMessage = maintenanceModeMessage;
-          changesMade = true;
-      }
-      
-      if (showLanguageSelector !== (currentData.showLanguageSelector === undefined ? true : currentData.showLanguageSelector)) {
-        dataToUpdate.showLanguageSelector = showLanguageSelector;
-        changesMade = true;
-      }
-
-      if (archiveChatHistoryEnabled !== (currentData.archiveChatHistoryEnabled === undefined ? true : currentData.archiveChatHistoryEnabled)) {
-        dataToUpdate.archiveChatHistoryEnabled = archiveChatHistoryEnabled;
-        changesMade = true;
-      }
-
-      if (changesMade) {
-        await updateDoc(siteAssetsDocRef, dataToUpdate);
-        
-        toast({ title: "Site Settings Saved", description: "Your site display settings have been updated." });
-        
-        if (backgroundImageUpdated) {
-          setBackgroundImagePreview(newBackgroundUrl);
-          setSelectedBackgroundFile(null);
-        } else if (dataToUpdate.backgroundUrl === DEFAULT_BACKGROUND_IMAGE_SRC) {
-          setBackgroundImagePreview(DEFAULT_BACKGROUND_IMAGE_SRC);
-        }
-
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+        toast({ title: "Site Settings Saved", description: "Your site display and app settings have been updated." });
       } else {
-        toast({ title: "No Changes", description: "No display setting changes detected to save." });
+        toast({ title: "No Changes", description: "No setting changes detected to save." });
       }
+
     } catch (error) {
       console.error("Error saving site settings:", error);
       toast({ title: "Save Error", description: "Could not save site settings.", variant: "destructive" });
@@ -263,6 +298,27 @@ Please check your environment variables and Google Cloud Console settings.`;
                 The admin password is now managed exclusively in your <code className="font-mono bg-muted p-1 rounded">.env.local</code> file for improved security and reliability. Edit the <code className="font-mono bg-muted p-1 rounded">ADMIN_PASSWORD</code> variable there.
               </AlertDescription>
           </Alert>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><Bot /> Conversational Model</CardTitle>
+              <CardDescription>Select the Gemini model to be used for generating chat responses.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <RadioGroup value={conversationalModel} onValueChange={setConversationalModel} className="space-y-4">
+                    {modelOptions.map(option => (
+                        <Label key={option.value} htmlFor={option.value} className="flex items-start gap-4 rounded-md border p-4 cursor-pointer hover:bg-accent/50 has-[:checked]:bg-accent has-[:checked]:border-primary">
+                           <RadioGroupItem value={option.value} id={option.value} />
+                           <div className="grid gap-1.5">
+                                <span className="font-semibold">{option.name}</span>
+                                <span className="text-sm text-muted-foreground">{option.description}</span>
+                                <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded-sm w-fit">Model: {option.value}</code>
+                           </div>
+                        </Label>
+                    ))}
+                </RadioGroup>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
