@@ -52,7 +52,6 @@ export default function TestChatPage() {
         chatHistory: historyForGenkit,
         language: 'English',
         communicationMode: 'text-only',
-        clarificationAttemptCount: 0,
       };
       
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);

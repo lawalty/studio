@@ -32,16 +32,17 @@ const GenerateChatResponseInputSchema = z.object({
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
-const AiResponseJsonSchema = z.object({
+// This is now an internal type for parsing, not for the prompt's output schema.
+const AiResponseSchema = z.object({
   aiResponse: z.string(),
-  isClarificationQuestion: z.boolean().describe('Set to true if you are asking the user a question to clarify their request.'),
-  shouldEndConversation: z.boolean().optional(),
+  isClarificationQuestion: z.boolean().optional().default(false),
+  shouldEndConversation: z.boolean().optional().default(false),
   pdfReference: z.object({
     fileName: z.string(),
     downloadURL: z.string(),
   }).optional(),
 });
-type AiResponseJson = z.infer<typeof AiResponseJsonSchema>;
+type AiResponseJson = z.infer<typeof AiResponseSchema>;
 
 // The final output includes the parsed AI response plus diagnostic data.
 export type GenerateChatResponseOutput = Omit<AiResponseJson, 'shouldEndConversation'> & {
@@ -130,10 +131,6 @@ const chatPrompt = ai.definePrompt({
             communicationMode: z.string(),
         })
     },
-    output: {
-        format: 'json',
-        schema: AiResponseJsonSchema,
-    },
     prompt: `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
 **CRITICAL INSTRUCTIONS:**
@@ -176,7 +173,8 @@ const chatPrompt = ai.definePrompt({
         - If > 70: If the information is suitable, you MUST format the response as a bulleted or numbered list.
         - If < 30: You are FORBIDDEN from using lists. You MUST always format your response as full paragraphs.
         - Otherwise (30-70): You should use your best judgment on whether to use lists or paragraphs.
-13.  **Output Format:** Your response MUST be a single, valid JSON object that strictly follows this schema: { "aiResponse": string, "isClarificationQuestion": boolean, "shouldEndConversation": boolean, "pdfReference"?: { "fileName": string, "downloadURL": string } }.
+13. **Output Format:** You MUST format your response as a single line of text. The conversational part of your response comes first. Then, you MUST include a triple-pipe separator '|||'. After the separator, provide a JSON object with the following optional keys: "isClarificationQuestion" (boolean), "shouldEndConversation" (boolean), and "pdfReference" (object with "fileName" and "downloadURL" strings).
+Example: I remember that the policy for returns is 30 days.|||{"pdfReference":{"fileName":"return-policy.pdf","downloadURL":"https://..."}, "isClarificationQuestion":false, "shouldEndConversation":false}
 
 You are an expert in: "{{conversationalTopics}}".
 The user is conversing in {{language}}.
@@ -316,25 +314,32 @@ const generateChatResponseFlow = async ({
     };
     
     try {
-      const raw = await withRetry(() => chatPrompt(promptInput, { model: googleAI.model(appConfig.conversationalModel) }));
-      let output: AiResponseJson;
-      try {
-        output = AiResponseJsonSchema.parse(raw.output);
-      } catch (parseError) {
-        console.warn(`[generateChatResponseFlow] Initial JSON parse failed. Attempting one-shot repair.`, parseError);
-        const repairPrompt = `The following JSON is malformed. Please fix it to strictly conform to the schema. Do not add any commentary, just the valid JSON object.
+      const { text: rawText } = await withRetry(() => ai.generate({ 
+          model: googleAI.model(appConfig.conversationalModel),
+          prompt: chatPrompt.prompt,
+          context: [promptInput],
+      }));
+      
+      let output: AiResponseJson = { aiResponse: '', isClarificationQuestion: false, shouldEndConversation: false };
 
-Malformed JSON:
-\`\`\`json
-${JSON.stringify(raw.output)}
-\`\`\`
+      if (!rawText) {
+          throw new Error("Model returned an empty response.");
+      }
 
-Corrected JSON:
-`;
-        const repairResult = await withRetry(() => ai.generate({ model: googleAI.model(appConfig.conversationalModel), prompt: repairPrompt }));
-        const repairedText = repairResult.text?.replace(/```json/g, '').replace(/```/g, '').trim();
-        if (!repairedText) throw new Error("Repair attempt resulted in empty output.");
-        output = AiResponseJsonSchema.parse(JSON.parse(repairedText));
+      const parts = rawText.split('|||');
+      const aiResponseText = parts[0]?.trim() || "I'm sorry, I seem to have gotten stuck. Could you please rephrase?";
+      output.aiResponse = aiResponseText;
+
+      if (parts.length > 1 && parts[1]) {
+          try {
+              const parsedMetadata = JSON.parse(parts[1]);
+              const validatedMetadata = AiResponseSchema.parse(parsedMetadata);
+              // Safely merge the parsed metadata into the output
+              output = { ...output, ...validatedMetadata, aiResponse: aiResponseText };
+          } catch (e) {
+              console.warn(`[generateChatResponseFlow] Failed to parse AI metadata. Raw metadata: "${parts[1]}"`, e);
+              // Don't log to firestore, as this is a common, recoverable error.
+          }
       }
       
       if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
@@ -343,34 +348,26 @@ Corrected JSON:
               output.pdfReference = spanishPdf;
           }
       }
-      
-      let shouldEndConversation = output.shouldEndConversation;
-      if (shouldEndConversation === undefined) {
-        // This is a safety check. If the model fails to return the flag, default to false.
-        shouldEndConversation = false;
-        console.warn('[generateChatResponseFlow] AI model did not return the `shouldEndConversation` flag. Defaulting to false.');
-        await logErrorToFirestore(
-            new Error('AI model did not return the `shouldEndConversation` flag.'),
-            'generateChatResponseFlow/parsing'
-        );
-      }
 
-      const finalOutput: GenerateChatResponseOutput = { ...output, shouldEndConversation };
-      finalOutput.distance = primarySearchResult?.distance;
-      finalOutput.distanceThreshold = appConfig.distanceThreshold;
-      finalOutput.formality = appConfig.formality;
-      finalOutput.conciseness = appConfig.conciseness;
-      finalOutput.tone = appConfig.tone;
-      finalOutput.formatting = appConfig.formatting;
+      const finalOutput: GenerateChatResponseOutput = {
+          aiResponse: output.aiResponse,
+          isClarificationQuestion: output.isClarificationQuestion || false,
+          shouldEndConversation: output.shouldEndConversation || false,
+          pdfReference: output.pdfReference,
+          distance: primarySearchResult?.distance,
+          distanceThreshold: appConfig.distanceThreshold,
+          formality: appConfig.formality,
+          conciseness: appConfig.conciseness,
+          tone: appConfig.tone,
+          formatting: appConfig.formatting,
+      };
 
-      // Add the closest match to a separate debug field if the AI didn't choose a reference.
       if (!output.pdfReference && primarySearchResult) {
         finalOutput.debugClosestMatch = {
             fileName: primarySearchResult.sourceName,
             downloadURL: primarySearchResult.downloadURL,
         };
       }
-
 
       return finalOutput;
 
