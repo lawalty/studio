@@ -335,7 +335,8 @@ const generateChatResponseFlow = async ({
           formality: appConfig.formality,
           conciseness: appConfig.conciseness,
           tone: appConfig.tone,
-          formatting: appConfig.formatting,
+  
+formatting: appConfig.formatting,
       };
 
       if (!output.pdfReference && primarySearchResult) {
@@ -365,4 +366,3 @@ export async function generateChatResponse(
   return generateChatResponseFlow(input);
 }
 
-    
