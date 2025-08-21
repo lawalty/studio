@@ -195,11 +195,14 @@ const queryRefinementPrompt = ai.definePrompt({
     name: 'queryRefinementPrompt',
     input: { schema: z.string().describe('The raw user query.') },
     output: { schema: z.string().describe('A refined, keyword-focused query for vector search.') },
-    prompt: `You are an expert at refining user questions into effective search queries for a vector database.
-Analyze the user's query below. Identify the core intent and key entities.
+    prompt: `You are an expert search query refiner for a vector database. Your sole job is to distill a user's question into a concise, keyword-focused query.
+
+CRITICAL INSTRUCTIONS:
+- Analyze the user's query below to identify the core intent and key entities.
+- Your output MUST be a single, rephrased query containing only these essential keywords.
 - Do NOT answer the question.
-- Do NOT add any preamble or explanation.
-- Your entire output should be a concise, rephrased query containing only the essential keywords and concepts.
+- Do NOT include any preamble, explanation, or any text other than the refined query itself.
+- Do NOT wrap your output in quotes or any other formatting.
 
 **User Query:**
 "{{{prompt}}}"
