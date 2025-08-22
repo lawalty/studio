@@ -210,7 +210,7 @@ const generateChatResponseFlow = async ({
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const appConfig = await getAppConfig();
-    const historyForRAG = chatHistory || [];
+    let historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
 
     if (!lastUserMessage) {
@@ -273,65 +273,48 @@ const generateChatResponseFlow = async ({
     }
     
     try {
-      let rawText = '';
-      const isNewModel = appConfig.conversationalModel.includes('2.5');
-
-      if (isNewModel) {
+        let systemInstruction: string;
         const template = Handlebars.compile(systemPromptTemplate);
-        const systemInstruction = template({
-            personaTraits,
-            personalBio,
-            conversationalTopics,
-            language: language || 'English',
-            retrievedContext: retrievedContext,
-            formality: appConfig.formality,
-            conciseness: appConfig.conciseness,
-            tone: appConfig.tone,
-            formatting: appConfig.formatting,
-            clarificationAttemptCount,
-            communicationMode,
-        });
+        
+        const isFirstTurn = historyForRAG.length === 2 && historyForRAG[0].role === 'model' && historyForRAG[1].role === 'user';
+        
+        if (isFirstTurn) {
+            const initialGreeting = historyForRAG[0].content[0].text;
+            const firstTurnTemplate = `Your opening message to the user was: '{{initialGreeting}}'. Now, you must respond to the user's first message.
+
+            ${systemPromptTemplate}`;
+            const firstTurnHandlebarsTemplate = Handlebars.compile(firstTurnTemplate);
+            systemInstruction = firstTurnHandlebarsTemplate({
+                initialGreeting,
+                personaTraits, personalBio, conversationalTopics, language: language || 'English',
+                retrievedContext, formality: appConfig.formality, conciseness: appConfig.conciseness,
+                tone: appConfig.tone, formatting: appConfig.formatting,
+                clarificationAttemptCount, communicationMode,
+            });
+            // For the first turn, the history MUST only contain the user's message.
+            historyForRAG = [historyForRAG[1]];
+        } else {
+             systemInstruction = template({
+                personaTraits, personalBio, conversationalTopics, language: language || 'English',
+                retrievedContext, formality: appConfig.formality, conciseness: appConfig.conciseness,
+                tone: appConfig.tone, formatting: appConfig.formatting,
+                clarificationAttemptCount, communicationMode,
+            });
+        }
+      
         const { text } = await withRetry(() => ai.generate({
             model: googleAI.model(appConfig.conversationalModel, { apiVersion: 'v1beta' }),
             system: systemInstruction,
             messages: historyForRAG,
         }));
-        rawText = text;
-      } else {
-        const fullPromptTemplate = `${systemPromptTemplate}
-
-Here is the full conversation history:
-<history>{{#each chatHistory}}{{this.role}}: {{this.content.0.text}}{{/each}}</history>
-`;
-        const template = Handlebars.compile(fullPromptTemplate);
-        const compiledPrompt = template({
-          personaTraits,
-          personalBio,
-          conversationalTopics,
-          language: language || 'English',
-          retrievedContext: retrievedContext,
-          formality: appConfig.formality,
-          conciseness: appConfig.conciseness,
-          tone: appConfig.tone,
-          formatting: appConfig.formatting,
-          clarificationAttemptCount,
-          communicationMode,
-          chatHistory: historyForRAG,
-        });
-        const { text } = await withRetry(() => ai.generate({ 
-            model: googleAI.model(appConfig.conversationalModel),
-            prompt: compiledPrompt,
-        }));
-        rawText = text;
-      }
       
       let output: AiResponseJson = { aiResponse: '', isClarificationQuestion: false, shouldEndConversation: false };
 
-      if (!rawText) {
+      if (!text) {
           throw new Error("Model returned an empty response.");
       }
 
-      const parts = rawText.split('|||');
+      const parts = text.split('|||');
       const aiResponseText = parts[0]?.trim() || "I'm sorry, I seem to have gotten stuck. Could you please rephrase?";
       output.aiResponse = aiResponseText;
 
