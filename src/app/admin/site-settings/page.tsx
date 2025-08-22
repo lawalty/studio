@@ -43,12 +43,12 @@ const modelOptions = [
     },
     {
         name: 'Gemini 2.5 Flash',
-        value: 'gemini-2.5-flash-latest',
+        value: 'gemini-2.5-flash',
         description: "The newest high-efficiency model. It offers a powerful balance of speed, quality, and cost, making it ideal for high-volume or latency-sensitive tasks."
     },
     {
         name: 'Gemini 2.5 Pro',
-        value: 'gemini-2.5-pro-latest',
+        value: 'gemini-2.5-pro',
         description: "This is the most powerful and capable flagship model, designed for the highest level of complex reasoning and performance."
     }
 ];

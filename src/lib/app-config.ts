@@ -23,8 +23,8 @@ const DEFAULTS = {
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
     'gemini-1.5-flash-latest': 'Gemini 1.5 Flash',
     'gemini-1.5-pro-latest': 'Gemini 1.5 Pro',
-    'gemini-2.5-flash-latest': 'Gemini 2.5 Flash',
-    'gemini-2.5-pro-latest': 'Gemini 2.5 Pro',
+    'gemini-2.5-flash': 'Gemini 2.5 Flash',
+    'gemini-2.5-pro': 'Gemini 2.5 Pro',
 };
 
 export interface AppConfig {
