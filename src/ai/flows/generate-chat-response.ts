@@ -303,7 +303,7 @@ const generateChatResponseFlow = async ({
         }
       
         const { text } = await withRetry(() => ai.generate({
-            model: googleAI.model(appConfig.conversationalModel, { apiVersion: 'v1beta' }),
+            model: googleAI.model(appConfig.conversationalModel),
             system: systemInstruction,
             messages: historyForRAG,
         }));
