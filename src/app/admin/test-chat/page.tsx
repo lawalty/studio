@@ -22,6 +22,7 @@ export default function TestChatPage() {
   const [inputValue, setInputValue] = useState('');
   const [chatHistory, setChatHistory] = useState<TestMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
   const { toast } = useToast();
 
   const handleSendMessage = useCallback(async () => {
@@ -52,9 +53,16 @@ export default function TestChatPage() {
         chatHistory: historyForGenkit,
         language: 'English',
         communicationMode: 'text-only',
+        clarificationAttemptCount: clarificationAttemptCount,
       };
       
       const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
+      
+      if (result.isClarificationQuestion) {
+          setClarificationAttemptCount(prev => prev + 1);
+      } else {
+          setClarificationAttemptCount(0); // Reset on a direct answer
+      }
 
       setChatHistory(prev => [...prev, { role: 'model', text: result.aiResponse }]);
 
@@ -71,11 +79,12 @@ export default function TestChatPage() {
     } finally {
       setIsSending(false);
     }
-  }, [inputValue, chatHistory, toast]);
+  }, [inputValue, chatHistory, toast, clarificationAttemptCount]);
 
   const handleReset = () => {
     setChatHistory([]);
     setInputValue('');
+    setClarificationAttemptCount(0);
   };
 
   return (
