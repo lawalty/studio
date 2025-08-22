@@ -37,9 +37,9 @@ export default function TestChatPage() {
     const currentUserInput = inputValue;
     setInputValue('');
 
-    const historyForGenkit = newHistory.map(msg => ({ 
-        role: msg.role, 
-        parts: [{ text: msg.text }] 
+    const historyForGenkit = newHistory.map(msg => ({
+      role: msg.role,
+      content: [{ text: msg.text }]
     }));
 
     try {
