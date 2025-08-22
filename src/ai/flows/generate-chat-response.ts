@@ -25,7 +25,7 @@ const GenerateChatResponseInputSchema = z.object({
   communicationMode: z.enum(['audio-only', 'audio-text', 'text-only']).optional().default('text-only').describe('The communication mode of the chat interface.'),
   chatHistory: z.array(z.object({
     role: z.enum(['user', 'model']),
-    parts: z.array(z.object({
+    content: z.array(z.object({
       text: z.string(),
     })),
   })).optional().describe('The history of the conversation so far, including the latest user message.'),
@@ -211,7 +211,7 @@ const generateChatResponseFlow = async ({
     
     const appConfig = await getAppConfig();
     const historyForRAG = chatHistory || [];
-    const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].parts?.[0]?.text || '') : '';
+    const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
 
     if (!lastUserMessage) {
         return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
@@ -301,7 +301,7 @@ const generateChatResponseFlow = async ({
         const fullPromptTemplate = `${systemPromptTemplate}
 
 Here is the full conversation history:
-<history>{{#each chatHistory}}{{this.role}}: {{this.parts.0.text}}{{/each}}</history>
+<history>{{#each chatHistory}}{{this.role}}: {{this.content.0.text}}{{/each}}</history>
 `;
         const template = Handlebars.compile(fullPromptTemplate);
         const compiledPrompt = template({
@@ -391,5 +391,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    

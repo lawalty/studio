@@ -442,7 +442,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         const historyForGenkit = [...messagesRef.current, {id: 'temp', text, sender: 'user', timestamp: Date.now()}].map(msg => ({ 
             role: msg.sender as 'user' | 'model', 
-            parts: [{ text: msg.text }] 
+            content: [{ text: msg.text }] 
         }));
 
         try {
