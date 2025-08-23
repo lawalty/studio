@@ -12,6 +12,8 @@
 import {z} from 'zod';
 import { ai } from '@/ai/genkit'; // Ensures Genkit is configured
 import { withRetry } from './index-document-flow';
+import { getAppConfig } from '@/lib/app-config';
+import { googleAI } from '@genkit-ai/googleai';
 
 const AdjustAiPersonaAndPersonalityInputSchema = z.object({
   personaTraits: z
@@ -59,7 +61,11 @@ Confirmation:`,
     });
 
     try {
-      const response = await withRetry(() => prompt(flowInput, { model: 'googleai/gemini-1.5-pro' }));
+      // Dynamically fetch the current conversational model to ensure the correct model is used for persona updates.
+      const appConfig = await getAppConfig();
+      const conversationalModel = googleAI.model(appConfig.conversationalModel);
+
+      const response = await withRetry(() => prompt(flowInput, { model: conversationalModel }));
       const output = response.output;
 
       if (!output || typeof output.updatedPersonaDescription !== 'string') {
