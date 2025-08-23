@@ -435,15 +435,31 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0; // Reset on user activity
-        addMessage({ text, sender: 'user' });
+        
+        const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
+        
         setInputValue('');
         setBotStatus('preparing');
         setStatusMessage(uiText.isPreparing);
         
-        const historyForGenkit = [...messagesRef.current, {id: 'temp', text, sender: 'user', timestamp: Date.now()}].map(msg => ({ 
-            role: msg.sender as 'user' | 'model', 
-            content: [{ text: msg.text }] 
-        }));
+        const isFirstUserMessage = messagesRef.current.filter(m => m.sender === 'user').length === 0;
+        
+        // Add the user message to the state to show it in the UI immediately
+        setMessages(prev => [...prev, userMessage]);
+
+        // Construct the history for the AI
+        let historyForGenkit;
+        if (isFirstUserMessage) {
+            // On the first user turn, only send the user's message
+            historyForGenkit = [{ role: 'user' as const, content: [{ text }] }];
+        } else {
+            // On subsequent turns, send the full history
+            historyForGenkit = [...messagesRef.current, userMessage].map(msg => ({ 
+                role: msg.sender as 'user' | 'model', 
+                content: [{ text: msg.text }] 
+            }));
+        }
+
 
         try {
             const { 
@@ -501,7 +517,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('idle');
             setStatusMessage('');
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, addMessage, uiText.isPreparing, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, addMessage, uiText.isPreparing]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         // Do not archive if no user messages, or if archiving is disabled.

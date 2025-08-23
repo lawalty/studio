@@ -210,10 +210,12 @@ const generateChatResponseFlow = async ({
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const appConfig = await getAppConfig();
-    let historyForRAG = chatHistory || [];
+    const historyForRAG = chatHistory || [];
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
 
     if (!lastUserMessage) {
+        // This case should ideally not be hit if the client ensures history is not empty.
+        // Returning a default response as a safeguard.
         return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
     }
 
@@ -273,34 +275,13 @@ const generateChatResponseFlow = async ({
     }
     
     try {
-        let systemInstruction: string;
         const template = Handlebars.compile(systemPromptTemplate);
-        
-        const isFirstTurn = historyForRAG.length === 2 && historyForRAG[0].role === 'model' && historyForRAG[1].role === 'user';
-        
-        if (isFirstTurn) {
-            const initialGreeting = historyForRAG[0].content[0].text;
-            const firstTurnTemplate = `Your opening message to the user was: '{{initialGreeting}}'. Now, you must respond to the user's first message.
-
-            ${systemPromptTemplate}`;
-            const firstTurnHandlebarsTemplate = Handlebars.compile(firstTurnTemplate);
-            systemInstruction = firstTurnHandlebarsTemplate({
-                initialGreeting,
-                personaTraits, personalBio, conversationalTopics, language: language || 'English',
-                retrievedContext, formality: appConfig.formality, conciseness: appConfig.conciseness,
-                tone: appConfig.tone, formatting: appConfig.formatting,
-                clarificationAttemptCount, communicationMode,
-            });
-            // For the first turn, the history MUST only contain the user's message.
-            historyForRAG = [historyForRAG[1]];
-        } else {
-             systemInstruction = template({
-                personaTraits, personalBio, conversationalTopics, language: language || 'English',
-                retrievedContext, formality: appConfig.formality, conciseness: appConfig.conciseness,
-                tone: appConfig.tone, formatting: appConfig.formatting,
-                clarificationAttemptCount, communicationMode,
-            });
-        }
+        const systemInstruction = template({
+            personaTraits, personalBio, conversationalTopics, language: language || 'English',
+            retrievedContext, formality: appConfig.formality, conciseness: appConfig.conciseness,
+            tone: appConfig.tone, formatting: appConfig.formatting,
+            clarificationAttemptCount, communicationMode,
+        });
       
         const { text } = await withRetry(() => ai.generate({
             model: googleAI.model(appConfig.conversationalModel),
