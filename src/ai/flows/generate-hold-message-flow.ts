@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { ai } from '@/ai/genkit';
 import { elevenLabsTextToSpeech } from './eleven-labs-tts-flow';
 import { textToSpeech as googleTextToSpeech } from './text-to-speech-flow';
-import { getDoc, doc } from 'firebase/firestore';
-import { db } from '@/lib/firebase-admin'; // Use firebase-admin on the server
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase-admin';
 
 const GenerateHoldMessageInputSchema = z.object({
   language: z.string().optional().default('English'),

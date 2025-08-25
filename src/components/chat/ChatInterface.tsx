@@ -258,7 +258,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, []);
 
     const startPreparationTimer = useCallback(() => {
-        if (hasConversationEnded) return;
+        if (hasConversationEnded || communicationMode === 'text-only') return;
         clearPreparationTimer();
     
         preparationTimerRef.current = setTimeout(async () => {
@@ -289,7 +289,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 isHoldMessagePlaying.current = false;
             }
         }, config.preparationTimeMs);
-    }, [botStatus, hasConversationEnded, clearPreparationTimer, config.preparationTimeMs, language]);
+    }, [botStatus, hasConversationEnded, clearPreparationTimer, config.preparationTimeMs, language, communicationMode]);
 
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
