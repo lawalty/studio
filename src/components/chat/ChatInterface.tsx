@@ -135,7 +135,6 @@ interface ChatConfig {
     conversationalTopics: string;
     responsePauseTimeMs: number;
     inactivityTimeoutMs: number;
-    preparationTimeMs: number;
     customGreetingMessage: string;
     useKnowledgeInGreeting: boolean;
     typingSpeedMs: number;
@@ -190,7 +189,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         conversationalTopics: "",
         responsePauseTimeMs: 1500,
         inactivityTimeoutMs: 30000,
-        preparationTimeMs: 4000,
         customGreetingMessage: "",
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
@@ -288,8 +286,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 console.error("Failed to play hold message via flow:", error);
                 isHoldMessagePlaying.current = false;
             }
-        }, config.preparationTimeMs);
-    }, [botStatus, hasConversationEnded, clearPreparationTimer, config.preparationTimeMs, language, communicationMode]);
+        }, config.responsePauseTimeMs);
+    }, [botStatus, hasConversationEnded, clearPreparationTimer, config.responsePauseTimeMs, language, communicationMode]);
 
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
@@ -673,7 +671,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     conversationalTopics: assets.conversationalTopics || "",
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
                     inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
-                    preparationTimeMs: assets.preparationTimeMs ?? 4000,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
@@ -987,3 +984,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
