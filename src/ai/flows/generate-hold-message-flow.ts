@@ -1,11 +1,10 @@
 
 'use server';
 import { z } from 'zod';
-import { ai } from '@/ai/genkit';
 import { elevenLabsTextToSpeech } from './eleven-labs-tts-flow';
 import { textToSpeech as googleTextToSpeech } from './text-to-speech-flow';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase-admin';
+import { doc, getDoc } from 'firebase/firestore'; // This import is for the client-side Firestore.
+import { db as adminDb } from '@/lib/firebase-admin'; // Correctly import the Admin SDK's Firestore instance.
 
 const GenerateHoldMessageInputSchema = z.object({
   language: z.string().optional().default('English'),
@@ -33,17 +32,16 @@ const holdMessages: Record<string, string[]> = {
     ],
 };
 
-// This is now a regular server function, not a flow, for simplicity.
 export async function generateHoldMessage({ language = 'English' }: GenerateHoldMessageInput): Promise<z.infer<typeof GenerateHoldMessageOutputSchema>> {
     try {
         const messages = holdMessages[language] || holdMessages['English'];
         const textToSpeak = messages[Math.floor(Math.random() * messages.length)];
 
-        // Fetch TTS config directly from Firestore on the server
-        const appConfigDoc = await getDoc(doc(db, "configurations/app_config"));
+        // Fetch TTS config directly from Firestore on the server using adminDb
+        const appConfigDoc = await getDoc(doc(adminDb, "configurations/app_config"));
         const ttsConfig = appConfigDoc.exists() ? appConfigDoc.data() : {};
         const useTtsApi = ttsConfig?.useTtsApi ?? false;
-        const apiKey = ttsConfig?.tts ?? '';
+        const apiKey = ttsConfig?.ttsApiKey ?? ''; // Changed 'tts' to 'ttsApiKey' to match expected config
         const voiceId = ttsConfig?.voiceId ?? '';
 
         let audioDataUri = '';

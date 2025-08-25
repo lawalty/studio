@@ -152,7 +152,7 @@ const systemPromptTemplate = `You are a helpful conversational AI. Your persona 
         - Otherwise: Maintain a helpful and friendly tone.
     - **Formatting ({{formatting}}):**
         - If > 70: If the information is suitable, you MUST format the response as a bulleted or numbered list.
-        - If < 30: You are FORBIDDEN from using lists. You MUST always format your response as full paragraphs.
+        - If < 30: You are forbidden from using lists. You MUST always format your response as full paragraphs.
         - Otherwise (30-70): You should use your best judgment on whether to use lists or paragraphs.
 14. **Output Format:** You MUST format your response as a single line of text. The conversational part of your response comes first. Then, you MUST include a triple-pipe separator '|||'. After the separator, provide a JSON object with the following optional keys: "isClarificationQuestion" (boolean), "shouldEndConversation" (boolean), and "pdfReference" (object with "fileName" and "downloadURL" strings).
 Example: I remember that the policy for returns is 30 days.|||{"pdfReference":{"fileName":"return-policy.pdf","downloadURL":"https://..."}, "isClarificationQuestion":false, "shouldEndConversation":false}
