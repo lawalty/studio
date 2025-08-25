@@ -260,30 +260,30 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const startPreparationTimer = useCallback(() => {
         if (hasConversationEnded) return;
         clearPreparationTimer();
-
+    
         preparationTimerRef.current = setTimeout(async () => {
             if (botStatus !== 'preparing' || !isMountedRef.current || isHoldMessagePlaying.current) {
                 return;
             }
-
+    
             try {
                 const result = await generateHoldMessage({ language });
-
+    
                 if (result.error || !result.audioDataUri) {
                     throw new Error(result.error || "Hold message flow failed to return audio.");
                 }
-
+    
                 if (!holdMessageAudioPlayerRef.current) {
                     holdMessageAudioPlayerRef.current = new Audio();
                 }
-
+    
                 isHoldMessagePlaying.current = true;
                 holdMessageAudioPlayerRef.current.src = result.audioDataUri;
                 const onEnd = () => { isHoldMessagePlaying.current = false; };
                 holdMessageAudioPlayerRef.current.onended = onEnd;
                 holdMessageAudioPlayerRef.current.onerror = onEnd;
                 await holdMessageAudioPlayerRef.current.play();
-
+    
             } catch (error) {
                 console.error("Failed to play hold message via flow:", error);
                 isHoldMessagePlaying.current = false;
@@ -419,8 +419,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
                         currentIndex++;
                         animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-                    } else if (communicationMode === 'text-only') {
-                        handleEnd();
+                    } else {
+                        // Animation finished
+                        if (communicationMode === 'text-only') {
+                            handleEnd();
+                        }
                     }
                 };
                 typeCharacter();
@@ -434,9 +437,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(); };
                 audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(); });
-            } else if (communicationMode === 'text-only') {
-                 // Already handled by animation end
-            } else {
+            } else if (communicationMode !== 'text-only') {
+                 // No audio, but not text-only mode, so just end
                 handleEnd();
             }
         };
