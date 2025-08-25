@@ -3,8 +3,7 @@
 import { z } from 'zod';
 import { elevenLabsTextToSpeech } from './eleven-labs-tts-flow';
 import { textToSpeech as googleTextToSpeech } from './text-to-speech-flow';
-import { doc, getDoc } from 'firebase/firestore'; // This import is for the client-side Firestore.
-import { db as adminDb } from '@/lib/firebase-admin'; // Correctly import the Admin SDK's Firestore instance.
+import { db as adminDb } from '@/lib/firebase-admin';
 
 const GenerateHoldMessageInputSchema = z.object({
   language: z.string().optional().default('English'),
@@ -16,6 +15,7 @@ const GenerateHoldMessageOutputSchema = z.object({
 });
 
 type GenerateHoldMessageInput = z.infer<typeof GenerateHoldMessageInputSchema>;
+type GenerateHoldMessageOutput = z.infer<typeof GenerateHoldMessageOutputSchema>;
 
 const holdMessages: Record<string, string[]> = {
     English: [
@@ -32,16 +32,18 @@ const holdMessages: Record<string, string[]> = {
     ],
 };
 
-export async function generateHoldMessage({ language = 'English' }: GenerateHoldMessageInput): Promise<z.infer<typeof GenerateHoldMessageOutputSchema>> {
+export async function generateHoldMessage({ language = 'English' }: GenerateHoldMessageInput): Promise<GenerateHoldMessageOutput> {
     try {
         const messages = holdMessages[language] || holdMessages['English'];
         const textToSpeak = messages[Math.floor(Math.random() * messages.length)];
 
         // Fetch TTS config directly from Firestore on the server using adminDb
-        const appConfigDoc = await getDoc(doc(adminDb, "configurations/app_config"));
+        const appConfigDocRef = adminDb.doc('configurations/app_config');
+        const appConfigDoc = await appConfigDocRef.get();
         const ttsConfig = appConfigDoc.exists() ? appConfigDoc.data() : {};
+
         const useTtsApi = ttsConfig?.useTtsApi ?? false;
-        const apiKey = ttsConfig?.ttsApiKey ?? ''; // Changed 'tts' to 'ttsApiKey' to match expected config
+        const apiKey = ttsConfig?.tts ?? '';
         const voiceId = ttsConfig?.voiceId ?? '';
 
         let audioDataUri = '';

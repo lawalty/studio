@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Bookmark, Heading2, SlidersHorizontal, Info, Wrench } from 'lucide-react';
+import { Save, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Bookmark, Heading2, SlidersHorizontal, Info, Wrench, Send, Timer, Volume2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -16,6 +16,7 @@ import { testTextGeneration, type TestTextGenerationOutput } from '@/ai/flows/te
 import { testEmbedding, type TestEmbeddingOutput } from '@/ai/flows/test-embedding-flow';
 import { testFirestoreWrite, type TestFirestoreWriteOutput } from '@/ai/flows/test-firestore-write-flow';
 import { testSearch, type TestSearchOutput, type SearchResult } from '@/ai/flows/test-search-flow';
+import { generateHoldMessage } from '@/ai/flows/generate-hold-message-flow';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
@@ -26,6 +27,9 @@ interface AppConfig {
 }
 
 const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
+
 
 export default function ApiKeysPage() {
   const [config, setConfig] = useState<AppConfig>({
@@ -34,6 +38,7 @@ export default function ApiKeysPage() {
   
   const [isSavingAppConfig, setIsSavingAppConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [responsePauseTime, setResponsePauseTime] = useState(DEFAULT_RESPONSE_PAUSE_TIME_MS);
   const { toast } = useToast();
 
   // State for diagnostics
@@ -43,19 +48,33 @@ export default function ApiKeysPage() {
   const [firestoreResult, setFirestoreResult] = useState<TestFirestoreWriteOutput | null>(null);
   const [searchResult, setSearchResult] = useState<TestSearchOutput | null>(null);
   const [searchQuery, setSearchQuery] = useState('What is a pawnbroker?');
+  const [holdMessageTimer, setHoldMessageTimer] = useState<number | null>(null);
+  const holdMessageIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const holdAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const fetchConfig = async () => {
       setIsLoading(true);
       try {
-        const docRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
+        const siteAssetsDocRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+
+        const [appConfigSnap, siteAssetsSnap] = await Promise.all([
+            getDoc(appConfigDocRef),
+            getDoc(siteAssetsSnap)
+        ]);
+
+        if (appConfigSnap.exists()) {
+          const data = appConfigSnap.data();
           setConfig({
             distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.8,
           });
         }
+        if (siteAssetsSnap.exists()) {
+            const data = siteAssetsSnap.data();
+            setResponsePauseTime(data.responsePauseTimeMs ?? DEFAULT_RESPONSE_PAUSE_TIME_MS);
+        }
+
       } catch (error) {
         console.error("Error fetching config from Firestore:", error);
         toast({
@@ -73,7 +92,6 @@ export default function ApiKeysPage() {
       setIsSavingAppConfig(true);
       try {
           const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
-          // Only save distanceThreshold from this page
           await setDoc(appConfigDocRef, { 
             distanceThreshold: config.distanceThreshold 
           }, { merge: true });
@@ -125,6 +143,44 @@ export default function ApiKeysPage() {
     setSearchResult(result);
     setIsTesting(prev => ({ ...prev, search: false }));
   };
+
+  const handleRunHoldMessageTest = () => {
+    if (isTesting.holdMessage) return;
+
+    setIsTesting(prev => ({...prev, holdMessage: true}));
+    setHoldMessageTimer(0);
+    const startTime = Date.now();
+    
+    // Cleanup previous interval if it exists
+    if(holdMessageIntervalRef.current) clearInterval(holdMessageIntervalRef.current);
+
+    holdMessageIntervalRef.current = setInterval(async () => {
+        const elapsedTime = Date.now() - startTime;
+        setHoldMessageTimer(elapsedTime);
+
+        if (elapsedTime >= responsePauseTime) {
+            clearInterval(holdMessageIntervalRef.current!);
+            holdMessageIntervalRef.current = null;
+            toast({ title: 'Hold message triggered!', description: `Playing audio after ${responsePauseTime}ms.` });
+
+            try {
+                const result = await generateHoldMessage({ language: 'English' });
+                if (result.error || !result.audioDataUri) throw new Error(result.error || "Flow failed to return audio");
+                
+                if (!holdAudioRef.current) holdAudioRef.current = new Audio();
+                holdAudioRef.current.src = result.audioDataUri;
+                await holdAudioRef.current.play();
+
+            } catch (e: any) {
+                toast({ title: 'Hold Message Error', description: e.message, variant: 'destructive' });
+            } finally {
+                setIsTesting(prev => ({ ...prev, holdMessage: false}));
+                setHoldMessageTimer(null);
+            }
+        }
+    }, 100);
+  };
+  
 
   const getSearchResultAlert = () => {
     if (!searchResult) return null;
@@ -258,7 +314,7 @@ export default function ApiKeysPage() {
         <CardDescription>
             Run tests to diagnose issues with your Google AI API key or project configuration.
         </CardDescription>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card>
                 <CardHeader>
                     <CardTitle className="text-base flex items-center gap-2">
@@ -389,6 +445,30 @@ export default function ApiKeysPage() {
                             </ScrollArea>
                         )}
                       </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Volume2 className="h-4 w-4" />
+                        Hold Message Test
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                        Simulates the pause before the AI responds to trigger the &quot;give me a moment&quot; audio.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleRunHoldMessageTest} disabled={isTesting.holdMessage}>
+                        {isTesting.holdMessage ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Simulate User Response
+                    </Button>
+                    {isTesting.holdMessage && holdMessageTimer !== null && (
+                        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                            <Timer className="h-4 w-4"/>
+                            <span>Waiting: {Math.min(holdMessageTimer, responsePauseTime)}ms / {responsePauseTime}ms</span>
+                        </div>
                     )}
                 </CardContent>
             </Card>
