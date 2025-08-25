@@ -40,7 +40,7 @@ export async function generateHoldMessage({ language = 'English' }: GenerateHold
         // Fetch TTS config directly from Firestore on the server using adminDb
         const appConfigDocRef = adminDb.doc('configurations/app_config');
         const appConfigDoc = await appConfigDocRef.get();
-        const ttsConfig = appConfigDoc.exists() ? appConfigDoc.data() : {};
+        const ttsConfig = appConfigDoc.exists ? appConfigDoc.data() : {};
 
         const useTtsApi = ttsConfig?.useTtsApi ?? false;
         const apiKey = ttsConfig?.tts ?? '';
