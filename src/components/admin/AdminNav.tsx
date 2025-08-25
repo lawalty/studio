@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, Database, KeyRound, Cog, MessageSquare } from 'lucide-react';
+import { Bot, Database, KeyRound, Cog, MessageSquare, Crosshair } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,7 @@ const navLinks = [
   { href: '/admin/knowledge-base', label: 'Knowledge Base', Icon: Database },
   { href: '/admin/api-keys', label: 'API Keys & RAG', Icon: KeyRound },
   { href: '/admin/site-settings', label: 'Site Settings', Icon: Cog },
+  { href: '/admin/targeted-chats', label: 'Targeted Chats', Icon: Crosshair },
   { href: '/admin/test-chat', label: 'Test Chat', Icon: MessageSquare },
 ];
 

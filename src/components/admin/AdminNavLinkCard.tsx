@@ -1,8 +1,9 @@
+
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Crosshair } from 'lucide-react';
 
 interface AdminNavLinkCardProps {
   title: string;
