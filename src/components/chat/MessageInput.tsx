@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { type FormEvent, useCallback } from 'react';
@@ -8,25 +9,25 @@ import { Mic, SendHorizontal, Square } from 'lucide-react';
 interface MessageInputProps {
   onSendMessage: (text: string) => void;
   isSending: boolean;
-  isSpeaking: boolean; 
   showMicButton?: boolean;
   isListening: boolean;
   onToggleListening: () => void;
   inputValue: string;
   onInputValueChange: (value: string) => void;
-  disabled?: boolean; 
+  disabled?: boolean;
+  placeholder: string;
 }
 
 export default function MessageInput({
   onSendMessage,
   isSending,
-  isSpeaking,
   showMicButton = true,
   isListening,
   onToggleListening,
   inputValue,
   onInputValueChange,
-  disabled = false, 
+  disabled = false,
+  placeholder,
 }: MessageInputProps) {
 
   const handleSendText = useCallback(() => {
@@ -49,14 +50,6 @@ export default function MessageInput({
   const inputDisabled = disabled || isSending || isListening;
   const sendButtonDisabled = disabled || isSending || (isListening ? false : inputValue.trim() === '');
 
-  const placeholderText = disabled 
-    ? "Conversation ended. Please choose an option above." 
-    : isListening 
-      ? "Listening... Speak now or press send to finish." 
-      : showMicButton 
-        ? "Use the microphone or type your message..." 
-        : "Type your message...";
-
   return (
     <form onSubmit={handleSubmit} className="mt-4 flex items-center gap-2">
       {showMicButton && (
@@ -73,7 +66,7 @@ export default function MessageInput({
       )}
       <Input
         type="text"
-        placeholder={placeholderText}
+        placeholder={placeholder}
         value={inputValue}
         onChange={(e) => onInputValueChange(e.target.value)}
         disabled={inputDisabled} 

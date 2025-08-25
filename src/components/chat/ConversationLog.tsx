@@ -2,24 +2,19 @@ import type { Message } from '@/components/chat/ChatInterface';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ChatBubble from "./ChatBubble";
 import React, { useEffect, useState, useRef } from 'react';
-import { useLanguage } from '@/context/LanguageContext';
 
 interface ConversationLogProps {
   messages: Message[]; 
   avatarSrc: string;
+  emptyLogMessage: string;
 }
 
 export default function ConversationLog({ 
   messages, 
   avatarSrc,
+  emptyLogMessage,
 }: ConversationLogProps) {
-  const { translate } = useLanguage();
-  const [emptyMessage, setEmptyMessage] = useState('Start the conversation by typing or using the microphone.');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    translate('Start the conversation by typing or using the microphone.').then(setEmptyMessage);
-  }, [translate]);
 
   useEffect(() => {
     // This effect ensures the scroll area automatically scrolls to the bottom
@@ -54,7 +49,7 @@ export default function ConversationLog({
                 ))
             ) : (
                 <div className="flex items-center justify-center h-full">
-                    <p className="text-muted-foreground">{emptyMessage}</p>
+                    <p className="text-muted-foreground">{emptyLogMessage}</p>
                 </div>
             )}
         </div>
