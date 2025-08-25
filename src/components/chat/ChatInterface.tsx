@@ -21,6 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-flow';
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
+import { generateHoldMessage } from '@/ai/flows/generate-hold-message-flow';
 
 
 export interface Message {
@@ -135,6 +136,7 @@ interface ChatConfig {
     splashScreenWelcomeMessage: string;
     responsePauseTimeMs: number;
     inactivityTimeoutMs: number;
+    preparationTimeMs: number;
     customGreetingMessage: string;
     useKnowledgeInGreeting: boolean;
     typingSpeedMs: number;
@@ -164,12 +166,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [config, setConfig] = useState<ChatConfig>({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
         animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
-        personaTraits: "",
+        personaTraits: "You are IA Blair v2, a knowledgeable and helpful assistant.",
         personalBio: "",
         conversationalTopics: "",
         splashScreenWelcomeMessage: "Welcome to AI Chat",
         responsePauseTimeMs: 1500,
         inactivityTimeoutMs: 30000,
+        preparationTimeMs: 4000,
         customGreetingMessage: "",
         useKnowledgeInGreeting: true,
         typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
@@ -187,8 +190,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const inactivityCheckLevelRef = useRef(0);
     
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+    const holdMessageAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
+    const isHoldMessagePlaying = useRef(false);
     const recognitionRef = useRef<any | null>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const preparationTimerRef = useRef<NodeJS.Timeout | null>(null);
     const speechPauseTimerRef = useRef<NodeJS.Timeout | null>(null);
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -249,6 +255,48 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
 
+    const clearPreparationTimer = useCallback(() => {
+        if (preparationTimerRef.current) {
+            clearTimeout(preparationTimerRef.current);
+            preparationTimerRef.current = null;
+        }
+    }, []);
+
+    const startPreparationTimer = useCallback(() => {
+        if (hasConversationEnded) return;
+        clearPreparationTimer();
+    
+        preparationTimerRef.current = setTimeout(async () => {
+            if (botStatus !== 'preparing' || !isMountedRef.current || isHoldMessagePlaying.current) {
+                return;
+            }
+    
+            try {
+                // The call is now much simpler, only passing the language.
+                const result = await generateHoldMessage({ language });
+    
+                if (result.error || !result.audioDataUri) {
+                    throw new Error(result.error || "Hold message flow failed to return audio.");
+                }
+    
+                if (!holdMessageAudioPlayerRef.current) {
+                    holdMessageAudioPlayerRef.current = new Audio();
+                }
+    
+                isHoldMessagePlaying.current = true;
+                holdMessageAudioPlayerRef.current.src = result.audioDataUri;
+                const onEnd = () => { isHoldMessagePlaying.current = false; };
+                holdMessageAudioPlayerRef.current.onended = onEnd;
+                holdMessageAudioPlayerRef.current.onerror = onEnd;
+                await holdMessageAudioPlayerRef.current.play();
+    
+            } catch (error) {
+                console.error("Failed to play hold message via flow:", error);
+                isHoldMessagePlaying.current = false;
+            }
+        }, config.preparationTimeMs);
+    }, [botStatus, hasConversationEnded, clearPreparationTimer, config.preparationTimeMs, language]);
+
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
         const isCurrentlyListening = botStatus === 'listening';
@@ -275,8 +323,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
         clearInactivityTimer();
+        clearPreparationTimer();
         if (botStatus === 'listening') { recognitionRef.current?.stop(); }
         if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
+        if (holdMessageAudioPlayerRef.current) { holdMessageAudioPlayerRef.current.pause(); }
         if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
         
         setBotStatus('idle');
@@ -288,13 +338,27 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setEndedDueToInactivity(false);
         }
         setHasConversationEnded(true);
-    }, [botStatus, clearInactivityTimer]);
+    }, [botStatus, clearInactivityTimer, clearPreparationTimer]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.();
             return;
+        }
+        
+        clearPreparationTimer();
+
+        if (isHoldMessagePlaying.current && holdMessageAudioPlayerRef.current) {
+            // Wait for the hold message to finish before starting the main response.
+            await new Promise<void>(resolve => {
+                const checkInterval = setInterval(() => {
+                    if (!isHoldMessagePlaying.current || !isMountedRef.current) {
+                        clearInterval(checkInterval);
+                        resolve();
+                    }
+                }, 100);
+            });
         }
         
         if (typeof window !== 'undefined') window.speechSynthesis.cancel();
@@ -389,7 +453,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         
         playAndAnimate();
-    }, [communicationMode, addMessage, logErrorToFirestore, uiText, config]);
+    }, [communicationMode, addMessage, logErrorToFirestore, uiText, config, clearPreparationTimer]);
     
     const startInactivityTimer = useCallback(() => {
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
@@ -441,6 +505,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setInputValue('');
         setBotStatus('preparing');
         setStatusMessage(uiText.isPreparing);
+        startPreparationTimer();
         
         const isFirstUserMessage = messagesRef.current.filter(m => m.sender === 'user').length === 0;
         
@@ -517,7 +582,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setBotStatus('idle');
             setStatusMessage('');
         }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, addMessage, uiText.isPreparing]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, addMessage, uiText.isPreparing, startPreparationTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         // Do not archive if no user messages, or if archiving is disabled.
@@ -572,11 +637,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     useEffect(() => {
         if (hasConversationEnded) {
             clearInactivityTimer();
+            clearPreparationTimer();
             if (!endedDueToInactivity) {
                 archiveAndIndexChat(messages);
             }
         }
-    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, endedDueToInactivity]);
+    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, clearPreparationTimer, endedDueToInactivity]);
     
     useEffect(() => {
         isMountedRef.current = true;
@@ -598,6 +664,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     splashScreenWelcomeMessage: assets.welcomeMessage || "Welcome to AI Chat",
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
                     inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
+                    preparationTimeMs: assets.preparationTimeMs ?? 4000,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
                     typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
@@ -624,6 +691,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             isMountedRef.current = false;
             dismissAllToasts();
             clearInactivityTimer();
+            clearPreparationTimer();
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             if (recognitionRef.current) try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
@@ -632,6 +700,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 audioPlayerRef.current.onended = null;
                 audioPlayerRef.current.pause();
                 audioPlayerRef.current.src = '';
+            }
+            if (holdMessageAudioPlayerRef.current) {
+                holdMessageAudioPlayerRef.current.onended = null;
+                holdMessageAudioPlayerRef.current.pause();
+                holdMessageAudioPlayerRef.current.src = '';
             }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -847,7 +920,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 ) : (
                 <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
                     <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
-                    <ConversationLog messages={messages} avatarSrc={config.avatarSrc} />
+                    <ConversationLog messages={messages} avatarSrc={config.avatarSrc} communicationMode={communicationMode}/>
                     <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                         <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
                         <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
@@ -874,7 +947,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         </div>
         <div className="md:col-span-2 flex flex-col h-full min-h-0">
           <div className="flex-grow min-h-0">
-            <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={config.avatarSrc} />
+            <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={config.avatarSrc} communicationMode={communicationMode} />
           </div>
           <MessageInput
             onSendMessage={(text) => handleSendMessage(text)} isSending={isBotProcessing || isBotSpeaking} isSpeaking={isBotSpeaking}
