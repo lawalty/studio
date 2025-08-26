@@ -209,7 +209,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const inactivityCheckLevelRef = useRef(0);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const holdMessageAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
-    const isHoldMessagePlaying = useRef(isHoldMessagePlaying);
+    const isHoldMessagePlaying = useRef(false);
     const recognitionRef = useRef<any | null>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
     const preparationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -508,24 +508,23 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
-        
+
         const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
         
         setInputValue('');
         setBotStatus('preparing');
         startPreparationTimer();
         
-        // This is the fix: create the history before the async state update.
         const updatedMessages = [...messagesRef.current, userMessage];
         setMessages(updatedMessages);
 
-        const historyForGenkit = updatedMessages.map(msg => ({ 
-            role: msg.sender as 'user' | 'model', 
-            content: [{ text: msg.text }] 
-        }));
-
         (async () => {
             try {
+                const historyForGenkit = updatedMessages.map(msg => ({ 
+                    role: msg.sender as 'user' | 'model', 
+                    content: [{ text: msg.text }] 
+                }));
+
                 const { personaTraits, personalBio, conversationalTopics } = config;
                 const flowInput: GenerateChatResponseInput = {
                     personaTraits, personalBio, conversationalTopics,
@@ -893,7 +892,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
             heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
             while (heightLeft > 0) {
-                position -= (pdf.internal.pageSize.getHeight() - pageMargin);
+                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
                 pdf.addPage();
                 pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
                 heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
