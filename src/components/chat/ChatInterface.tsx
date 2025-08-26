@@ -335,8 +335,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             onSpeechEnd?.();
             return;
         }
-        
-        clearPreparationTimer();
 
         if (isHoldMessagePlaying.current && holdMessageAudioPlayerRef.current) {
             await new Promise<void>(resolve => {
@@ -442,7 +440,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         
         playAndAnimate();
-    }, [communicationMode, addMessage, logErrorToFirestore, config, clearPreparationTimer]);
+    }, [communicationMode, addMessage, logErrorToFirestore, config]);
     
     const startInactivityTimer = useCallback(() => {
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
@@ -984,7 +982,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
-
-    
