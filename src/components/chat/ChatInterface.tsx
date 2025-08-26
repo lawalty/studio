@@ -515,72 +515,57 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         setMessages(prev => [...prev, userMessage]);
 
-        let historyForGenkit;
-        if (isFirstUserMessage) {
-            historyForGenkit = [{ role: 'user' as const, content: [{ text }] }];
-        } else {
-            historyForGenkit = [...messagesRef.current, userMessage].map(msg => ({ 
-                role: msg.sender as 'user' | 'model', 
-                content: [{ text: msg.text }] 
-            }));
-        }
+        const historyForGenkit = [...messagesRef.current, userMessage].map(msg => ({ 
+            role: msg.sender as 'user' | 'model', 
+            content: [{ text: msg.text }] 
+        }));
 
+        (async () => {
+            try {
+                const { personaTraits, personalBio, conversationalTopics } = config;
+                const flowInput: GenerateChatResponseInput = {
+                    personaTraits, personalBio, conversationalTopics,
+                    chatHistory: historyForGenkit,
+                    language, communicationMode, clarificationAttemptCount,
+                };
+                const result = await generateChatResponse(flowInput);
 
-        try {
-            const { 
-                personaTraits, 
-                personalBio,
-                conversationalTopics,
-            } = config;
-            const flowInput: GenerateChatResponseInput = {
-                personaTraits,
-                personalBio,
-                conversationalTopics,
-                chatHistory: historyForGenkit,
-                language: language,
-                communicationMode: communicationMode,
-                clarificationAttemptCount: clarificationAttemptCount,
-            };
-            const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
-
-            if (result.isClarificationQuestion) {
-                setClarificationAttemptCount(prev => prev + 1);
-            } else {
-                setClarificationAttemptCount(0);
-            }
-            
-            const aiMessage: Message = {
-                id: uuidv4(),
-                text: result.aiResponse,
-                sender: 'model',
-                timestamp: Date.now(),
-                pdfReference: result.pdfReference,
-                distance: result.distance,
-                distanceThreshold: result.distanceThreshold,
-                formality: result.formality,
-                conciseness: result.conciseness,
-                tone: result.tone,
-                formatting: result.formatting,
-                debugClosestMatch: result.debugClosestMatch,
-            };
-            
-            await speakText(result.aiResponse, aiMessage, () => {
-                if (result.shouldEndConversation) {
-                    handleEndChatManually();
-                } else if (!hasConversationEnded) {
-                    setBotStatus('idle');
+                if (result.isClarificationQuestion) {
+                    setClarificationAttemptCount(prev => prev + 1);
+                } else {
+                    setClarificationAttemptCount(0);
                 }
-            });
+                
+                const aiMessage: Message = {
+                    id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+                    pdfReference: result.pdfReference, distance: result.distance,
+                    distanceThreshold: result.distanceThreshold, formality: result.formality,
+                    conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+                    debugClosestMatch: result.debugClosestMatch,
+                };
+                
+                clearPreparationTimer();
 
-        } catch (error: any) {
-            console.error("Error in generateChatResponse:", error);
-            await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-            const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
-            const translatedError = await translate(errorMessage);
-            addMessage({ text: translatedError, sender: 'model'});
-            setBotStatus('idle');
-        }
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, addMessage, startPreparationTimer]);
+                await speakText(result.aiResponse, aiMessage, () => {
+                    if (result.shouldEndConversation) {
+                        handleEndChatManually();
+                    } else if (!hasConversationEnded) {
+                        setBotStatus('idle');
+                    }
+                });
+
+            } catch (error: any) {
+                console.error("Error in generateChatResponse:", error);
+                await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+                const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
+                const translatedError = await translate(errorMessage);
+                
+                clearPreparationTimer();
+                const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
+                await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+            }
+        })();
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, addMessage, startPreparationTimer, clearPreparationTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         const hasUserMessages = msgs.some(m => m.sender === 'user');
