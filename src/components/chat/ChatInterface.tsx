@@ -258,9 +258,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearPreparationTimer();
     
         preparationTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current || isHoldMessagePlaying.current) return;
-    
+            // This runs the async block without blocking the timer's thread
             (async () => {
+                if (!isMountedRef.current || isHoldMessagePlaying.current) return;
+        
                 try {
                     const result = await generateHoldMessage({
                         language,
@@ -1044,5 +1045,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
 
     
