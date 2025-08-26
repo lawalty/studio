@@ -506,65 +506,71 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
-
-        const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
-        const updatedMessages = [...messagesRef.current, userMessage];
-
-        setMessages(updatedMessages);
         setInputValue('');
         setBotStatus('preparing');
         startPreparationTimer();
         
-        (async () => {
-            try {
-                const historyForGenkit = updatedMessages.map(msg => ({ 
-                    role: msg.sender as 'user' | 'model', 
-                    content: [{ text: msg.text }] 
-                }));
+        setMessages(prevMessages => {
+            const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
+            const updatedMessages = [...prevMessages, userMessage];
 
-                const { personaTraits, personalBio, conversationalTopics } = config;
-                const flowInput: GenerateChatResponseInput = {
-                    personaTraits, personalBio, conversationalTopics,
-                    chatHistory: historyForGenkit,
-                    language, communicationMode, clarificationAttemptCount,
-                };
-                const result = await generateChatResponse(flowInput);
-                
-                clearPreparationTimer();
+            const historyForGenkit = updatedMessages.map(msg => ({ 
+                role: msg.sender as 'user' | 'model', 
+                content: [{ text: msg.text }] 
+            }));
 
-                if (result.isClarificationQuestion) {
-                    setClarificationAttemptCount(prev => prev + 1);
-                } else {
-                    setClarificationAttemptCount(0);
-                }
-                
-                const aiMessage: Message = {
-                    id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-                    pdfReference: result.pdfReference, distance: result.distance,
-                    distanceThreshold: result.distanceThreshold, formality: result.formality,
-                    conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-                    debugClosestMatch: result.debugClosestMatch,
-                };
-                
-                await speakText(result.aiResponse, aiMessage, () => {
-                    if (result.shouldEndConversation) {
-                        handleEndChatManually();
-                    } else if (!hasConversationEnded) {
-                        setBotStatus('idle');
+            (async () => {
+                try {
+                    const { personaTraits, personalBio, conversationalTopics } = config;
+                    const flowInput: GenerateChatResponseInput = {
+                        personaTraits, personalBio, conversationalTopics,
+                        chatHistory: historyForGenkit,
+                        language, communicationMode, clarificationAttemptCount,
+                    };
+                    const result = await generateChatResponse(flowInput);
+                    
+                    if (!isMountedRef.current) return;
+
+                    clearPreparationTimer();
+
+                    if (result.isClarificationQuestion) {
+                        setClarificationAttemptCount(prev => prev + 1);
+                    } else {
+                        setClarificationAttemptCount(0);
                     }
-                });
+                    
+                    const aiMessage: Message = {
+                        id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+                        pdfReference: result.pdfReference, distance: result.distance,
+                        distanceThreshold: result.distanceThreshold, formality: result.formality,
+                        conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+                        debugClosestMatch: result.debugClosestMatch,
+                    };
+                    
+                    await speakText(result.aiResponse, aiMessage, () => {
+                        if (result.shouldEndConversation) {
+                            handleEndChatManually();
+                        } else if (!hasConversationEnded) {
+                            setBotStatus('idle');
+                        }
+                    });
 
-            } catch (error: any) {
-                console.error("Error in generateChatResponse:", error);
-                await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-                const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
-                const translatedError = await translate(errorMessage);
-                
-                clearPreparationTimer();
-                const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
-                await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
-            }
-        })();
+                } catch (error: any) {
+                    if (!isMountedRef.current) return;
+                    console.error("Error in generateChatResponse:", error);
+                    await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+                    const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
+                    const translatedError = await translate(errorMessage);
+                    
+                    clearPreparationTimer();
+                    const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
+                    await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+                }
+            })();
+
+            return updatedMessages;
+        });
+
     }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, startPreparationTimer, clearPreparationTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
