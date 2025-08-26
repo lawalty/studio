@@ -256,47 +256,47 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const startPreparationTimer = useCallback(() => {
         if (!config || hasConversationEnded || communicationMode === 'text-only') return;
         clearPreparationTimer();
-
+    
         preparationTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current || isHoldMessagePlaying.current || botStatus !== 'preparing') return;
+            if (!isMountedRef.current || isHoldMessagePlaying.current) return;
     
             (async () => {
                 try {
-                    const result = await generateHoldMessage({ 
+                    const result = await generateHoldMessage({
                         language,
                         useCustomTts: config.useCustomTts,
                         ttsApiKey: config.ttsApiKey,
                         ttsVoiceId: config.ttsVoiceId,
                     });
-        
+    
                     if (result.error || !result.audioDataUri) {
                         throw new Error(result.error || "Hold message flow failed to return audio data.");
                     }
-                    
+    
                     if (!holdMessageAudioPlayerRef.current) {
                         holdMessageAudioPlayerRef.current = new Audio();
                     }
-                    
+    
                     isHoldMessagePlaying.current = true;
                     setBotStatus('speaking');
-                    
+    
                     holdMessageAudioPlayerRef.current.src = result.audioDataUri;
                     const onEnd = () => {
                         isHoldMessagePlaying.current = false;
                         if (botStatus === 'speaking') {
-                             setBotStatus('preparing'); 
+                            setBotStatus('preparing');
                         }
                     };
                     holdMessageAudioPlayerRef.current.onended = onEnd;
                     holdMessageAudioPlayerRef.current.onerror = onEnd; // Also handle errors
                     await holdMessageAudioPlayerRef.current.play();
-        
+    
                 } catch (error) {
                     console.error("Failed to play hold message:", error);
                     isHoldMessagePlaying.current = false;
                 }
             })();
-
+    
         }, config.aiResponsePreparationTimeMs);
     }, [hasConversationEnded, communicationMode, clearPreparationTimer, config, language, botStatus]);
 
@@ -488,77 +488,76 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
     }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText, messages]);
 
-    const handleSendMessage = useCallback((text: string) => {
-        if (!text.trim() || hasConversationEnded || isBotProcessing || !config) return;
+    const handleSendMessage = useCallback(() => {
+      const text = inputValue;
+      if (!text.trim() || hasConversationEnded || isBotProcessing || !config) return;
+  
+      clearInactivityTimer();
+      inactivityCheckLevelRef.current = 0;
+  
+      const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
+      
+      const updatedMessages = [...messagesRef.current, userMessage];
+      messagesRef.current = updatedMessages;
+      setMessages(updatedMessages);
+      
+      setInputValue('');
+      setBotStatus('preparing');
+      startPreparationTimer();
+  
+      (async () => {
+          try {
+              const historyForGenkit = messagesRef.current.map(msg => ({ 
+                  role: msg.sender as 'user' | 'model', 
+                  content: [{ text: msg.text }] 
+              }));
 
-        clearInactivityTimer();
-        inactivityCheckLevelRef.current = 0;
-        
-        const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
-        
-        // This is the key fix: construct the history to be sent to the AI immediately.
-        const updatedMessages = [...messagesRef.current, userMessage];
+              const { personaTraits, personalBio, conversationalTopics } = config;
+              const flowInput: GenerateChatResponseInput = {
+                  personaTraits, personalBio, conversationalTopics,
+                  chatHistory: historyForGenkit,
+                  language, communicationMode, clarificationAttemptCount,
+              };
+              const result = await generateChatResponse(flowInput);
+              
+              if (!isMountedRef.current) return;
 
-        // Then, update the UI state.
-        setMessages(updatedMessages);
-        
-        setInputValue('');
-        setBotStatus('preparing');
-        startPreparationTimer();
-    
-        (async () => {
-            try {
-                const historyForGenkit = updatedMessages.map(msg => ({ 
-                    role: msg.sender as 'user' | 'model', 
-                    content: [{ text: msg.text }] 
-                }));
+              if (result.isClarificationQuestion) {
+                  setClarificationAttemptCount(prev => prev + 1);
+              } else {
+                  setClarificationAttemptCount(0);
+              }
+              
+              const aiMessage: Message = {
+                  id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+                  pdfReference: result.pdfReference, distance: result.distance,
+                  distanceThreshold: result.distanceThreshold, formality: result.formality,
+                  conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+                  debugClosestMatch: result.debugClosestMatch,
+              };
+              
+              await speakText(result.aiResponse, aiMessage, () => {
+                  if (result.shouldEndConversation) {
+                      handleEndChatManually();
+                  } else if (!hasConversationEnded) {
+                      setBotStatus('idle');
+                  }
+              });
 
-                const { personaTraits, personalBio, conversationalTopics } = config;
-                const flowInput: GenerateChatResponseInput = {
-                    personaTraits, personalBio, conversationalTopics,
-                    chatHistory: historyForGenkit,
-                    language, communicationMode, clarificationAttemptCount,
-                };
-                const result = await generateChatResponse(flowInput);
-                
-                if (!isMountedRef.current) return;
-
-                if (result.isClarificationQuestion) {
-                    setClarificationAttemptCount(prev => prev + 1);
-                } else {
-                    setClarificationAttemptCount(0);
-                }
-                
-                const aiMessage: Message = {
-                    id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-                    pdfReference: result.pdfReference, distance: result.distance,
-                    distanceThreshold: result.distanceThreshold, formality: result.formality,
-                    conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-                    debugClosestMatch: result.debugClosestMatch,
-                };
-                
-                await speakText(result.aiResponse, aiMessage, () => {
-                    if (result.shouldEndConversation) {
-                        handleEndChatManually();
-                    } else if (!hasConversationEnded) {
-                        setBotStatus('idle');
-                    }
-                });
-
-            } catch (error: any) {
-                if (!isMountedRef.current) return;
-                console.error("Error in generateChatResponse:", error);
-                await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-                const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
-                const translatedError = await translate(errorMessage);
-                
-                clearPreparationTimer();
-                const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
-                await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
-            }
-        })();
-        
-    }, [hasConversationEnded, isBotProcessing, config, clearInactivityTimer, startPreparationTimer, language, communicationMode, clarificationAttemptCount, speakText, handleEndChatManually, logErrorToFirestore, translate]);
+          } catch (error: any) {
+              if (!isMountedRef.current) return;
+              console.error("Error in generateChatResponse:", error);
+              await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+              const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
+              const translatedError = await translate(errorMessage);
+              
+              clearPreparationTimer();
+              const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
+              await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+          }
+      })();
+      
+  }, [inputValue, hasConversationEnded, isBotProcessing, config, clearInactivityTimer, startPreparationTimer, language, communicationMode, clarificationAttemptCount, speakText, handleEndChatManually, logErrorToFirestore, translate]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (!config || msgs.length === 0 || !config.archiveChatHistoryEnabled || !msgs.some(m => m.sender === 'user')) return;
@@ -810,7 +809,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
               const finalTranscript = finalTranscriptRef.current.trim();
               if (finalTranscript) {
                   setBotStatus('idle'); 
-                  handleSendMessage(finalTranscript);
+                  handleSendMessage(finalTranscriptRef.current);
               } else {
                   setBotStatus('idle');
               }
@@ -1026,7 +1025,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             <ConversationLog messages={getVisibleChatBubbles(messages, animatedResponse ?? undefined)} avatarSrc={config.avatarSrc} emptyLogMessage={emptyLogMessage} />
           </div>
           <MessageInput
-            onSendMessage={(text) => handleSendMessage(text)} isSending={isBotProcessing || isBotSpeaking}
+            onSendMessage={(text) => handleSendMessage()} isSending={isBotProcessing || isBotSpeaking}
             showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
             inputValue={inputValue} onInputValueChange={setInputValue} disabled={hasConversationEnded}
             placeholder={inputPlaceholder}
