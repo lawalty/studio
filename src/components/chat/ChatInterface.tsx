@@ -265,10 +265,20 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
     
             try {
-                const result = await generateHoldMessage({ language });
+                const result = await generateHoldMessage({ 
+                    language,
+                    useCustomTts: config.useCustomTts,
+                    ttsApiKey: config.ttsApiKey,
+                    ttsVoiceId: config.ttsVoiceId,
+                });
     
-                if (result.error || !result.audioDataUri) {
-                    throw new Error(result.error || "Hold message flow failed to return audio.");
+                if (result.error || !result.audioDataUri || !result.text) {
+                    throw new Error(result.error || "Hold message flow failed to return required data.");
+                }
+
+                if (communicationMode === 'audio-text') {
+                    const holdMessage: Message = { id: uuidv4(), text: result.text, sender: 'model', timestamp: Date.now() };
+                    setAnimatedResponse(holdMessage);
                 }
     
                 if (!holdMessageAudioPlayerRef.current) {
@@ -277,7 +287,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
                 isHoldMessagePlaying.current = true;
                 holdMessageAudioPlayerRef.current.src = result.audioDataUri;
-                const onEnd = () => { isHoldMessagePlaying.current = false; };
+                const onEnd = () => { 
+                    isHoldMessagePlaying.current = false; 
+                    if (communicationMode === 'audio-text') {
+                        setAnimatedResponse(null);
+                        addMessage({ text: result.text!, sender: 'model' });
+                    }
+                };
                 holdMessageAudioPlayerRef.current.onended = onEnd;
                 holdMessageAudioPlayerRef.current.onerror = onEnd;
                 await holdMessageAudioPlayerRef.current.play();
@@ -285,9 +301,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } catch (error) {
                 console.error("Failed to play hold message via flow:", error);
                 isHoldMessagePlaying.current = false;
+                 if (communicationMode === 'audio-text') {
+                    setAnimatedResponse(null);
+                }
             }
         }, config.responsePauseTimeMs);
-    }, [botStatus, hasConversationEnded, clearPreparationTimer, config.responsePauseTimeMs, language, communicationMode]);
+    }, [botStatus, hasConversationEnded, clearPreparationTimer, config, language, communicationMode, addMessage]);
 
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
@@ -366,7 +385,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const { useCustomTts, ttsApiKey, ttsVoiceId } = config;
                 if (useCustomTts && ttsApiKey && ttsVoiceId) {
                     const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
-                    if (result.error || !result.media) throw new Error(result.error || "Custom TTS failed to return media.");
+                    if (result.error || !result.media) throw new Error(result.error);
                     audioDataUri = result.media;
                 } else {
                     const result = await googleTextToSpeech(processedText);

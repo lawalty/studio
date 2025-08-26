@@ -26,6 +26,12 @@ interface AppConfig {
   distanceThreshold: number;
 }
 
+interface TtsConfig {
+  tts: string;
+  voiceId: string;
+  useTtsApi: boolean;
+}
+
 const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
@@ -39,6 +45,7 @@ export default function ApiKeysPage() {
   const [isSavingAppConfig, setIsSavingAppConfig] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [responsePauseTime, setResponsePauseTime] = useState(DEFAULT_RESPONSE_PAUSE_TIME_MS);
+  const [ttsConfig, setTtsConfig] = useState<TtsConfig>({ tts: '', voiceId: '', useTtsApi: false });
   const { toast } = useToast();
 
   // State for diagnostics
@@ -68,6 +75,11 @@ export default function ApiKeysPage() {
           const data = appConfigSnap.data();
           setConfig({
             distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.8,
+          });
+          setTtsConfig({
+            tts: data.tts || '',
+            voiceId: data.voiceId || '',
+            useTtsApi: typeof data.useTtsApi === 'boolean' ? data.useTtsApi : false,
           });
         }
         if (siteAssetsSnap.exists()) {
@@ -151,7 +163,6 @@ export default function ApiKeysPage() {
     setHoldMessageTimer(0);
     const startTime = Date.now();
     
-    // Cleanup previous interval if it exists
     if(holdMessageIntervalRef.current) clearInterval(holdMessageIntervalRef.current);
 
     holdMessageIntervalRef.current = setInterval(async () => {
@@ -164,7 +175,12 @@ export default function ApiKeysPage() {
             toast({ title: 'Hold message triggered!', description: `Playing audio after ${responsePauseTime}ms.` });
 
             try {
-                const result = await generateHoldMessage({ language: 'English' });
+                const result = await generateHoldMessage({ 
+                    language: 'English',
+                    useCustomTts: ttsConfig.useTtsApi,
+                    ttsApiKey: ttsConfig.tts,
+                    ttsVoiceId: ttsConfig.voiceId,
+                });
                 if (result.error || !result.audioDataUri) throw new Error(result.error || "Flow failed to return audio");
                 
                 if (!holdAudioRef.current) holdAudioRef.current = new Audio();

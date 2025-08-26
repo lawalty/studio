@@ -1,4 +1,3 @@
-
 'use server';
 import { z } from 'zod';
 import { elevenLabsTextToSpeech } from './eleven-labs-tts-flow';
@@ -7,9 +6,13 @@ import { db as adminDb } from '@/lib/firebase-admin';
 
 const GenerateHoldMessageInputSchema = z.object({
   language: z.string().optional().default('English'),
+  useCustomTts: z.boolean(),
+  ttsApiKey: z.string().optional(),
+  ttsVoiceId: z.string().optional(),
 });
 
 const GenerateHoldMessageOutputSchema = z.object({
+  text: z.string().optional(),
   audioDataUri: z.string().optional(),
   error: z.string().optional(),
 });
@@ -32,24 +35,20 @@ const holdMessages: Record<string, string[]> = {
     ],
 };
 
-export async function generateHoldMessage({ language = 'English' }: GenerateHoldMessageInput): Promise<GenerateHoldMessageOutput> {
+export async function generateHoldMessage({ 
+    language = 'English',
+    useCustomTts,
+    ttsApiKey,
+    ttsVoiceId,
+}: GenerateHoldMessageInput): Promise<GenerateHoldMessageOutput> {
     try {
         const messages = holdMessages[language] || holdMessages['English'];
         const textToSpeak = messages[Math.floor(Math.random() * messages.length)];
 
-        // Fetch TTS config directly from Firestore on the server using adminDb
-        const appConfigDocRef = adminDb.doc('configurations/app_config');
-        const appConfigDoc = await appConfigDocRef.get();
-        const ttsConfig = appConfigDoc.exists ? appConfigDoc.data() : {};
-
-        const useTtsApi = ttsConfig?.useTtsApi ?? false;
-        const apiKey = ttsConfig?.tts ?? '';
-        const voiceId = ttsConfig?.voiceId ?? '';
-
         let audioDataUri = '';
 
-        if (useTtsApi && apiKey && voiceId) {
-            const result = await elevenLabsTextToSpeech({ text: textToSpeak, apiKey, voiceId });
+        if (useCustomTts && ttsApiKey && ttsVoiceId) {
+            const result = await elevenLabsTextToSpeech({ text: textToSpeak, apiKey: ttsApiKey, voiceId: ttsVoiceId });
             if (result.error || !result.media) {
                 throw new Error(result.error || "Custom TTS service failed to return audio.");
             }
@@ -59,7 +58,7 @@ export async function generateHoldMessage({ language = 'English' }: GenerateHold
             audioDataUri = result.media;
         }
 
-        return { audioDataUri };
+        return { text: textToSpeak, audioDataUri };
 
     } catch (error: any) {
         console.error('[generateHoldMessage] Error:', error);
