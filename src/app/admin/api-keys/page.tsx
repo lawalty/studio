@@ -1,14 +1,14 @@
 
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Bookmark, Heading2, SlidersHorizontal, Info, Wrench, Send, Timer, Volume2 } from 'lucide-react';
+import { Save, KeyRound, Terminal, CheckCircle, AlertTriangle, Activity, DatabaseZap, Loader2, Search, FileText, Bookmark, Heading2, SlidersHorizontal, Info, Wrench, Send, Timer, Volume2, Bot, User, Trash2, SendHorizontal, MessageSquare } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
@@ -21,6 +21,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import AdminNav from '@/components/admin/AdminNav';
+import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
+
 
 interface AppConfig {
   distanceThreshold: number;
@@ -30,6 +32,11 @@ interface TtsConfig {
   tts: string;
   voiceId: string;
   useTtsApi: boolean;
+}
+
+interface TestMessage {
+  role: 'user' | 'model';
+  text: string;
 }
 
 const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
@@ -58,6 +65,12 @@ export default function ApiKeysPage() {
   const [holdMessageTimer, setHoldMessageTimer] = useState<number | null>(null);
   const holdMessageIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const holdAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // State for Test Chat
+  const [inputValue, setInputValue] = useState('');
+  const [chatHistory, setChatHistory] = useState<TestMessage[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -195,6 +208,68 @@ export default function ApiKeysPage() {
             }
         }
     }, 100);
+  };
+
+  const handleSendMessage = useCallback(async () => {
+    if (!inputValue.trim()) {
+      toast({ title: "Input is empty", description: "Please enter a message to send.", variant: "destructive" });
+      return;
+    }
+    
+    setIsSending(true);
+
+    const newHistory: TestMessage[] = [...chatHistory, { role: 'user', text: inputValue }];
+    setChatHistory(newHistory);
+    const currentUserInput = inputValue;
+    setInputValue('');
+
+    const historyForGenkit = newHistory.map(msg => ({
+      role: msg.role,
+      content: [{ text: msg.text }]
+    }));
+
+    try {
+      // NOTE: For testing purposes, we send minimal persona info.
+      // The flow has defaults if the persona info is missing from the config documents.
+      const flowInput: GenerateChatResponseInput = {
+        personaTraits: "A helpful AI assistant.",
+        personalBio: "I am a testing AI.",
+        conversationalTopics: "General",
+        chatHistory: historyForGenkit,
+        language: 'English',
+        communicationMode: 'text-only',
+        clarificationAttemptCount: clarificationAttemptCount,
+      };
+      
+      const result: GenerateChatResponseOutput = await generateChatResponse(flowInput);
+      
+      if (result.isClarificationQuestion) {
+          setClarificationAttemptCount(prev => prev + 1);
+      } else {
+          setClarificationAttemptCount(0); // Reset on a direct answer
+      }
+
+      setChatHistory(prev => [...prev, { role: 'model', text: result.aiResponse }]);
+
+    } catch (error: any) {
+      console.error("Error calling generateChatResponse:", error);
+      toast({
+        title: "Error",
+        description: `An error occurred: ${error.message}`,
+        variant: "destructive",
+      });
+      // Roll back the user message if the API call fails
+      setChatHistory(prev => prev.slice(0, -1));
+      setInputValue(currentUserInput);
+    } finally {
+      setIsSending(false);
+    }
+  }, [inputValue, chatHistory, toast, clarificationAttemptCount]);
+
+  const handleReset = () => {
+    setChatHistory([]);
+    setInputValue('');
+    setClarificationAttemptCount(0);
   };
   
 
@@ -490,6 +565,67 @@ export default function ApiKeysPage() {
             </Card>
         </div>
       </div>
+      
+      <Separator />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5" /> Test Conversational Context</CardTitle>
+          <CardDescription>
+            Use this page to test the AI&apos;s ability to remember context within a single conversation. 
+            Each message sent includes the full history above it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                    <Label>Conversation History</Label>
+                    <Button variant="ghost" size="sm" onClick={handleReset}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Reset
+                    </Button>
+                </div>
+                <ScrollArea className="h-96 w-full rounded-md border p-4 space-y-4">
+                    {chatHistory.length === 0 ? (
+                        <p className="text-muted-foreground text-center">Conversation is empty. Send a message to begin.</p>
+                    ) : (
+                        chatHistory.map((msg, index) => (
+                            <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                                {msg.role === 'model' && <Bot className="h-6 w-6 text-primary flex-shrink-0" />}
+                                <div className={`max-w-xl rounded-lg p-3 ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                    <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                                </div>
+                                {msg.role === 'user' && <User className="h-6 w-6 text-primary flex-shrink-0" />}
+                            </div>
+                        ))
+                    )}
+                </ScrollArea>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+                <Label htmlFor="message-input">User Message</Label>
+                <div className="flex gap-2">
+                    <Input
+                        id="message-input"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        placeholder="Type your message here to test the next turn..."
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !isSending) handleSendMessage(); }}
+                        disabled={isSending}
+                    />
+                    <Button onClick={handleSendMessage} disabled={isSending}>
+                        {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SendHorizontal className="mr-2 h-4 w-4" />}
+                        Send
+                    </Button>
+                </div>
+            </div>
+        </CardContent>
+        <CardFooter>
+            <CardDescription>
+                Example Scenario: 1) AI asks a question with options. 2) You reply with one option (e.g., &quot;Sales&quot;). 3) AI should understand the context and ask a relevant follow-up.
+            </CardDescription>
+        </CardFooter>
+      </Card>
+
     </div>
   );
 }

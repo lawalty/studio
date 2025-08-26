@@ -13,7 +13,6 @@ const navLinks = [
   { href: '/admin/api-keys', label: 'API Keys & RAG', Icon: KeyRound },
   { href: '/admin/site-settings', label: 'Site Settings', Icon: Cog },
   { href: '/admin/targeted-chats', label: 'Targeted Chats', Icon: Crosshair },
-  { href: '/admin/test-chat', label: 'Test Chat', Icon: MessageSquare },
 ];
 
 export default function AdminNav() {
