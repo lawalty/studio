@@ -203,6 +203,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         splashScreenWelcomeMessage: "Welcome to AI Chat",
     });
     
+    const messagesRef = useRef<Message[]>([]);
     const inactivityCheckLevelRef = useRef(0);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const holdMessageAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -223,6 +224,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const isBotProcessing = botStatus === 'preparing';
     const isBotSpeaking = botStatus === 'speaking' || botStatus === 'typing';
     const isListening = botStatus === 'listening';
+
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
 
     const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
         const newMessage: Message = { ...message, id: uuidv4(), timestamp: Date.now() };
@@ -281,7 +286,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     }
                     
                     isHoldMessagePlaying.current = true;
-                    setBotStatus('speaking'); // Trigger avatar animation
+                    setBotStatus('speaking');
                     
                     holdMessageAudioPlayerRef.current.src = result.audioDataUri;
                     const onEnd = () => {
@@ -291,7 +296,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         }
                     };
                     holdMessageAudioPlayerRef.current.onended = onEnd;
-                    holdMessageAudioPlayerRef.current.onerror = onEnd; // Also reset on error
+                    holdMessageAudioPlayerRef.current.onerror = onEnd;
                     await holdMessageAudioPlayerRef.current.play();
         
                 } catch (error) {
@@ -349,6 +354,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             onSpeechEnd?.();
             return;
         }
+        clearPreparationTimer();
 
         if (isHoldMessagePlaying.current && holdMessageAudioPlayerRef.current) {
             await new Promise<void>(resolve => {
@@ -454,7 +460,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         
         playAndAnimate();
-    }, [communicationMode, addMessage, logErrorToFirestore, config]);
+    }, [communicationMode, addMessage, logErrorToFirestore, config, clearPreparationTimer]);
     
     const startInactivityTimer = useCallback(() => {
         if (communicationMode !== 'audio-only' || hasConversationEnded) return;
@@ -502,71 +508,63 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
 
-        setMessages(prevMessages => {
-            const updatedMessages = [...prevMessages, userMessage];
-            
-            // This self-executing async function runs the AI call.
-            // It's inside the state updater to guarantee it has the latest messages.
-            (async () => {
+        const updatedMessages = [...messagesRef.current, userMessage];
+        setMessages(updatedMessages);
+        setInputValue('');
+        setBotStatus('preparing');
+        startPreparationTimer();
+        
+        (async () => {
+            try {
                 const historyForGenkit = updatedMessages.map(msg => ({ 
                     role: msg.sender as 'user' | 'model', 
                     content: [{ text: msg.text }] 
                 }));
 
-                try {
-                    const { personaTraits, personalBio, conversationalTopics } = config;
-                    const flowInput: GenerateChatResponseInput = {
-                        personaTraits, personalBio, conversationalTopics,
-                        chatHistory: historyForGenkit,
-                        language, communicationMode, clarificationAttemptCount,
-                    };
-                    const result = await generateChatResponse(flowInput);
-                    
-                    if (!isMountedRef.current) return;
+                const { personaTraits, personalBio, conversationalTopics } = config;
+                const flowInput: GenerateChatResponseInput = {
+                    personaTraits, personalBio, conversationalTopics,
+                    chatHistory: historyForGenkit,
+                    language, communicationMode, clarificationAttemptCount,
+                };
+                const result = await generateChatResponse(flowInput);
+                
+                if (!isMountedRef.current) return;
 
-                    clearPreparationTimer();
-
-                    if (result.isClarificationQuestion) {
-                        setClarificationAttemptCount(prev => prev + 1);
-                    } else {
-                        setClarificationAttemptCount(0);
-                    }
-                    
-                    const aiMessage: Message = {
-                        id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-                        pdfReference: result.pdfReference, distance: result.distance,
-                        distanceThreshold: result.distanceThreshold, formality: result.formality,
-                        conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-                        debugClosestMatch: result.debugClosestMatch,
-                    };
-                    
-                    await speakText(result.aiResponse, aiMessage, () => {
-                        if (result.shouldEndConversation) {
-                            handleEndChatManually();
-                        } else if (!hasConversationEnded) {
-                            setBotStatus('idle');
-                        }
-                    });
-
-                } catch (error: any) {
-                    if (!isMountedRef.current) return;
-                    console.error("Error in generateChatResponse:", error);
-                    await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-                    const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
-                    const translatedError = await translate(errorMessage);
-                    
-                    clearPreparationTimer();
-                    const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
-                    await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+                if (result.isClarificationQuestion) {
+                    setClarificationAttemptCount(prev => prev + 1);
+                } else {
+                    setClarificationAttemptCount(0);
                 }
-            })();
+                
+                const aiMessage: Message = {
+                    id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+                    pdfReference: result.pdfReference, distance: result.distance,
+                    distanceThreshold: result.distanceThreshold, formality: result.formality,
+                    conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+                    debugClosestMatch: result.debugClosestMatch,
+                };
+                
+                await speakText(result.aiResponse, aiMessage, () => {
+                    if (result.shouldEndConversation) {
+                        handleEndChatManually();
+                    } else if (!hasConversationEnded) {
+                        setBotStatus('idle');
+                    }
+                });
 
-            return updatedMessages;
-        });
-
-        setInputValue('');
-        setBotStatus('preparing');
-        startPreparationTimer();
+            } catch (error: any) {
+                if (!isMountedRef.current) return;
+                console.error("Error in generateChatResponse:", error);
+                await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+                const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
+                const translatedError = await translate(errorMessage);
+                
+                clearPreparationTimer();
+                const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
+                await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+            }
+        })();
         
     }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, startPreparationTimer, config, language, communicationMode, clarificationAttemptCount, clearPreparationTimer, speakText, handleEndChatManually, logErrorToFirestore, translate]);
     
@@ -592,7 +590,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
             heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
             while (heightLeft > 0) {
-                position -= (pdf.internal.pageSize.getHeight() - pageMargin);
+                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
                 pdf.addPage();
                 pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
                 heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
@@ -894,7 +892,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
             heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
             while (heightLeft > 0) {
-                position -= (pdf.internal.pageSize.getHeight() - pageMargin);
+                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
                 pdf.addPage();
                 pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
                 heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
@@ -1032,3 +1030,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
