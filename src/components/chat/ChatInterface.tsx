@@ -209,7 +209,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const inactivityCheckLevelRef = useRef(0);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
     const holdMessageAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
-    const isHoldMessagePlaying = useRef(false);
+    const isHoldMessagePlaying = useRef(isHoldMessagePlaying);
     const recognitionRef = useRef<any | null>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
     const preparationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -515,11 +515,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setBotStatus('preparing');
         startPreparationTimer();
         
-        const isFirstUserMessage = messagesRef.current.filter(m => m.sender === 'user').length === 0;
-        
-        setMessages(prev => [...prev, userMessage]);
+        // This is the fix: create the history before the async state update.
+        const updatedMessages = [...messagesRef.current, userMessage];
+        setMessages(updatedMessages);
 
-        const historyForGenkit = [...messagesRef.current, userMessage].map(msg => ({ 
+        const historyForGenkit = updatedMessages.map(msg => ({ 
             role: msg.sender as 'user' | 'model', 
             content: [{ text: msg.text }] 
         }));
@@ -567,7 +567,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
             }
         })();
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, addMessage, startPreparationTimer, clearPreparationTimer]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, language, communicationMode, clarificationAttemptCount, logErrorToFirestore, translate, config, speakText, handleEndChatManually, startPreparationTimer, clearPreparationTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         const hasUserMessages = msgs.some(m => m.sender === 'user');
@@ -1031,3 +1031,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
