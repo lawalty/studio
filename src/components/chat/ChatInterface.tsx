@@ -258,7 +258,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearPreparationTimer();
 
         preparationTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current || isHoldMessagePlaying.current) return;
+            if (!isMountedRef.current || isHoldMessagePlaying.current || botStatus !== 'preparing') return;
     
             (async () => {
                 try {
@@ -283,12 +283,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     holdMessageAudioPlayerRef.current.src = result.audioDataUri;
                     const onEnd = () => {
                         isHoldMessagePlaying.current = false;
-                        if (botStatus !== 'preparing') {
-                             setBotStatus('idle');
+                        if (botStatus === 'speaking') {
+                             setBotStatus('preparing'); 
                         }
                     };
                     holdMessageAudioPlayerRef.current.onended = onEnd;
-                    holdMessageAudioPlayerRef.current.onerror = onEnd;
+                    holdMessageAudioPlayerRef.current.onerror = onEnd; // Also handle errors
                     await holdMessageAudioPlayerRef.current.play();
         
                 } catch (error) {
@@ -346,17 +346,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             onSpeechEnd?.();
             return;
         }
+
+        // Cancel any pending hold message timer.
         clearPreparationTimer();
 
+        // If hold message is currently playing, stop it immediately.
         if (isHoldMessagePlaying.current && holdMessageAudioPlayerRef.current) {
-            await new Promise<void>(resolve => {
-                const checkInterval = setInterval(() => {
-                    if (!isHoldMessagePlaying.current || !isMountedRef.current) {
-                        clearInterval(checkInterval);
-                        resolve();
-                    }
-                }, 100);
-            });
+            holdMessageAudioPlayerRef.current.pause();
+            holdMessageAudioPlayerRef.current.currentTime = 0;
+            isHoldMessagePlaying.current = false;
         }
         
         if (typeof window !== 'undefined') window.speechSynthesis.cancel();
@@ -498,69 +496,69 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
         
-        setMessages(prevMessages => {
-            const updatedMessages = [...prevMessages, userMessage];
-            
-            const historyForGenkit = updatedMessages.map(msg => ({ 
-                role: msg.sender as 'user' | 'model', 
-                content: [{ text: msg.text }] 
-            }));
+        // This is the key fix: construct the history to be sent to the AI immediately.
+        const updatedMessages = [...messagesRef.current, userMessage];
 
-            setInputValue('');
-            setBotStatus('preparing');
-            startPreparationTimer();
+        // Then, update the UI state.
+        setMessages(updatedMessages);
         
-            (async () => {
-                try {
-                    const { personaTraits, personalBio, conversationalTopics } = config;
-                    const flowInput: GenerateChatResponseInput = {
-                        personaTraits, personalBio, conversationalTopics,
-                        chatHistory: historyForGenkit,
-                        language, communicationMode, clarificationAttemptCount,
-                    };
-                    const result = await generateChatResponse(flowInput);
-                    
-                    if (!isMountedRef.current) return;
+        setInputValue('');
+        setBotStatus('preparing');
+        startPreparationTimer();
+    
+        (async () => {
+            try {
+                const historyForGenkit = updatedMessages.map(msg => ({ 
+                    role: msg.sender as 'user' | 'model', 
+                    content: [{ text: msg.text }] 
+                }));
 
-                    if (result.isClarificationQuestion) {
-                        setClarificationAttemptCount(prev => prev + 1);
-                    } else {
-                        setClarificationAttemptCount(0);
-                    }
-                    
-                    const aiMessage: Message = {
-                        id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-                        pdfReference: result.pdfReference, distance: result.distance,
-                        distanceThreshold: result.distanceThreshold, formality: result.formality,
-                        conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-                        debugClosestMatch: result.debugClosestMatch,
-                    };
-                    
-                    await speakText(result.aiResponse, aiMessage, () => {
-                        if (result.shouldEndConversation) {
-                            handleEndChatManually();
-                        } else if (!hasConversationEnded) {
-                            setBotStatus('idle');
-                        }
-                    });
+                const { personaTraits, personalBio, conversationalTopics } = config;
+                const flowInput: GenerateChatResponseInput = {
+                    personaTraits, personalBio, conversationalTopics,
+                    chatHistory: historyForGenkit,
+                    language, communicationMode, clarificationAttemptCount,
+                };
+                const result = await generateChatResponse(flowInput);
+                
+                if (!isMountedRef.current) return;
 
-                } catch (error: any) {
-                    if (!isMountedRef.current) return;
-                    console.error("Error in generateChatResponse:", error);
-                    await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-                    const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
-                    const translatedError = await translate(errorMessage);
-                    
-                    clearPreparationTimer();
-                    const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
-                    await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+                if (result.isClarificationQuestion) {
+                    setClarificationAttemptCount(prev => prev + 1);
+                } else {
+                    setClarificationAttemptCount(0);
                 }
-            })();
+                
+                const aiMessage: Message = {
+                    id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+                    pdfReference: result.pdfReference, distance: result.distance,
+                    distanceThreshold: result.distanceThreshold, formality: result.formality,
+                    conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+                    debugClosestMatch: result.debugClosestMatch,
+                };
+                
+                await speakText(result.aiResponse, aiMessage, () => {
+                    if (result.shouldEndConversation) {
+                        handleEndChatManually();
+                    } else if (!hasConversationEnded) {
+                        setBotStatus('idle');
+                    }
+                });
 
-            return updatedMessages;
-        });
+            } catch (error: any) {
+                if (!isMountedRef.current) return;
+                console.error("Error in generateChatResponse:", error);
+                await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+                const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
+                const translatedError = await translate(errorMessage);
+                
+                clearPreparationTimer();
+                const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
+                await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+            }
+        })();
         
-    }, [hasConversationEnded, isBotProcessing, config, clearInactivityTimer, startPreparationTimer, language, communicationMode, clarificationAttemptCount, clearPreparationTimer, speakText, handleEndChatManually, logErrorToFirestore, translate]);
+    }, [hasConversationEnded, isBotProcessing, config, clearInactivityTimer, startPreparationTimer, language, communicationMode, clarificationAttemptCount, speakText, handleEndChatManually, logErrorToFirestore, translate]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (!config || msgs.length === 0 || !config.archiveChatHistoryEnabled || !msgs.some(m => m.sender === 'user')) return;
@@ -1047,3 +1045,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
