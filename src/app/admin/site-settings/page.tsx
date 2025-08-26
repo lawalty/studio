@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot } from 'lucide-react';
+import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot, Timer } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -61,6 +61,7 @@ export default function SiteSettingsPage() {
   const [maintenanceModeMessage, setMaintenanceModeMessage] = useState('');
   const [showLanguageSelector, setShowLanguageSelector] = useState(true);
   const [archiveChatHistoryEnabled, setArchiveChatHistoryEnabled] = useState(true);
+  const [showDiagnosticTimer, setShowDiagnosticTimer] = useState(false);
   const [conversationalModel, setConversationalModel] = useState(DEFAULT_CONVERSATIONAL_MODEL);
   const [configError, setConfigError] = useState<string | null>(null);
 
@@ -92,6 +93,7 @@ export default function SiteSettingsPage() {
           setMaintenanceModeMessage(data.maintenanceModeMessage || DEFAULT_MAINTENANCE_MESSAGE);
           setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
           setArchiveChatHistoryEnabled(data.archiveChatHistoryEnabled === undefined ? true : data.archiveChatHistoryEnabled);
+          setShowDiagnosticTimer(data.showDiagnosticTimer === undefined ? false : data.showDiagnosticTimer);
         } else {
           // On first run, create the doc with defaults
           const defaultSettings = {
@@ -101,6 +103,7 @@ export default function SiteSettingsPage() {
             maintenanceModeMessage: DEFAULT_MAINTENANCE_MESSAGE,
             showLanguageSelector: true,
             archiveChatHistoryEnabled: true,
+            showDiagnosticTimer: false,
           };
           await setDoc(siteAssetsDocRef, defaultSettings, { merge: true });
         }
@@ -197,6 +200,9 @@ Please check your environment variables and Google Cloud Console settings.`;
       if (archiveChatHistoryEnabled !== (currentSiteAssets.archiveChatHistoryEnabled ?? true)) {
         siteAssetsUpdate.archiveChatHistoryEnabled = archiveChatHistoryEnabled; siteAssetsChanged = true;
       }
+      if (showDiagnosticTimer !== (currentSiteAssets.showDiagnosticTimer ?? false)) {
+        siteAssetsUpdate.showDiagnosticTimer = showDiagnosticTimer; siteAssetsChanged = true;
+      }
 
       // Data for app_config
       const appConfigUpdate: { [key: string]: any } = {};
@@ -258,6 +264,11 @@ Please check your environment variables and Google Cloud Console settings.`;
   const handleResetChatArchiving = () => {
     setArchiveChatHistoryEnabled(true);
     toast({ title: "Chat Archiving Reset", description: "Click 'Save Site Settings' to make it permanent." });
+  };
+
+  const handleResetDiagnosticTimer = () => {
+    setShowDiagnosticTimer(false);
+    toast({ title: "Diagnostic Timer Reset", description: "Click 'Save Site Settings' to make it permanent." });
   };
 
   const handleClearStats = useCallback(async () => {
@@ -473,6 +484,39 @@ Please check your environment variables and Google Cloud Console settings.`;
             <CardFooter>
                 <Button variant="outline" onClick={handleResetChatArchiving} disabled={isLoadingData}>
                 <RotateCcw className="mr-2 h-4 w-4" /> Reset Chat Archiving
+                </Button>
+            </CardFooter>
+          </Card>
+
+          <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><Timer /> Diagnostic Timer</CardTitle>
+                <CardDescription>
+                  Display a timer under the bot status message for debugging latency.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm">
+                    <div className="flex-1 space-y-1">
+                        <Label htmlFor="showDiagnosticTimer" className="font-medium">
+                            Show Diagnostic Timer
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            If ON, a timer will show how long the AI is in each state (listening, preparing, etc.).
+                        </p>
+                    </div>
+                    <Switch
+                        id="showDiagnosticTimer"
+                        checked={showDiagnosticTimer}
+                        onCheckedChange={setShowDiagnosticTimer}
+                        disabled={isLoadingData}
+                        aria-label="Toggle diagnostic timer visibility"
+                    />
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button variant="outline" onClick={handleResetDiagnosticTimer} disabled={isLoadingData}>
+                <RotateCcw className="mr-2 h-4 w-4" /> Reset Diagnostic Timer
                 </Button>
             </CardFooter>
           </Card>

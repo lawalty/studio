@@ -12,7 +12,7 @@ import { generateChatResponse, type GenerateChatResponseInput, type GenerateChat
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Mic, Power, DatabaseZap, Save, RotateCcw, Square, Loader2 } from 'lucide-react';
+import { Mic, Power, DatabaseZap, Save, RotateCcw, Square, Loader2, Timer } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -143,6 +143,7 @@ interface ChatConfig {
     ttsVoiceId: string;
     useCustomTts: boolean;
     archiveChatHistoryEnabled: boolean;
+    showDiagnosticTimer: boolean;
     splashScreenWelcomeMessage: string;
 }
 
@@ -180,6 +181,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
     const [uiText, setUiText] = useState(ENGLISH_UI_TEXT);
     const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
+    const [diagnosticTimerValue, setDiagnosticTimerValue] = useState(0);
 
     const [config, setConfig] = useState<ChatConfig>({
         avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
@@ -197,6 +199,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         ttsVoiceId: '',
         useCustomTts: false,
         archiveChatHistoryEnabled: true,
+        showDiagnosticTimer: false,
         splashScreenWelcomeMessage: "Welcome to AI Chat",
     });
     
@@ -213,6 +216,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const speechPauseTimerRef = useRef<NodeJS.Timeout | null>(null);
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const diagnosticTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const isMountedRef = useRef(true);
 
     const router = useRouter();
@@ -544,8 +548,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     debugClosestMatch: result.debugClosestMatch,
                 };
                 
-                clearPreparationTimer();
-
                 await speakText(result.aiResponse, aiMessage, () => {
                     if (result.shouldEndConversation) {
                         handleEndChatManually();
@@ -681,6 +683,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     ttsVoiceId: appConfigData.voiceId || '',
                     useCustomTts: typeof appConfigData.useTtsApi === 'boolean' ? appConfigData.useTtsApi : false,
                     archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
+                    showDiagnosticTimer: assets.showDiagnosticTimer === undefined ? false : assets.showDiagnosticTimer,
                     splashScreenWelcomeMessage: assets.welcomeMessage || "Welcome to AI Chat",
                 };
                 setConfig(newConfig);
@@ -702,6 +705,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             clearPreparationTimer();
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
+            if (diagnosticTimerIntervalRef.current) clearInterval(diagnosticTimerIntervalRef.current);
             if (recognitionRef.current) try { recognitionRef.current.abort(); } catch(e) { /* ignore */ }
             if (typeof window !== 'undefined' && window.speechSynthesis?.speaking) window.speechSynthesis.cancel();
             if (audioPlayerRef.current) {
@@ -843,6 +847,31 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [botStatus, isInitialized, communicationMode, hasConversationEnded, toggleListening]);
 
+    useEffect(() => {
+        if (config.showDiagnosticTimer && botStatus !== 'idle') {
+            setDiagnosticTimerValue(0);
+            if (diagnosticTimerIntervalRef.current) {
+                clearInterval(diagnosticTimerIntervalRef.current);
+            }
+            const startTime = Date.now();
+            diagnosticTimerIntervalRef.current = setInterval(() => {
+                setDiagnosticTimerValue(Date.now() - startTime);
+            }, 100);
+        } else {
+            if (diagnosticTimerIntervalRef.current) {
+                clearInterval(diagnosticTimerIntervalRef.current);
+                diagnosticTimerIntervalRef.current = null;
+            }
+            setDiagnosticTimerValue(0);
+        }
+
+        return () => {
+            if (diagnosticTimerIntervalRef.current) {
+                clearInterval(diagnosticTimerIntervalRef.current);
+            }
+        };
+    }, [botStatus, config.showDiagnosticTimer]);
+
 
     const handleSaveConversationAsPdf = async () => {
         toast({ title: "Generating PDF..." });
@@ -924,9 +953,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     <Image {...imageProps} alt="AI Blair Avatar" />
                     <div className="flex h-16 w-full items-center justify-center">
                     {botStatusMessage && (
-                        <div className={cn("flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow", (isListening || isBotProcessing) && "animate-pulse")}>
-                            {isListening ? <Mic size={20} className="mr-2" /> : <Loader2 size={20} className="mr-2 animate-spin" />}
-                            {botStatusMessage}
+                        <div className="flex flex-col items-center">
+                            <div className={cn("flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-accent-foreground shadow", (isListening || isBotProcessing) && "animate-pulse")}>
+                                {isListening ? <Mic size={20} className="mr-2" /> : <Loader2 size={20} className="mr-2 animate-spin" />}
+                                {botStatusMessage}
+                            </div>
+                             {config.showDiagnosticTimer && diagnosticTimerValue > 0 && (
+                                <div className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+                                    <Timer size={12}/>
+                                    <span>{(diagnosticTimerValue / 1000).toFixed(1)}s</span>
+                                </div>
+                            )}
                         </div>
                     )}
                     </div>
@@ -957,7 +994,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                <h2 className="mb-4 text-2xl font-bold text-center font-headline text-primary">{uiText.splashScreenWelcomeMessage}</h2>
               <Image {...imageProps} alt="AI Blair Avatar" />
                 {botStatusMessage && (
-                  <p className="mt-2 text-center text-lg font-bold text-primary animate-pulse">{botStatusMessage}</p>
+                  <div className="flex flex-col items-center mt-2">
+                    <p className="text-center text-lg font-bold text-primary animate-pulse">{botStatusMessage}</p>
+                    {config.showDiagnosticTimer && diagnosticTimerValue > 0 && (
+                        <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                            <Timer size={12}/>
+                            <span>{(diagnosticTimerValue / 1000).toFixed(1)}s</span>
+                        </div>
+                    )}
+                  </div>
                 )}
             </CardContent>
           </Card>
