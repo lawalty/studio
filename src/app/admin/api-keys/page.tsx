@@ -61,7 +61,7 @@ export default function ApiKeysPage() {
 
         const [appConfigSnap, siteAssetsSnap] = await Promise.all([
             getDoc(appConfigDocRef),
-            getDoc(siteAssetsSnap)
+            getDoc(siteAssetsDocRef)
         ]);
 
         if (appConfigSnap.exists()) {
