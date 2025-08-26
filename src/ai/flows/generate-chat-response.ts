@@ -211,7 +211,14 @@ const generateChatResponseFlow = async ({
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const appConfig = await getAppConfig();
-    const historyForRAG = chatHistory || [];
+    let historyForRAG = chatHistory || [];
+    
+    // FIX: If the history starts with a model message (the initial greeting), remove it.
+    // The AI doesn't need its own greeting to understand the user's first question.
+    if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
+        historyForRAG = historyForRAG.slice(1);
+    }
+    
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
 
     if (!lastUserMessage) {
@@ -356,3 +363,5 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
+
+    
