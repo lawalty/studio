@@ -33,7 +33,6 @@ const SPLASH_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/splash_image";
 
 const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and helpful assistant specializing in the pawn store industry. You are professional, articulate, and provide clear, concise answers based on your knowledge base. Your tone is engaging and conversational.";
 const DEFAULT_PERSONAL_BIO_TEXT = "I am a new AI assistant, recently created to help with questions about the pawn industry. I am still learning and growing my knowledge base every day.";
-const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
 const DEFAULT_STYLE_VALUE = 50;
 const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
@@ -43,7 +42,6 @@ const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
 export default function PersonaPage() {
   const [personaTraits, setPersonaTraits] = useState(DEFAULT_PERSONA_TRAITS_TEXT);
   const [personalBio, setPersonalBio] = useState(DEFAULT_PERSONAL_BIO_TEXT);
-  const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
   const [avatarPreview, setAvatarPreview] = useState<string>(DEFAULT_AVATAR_PLACEHOLDER);
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [animatedAvatarPreview, setAnimatedAvatarPreview] = useState<string>(DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
@@ -95,7 +93,6 @@ export default function PersonaPage() {
           setAnimatedAvatarPreview(data?.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER);
           setPersonaTraits(data?.personaTraits || DEFAULT_PERSONA_TRAITS_TEXT);
           setPersonalBio(data?.personalBio || DEFAULT_PERSONAL_BIO_TEXT);
-          setConversationalTopics(data?.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS);
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
           // Load slider values
@@ -185,7 +182,7 @@ export default function PersonaPage() {
       if (!greetingText) {
         const result = await generateInitialGreeting({
           personaTraits,
-          conversationalTopics,
+          conversationalTopics: "General", // Pass a default/placeholder
           useKnowledgeInGreeting,
           language: 'English', // Admin panel test is always in English
         });
@@ -333,7 +330,7 @@ export default function PersonaPage() {
       const appConfigDocRef = doc(db, FIRESTORE_APP_CONFIG_PATH);
 
       const siteAssetsToSave: { [key: string]: any } = {
-        personaTraits, personalBio, conversationalTopics, useKnowledgeInGreeting,
+        personaTraits, personalBio, useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
         formality: formality[0], conciseness: conciseness[0], tone: tone[0], formatting: formatting[0], welcomeMessage,
       };
@@ -431,21 +428,6 @@ export default function PersonaPage() {
                 />
                 <p className="text-xs text-muted-foreground mt-1">
                   This text will be used as the AI&apos;s own history when asked questions about itself.
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="conversationalTopics" className="font-medium flex items-center gap-1.5"><ListOrdered className="h-4 w-4" /> Conversational Topics</Label>
-                <Textarea
-                  id="conversationalTopics"
-                  value={conversationalTopics}
-                  onChange={(e) => setConversationalTopics(e.target.value)}
-                  placeholder="Enter topics separated by commas (e.g., Topic 1, Topic 2, Topic 3)"
-                  rows={5}
-                  className="mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Enter a comma-separated list (e.g., Topic 1, Topic 2). The space after the comma is optional but recommended for readability. This list will be used to categorize documents in the Knowledge Base.
                 </p>
               </div>
 

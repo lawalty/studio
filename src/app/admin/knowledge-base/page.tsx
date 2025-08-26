@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { extractTextFromLocalFile } from '@/ai/flows/extract-text-from-local-file-flow';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { deleteSource } from '@/ai/flows/delete-source-flow';
-import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye, Type, AudioLines, Image as ImageIcon, Mic, Square, Zap, FileCog } from 'lucide-react';
+import { Loader2, UploadCloud, Trash2, FileText, CheckCircle, AlertTriangle, History, Archive, RotateCcw, HelpCircle, ArrowLeftRight, Link as LinkIcon, Eye, Type, AudioLines, Image as ImageIcon, Mic, Square, Zap, FileCog, ListOrdered, Save } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
@@ -50,6 +50,9 @@ interface KnowledgeSource {
   title?: string;
   header?: string;
 }
+
+const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
+const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 
 const LEVEL_CONFIG: Record<KnowledgeBaseLevel, { title: string; description: string }> = {
   'High': { title: 'High Priority', description: 'Manage high priority sources.' },
@@ -300,6 +303,8 @@ export default function KnowledgeBasePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCurrentlyUploading, setIsCurrentlyUploading] = useState(false);
+  const [isSavingTopics, setIsSavingTopics] = useState(false);
+  const [conversationalTopics, setConversationalTopics] = useState(DEFAULT_CONVERSATIONAL_TOPICS);
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [selectedTopicForUpload, setSelectedTopicForUpload] = useState<string>('');
   const [uploadDescription, setUploadDescription] = useState('');
@@ -325,29 +330,24 @@ export default function KnowledgeBasePage() {
   }, []);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      const docRef = doc(db, 'configurations/site_display_assets');
-      try {
-        const docSnap = await getDoc(docRef);
+    const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+    const unsubscribeSettings = onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
-          const data = docSnap.data();
-          const topicsString = data.conversationalTopics || '';
-          let topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
-          setAvailableTopics(topicsArray);
-          if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
-            setSelectedTopicForUpload(topicsArray[0]);
-          }
+            const data = docSnap.data();
+            const topicsString = data.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS;
+            setConversationalTopics(topicsString);
+            const topicsArray = topicsString.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+            setAvailableTopics(topicsArray);
+            if (topicsArray.length > 0 && !topicsArray.includes(selectedTopicForUpload)) {
+              setSelectedTopicForUpload(topicsArray[0]);
+            }
         }
-      } catch (error) {
-        console.error("Error fetching initial settings:", error);
-      }
-    };
-    fetchSettings();
-  }, [selectedTopicForUpload]);
-  
-  useEffect(() => {
+    }, (error) => {
+        console.error("Error fetching settings:", error);
+    });
+
     const q = query(collection(db, 'kb_meta'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const unsubscribeSources = onSnapshot(q, (querySnapshot) => {
       const allSources: KnowledgeSource[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
@@ -386,8 +386,24 @@ export default function KnowledgeBasePage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+        unsubscribeSettings();
+        unsubscribeSources();
+    };
+  }, [selectedTopicForUpload]);
+  
+  const handleSaveTopics = async () => {
+    setIsSavingTopics(true);
+    const docRef = doc(db, FIRESTORE_SITE_ASSETS_PATH);
+    try {
+        await setDoc(docRef, { conversationalTopics }, { merge: true });
+        toast({ title: "Topics Saved", description: "The list of conversational topics has been updated." });
+    } catch (error) {
+        console.error("Error saving topics:", error);
+        toast({ title: "Error", description: "Could not save topics.", variant: "destructive" });
+    }
+    setIsSavingTopics(false);
+  };
 
   const handleDeleteSource = useCallback(async (source: KnowledgeSource) => {
     setOperationStatus(source.id, true);
@@ -730,6 +746,36 @@ export default function KnowledgeBasePage() {
           Manage the documents and sources that form the AI&apos;s knowledge. Upload new content, move sources between priority levels, or remove them entirely.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+            <CardTitle className="font-headline flex items-center gap-2"><ListOrdered /> Conversational Topics</CardTitle>
+            <CardDescription>
+                Manage the list of topics used to categorize knowledge base documents.
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Label htmlFor="conversationalTopics">Topics (comma-separated)</Label>
+            <Textarea
+                id="conversationalTopics"
+                value={conversationalTopics}
+                onChange={(e) => setConversationalTopics(e.target.value)}
+                placeholder="e.g., Topic 1, Topic 2, Topic 3"
+                rows={5}
+                className="mt-1"
+            />
+             <p className="text-xs text-muted-foreground mt-1">
+                This list will be used to categorize documents for upload. The space after the comma is optional but recommended.
+            </p>
+        </CardContent>
+        <CardFooter>
+            <Button onClick={handleSaveTopics} disabled={isSavingTopics}>
+                {isSavingTopics ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save Topics
+            </Button>
+        </CardFooter>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">
           <Card>
