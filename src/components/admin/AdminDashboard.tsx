@@ -249,7 +249,7 @@ ${stats.topDocuments.map(d => `${d.name}: ${d.references} references`).join('\n'
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
               <AdminNavLinkCard href="/admin/persona" title="AI Persona" description="Define conversational style and traits." Icon={Bot}/>
               <AdminNavLinkCard href="/admin/knowledge-base" title="Knowledge Base" description="Manage documents for the AI." Icon={Database}/>
-              <AdminNavLinkCard href="/admin/api-keys" title="API Keys" description="Manage third-party service keys." Icon={KeyRound}/>
+              <AdminNavLinkCard href="/admin/api-keys" title="Diagnostics & Test" description="Manage keys and test services." Icon={KeyRound}/>
               <AdminNavLinkCard href="/admin/site-settings" title="Site Settings" description="Adjust splash screen and display." Icon={Cog}/>
               <AdminNavLinkCard href="/admin/targeted-chats" title="Targeted Chats" description="Configure specialized chat modes." Icon={Crosshair}/>
             </div>

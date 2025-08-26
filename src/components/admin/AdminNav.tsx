@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 const navLinks = [
   { href: '/admin/persona', label: 'AI Persona', Icon: Bot },
   { href: '/admin/knowledge-base', label: 'Knowledge Base', Icon: Database },
-  { href: '/admin/api-keys', label: 'API Keys & RAG', Icon: KeyRound },
+  { href: '/admin/api-keys', label: 'Diagnostics & Test', Icon: KeyRound },
   { href: '/admin/site-settings', label: 'Site Settings', Icon: Cog },
   { href: '/admin/targeted-chats', label: 'Targeted Chats', Icon: Crosshair },
 ];

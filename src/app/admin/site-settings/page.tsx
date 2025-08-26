@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot, Timer, History, Link2 } from 'lucide-react';
+import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot, Timer, History, Link2, SlidersHorizontal, Terminal } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -19,6 +19,7 @@ import AdminNav from '@/components/admin/AdminNav';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { clearUsageStats } from '@/ai/flows/clear-usage-stats-flow';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Slider } from '@/components/ui/slider';
 
 
 const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
@@ -59,6 +60,11 @@ const modelOptions = [
     }
 ];
 
+interface AppConfig {
+  distanceThreshold: number;
+}
+
+
 export default function SiteSettingsPage() {
   const [backgroundImagePreview, setBackgroundImagePreview] = useState<string>(DEFAULT_BACKGROUND_IMAGE_SRC);
   const [selectedBackgroundFile, setSelectedBackgroundFile] = useState<File | null>(null);
@@ -74,6 +80,10 @@ export default function SiteSettingsPage() {
   const [inactivityTimeout, setInactivityTimeout] = useState<string>(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
   const [animationSyncFactor, setAnimationSyncFactor] = useState<string>(String(DEFAULT_ANIMATION_SYNC_FACTOR));
   const [aiPreparationTime, setAiPreparationTime] = useState<string>(String(DEFAULT_AI_PREPARATION_TIME_MS));
+
+  // RAG Tuning State
+  const [config, setConfig] = useState<AppConfig>({ distanceThreshold: 0.8 });
+  const [isSavingAppConfig, setIsSavingAppConfig] = useState(false);
 
 
   const [isSaving, setIsSaving] = useState(false);
@@ -131,8 +141,11 @@ export default function SiteSettingsPage() {
         if (appConfigSnap.exists()) {
             const data = appConfigSnap.data();
             setConversationalModel(data.conversationalModel || DEFAULT_CONVERSATIONAL_MODEL);
+            setConfig({
+              distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.8,
+            });
         } else {
-            await setDoc(appConfigDocRef, { conversationalModel: DEFAULT_CONVERSATIONAL_MODEL }, { merge: true });
+            await setDoc(appConfigDocRef, { conversationalModel: DEFAULT_CONVERSATIONAL_MODEL, distanceThreshold: 0.8 }, { merge: true });
         }
 
       } catch (error: any) {
@@ -185,7 +198,6 @@ Please check your environment variables and Google Cloud Console settings.`;
   const handleAiPreparationTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setAiPreparationTime(e.target.value);
   };
-
 
   const handleSaveAllSiteSettings = async () => {
     setIsSaving(true);
@@ -271,6 +283,10 @@ Please check your environment variables and Google Cloud Console settings.`;
           appConfigUpdate.conversationalModel = conversationalModel;
           appConfigChanged = true;
       }
+      if (config.distanceThreshold !== (currentAppConfig.distanceThreshold ?? 0.8)) {
+        appConfigUpdate.distanceThreshold = config.distanceThreshold;
+        appConfigChanged = true;
+      }
       
       const updatePromises = [];
       if (siteAssetsChanged) {
@@ -281,7 +297,6 @@ Please check your environment variables and Google Cloud Console settings.`;
       }
 
       if (updatePromises.length > 0) {
-        await Promise.all(updatePromises);
         toast({ title: "Site Settings Saved", description: "Your site display and app settings have been updated." });
       } else {
         toast({ title: "No Changes", description: "No setting changes detected to save." });
@@ -359,12 +374,18 @@ Please check your environment variables and Google Cloud Console settings.`;
         <p className="text-center text-muted-foreground">Loading site settings...</p>
        ) : (
         <>
-          <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Admin Password Management</AlertTitle>
-              <AlertDescription>
-                The admin password is now managed exclusively in your <code className="font-mono bg-muted p-1 rounded">.env.local</code> file for improved security and reliability. Edit the <code className="font-mono bg-muted p-1 rounded">ADMIN_PASSWORD</code> variable there.
-              </AlertDescription>
+          <Alert variant="default" className="bg-sky-50 border-sky-200">
+            <Terminal className="h-4 w-4 text-sky-700" />
+            <AlertTitle className="text-sky-800 font-bold">Important: Google AI Configuration</AlertTitle>
+            <AlertDescription className="text-sky-700 space-y-3">
+                <p>
+                  Your Google AI API Key is managed via an environment variable for security.
+                </p>
+                <ul className="list-disc pl-5 text-xs space-y-1">
+                    <li>For local development, add your `GEMINI_API_KEY` to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
+                    <li>For production, set this as a secret in your hosting provider&apos;s dashboard. See `apphosting.yaml` for the required secret name.</li>
+                </ul>
+            </AlertDescription>
           </Alert>
 
           <Card>
@@ -385,6 +406,34 @@ Please check your environment variables and Google Cloud Console settings.`;
                         </Label>
                     ))}
                 </RadioGroup>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2"><SlidersHorizontal /> RAG Tuning</CardTitle>
+              <CardDescription>
+                  Adjust the similarity threshold for the Firestore vector search.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div>
+                  <Label htmlFor="distance-slider" className="font-medium">
+                  Distance Threshold: {config.distanceThreshold.toFixed(2)}
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-1">
+                  Lower values mean stricter, more relevant results (closer to 0). Higher values are more lenient (closer to 1). Default is 0.8.
+                  </p>
+              </div>
+              <Slider
+                  id="distance-slider"
+                  min={0.1}
+                  max={1}
+                  step={0.01}
+                  value={[config.distanceThreshold]}
+                  onValueChange={(value) => setConfig(prev => ({ ...prev, distanceThreshold: value[0] }))}
+                  className="mt-2"
+              />
             </CardContent>
           </Card>
 
