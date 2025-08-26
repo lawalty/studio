@@ -498,69 +498,77 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
 
         const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
-        const updatedMessages = [...messages, userMessage];
-
+        
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
+
+        setMessages(prevMessages => {
+            const updatedMessages = [...prevMessages, userMessage];
+            
+            // This self-executing async function runs the AI call.
+            // It's inside the state updater to guarantee it has the latest messages.
+            (async () => {
+                const historyForGenkit = updatedMessages.map(msg => ({ 
+                    role: msg.sender as 'user' | 'model', 
+                    content: [{ text: msg.text }] 
+                }));
+
+                try {
+                    const { personaTraits, personalBio, conversationalTopics } = config;
+                    const flowInput: GenerateChatResponseInput = {
+                        personaTraits, personalBio, conversationalTopics,
+                        chatHistory: historyForGenkit,
+                        language, communicationMode, clarificationAttemptCount,
+                    };
+                    const result = await generateChatResponse(flowInput);
+                    
+                    if (!isMountedRef.current) return;
+
+                    clearPreparationTimer();
+
+                    if (result.isClarificationQuestion) {
+                        setClarificationAttemptCount(prev => prev + 1);
+                    } else {
+                        setClarificationAttemptCount(0);
+                    }
+                    
+                    const aiMessage: Message = {
+                        id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+                        pdfReference: result.pdfReference, distance: result.distance,
+                        distanceThreshold: result.distanceThreshold, formality: result.formality,
+                        conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+                        debugClosestMatch: result.debugClosestMatch,
+                    };
+                    
+                    await speakText(result.aiResponse, aiMessage, () => {
+                        if (result.shouldEndConversation) {
+                            handleEndChatManually();
+                        } else if (!hasConversationEnded) {
+                            setBotStatus('idle');
+                        }
+                    });
+
+                } catch (error: any) {
+                    if (!isMountedRef.current) return;
+                    console.error("Error in generateChatResponse:", error);
+                    await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+                    const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
+                    const translatedError = await translate(errorMessage);
+                    
+                    clearPreparationTimer();
+                    const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
+                    await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+                }
+            })();
+
+            return updatedMessages;
+        });
+
         setInputValue('');
-        setMessages(updatedMessages);
         setBotStatus('preparing');
         startPreparationTimer();
         
-        (async () => {
-            const historyForGenkit = updatedMessages.map(msg => ({ 
-                role: msg.sender as 'user' | 'model', 
-                content: [{ text: msg.text }] 
-            }));
-
-            try {
-                const { personaTraits, personalBio, conversationalTopics } = config;
-                const flowInput: GenerateChatResponseInput = {
-                    personaTraits, personalBio, conversationalTopics,
-                    chatHistory: historyForGenkit,
-                    language, communicationMode, clarificationAttemptCount,
-                };
-                const result = await generateChatResponse(flowInput);
-                
-                if (!isMountedRef.current) return;
-
-                clearPreparationTimer();
-
-                if (result.isClarificationQuestion) {
-                    setClarificationAttemptCount(prev => prev + 1);
-                } else {
-                    setClarificationAttemptCount(0);
-                }
-                
-                const aiMessage: Message = {
-                    id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-                    pdfReference: result.pdfReference, distance: result.distance,
-                    distanceThreshold: result.distanceThreshold, formality: result.formality,
-                    conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-                    debugClosestMatch: result.debugClosestMatch,
-                };
-                
-                await speakText(result.aiResponse, aiMessage, () => {
-                    if (result.shouldEndConversation) {
-                        handleEndChatManually();
-                    } else if (!hasConversationEnded) {
-                        setBotStatus('idle');
-                    }
-                });
-
-            } catch (error: any) {
-                if (!isMountedRef.current) return;
-                console.error("Error in generateChatResponse:", error);
-                await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-                const errorMessage = "I'm having a little trouble connecting right now. Please try again in a moment.";
-                const translatedError = await translate(errorMessage);
-                
-                clearPreparationTimer();
-                const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
-                await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
-            }
-        })();
-    }, [hasConversationEnded, isBotProcessing, messages, clearInactivityTimer, startPreparationTimer, config, language, communicationMode, clarificationAttemptCount, clearPreparationTimer, speakText, handleEndChatManually, logErrorToFirestore, translate]);
+    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, startPreparationTimer, config, language, communicationMode, clarificationAttemptCount, clearPreparationTimer, speakText, handleEndChatManually, logErrorToFirestore, translate]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         const hasUserMessages = msgs.some(m => m.sender === 'user');
