@@ -35,9 +35,6 @@ const DEFAULT_PERSONA_TRAITS_TEXT = "You are IA Blair v2, a knowledgeable and he
 const DEFAULT_PERSONAL_BIO_TEXT = "I am a new AI assistant, recently created to help with questions about the pawn industry. I am still learning and growing my knowledge base every day.";
 const DEFAULT_CONVERSATIONAL_TOPICS = "Pawn industry regulations, Customer service best practices, Product valuation, Store operations and security";
 const DEFAULT_CUSTOM_GREETING = "";
-const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
-const DEFAULT_INACTIVITY_TIMEOUT_MS = 30000;
-const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 const DEFAULT_STYLE_VALUE = 50;
 const DEFAULT_SPLASH_IMAGE_SRC = TRANSPARENT_PIXEL;
 const DEFAULT_WELCOME_MESSAGE = "Welcome to AI Chat";
@@ -53,9 +50,6 @@ export default function PersonaPage() {
   const [selectedAnimatedAvatarFile, setSelectedAnimatedAvatarFile] = useState<File | null>(null);
   const [useKnowledgeInGreeting, setUseKnowledgeInGreeting] = useState<boolean>(true);
   const [customGreetingMessage, setCustomGreetingMessage] = useState<string>(DEFAULT_CUSTOM_GREETING);
-  const [responsePauseTime, setResponsePauseTime] = useState<string>(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
-  const [inactivityTimeout, setInactivityTimeout] = useState<string>(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
-  const [animationSyncFactor, setAnimationSyncFactor] = useState<string>(String(DEFAULT_ANIMATION_SYNC_FACTOR));
 
   // Splash Screen State
   const [splashImagePreview, setSplashImagePreview] = useState<string>(DEFAULT_SPLASH_IMAGE_SRC);
@@ -104,9 +98,6 @@ export default function PersonaPage() {
           setConversationalTopics(data?.conversationalTopics || DEFAULT_CONVERSATIONAL_TOPICS);
           setUseKnowledgeInGreeting(typeof data?.useKnowledgeInGreeting === 'boolean' ? data.useKnowledgeInGreeting : true);
           setCustomGreetingMessage(data?.customGreetingMessage || DEFAULT_CUSTOM_GREETING);
-          setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
-          setInactivityTimeout(data?.inactivityTimeoutMs === undefined ? String(DEFAULT_INACTIVITY_TIMEOUT_MS) : String(data.inactivityTimeoutMs));
-          setAnimationSyncFactor(data?.animationSyncFactor === undefined ? String(DEFAULT_ANIMATION_SYNC_FACTOR) : String(data.animationSyncFactor));
           // Load slider values
           setFormality([data?.formality ?? DEFAULT_STYLE_VALUE]);
           setConciseness([data?.conciseness ?? DEFAULT_STYLE_VALUE]);
@@ -171,18 +162,6 @@ export default function PersonaPage() {
     }
   };
 
-  const handleResponsePauseTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setResponsePauseTime(e.target.value);
-  };
-  
-  const handleInactivityTimeoutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInactivityTimeout(e.target.value);
-  };
-  
-  const handleAnimationSyncFactorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAnimationSyncFactor(e.target.value);
-  };
-
   const handleSplashImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
@@ -218,7 +197,7 @@ export default function PersonaPage() {
         .replace(/\bEZCORP\b/gi, 'easy corp');
 
       let audioDataUri = '';
-      if (ttsConfig.useTtsApi && ttsConfig.tts && ttsConfig.voiceId) {
+      if (ttsConfig.useCustomTts && ttsConfig.tts && ttsConfig.voiceId) {
           const result = await elevenLabsTextToSpeech({ text: processedGreetingText, apiKey: ttsConfig.tts, voiceId: ttsConfig.voiceId });
           if(result.error) throw new Error(result.error);
           audioDataUri = result.media;
@@ -346,16 +325,7 @@ export default function PersonaPage() {
         setIsSaving(false); return;
       }
     }
-
-    const pauseTimeMs = parseInt(responsePauseTime, 10);
-    const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
     
-    const inactivityMs = parseInt(inactivityTimeout, 10);
-    const validInactivityTimeout = isNaN(inactivityMs) || inactivityMs < 0 ? DEFAULT_INACTIVITY_TIMEOUT_MS : inactivityMs;
-
-    const syncFactor = parseFloat(animationSyncFactor);
-    const validSyncFactor = isNaN(syncFactor) || syncFactor <= 0 ? DEFAULT_ANIMATION_SYNC_FACTOR : syncFactor;
-
     try {
       const currentSiteAssetsSnap = await getDoc(siteAssetsDocRef);
       const currentSiteAssets = currentSiteAssetsSnap.data() || {};
@@ -365,7 +335,6 @@ export default function PersonaPage() {
       const siteAssetsToSave: { [key: string]: any } = {
         personaTraits, personalBio, conversationalTopics, useKnowledgeInGreeting,
         customGreetingMessage: customGreetingMessage.trim() === "" ? "" : customGreetingMessage,
-        responsePauseTimeMs: validPauseTime, inactivityTimeoutMs: validInactivityTimeout, animationSyncFactor: validSyncFactor,
         formality: formality[0], conciseness: conciseness[0], tone: tone[0], formatting: formatting[0], welcomeMessage,
       };
 
@@ -520,71 +489,6 @@ export default function PersonaPage() {
                 {isTestingGreeting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
                 Test Initial Greeting
               </Button>
-
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
-                      <Timer className="h-4 w-4" />
-                      User Speaking Pause Time (ms)
-                  </Label>
-                  <Input
-                      id="responsePauseTime"
-                      type="number"
-                      value={responsePauseTime}
-                      onChange={handleResponsePauseTimeChange}
-                      placeholder="e.g., 750"
-                      min="0"
-                      step="50"
-                      className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                      Pause after user stops speaking before AI processes input (Audio Only mode). Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="inactivityTimeout" className="font-medium flex items-center gap-1.5">
-                      <History className="h-4 w-4" />
-                      Inactivity Timeout (ms)
-                  </Label>
-                  <Input
-                      id="inactivityTimeout"
-                      type="number"
-                      value={inactivityTimeout}
-                      onChange={handleInactivityTimeoutChange}
-                      placeholder="e.g., 30000"
-                      min="5000"
-                      step="1000"
-                      className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                      In Audio Only mode, how long to wait for a response before checking in. Default: {DEFAULT_INACTIVITY_TIMEOUT_MS}ms.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="animationSyncFactor" className="font-medium flex items-center gap-1.5">
-                        <Link2 className="h-4 w-4" />
-                        Audio-Text Animation Sync
-                    </Label>
-                    <Input
-                        id="animationSyncFactor"
-                        type="number"
-                        value={animationSyncFactor}
-                        onChange={handleAnimationSyncFactorChange}
-                        placeholder="e.g., 0.9"
-                        min="0.1"
-                        max="2.0"
-                        step="0.05"
-                        className="mt-1"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                        Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, &gt;1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
-                    </p>
-                </div>
-              </div>
-
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
                 <div>

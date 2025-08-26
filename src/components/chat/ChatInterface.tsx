@@ -134,6 +134,7 @@ interface ChatConfig {
     personalBio: string;
     conversationalTopics: string;
     responsePauseTimeMs: number;
+    aiResponsePreparationTimeMs: number;
     inactivityTimeoutMs: number;
     customGreetingMessage: string;
     useKnowledgeInGreeting: boolean;
@@ -190,6 +191,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         personalBio: "",
         conversationalTopics: "",
         responsePauseTimeMs: 1500,
+        aiResponsePreparationTimeMs: 2000,
         inactivityTimeoutMs: 30000,
         customGreetingMessage: "",
         useKnowledgeInGreeting: true,
@@ -305,7 +307,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             })();
 
-        }, config.responsePauseTimeMs);
+        }, config.aiResponsePreparationTimeMs);
     }, [hasConversationEnded, communicationMode, clearPreparationTimer, config, language, botStatus]);
 
     const toggleListening = useCallback(() => {
@@ -503,20 +505,21 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const handleSendMessage = useCallback((text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
 
-        const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
-        
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
-
+        
+        const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
         const updatedMessages = [...messagesRef.current, userMessage];
-        setMessages(updatedMessages);
+        messagesRef.current = updatedMessages; // Immediately update ref
+        setMessages(updatedMessages); // Schedule state update
+
         setInputValue('');
         setBotStatus('preparing');
         startPreparationTimer();
         
         (async () => {
             try {
-                const historyForGenkit = updatedMessages.map(msg => ({ 
+                const historyForGenkit = messagesRef.current.map(msg => ({ 
                     role: msg.sender as 'user' | 'model', 
                     content: [{ text: msg.text }] 
                 }));
@@ -673,6 +676,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     personalBio: assets.personalBio || "I am an AI assistant.",
                     conversationalTopics: assets.conversationalTopics || "",
                     responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
+                    aiResponsePreparationTimeMs: assets.aiResponsePreparationTimeMs ?? 2000,
                     inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
                     customGreetingMessage: assets.customGreetingMessage || "",
                     useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,

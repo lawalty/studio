@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot, Timer } from 'lucide-react';
+import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot, Timer, History, Link2 } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -26,6 +26,12 @@ const DEFAULT_BACKGROUND_IMAGE_SRC = TRANSPARENT_PIXEL;
 const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_MAINTENANCE_MESSAGE = "Exciting updates are on the way! We'll be back online shortly.";
 const DEFAULT_CONVERSATIONAL_MODEL = 'gemini-1.5-pro-latest';
+const DEFAULT_RESPONSE_PAUSE_TIME_MS = 750;
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 30000;
+const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
+const DEFAULT_AI_PREPARATION_TIME_MS = 2000;
+
+
 const FIRESTORE_SITE_ASSETS_PATH = "configurations/site_display_assets";
 const FIRESTORE_APP_CONFIG_PATH = "configurations/app_config";
 const BACKGROUND_IMAGE_FIREBASE_STORAGE_PATH = "site_assets/background_image";
@@ -64,6 +70,11 @@ export default function SiteSettingsPage() {
   const [showDiagnosticTimer, setShowDiagnosticTimer] = useState(false);
   const [conversationalModel, setConversationalModel] = useState(DEFAULT_CONVERSATIONAL_MODEL);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [responsePauseTime, setResponsePauseTime] = useState<string>(String(DEFAULT_RESPONSE_PAUSE_TIME_MS));
+  const [inactivityTimeout, setInactivityTimeout] = useState<string>(String(DEFAULT_INACTIVITY_TIMEOUT_MS));
+  const [animationSyncFactor, setAnimationSyncFactor] = useState<string>(String(DEFAULT_ANIMATION_SYNC_FACTOR));
+  const [aiPreparationTime, setAiPreparationTime] = useState<string>(String(DEFAULT_AI_PREPARATION_TIME_MS));
+
 
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -94,6 +105,11 @@ export default function SiteSettingsPage() {
           setShowLanguageSelector(data.showLanguageSelector === undefined ? true : data.showLanguageSelector);
           setArchiveChatHistoryEnabled(data.archiveChatHistoryEnabled === undefined ? true : data.archiveChatHistoryEnabled);
           setShowDiagnosticTimer(data.showDiagnosticTimer === undefined ? false : data.showDiagnosticTimer);
+          setResponsePauseTime(data?.responsePauseTimeMs === undefined ? String(DEFAULT_RESPONSE_PAUSE_TIME_MS) : String(data.responsePauseTimeMs));
+          setInactivityTimeout(data?.inactivityTimeoutMs === undefined ? String(DEFAULT_INACTIVITY_TIMEOUT_MS) : String(data.inactivityTimeoutMs));
+          setAnimationSyncFactor(data?.animationSyncFactor === undefined ? String(DEFAULT_ANIMATION_SYNC_FACTOR) : String(data.animationSyncFactor));
+          setAiPreparationTime(data?.aiResponsePreparationTimeMs === undefined ? String(DEFAULT_AI_PREPARATION_TIME_MS) : String(data.aiResponsePreparationTimeMs));
+
         } else {
           // On first run, create the doc with defaults
           const defaultSettings = {
@@ -104,6 +120,10 @@ export default function SiteSettingsPage() {
             showLanguageSelector: true,
             archiveChatHistoryEnabled: true,
             showDiagnosticTimer: false,
+            responsePauseTimeMs: DEFAULT_RESPONSE_PAUSE_TIME_MS,
+            inactivityTimeoutMs: DEFAULT_INACTIVITY_TIMEOUT_MS,
+            animationSyncFactor: DEFAULT_ANIMATION_SYNC_FACTOR,
+            aiResponsePreparationTimeMs: DEFAULT_AI_PREPARATION_TIME_MS,
           };
           await setDoc(siteAssetsDocRef, defaultSettings, { merge: true });
         }
@@ -150,6 +170,22 @@ Please check your environment variables and Google Cloud Console settings.`;
     }
   };
 
+  const handleResponsePauseTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setResponsePauseTime(e.target.value);
+  };
+  
+  const handleInactivityTimeoutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInactivityTimeout(e.target.value);
+  };
+  
+  const handleAnimationSyncFactorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAnimationSyncFactor(e.target.value);
+  };
+  
+  const handleAiPreparationTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAiPreparationTime(e.target.value);
+  };
+
 
   const handleSaveAllSiteSettings = async () => {
     setIsSaving(true);
@@ -174,6 +210,14 @@ Please check your environment variables and Google Cloud Console settings.`;
 
     const speedMs = parseInt(typingSpeedMs, 10);
     const validTypingSpeed = isNaN(speedMs) || speedMs <= 0 ? DEFAULT_TYPING_SPEED_MS : speedMs;
+    const pauseTimeMs = parseInt(responsePauseTime, 10);
+    const validPauseTime = isNaN(pauseTimeMs) || pauseTimeMs < 0 ? DEFAULT_RESPONSE_PAUSE_TIME_MS : pauseTimeMs;
+    const inactivityMs = parseInt(inactivityTimeout, 10);
+    const validInactivityTimeout = isNaN(inactivityMs) || inactivityMs < 0 ? DEFAULT_INACTIVITY_TIMEOUT_MS : inactivityMs;
+    const syncFactor = parseFloat(animationSyncFactor);
+    const validSyncFactor = isNaN(syncFactor) || syncFactor <= 0 ? DEFAULT_ANIMATION_SYNC_FACTOR : syncFactor;
+    const prepTimeMs = parseInt(aiPreparationTime, 10);
+    const validPrepTime = isNaN(prepTimeMs) || prepTimeMs < 0 ? DEFAULT_AI_PREPARATION_TIME_MS : prepTimeMs;
 
     try {
       // Data for site_display_assets
@@ -203,6 +247,19 @@ Please check your environment variables and Google Cloud Console settings.`;
       if (showDiagnosticTimer !== (currentSiteAssets.showDiagnosticTimer ?? false)) {
         siteAssetsUpdate.showDiagnosticTimer = showDiagnosticTimer; siteAssetsChanged = true;
       }
+      if (validPauseTime !== (currentSiteAssets.responsePauseTimeMs ?? DEFAULT_RESPONSE_PAUSE_TIME_MS)) {
+        siteAssetsUpdate.responsePauseTimeMs = validPauseTime; siteAssetsChanged = true;
+      }
+      if (validInactivityTimeout !== (currentSiteAssets.inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS)) {
+        siteAssetsUpdate.inactivityTimeoutMs = validInactivityTimeout; siteAssetsChanged = true;
+      }
+      if (validSyncFactor !== (currentSiteAssets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR)) {
+        siteAssetsUpdate.animationSyncFactor = validSyncFactor; siteAssetsChanged = true;
+      }
+      if (validPrepTime !== (currentSiteAssets.aiResponsePreparationTimeMs ?? DEFAULT_AI_PREPARATION_TIME_MS)) {
+        siteAssetsUpdate.aiResponsePreparationTimeMs = validPrepTime; siteAssetsChanged = true;
+      }
+
 
       // Data for app_config
       const appConfigUpdate: { [key: string]: any } = {};
@@ -371,6 +428,108 @@ Please check your environment variables and Google Cloud Console settings.`;
                 </Button>
             </CardFooter>
           </Card>
+          
+          <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center gap-2"><Timer /> Universal Timing Controls</CardTitle>
+                <CardDescription>
+                Configure universal timing settings for audio chat modes and animations.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="aiPreparationTime" className="font-medium flex items-center gap-1.5">
+                      <Bot className="h-4 w-4" />
+                      AI Response Preparation Time (ms)
+                  </Label>
+                  <Input
+                      id="aiPreparationTime"
+                      type="number"
+                      value={aiPreparationTime}
+                      onChange={handleAiPreparationTimeChange}
+                      placeholder={`e.g., ${DEFAULT_AI_PREPARATION_TIME_MS}`}
+                      min="0"
+                      step="50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                      Time to wait before playing the "hold message" audio. Default: {DEFAULT_AI_PREPARATION_TIME_MS}ms.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="responsePauseTime" className="font-medium flex items-center gap-1.5">
+                      <Timer className="h-4 w-4" />
+                      User Speaking Pause Time (ms)
+                  </Label>
+                  <Input
+                      id="responsePauseTime"
+                      type="number"
+                      value={responsePauseTime}
+                      onChange={handleResponsePauseTimeChange}
+                      placeholder={`e.g., ${DEFAULT_RESPONSE_PAUSE_TIME_MS}`}
+                      min="0"
+                      step="50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                      Pause after user stops speaking before AI processes input (Audio Only mode). Default: {DEFAULT_RESPONSE_PAUSE_TIME_MS}ms.
+                  </p>
+                </div>
+                 <div className="space-y-2">
+                  <Label htmlFor="inactivityTimeout" className="font-medium flex items-center gap-1.5">
+                      <History className="h-4 w-4" />
+                      Inactivity Timeout (ms)
+                  </Label>
+                  <Input
+                      id="inactivityTimeout"
+                      type="number"
+                      value={inactivityTimeout}
+                      onChange={handleInactivityTimeoutChange}
+                      placeholder={`e.g., ${DEFAULT_INACTIVITY_TIMEOUT_MS}`}
+                      min="5000"
+                      step="1000"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                      In Audio Only mode, how long to wait for a response before checking in. Default: {DEFAULT_INACTIVITY_TIMEOUT_MS}ms.
+                  </p>
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="animationSyncFactor" className="font-medium flex items-center gap-1.5">
+                        <Link2 className="h-4 w-4" />
+                        Audio-Text Animation Sync
+                    </Label>
+                    <Input
+                        id="animationSyncFactor"
+                        type="number"
+                        value={animationSyncFactor}
+                        onChange={handleAnimationSyncFactorChange}
+                        placeholder={`e.g., ${DEFAULT_ANIMATION_SYNC_FACTOR}`}
+                        min="0.1"
+                        max="2.0"
+                        step="0.05"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Adjusts typing speed in Audio-Text mode to match audio length (API TTS only). &lt;1.0 is faster, &gt;1.0 is slower. Default: {DEFAULT_ANIMATION_SYNC_FACTOR}.
+                    </p>
+                </div>
+                 <div className="space-y-2">
+                <Label htmlFor="typingSpeedMs" className="font-medium flex items-center gap-1.5">
+                  <Clock className="h-4 w-4" /> Average Typing Delay (ms)
+                </Label>
+                <Input
+                  id="typingSpeedMs"
+                  type="number"
+                  value={typingSpeedMs}
+                  onChange={handleTypingSpeedChange}
+                  placeholder="e.g., 40"
+                  min="10"
+                  step="5"
+                  disabled={isLoadingData}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The average delay between each character appearing for text-only mode animations. Lower is faster. Default: {DEFAULT_TYPING_SPEED_MS}ms.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -518,41 +677,6 @@ Please check your environment variables and Google Cloud Console settings.`;
                 <Button variant="outline" onClick={handleResetDiagnosticTimer} disabled={isLoadingData}>
                 <RotateCcw className="mr-2 h-4 w-4" /> Reset Diagnostic Timer
                 </Button>
-            </CardFooter>
-          </Card>
-
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2"><Type className="h-5 w-5" /> AI Speech Text Typing Animation</CardTitle>
-              <CardDescription>
-                Configure the letter-by-letter typing animation effect for AI Blair&apos;s speech.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="typingSpeedMs" className="font-medium flex items-center gap-1.5">
-                  <Clock className="h-4 w-4" /> Average Typing Delay (ms)
-                </Label>
-                <Input
-                  id="typingSpeedMs"
-                  type="number"
-                  value={typingSpeedMs}
-                  onChange={handleTypingSpeedChange}
-                  placeholder="e.g., 40"
-                  min="10"
-                  step="5"
-                  disabled={isLoadingData}
-                />
-                <p className="text-xs text-muted-foreground">
-                  The average delay between each character appearing. Lower is faster. Default: {DEFAULT_TYPING_SPEED_MS}ms.
-                </p>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button variant="outline" onClick={handleResetTypingSpeed} disabled={isLoadingData}>
-                <RotateCcw className="mr-2 h-4 w-4" /> Reset Typing Speed
-              </Button>
             </CardFooter>
           </Card>
 
