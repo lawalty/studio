@@ -264,9 +264,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearPreparationTimer();
     
         preparationTimerRef.current = setTimeout(async () => {
-            if (!isMountedRef.current || isHoldMessagePlaying.current) {
-                return;
-            }
+            if (!isMountedRef.current) return;
     
             try {
                 const result = await generateHoldMessage({ 
@@ -503,21 +501,20 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
     }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText]);
 
-    const handleSendMessage = useCallback(async (text: string) => {
+    const handleSendMessage = useCallback((text: string) => {
         if (!text.trim() || hasConversationEnded || isBotProcessing) return;
 
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
 
         const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
-        
+        const updatedMessages = [...messagesRef.current, userMessage];
+
+        setMessages(updatedMessages);
         setInputValue('');
         setBotStatus('preparing');
         startPreparationTimer();
         
-        const updatedMessages = [...messagesRef.current, userMessage];
-        setMessages(updatedMessages);
-
         (async () => {
             try {
                 const historyForGenkit = updatedMessages.map(msg => ({ 
@@ -532,6 +529,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     language, communicationMode, clarificationAttemptCount,
                 };
                 const result = await generateChatResponse(flowInput);
+                
+                clearPreparationTimer();
 
                 if (result.isClarificationQuestion) {
                     setClarificationAttemptCount(prev => prev + 1);
@@ -892,7 +891,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
             heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
             while (heightLeft > 0) {
-                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
+                position -= (pdf.internal.pageSize.getHeight() - pageMargin);
                 pdf.addPage();
                 pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
                 heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
@@ -1030,5 +1029,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
