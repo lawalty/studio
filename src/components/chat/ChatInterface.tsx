@@ -148,6 +148,11 @@ interface ChatConfig {
     splashScreenWelcomeMessage: string;
 }
 
+interface PrecachedData {
+    greetingText: string;
+    greetingAudioUri?: string;
+}
+
 const ENGLISH_UI_TEXT = {
     loadingConfig: "Loading Chat Configuration...",
     isPreparing: "is preparing",
@@ -184,26 +189,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
     const [diagnosticTimerValue, setDiagnosticTimerValue] = useState(0);
 
-    const [config, setConfig] = useState<ChatConfig>({
-        avatarSrc: DEFAULT_AVATAR_PLACEHOLDER_URL,
-        animatedAvatarSrc: DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
-        personaTraits: "You are IA Blair v2, a knowledgeable and helpful assistant.",
-        personalBio: "",
-        conversationalTopics: "",
-        responsePauseTimeMs: 1500,
-        aiResponsePreparationTimeMs: 2000,
-        inactivityTimeoutMs: 30000,
-        customGreetingMessage: "",
-        useKnowledgeInGreeting: true,
-        typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
-        animationSyncFactor: DEFAULT_ANIMATION_SYNC_FACTOR,
-        ttsApiKey: '',
-        ttsVoiceId: '',
-        useCustomTts: false,
-        archiveChatHistoryEnabled: true,
-        showDiagnosticTimer: false,
-        splashScreenWelcomeMessage: "Welcome to AI Chat",
-    });
+    const [config, setConfig] = useState<ChatConfig | null>(null);
+    const [precached, setPrecached] = useState<PrecachedData | null>(null);
     
     const messagesRef = useRef<Message[]>([]);
     const inactivityCheckLevelRef = useRef(0);
@@ -232,9 +219,12 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [messages]);
 
     const addMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
-        const newMessage: Message = { ...message, id: uuidv4(), timestamp: Date.now() };
-        setMessages(prev => [...prev, newMessage]);
+        setMessages(prev => {
+            const newMessage: Message = { ...message, id: uuidv4(), timestamp: Date.now() };
+            return [...prev, newMessage];
+        });
     }, []);
+
 
     const logErrorToFirestore = useCallback(async (error: any, source: string) => {
         try {
@@ -264,11 +254,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, []);
 
     const startPreparationTimer = useCallback(() => {
-        if (hasConversationEnded || communicationMode === 'text-only') return;
+        if (!config || hasConversationEnded || communicationMode === 'text-only') return;
         clearPreparationTimer();
 
         preparationTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || isHoldMessagePlaying.current) return;
     
             (async () => {
                 try {
@@ -350,7 +340,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setHasConversationEnded(true);
     }, [botStatus, clearInactivityTimer, clearPreparationTimer]);
     
-    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void) => {
+    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void, audioDataUri?: string) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.();
@@ -382,17 +372,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             onSpeechEnd?.();
         };
 
-        let audioDataUri = '';
-        if (communicationMode !== 'text-only') {
+        let finalAudioDataUri = audioDataUri;
+        if (!finalAudioDataUri && communicationMode !== 'text-only' && config) {
             try {
                 const { useCustomTts, ttsApiKey, ttsVoiceId } = config;
                 if (useCustomTts && ttsApiKey && ttsVoiceId) {
                     const result = await elevenLabsTextToSpeech({ text: processedText, apiKey: ttsApiKey, voiceId: ttsVoiceId });
                     if (result.error || !result.media) throw new Error(result.error);
-                    audioDataUri = result.media;
+                    finalAudioDataUri = result.media;
                 } else {
                     const result = await googleTextToSpeech(processedText);
-                    audioDataUri = result.media;
+                    finalAudioDataUri = result.media;
                 }
             } catch (ttsError: any) {
                 console.error("TTS API Error:", ttsError);
@@ -401,7 +391,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 return;
             }
         }
-
+        
         const targetStatus = communicationMode === 'text-only' ? 'typing' : 'speaking';
         
         const playAndAnimate = async () => {
@@ -410,14 +400,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (communicationMode !== 'audio-only') {
                 const getAnimationDuration = (): Promise<number> => {
                     return new Promise((resolve) => {
-                        if (communicationMode === 'text-only' || !audioDataUri) {
-                            resolve(fullMessage.text.length * config.typingSpeedMs); return;
+                        if (communicationMode === 'text-only' || !finalAudioDataUri) {
+                            resolve(fullMessage.text.length * (config?.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS)); return;
                         }
-                        const audioEl = new Audio(); audioEl.src = audioDataUri;
+                        const audioEl = new Audio(); audioEl.src = finalAudioDataUri;
                         const resolveOnce = (duration: number) => { audioEl.onloadedmetadata = null; audioEl.onerror = null; resolve(duration); };
                         audioEl.onloadedmetadata = () => {
                             const durationInMs = (audioEl.duration || 0) * 1000;
-                            const adjustedDuration = isFinite(durationInMs) ? durationInMs * config.animationSyncFactor : (fullMessage.text.length * 50);
+                            const adjustedDuration = isFinite(durationInMs) ? durationInMs * (config?.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR) : (fullMessage.text.length * 50);
                             resolveOnce(adjustedDuration);
                         };
                         audioEl.onerror = () => resolveOnce(fullMessage.text.length * 50);
@@ -438,7 +428,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         currentIndex++;
                         animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
                     } else {
-                        // Animation finished
                         if (communicationMode === 'text-only') {
                             handleEnd();
                         }
@@ -447,16 +436,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 typeCharacter();
             }
             
-            if (audioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
-                audioPlayerRef.current.src = audioDataUri;
+            if (finalAudioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
+                audioPlayerRef.current.src = finalAudioDataUri;
                 audioPlayerRef.current.onended = handleEnd;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
-            } else if (audioDataUri && communicationMode === 'audio-only' && audioPlayerRef.current) {
+            } else if (finalAudioDataUri && communicationMode === 'audio-only' && audioPlayerRef.current) {
                 audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(); };
-                audioPlayerRef.current.src = audioDataUri;
+                audioPlayerRef.current.src = finalAudioDataUri;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(); });
             } else if (communicationMode !== 'text-only') {
-                 // No audio, but not text-only mode, so just end
                 handleEnd();
             }
         };
@@ -465,7 +453,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [communicationMode, addMessage, logErrorToFirestore, config, clearPreparationTimer]);
     
     const startInactivityTimer = useCallback(() => {
-        if (communicationMode !== 'audio-only' || hasConversationEnded) return;
+        if (!config || communicationMode !== 'audio-only' || hasConversationEnded) return;
         clearInactivityTimer();
     
         const runCheck = async () => {
@@ -503,77 +491,79 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText, messages]);
 
     const handleSendMessage = useCallback((text: string) => {
-        if (!text.trim() || hasConversationEnded || isBotProcessing) return;
+        if (!text.trim() || hasConversationEnded || isBotProcessing || !config) return;
 
         clearInactivityTimer();
         inactivityCheckLevelRef.current = 0;
         
         const userMessage: Message = { id: uuidv4(), text, sender: 'user', timestamp: Date.now() };
-        const updatedMessages = [...messagesRef.current, userMessage];
-        messagesRef.current = updatedMessages; // Immediately update ref
-        setMessages(updatedMessages); // Schedule state update
-
-        setInputValue('');
-        setBotStatus('preparing');
-        startPreparationTimer();
         
-        (async () => {
-            try {
-                const historyForGenkit = messagesRef.current.map(msg => ({ 
-                    role: msg.sender as 'user' | 'model', 
-                    content: [{ text: msg.text }] 
-                }));
+        setMessages(prevMessages => {
+            const updatedMessages = [...prevMessages, userMessage];
+            
+            const historyForGenkit = updatedMessages.map(msg => ({ 
+                role: msg.sender as 'user' | 'model', 
+                content: [{ text: msg.text }] 
+            }));
 
-                const { personaTraits, personalBio, conversationalTopics } = config;
-                const flowInput: GenerateChatResponseInput = {
-                    personaTraits, personalBio, conversationalTopics,
-                    chatHistory: historyForGenkit,
-                    language, communicationMode, clarificationAttemptCount,
-                };
-                const result = await generateChatResponse(flowInput);
-                
-                if (!isMountedRef.current) return;
+            setInputValue('');
+            setBotStatus('preparing');
+            startPreparationTimer();
+        
+            (async () => {
+                try {
+                    const { personaTraits, personalBio, conversationalTopics } = config;
+                    const flowInput: GenerateChatResponseInput = {
+                        personaTraits, personalBio, conversationalTopics,
+                        chatHistory: historyForGenkit,
+                        language, communicationMode, clarificationAttemptCount,
+                    };
+                    const result = await generateChatResponse(flowInput);
+                    
+                    if (!isMountedRef.current) return;
 
-                if (result.isClarificationQuestion) {
-                    setClarificationAttemptCount(prev => prev + 1);
-                } else {
-                    setClarificationAttemptCount(0);
-                }
-                
-                const aiMessage: Message = {
-                    id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-                    pdfReference: result.pdfReference, distance: result.distance,
-                    distanceThreshold: result.distanceThreshold, formality: result.formality,
-                    conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-                    debugClosestMatch: result.debugClosestMatch,
-                };
-                
-                await speakText(result.aiResponse, aiMessage, () => {
-                    if (result.shouldEndConversation) {
-                        handleEndChatManually();
-                    } else if (!hasConversationEnded) {
-                        setBotStatus('idle');
+                    if (result.isClarificationQuestion) {
+                        setClarificationAttemptCount(prev => prev + 1);
+                    } else {
+                        setClarificationAttemptCount(0);
                     }
-                });
+                    
+                    const aiMessage: Message = {
+                        id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+                        pdfReference: result.pdfReference, distance: result.distance,
+                        distanceThreshold: result.distanceThreshold, formality: result.formality,
+                        conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+                        debugClosestMatch: result.debugClosestMatch,
+                    };
+                    
+                    await speakText(result.aiResponse, aiMessage, () => {
+                        if (result.shouldEndConversation) {
+                            handleEndChatManually();
+                        } else if (!hasConversationEnded) {
+                            setBotStatus('idle');
+                        }
+                    });
 
-            } catch (error: any) {
-                if (!isMountedRef.current) return;
-                console.error("Error in generateChatResponse:", error);
-                await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
-                const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
-                const translatedError = await translate(errorMessage);
-                
-                clearPreparationTimer();
-                const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
-                await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
-            }
-        })();
+                } catch (error: any) {
+                    if (!isMountedRef.current) return;
+                    console.error("Error in generateChatResponse:", error);
+                    await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+                    const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
+                    const translatedError = await translate(errorMessage);
+                    
+                    clearPreparationTimer();
+                    const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
+                    await speakText(translatedError, errorMsg, () => setBotStatus('idle'));
+                }
+            })();
+
+            return updatedMessages;
+        });
         
-    }, [hasConversationEnded, isBotProcessing, clearInactivityTimer, startPreparationTimer, config, language, communicationMode, clarificationAttemptCount, clearPreparationTimer, speakText, handleEndChatManually, logErrorToFirestore, translate]);
+    }, [hasConversationEnded, isBotProcessing, config, clearInactivityTimer, startPreparationTimer, language, communicationMode, clarificationAttemptCount, clearPreparationTimer, speakText, handleEndChatManually, logErrorToFirestore, translate]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
-        const hasUserMessages = msgs.some(m => m.sender === 'user');
-        if (msgs.length === 0 || !config.archiveChatHistoryEnabled || !hasUserMessages) return;
+        if (!config || msgs.length === 0 || !config.archiveChatHistoryEnabled || !msgs.some(m => m.sender === 'user')) return;
         
         try {
             const { default: jsPDF } = await import('jspdf');
@@ -633,14 +623,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     useEffect(() => {
         const translateAllUiText = async () => {
             if (language === 'English') {
-                setUiText({ ...ENGLISH_UI_TEXT, splashScreenWelcomeMessage: config.splashScreenWelcomeMessage });
+                setUiText({ ...ENGLISH_UI_TEXT, splashScreenWelcomeMessage: config?.splashScreenWelcomeMessage || "Welcome to AI Chat" });
                 return;
             }
 
             const keysToTranslate = Object.keys(ENGLISH_UI_TEXT) as Array<keyof typeof ENGLISH_UI_TEXT>;
             const translations = await Promise.all(
                 keysToTranslate.map(key => {
-                    const text = key === 'splashScreenWelcomeMessage' ? config.splashScreenWelcomeMessage : ENGLISH_UI_TEXT[key];
+                    const text = key === 'splashScreenWelcomeMessage' ? (config?.splashScreenWelcomeMessage || "Welcome to AI Chat") : ENGLISH_UI_TEXT[key];
                     return translate(text);
                 })
             );
@@ -653,44 +643,73 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setUiText(newUiText);
         };
 
-        if (isReady) {
+        if (isReady && config) {
             translateAllUiText();
         }
-    }, [language, isReady, translate, config.splashScreenWelcomeMessage]);
+    }, [language, isReady, translate, config]);
     
     useEffect(() => {
         isMountedRef.current = true;
-        const fetchAllData = async () => {
+        const fetchAllDataAndPrecache = async () => {
           try {
             const siteAssetsSnap = await getDoc(doc(db, FIRESTORE_SITE_ASSETS_PATH));
             const appConfigSnap = await getDoc(doc(db, FIRESTORE_APP_CONFIG_PATH));
 
-            if (isMountedRef.current) {
-                const assets = siteAssetsSnap.exists() ? siteAssetsSnap.data() : {};
-                const appConfigData = appConfigSnap.exists() ? appConfigSnap.data() : {};
+            if (!isMountedRef.current) return;
+            
+            const assets = siteAssetsSnap.exists() ? siteAssetsSnap.data() : {};
+            const appConfigData = appConfigSnap.exists() ? appConfigSnap.data() : {};
 
-                const newConfig: ChatConfig = {
-                    avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
-                    animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
-                    personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
-                    personalBio: assets.personalBio || "I am an AI assistant.",
-                    conversationalTopics: assets.conversationalTopics || "",
-                    responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
-                    aiResponsePreparationTimeMs: assets.aiResponsePreparationTimeMs ?? 2000,
-                    inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
-                    customGreetingMessage: assets.customGreetingMessage || "",
-                    useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
-                    typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
-                    animationSyncFactor: assets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR,
-                    ttsApiKey: appConfigData.tts || '',
-                    ttsVoiceId: appConfigData.voiceId || '',
-                    useCustomTts: typeof appConfigData.useTtsApi === 'boolean' ? appConfigData.useTtsApi : false,
-                    archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
-                    showDiagnosticTimer: assets.showDiagnosticTimer === undefined ? false : assets.showDiagnosticTimer,
-                    splashScreenWelcomeMessage: assets.welcomeMessage || "Welcome to AI Chat",
-                };
-                setConfig(newConfig);
+            const fetchedConfig: ChatConfig = {
+                avatarSrc: assets.avatarUrl || DEFAULT_AVATAR_PLACEHOLDER_URL,
+                animatedAvatarSrc: assets.animatedAvatarUrl || DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL,
+                personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
+                personalBio: assets.personalBio || "I am an AI assistant.",
+                conversationalTopics: assets.conversationalTopics || "",
+                responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
+                aiResponsePreparationTimeMs: assets.aiResponsePreparationTimeMs ?? 2000,
+                inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
+                customGreetingMessage: assets.customGreetingMessage || "",
+                useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
+                typingSpeedMs: assets.typingSpeedMs ?? DEFAULT_TYPING_SPEED_MS,
+                animationSyncFactor: assets.animationSyncFactor ?? DEFAULT_ANIMATION_SYNC_FACTOR,
+                ttsApiKey: appConfigData.tts || '',
+                ttsVoiceId: appConfigData.voiceId || '',
+                useCustomTts: typeof appConfigData.useTtsApi === 'boolean' ? appConfigData.useTtsApi : false,
+                archiveChatHistoryEnabled: assets.archiveChatHistoryEnabled === undefined ? true : assets.archiveChatHistoryEnabled,
+                showDiagnosticTimer: assets.showDiagnosticTimer === undefined ? false : assets.showDiagnosticTimer,
+                splashScreenWelcomeMessage: assets.welcomeMessage || "Welcome to AI Chat",
+            };
+            setConfig(fetchedConfig);
+            
+            // --- Pre-caching logic starts here ---
+            let greetingTextToCache: string;
+            const { customGreetingMessage, useKnowledgeInGreeting, personaTraits, conversationalTopics, useCustomTts, ttsApiKey, ttsVoiceId } = fetchedConfig;
+
+            if (customGreetingMessage) {
+                greetingTextToCache = customGreetingMessage;
+            } else {
+                const result = await generateInitialGreeting({ personaTraits, conversationalTopics, useKnowledgeInGreeting, language: 'English' });
+                greetingTextToCache = result.greeting;
             }
+
+            let greetingAudioUri: string | undefined = undefined;
+            if (communicationMode !== 'text-only') {
+                 const processedGreeting = greetingTextToCache.replace(/\bCOO\b/gi, 'Chief Operating Officer').replace(/\bEZCORP\b/gi, 'easy corp');
+                 if (useCustomTts && ttsApiKey && ttsVoiceId) {
+                    const result = await elevenLabsTextToSpeech({ text: processedGreeting, apiKey: ttsApiKey, voiceId: ttsVoiceId });
+                    if (!result.error) greetingAudioUri = result.media;
+                } else {
+                    const result = await googleTextToSpeech(processedGreeting);
+                    greetingAudioUri = result.media;
+                }
+            }
+
+            if(isMountedRef.current) {
+                setPrecached({ greetingText: greetingTextToCache, greetingAudioUri });
+            }
+            // --- Pre-caching logic ends here ---
+
           } catch (e: any) {
             await logErrorToFirestore(e, 'ChatInterface/fetchAllData');
           } finally {
@@ -699,7 +718,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
           }
         };
-        fetchAllData();
+        fetchAllDataAndPrecache();
 
         return () => {
             isMountedRef.current = false;
@@ -726,29 +745,21 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, []);
 
     useEffect(() => {
-        if (!isReady || isInitialized || messages.length > 0) return;
+        if (!isReady || isInitialized || messages.length > 0 || !precached || !config) return;
         
         const sendInitialGreeting = async () => {
-            setBotStatus('preparing');
-            let greetingText = "Hello! How can I help you today?"; 
             try {
-                const { customGreetingMessage, useKnowledgeInGreeting, personaTraits, conversationalTopics } = config;
-                let textToTranslate = customGreetingMessage || "Hello! How can I help you today?";
-                if (!customGreetingMessage) {
-                    const result = await generateInitialGreeting({ personaTraits, conversationalTopics, useKnowledgeInGreeting, language: 'English' });
-                    textToTranslate = result.greeting;
-                }
-                greetingText = await translate(textToTranslate);
+                const greetingText = await translate(precached.greetingText);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 
                 await speakText(greetingText, greetingMessage, () => {
                     setBotStatus('idle');
-                });
+                }, precached.greetingAudioUri); // Use the precached audio
             } catch (error: any) {
-                console.error("Error generating or sending initial greeting:", error);
+                console.error("Error sending initial greeting:", error);
                 await logErrorToFirestore(error, 'ChatInterface/sendInitialGreeting');
-                const fallbackMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
-                await speakText(greetingText, fallbackMessage, () => {
+                const fallbackMessage: Message = { id: uuidv4(), text: "Hello! How can I help you today?", sender: 'model', timestamp: Date.now() };
+                await speakText(fallbackMessage.text, fallbackMessage, () => {
                      setBotStatus('idle');
                 });
             }
@@ -757,7 +768,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, config]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, config, precached]);
     
     useEffect(() => {
         if (!isReady || !['audio-only', 'audio-text'].includes(communicationMode)) return;
@@ -781,7 +792,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [isReady, communicationMode]);
     
     useEffect(() => {
-        if (!recognitionRef.current) return;
+        if (!recognitionRef.current || !config) return;
 
         recognitionRef.current.lang = language === 'Spanish' ? 'es-MX' : 'en-US';
 
@@ -851,7 +862,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [botStatus, isInitialized, communicationMode, hasConversationEnded, toggleListening]);
 
     useEffect(() => {
-        if (config.showDiagnosticTimer && botStatus !== 'idle') {
+        if (config?.showDiagnosticTimer && botStatus !== 'idle') {
             setDiagnosticTimerValue(0);
             if (diagnosticTimerIntervalRef.current) {
                 clearInterval(diagnosticTimerIntervalRef.current);
@@ -873,10 +884,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 clearInterval(diagnosticTimerIntervalRef.current);
             }
         };
-    }, [botStatus, config.showDiagnosticTimer]);
+    }, [botStatus, config?.showDiagnosticTimer]);
 
 
     const handleSaveConversationAsPdf = async () => {
+        if (!config) return;
         toast({ title: "Generating PDF..." });
         try {
             const { default: jsPDF } = await import('jspdf');
@@ -908,6 +920,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     };
     
+    
+    if (!isReady || !config) {
+        return ( <div className="flex flex-col items-center justify-center h-full text-center"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2></div> );
+    }
+
     const imageProps: React.ComponentProps<typeof Image> = {
       src: (isBotSpeaking && communicationMode !== 'text-only' && config.animatedAvatarSrc !== DEFAULT_ANIMATED_AVATAR_PLACEHOLDER_URL) ? config.animatedAvatarSrc : config.avatarSrc,
       alt: "AI Blair Avatar",
@@ -920,10 +937,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       priority: true,
       unoptimized: true
     };
-    
-    if (!isReady) {
-        return ( <div className="flex flex-col items-center justify-center h-full text-center"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2></div> );
-    }
 
     const botStatusMessage = 
         botStatus === 'listening' ? uiText.isListening :
@@ -1034,5 +1047,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
