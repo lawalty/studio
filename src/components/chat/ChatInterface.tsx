@@ -260,7 +260,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearPreparationTimer();
     
         preparationTimerRef.current = setTimeout(async () => {
-            if (botStatus !== 'preparing' || !isMountedRef.current || isHoldMessagePlaying.current) {
+            if (!isMountedRef.current || isHoldMessagePlaying.current) {
                 return;
             }
     
@@ -306,7 +306,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             }
         }, config.responsePauseTimeMs);
-    }, [botStatus, hasConversationEnded, clearPreparationTimer, config, language, communicationMode, addMessage]);
+    }, [hasConversationEnded, communicationMode, clearPreparationTimer, config, language, addMessage]);
 
     const toggleListening = useCallback(() => {
         if (!recognitionRef.current || !isMountedRef.current) return;
