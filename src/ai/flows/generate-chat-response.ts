@@ -226,18 +226,21 @@ const generateChatResponseFlow = async ({
     
     const appConfig = await getAppConfig();
     let historyForRAG = chatHistory || [];
-    
-    // Correctly handle the initial greeting: if the first message is from the model,
-    // the history for the AI should only contain the user's first actual message.
-    // This prevents the AI from responding to its own greeting.
-    if (historyForRAG.length === 2 && historyForRAG[0].role === 'model') {
-        historyForRAG = historyForRAG.slice(1);
+    let lastUserMessage = '';
+
+    if (historyForRAG.length > 0) {
+        if (historyForRAG.length === 2 && historyForRAG[0].role === 'model') {
+            // This is the user's first real message after the AI's greeting.
+            lastUserMessage = historyForRAG[1]?.content?.[0]?.text || '';
+        } else {
+            // This is a subsequent message in the conversation.
+            lastUserMessage = historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '';
+        }
     }
     
-    const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
-
     if (!lastUserMessage) {
-        return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
+        // This case handles a scenario where the history is malformed or empty.
+        return { aiResponse: "I'm ready when you are. What's on your mind?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
     }
 
     if (clarificationAttemptCount >= 3) {
