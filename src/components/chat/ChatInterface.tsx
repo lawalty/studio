@@ -146,7 +146,6 @@ interface ChatConfig {
     useCustomTts: boolean;
     archiveChatHistoryEnabled: boolean;
     showDiagnosticTimer: boolean;
-    splashScreenWelcomeMessage: string;
 }
 
 interface PrecachedData {
@@ -341,6 +340,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (!isMountedRef.current) return;
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             setAnimatedResponse(null);
+            // This is the fix: ALWAYS add the message to the log after it has "played".
             addMessage(fullMessage);
             onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false);
         };
@@ -455,7 +455,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearInactivityTimer();
     
         const runCheck = async () => {
-            if (!isMountedRef.current) return;
+            if (!isMountedRef.current || hasConversationEnded) return;
             
             setIsCheckingInactivity(true);
             recognitionRef.current?.stop();
@@ -817,7 +817,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     useEffect(() => {
         if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
-            // This is the trigger for the inactivity timer and listening to start
             startInactivityTimer();
             if (recognitionRef.current && !recognitionRef.current.isListening) {
                 try {
@@ -939,7 +938,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         <div className="flex flex-col h-full items-center justify-center text-center">
             <div className="flex flex-col items-center space-y-6">
                 <h2 className="text-2xl font-bold font-headline text-primary">
-                    {config.splashScreenWelcomeMessage}
+                    {uiText.splashScreenWelcomeMessage}
                 </h2>
                 {!hasConversationEnded ? (
                 <div className="flex flex-col items-center space-y-6">
@@ -1033,3 +1032,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
     
 
+
+    
