@@ -225,7 +225,13 @@ const generateChatResponseFlow = async ({
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const appConfig = await getAppConfig();
-    const historyForRAG = chatHistory || [];
+    let historyForRAG = chatHistory || [];
+    
+    // Crucial Fix: If the history starts with a model message, remove it.
+    if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
+        historyForRAG = historyForRAG.slice(1);
+    }
+
     const lastMessage = historyForRAG[historyForRAG.length - 1];
     const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
     
@@ -304,7 +310,8 @@ const generateChatResponseFlow = async ({
     
     // If no hold message is required, generate the final response immediately.
     if (!requiresHoldMessage) {
-        return generateFinalResponse({ ...arguments[0], retrievedContext });
+        // Pass the corrected history to the final response generator
+        return generateFinalResponse({ ...arguments[0], chatHistory: historyForRAG, retrievedContext });
     }
 
     // Otherwise, signal the UI to play the hold message and wait for a second call.
@@ -338,7 +345,12 @@ export const generateFinalResponse = async ({
     retrievedContext,
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     const appConfig = await getAppConfig();
-    const historyForRAG = chatHistory || [];
+    let historyForRAG = chatHistory || [];
+    
+    // Crucial Fix: If the history starts with a model message, remove it.
+    if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
+        historyForRAG = historyForRAG.slice(1);
+    }
     
     const lastMessage = historyForRAG[historyForRAG.length - 1];
     const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
@@ -420,13 +432,8 @@ export const generateFinalResponse = async ({
 export async function generateChatResponse(
   input: GenerateChatResponseInput
 ): Promise<GenerateChatResponseOutput> {
-  // This initial history manipulation handles the case where the user's first message follows the AI's greeting.
-  // It ensures the AI doesn't see its own greeting as the first user message.
-  let history = input.chatHistory || [];
-  if (history.length === 2 && history[0].role === 'model') {
-      history = history.slice(1);
-  }
-  const processedInput = { ...input, chatHistory: history };
-  
-  return generateChatResponseFlow(processedInput);
+  // The history manipulation now happens inside the flows, so we can pass the input directly.
+  return generateChatResponseFlow(input);
 }
+
+    
