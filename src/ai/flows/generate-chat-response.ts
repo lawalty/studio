@@ -227,7 +227,10 @@ const generateChatResponseFlow = async ({
     const appConfig = await getAppConfig();
     let historyForRAG = chatHistory || [];
     
-    if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
+    // Correctly handle the initial greeting: if the first message is from the model,
+    // the history for the AI should only contain the user's first actual message.
+    // This prevents the AI from responding to its own greeting.
+    if (historyForRAG.length === 2 && historyForRAG[0].role === 'model') {
         historyForRAG = historyForRAG.slice(1);
     }
     
@@ -343,7 +346,7 @@ export const generateFinalResponse = async ({
     const appConfig = await getAppConfig();
     let historyForRAG = chatHistory || [];
     
-    if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
+    if (historyForRAG.length === 2 && historyForRAG[0].role === 'model') {
         historyForRAG = historyForRAG.slice(1);
     }
 
