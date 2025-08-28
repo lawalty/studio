@@ -192,6 +192,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [uiText, setUiText] = useState({ ...ENGLISH_UI_TEXT });
     const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
     const [diagnosticTimerValue, setDiagnosticTimerValue] = useState(0);
+    const [isCheckingInactivity, setIsCheckingInactivity] = useState(false);
 
     const [config, setConfig] = useState<ChatConfig | null>(null);
     const [precached, setPrecached] = useState<PrecachedData | null>(null);
@@ -454,8 +455,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         clearInactivityTimer();
     
         const runCheck = async () => {
-            if (!isMountedRef.current || botStatus !== 'listening') return;
+            if (!isMountedRef.current) return;
             
+            setIsCheckingInactivity(true);
             recognitionRef.current?.stop();
             
             inactivityCheckLevelRef.current += 1;
@@ -475,17 +477,17 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 return;
             }
             
-            setBotStatus('preparing');
             const translatedPrompt = await translate(promptText);
             const promptMessage: Message = { id: uuidv4(), text: translatedPrompt, sender: 'model', timestamp: Date.now() };
             
             speakText(translatedPrompt, promptMessage, () => {
+                setIsCheckingInactivity(false);
                 setBotStatus('idle');
             });
         };
     
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually, botStatus]);
+    }, [communicationMode, hasConversationEnded, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually]);
 
     const handleFinalResponse = useCallback((result: GenerateChatResponseOutput) => {
         if (!isMountedRef.current) return;
@@ -764,7 +766,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         
         recognitionRef.current.onend = () => {
-          if (!isMountedRef.current || botStatus === 'preparing') return;
+          if (!isMountedRef.current || botStatus === 'preparing' || isCheckingInactivity) return;
           
           if (botStatus === 'listening') {
               const finalTranscript = finalTranscriptRef.current.trim();
@@ -811,13 +813,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
           }, config.responsePauseTimeMs);
         };
-    }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, botStatus, logErrorToFirestore, communicationMode, config]);
+    }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, logErrorToFirestore, communicationMode, config, isCheckingInactivity, botStatus]);
     
     useEffect(() => {
         if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
-            // This is the trigger for the inactivity timer to start
+            // This is the trigger for the inactivity timer and listening to start
             startInactivityTimer();
-            if (!recognitionRef.current.isListening) {
+            if (recognitionRef.current && !recognitionRef.current.isListening) {
                 try {
                     recognitionRef.current.start();
                 } catch(e) {
@@ -888,11 +890,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     if (!isReady || !config) {
         return (
-            <div className="flex flex-col items-center justify-center flex-grow h-full text-center">
-                <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
-                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">
-                    {uiText.loadingConfig}
-                </h2>
+            <div className="flex flex-col h-full flex-grow items-center justify-center">
+                <div className="flex flex-col items-center justify-center flex-grow h-full text-center">
+                    <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
+                    <h2 className="mt-6 text-3xl font-bold font-headline text-primary">
+                        {uiText.loadingConfig}
+                    </h2>
+                </div>
             </div>
         );
     }
@@ -1028,3 +1032,4 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 }
 
     
+
