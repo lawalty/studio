@@ -194,7 +194,7 @@ export default function PersonaPage() {
         .replace(/\bEZCORP\b/gi, 'easy corp');
 
       let audioDataUri = '';
-      if (ttsConfig.useCustomTts && ttsConfig.tts && ttsConfig.voiceId) {
+      if (ttsConfig.useTtsApi && ttsConfig.tts && ttsConfig.voiceId) {
           const result = await elevenLabsTextToSpeech({ text: processedGreetingText, apiKey: ttsConfig.tts, voiceId: ttsConfig.voiceId });
           if(result.error) throw new Error(result.error);
           audioDataUri = result.media;
