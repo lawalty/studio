@@ -48,6 +48,8 @@ type AiResponseJson = z.infer<typeof AiResponseSchema>;
 // The final output includes the parsed AI response plus diagnostic data.
 export type GenerateChatResponseOutput = Omit<AiResponseJson, 'shouldEndConversation'> & {
     shouldEndConversation: boolean;
+    requiresHoldMessage: boolean; // New flag to signal the UI
+    retrievedContext?: string; // Pass context to the final generation step
     debugClosestMatch?: {
         fileName: string,
         downloadURL?: string,
@@ -111,6 +113,17 @@ const buildRetrievedContext = (results: any[], budgetChars = 6000) => {
   }
   return chunks.join('\n\n') || 'NO_CONTEXT_FOUND';
 };
+
+const complexityCheckPromptTemplate = `You are a helpful AI assistant. Analyze the user's question and the provided context. Your task is to determine if generating a comprehensive answer would be a complex task. A complex task is one that requires synthesizing information from multiple paragraphs or sources, involves step-by-step instructions, or addresses a broad, open-ended question. A simple task can be answered with a short, direct fact.
+
+User's Question: "{{lastUserMessage}}"
+Retrieved Context:
+<retrieved_context>
+{{{retrievedContext}}}
+</retrieved_context>
+
+Is a detailed and comprehensive answer required? Respond with only the word "YES" or "NO".`;
+
 
 const systemPromptTemplate = `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
 
@@ -199,7 +212,7 @@ const logErrorToFirestore = async (error: any, source: string) => {
     }
 };
 
-// Define the flow at the top level.
+// This flow now only performs the pre-flight check.
 const generateChatResponseFlow = async ({ 
     personaTraits, 
     personalBio,
@@ -213,8 +226,6 @@ const generateChatResponseFlow = async ({
     const appConfig = await getAppConfig();
     let historyForRAG = chatHistory || [];
     
-    // FIX: If the history starts with a model message (the initial greeting), remove it.
-    // The AI doesn't need its own greeting to understand the user's first question.
     if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
         historyForRAG = historyForRAG.slice(1);
     }
@@ -222,9 +233,7 @@ const generateChatResponseFlow = async ({
     const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
 
     if (!lastUserMessage) {
-        // This case should ideally not be hit if the client ensures history is not empty.
-        // Returning a default response as a safeguard.
-        return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false };
+        return { aiResponse: "Hello! How can I help you today?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
     }
 
     if (clarificationAttemptCount >= 3) {
@@ -232,36 +241,34 @@ const generateChatResponseFlow = async ({
         aiResponse: "I apologize, but I'm still unable to find the information you're looking for. Is there anything else I can help you with?",
         isClarificationQuestion: false,
         shouldEndConversation: false,
+        requiresHoldMessage: false,
       };
     }
 
     let searchQuery = lastUserMessage;
-    let queryForNlp = lastUserMessage;
     if (language && language.toLowerCase() !== 'english') {
       try {
-        const { translatedText } = await translateText({ text: queryForNlp, targetLanguage: 'English' });
-        queryForNlp = translatedText;
+        const { translatedText } = await translateText({ text: lastUserMessage, targetLanguage: 'English' });
+        searchQuery = translatedText;
       } catch (e) {
         console.error("[generateChatResponseFlow] Failed to translate user query, proceeding with original text.", e);
       }
     }
     
-    if (queryForNlp) {
+    if (searchQuery) {
       try {
-          const { output } = await queryRefinementPrompt(queryForNlp, { model: googleAI.model(appConfig.conversationalModel) });
-          searchQuery = output || queryForNlp;
+          const { output } = await queryRefinementPrompt(searchQuery, { model: googleAI.model(appConfig.conversationalModel) });
+          searchQuery = output || searchQuery;
       } catch (e) {
           console.error('[generateChatResponseFlow] NLP query refinement failed:', e);
-          searchQuery = queryForNlp;
       }
     }
 
-    let retrievedContext = '';
+    let retrievedContext = 'NO_CONTEXT_FOUND';
     let primarySearchResult = null;
-    let searchResults: any[] = [];
     try {
       if (searchQuery) {
-        searchResults = await searchKnowledgeBase({ 
+        const searchResults = await searchKnowledgeBase({ 
             query: searchQuery, 
             limit: 5,
             distanceThreshold: appConfig.distanceThreshold,
@@ -278,10 +285,67 @@ const generateChatResponseFlow = async ({
       retrievedContext = `CONTEXT_SEARCH_FAILED: ${e.message}`;
     }
     
-    if (searchQuery && !retrievedContext) {
-      retrievedContext = 'NO_CONTEXT_FOUND';
+    // Perform complexity check
+    let requiresHoldMessage = false;
+    try {
+        const complexityTemplate = Handlebars.compile(complexityCheckPromptTemplate);
+        const complexityPrompt = complexityTemplate({ lastUserMessage: searchQuery, retrievedContext });
+        
+        const { text: complexityResult } = await withRetry(() => ai.generate({
+            model: googleAI.model('gemini-1.5-flash-latest'), // Use a fast model for the check
+            prompt: complexityPrompt,
+        }));
+
+        if (complexityResult && complexityResult.trim().toUpperCase() === 'YES') {
+            requiresHoldMessage = true;
+        }
+
+    } catch (e: any) {
+        console.warn('[generateChatResponseFlow] Complexity check failed, defaulting to no hold message.', e);
     }
     
+    // If no hold message is required, generate the final response immediately.
+    if (!requiresHoldMessage) {
+        return generateFinalResponse({ ...arguments[0], retrievedContext });
+    }
+
+    // Otherwise, signal the UI to play the hold message and wait for a second call.
+    return {
+        aiResponse: '', // No response text yet
+        isClarificationQuestion: false,
+        shouldEndConversation: false,
+        requiresHoldMessage: true,
+        retrievedContext: retrievedContext, // Send context back to UI for the next step
+        distance: primarySearchResult?.distance,
+        distanceThreshold: appConfig.distanceThreshold,
+        formality: appConfig.formality,
+        conciseness: appConfig.conciseness,
+        tone: appConfig.tone,
+        formatting: appConfig.formatting,
+        debugClosestMatch: primarySearchResult ? {
+            fileName: primarySearchResult.sourceName,
+            downloadURL: primarySearchResult.downloadURL,
+        } : undefined,
+    };
+  };
+  
+export const generateFinalResponse = async ({
+    personaTraits, 
+    personalBio,
+    conversationalTopics, 
+    chatHistory, 
+    language,
+    communicationMode = 'text-only',
+    clarificationAttemptCount = 0,
+    retrievedContext,
+}: GenerateChatResponseInput & { retrievedContext: string }): Promise<GenerateChatResponseOutput> => {
+    const appConfig = await getAppConfig();
+    let historyForRAG = chatHistory || [];
+    
+    if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
+        historyForRAG = historyForRAG.slice(1);
+    }
+
     try {
         const template = Handlebars.compile(systemPromptTemplate);
         const systemInstruction = template({
@@ -313,49 +377,35 @@ const generateChatResponseFlow = async ({
               const validatedMetadata = AiResponseSchema.parse(parsedMetadata);
               output = { ...output, ...validatedMetadata, aiResponse: aiResponseText };
           } catch (e) {
-              console.warn(`[generateChatResponseFlow] Failed to parse AI metadata. Raw metadata: "${parts[1]}"`, e);
+              console.warn(`[generateFinalResponse] Failed to parse AI metadata. Raw metadata: "${parts[1]}"`, e);
           }
       }
       
-      if (output.pdfReference && language === 'Spanish' && primarySearchResult?.sourceId) {
-          const spanishPdf = await findSpanishPdf(primarySearchResult.sourceId);
-          if (spanishPdf) {
-              output.pdfReference = spanishPdf;
-          }
-      }
+      // We don't have primarySearchResult here, so PDF logic needs adjustment or removal for Spanish
+      // For now, removing the Spanish PDF swap logic as it depends on search results not available here.
 
       const finalOutput: GenerateChatResponseOutput = {
           aiResponse: output.aiResponse,
           isClarificationQuestion: output.isClarificationQuestion || false,
           shouldEndConversation: output.shouldEndConversation || false,
+          requiresHoldMessage: false, // Final response never requires a hold message
           pdfReference: output.pdfReference,
-          distance: primarySearchResult?.distance,
-          distanceThreshold: appConfig.distanceThreshold,
-          formality: appConfig.formality,
-          conciseness: appConfig.conciseness,
-          tone: appConfig.tone,
-          formatting: appConfig.formatting,
+          // Diagnostics are mostly returned in the first call now
       };
-
-      if (!output.pdfReference && primarySearchResult) {
-        finalOutput.debugClosestMatch = {
-            fileName: primarySearchResult.sourceName,
-            downloadURL: primarySearchResult.downloadURL,
-        };
-      }
 
       return finalOutput;
 
     } catch (error: any) {
-      console.error('[generateChatResponseFlow] Error generating AI response:', error);
-      await logErrorToFirestore(error, 'generateChatResponseFlow/chatPrompt');
+      console.error('[generateFinalResponse] Error generating AI response:', error);
+      await logErrorToFirestore(error, 'generateFinalResponse');
       return {
         aiResponse: "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.",
         isClarificationQuestion: false,
         shouldEndConversation: true,
+        requiresHoldMessage: false,
       };
     }
-  };
+};
 
 // Export a wrapper function that calls the flow.
 export async function generateChatResponse(
@@ -363,5 +413,3 @@ export async function generateChatResponse(
 ): Promise<GenerateChatResponseOutput> {
   return generateChatResponseFlow(input);
 }
-
-    

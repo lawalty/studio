@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import ConversationLog from '@/components/chat/ConversationLog';
 import MessageInput from '@/components/chat/MessageInput';
-import { generateChatResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
+import { generateChatResponse, generateFinalResponse, type GenerateChatResponseInput, type GenerateChatResponseOutput } from '@/ai/flows/generate-chat-response';
 import { indexDocument } from '@/ai/flows/index-document-flow';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -134,7 +134,6 @@ interface ChatConfig {
     personalBio: string;
     conversationalTopics: string;
     responsePauseTimeMs: number;
-    aiResponsePreparationTimeMs: number;
     inactivityTimeoutMs: number;
     customGreetingMessage: string;
     useKnowledgeInGreeting: boolean;
@@ -151,6 +150,7 @@ interface ChatConfig {
 interface PrecachedData {
     greetingText: string;
     greetingAudioUri?: string;
+    holdAudioUri?: string;
 }
 
 const ENGLISH_UI_TEXT = {
@@ -195,11 +195,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const messagesRef = useRef<Message[]>([]);
     const inactivityCheckLevelRef = useRef(0);
     const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
-    const holdMessageAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
-    const isHoldMessagePlaying = useRef(false);
     const recognitionRef = useRef<any | null>(null);
     const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const preparationTimerRef = useRef<NodeJS.Timeout | null>(null);
     const speechPauseTimerRef = useRef<NodeJS.Timeout | null>(null);
     const finalTranscriptRef = useRef<string>('');
     const animationTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -245,100 +242,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             inactivityTimerRef.current = null;
         }
     }, []);
-
-    const clearPreparationTimer = useCallback(() => {
-        if (preparationTimerRef.current) {
-            clearTimeout(preparationTimerRef.current);
-            preparationTimerRef.current = null;
-        }
-    }, []);
-
-    const startPreparationTimer = useCallback(() => {
-        if (!config || hasConversationEnded || communicationMode === 'text-only') return;
-        clearPreparationTimer();
-    
-        preparationTimerRef.current = setTimeout(() => {
-            (async () => {
-                if (!isMountedRef.current || isHoldMessagePlaying.current) return;
-        
-                try {
-                    const result = await generateHoldMessage({
-                        language,
-                        useCustomTts: config.useCustomTts,
-                        ttsApiKey: config.ttsApiKey,
-                        ttsVoiceId: config.ttsVoiceId,
-                    });
-    
-                    if (result.error || !result.audioDataUri) {
-                        throw new Error(result.error || "Hold message flow failed to return audio data.");
-                    }
-    
-                    if (!holdMessageAudioPlayerRef.current) {
-                        holdMessageAudioPlayerRef.current = new Audio();
-                    }
-    
-                    isHoldMessagePlaying.current = true;
-                    setBotStatus('speaking');
-    
-                    holdMessageAudioPlayerRef.current.src = result.audioDataUri;
-                    const onEnd = () => {
-                        isHoldMessagePlaying.current = false;
-                        if (botStatus === 'speaking') {
-                            setBotStatus('preparing');
-                        }
-                    };
-                    holdMessageAudioPlayerRef.current.onended = onEnd;
-                    holdMessageAudioPlayerRef.current.onerror = onEnd; // Also handle errors
-                    await holdMessageAudioPlayerRef.current.play();
-    
-                } catch (error) {
-                    console.error("Failed to play hold message:", error);
-                    isHoldMessagePlaying.current = false;
-                }
-            })();
-    
-        }, config.aiResponsePreparationTimeMs);
-    }, [hasConversationEnded, communicationMode, clearPreparationTimer, config, language, botStatus]);
-
-    const toggleListening = useCallback(() => {
-        if (!recognitionRef.current || !isMountedRef.current) return;
-        const isCurrentlyListening = botStatus === 'listening';
-    
-        if (isCurrentlyListening) {
-            recognitionRef.current.stop();
-        } else if (!hasConversationEnded) {
-            try {
-                setBotStatus('listening');
-                setInputValue('');
-                finalTranscriptRef.current = '';
-                recognitionRef.current.start();
-            } catch (e: any) {
-                if (e.name !== 'invalid-state') { 
-                    console.error("Mic start error:", e);
-                    logErrorToFirestore(e, 'ChatInterface/toggleListening/start');
-                    setBotStatus('idle');
-                }
-            }
-        }
-    }, [botStatus, hasConversationEnded, logErrorToFirestore]);
-
-    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
-        clearInactivityTimer();
-        clearPreparationTimer();
-        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
-        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
-        if (holdMessageAudioPlayerRef.current) { holdMessageAudioPlayerRef.current.pause(); }
-        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
-        
-        setBotStatus('idle');
-        
-        if (reason === 'final-inactive') {
-            setEndedDueToInactivity(true);
-        } else {
-            setEndedDueToInactivity(false);
-        }
-        setHasConversationEnded(true);
-    }, [botStatus, clearInactivityTimer, clearPreparationTimer]);
     
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void, audioDataUri?: string) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
@@ -347,16 +250,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             return;
         }
 
-        // Cancel any pending hold message timer.
-        clearPreparationTimer();
-
-        // If hold message is currently playing, stop it immediately.
-        if (isHoldMessagePlaying.current && holdMessageAudioPlayerRef.current) {
-            holdMessageAudioPlayerRef.current.pause();
-            holdMessageAudioPlayerRef.current.currentTime = 0;
-            isHoldMessagePlaying.current = false;
+        if (audioPlayerRef.current.src) {
+            audioPlayerRef.current.pause();
+            audioPlayerRef.current.currentTime = 0;
         }
-        
         if (typeof window !== 'undefined') window.speechSynthesis.cancel();
         if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
 
@@ -448,7 +345,25 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
         
         playAndAnimate();
-    }, [communicationMode, addMessage, logErrorToFirestore, config, clearPreparationTimer]);
+    }, [communicationMode, addMessage, logErrorToFirestore, config]);
+
+    const playHoldMessage = useCallback(() => {
+        if (!precached?.holdAudioUri || !audioPlayerRef.current || hasConversationEnded) return;
+
+        setBotStatus('speaking'); // Trigger animated avatar
+        audioPlayerRef.current.src = precached.holdAudioUri;
+        audioPlayerRef.current.onended = () => {
+            if (isMountedRef.current && !hasConversationEnded) {
+                setBotStatus('preparing'); // Revert to static avatar
+            }
+        };
+        audioPlayerRef.current.play().catch(e => {
+            console.error("Hold message playback failed:", e);
+            if (isMountedRef.current && !hasConversationEnded) {
+                setBotStatus('preparing'); // Revert even if it fails to play
+            }
+        });
+    }, [precached, hasConversationEnded]);
     
     const startInactivityTimer = useCallback(() => {
         if (!config || communicationMode !== 'audio-only' || hasConversationEnded) return;
@@ -486,7 +401,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
     
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, handleEndChatManually, speakText, messages]);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, speakText, messages]);
 
     const processAndRespond = async (history: Message[]) => {
       if (!isMountedRef.current || !config) return;
@@ -498,48 +413,63 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           }));
 
           const { personaTraits, personalBio, conversationalTopics } = config;
-          const flowInput: GenerateChatResponseInput = {
+          let flowInput: GenerateChatResponseInput = {
               personaTraits, personalBio, conversationalTopics,
               chatHistory: historyForGenkit,
               language, communicationMode, clarificationAttemptCount,
           };
-          const result = await generateChatResponse(flowInput);
           
-          if (!isMountedRef.current) return;
+          // Step 1: Pre-flight check
+          const preflightResult = await generateChatResponse(flowInput);
 
-          if (result.isClarificationQuestion) {
-              setClarificationAttemptCount(prev => prev + 1);
+          if (!isMountedRef.current) return;
+          
+          if (preflightResult.requiresHoldMessage) {
+              playHoldMessage();
+              flowInput.retrievedContext = preflightResult.retrievedContext;
+              const finalResult = await generateFinalResponse(flowInput);
+              handleFinalResponse(finalResult);
           } else {
-              setClarificationAttemptCount(0);
+              // The first call already returned the final response
+              handleFinalResponse(preflightResult);
           }
-          
-          const aiMessage: Message = {
-              id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-              pdfReference: result.pdfReference, distance: result.distance,
-              distanceThreshold: result.distanceThreshold, formality: result.formality,
-              conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-              debugClosestMatch: result.debugClosestMatch,
-          };
-          
-          speakText(result.aiResponse, aiMessage, () => {
-              if (result.shouldEndConversation) {
-                  handleEndChatManually();
-              } else if (!hasConversationEnded) {
-                  setBotStatus('idle');
-              }
-          });
 
       } catch (error: any) {
           if (!isMountedRef.current) return;
           console.error("Error in generateChatResponse:", error);
-          await logErrorToFirestore(error, 'ChatInterface/handleSendMessage');
+          await logErrorToFirestore(error, 'ChatInterface/processAndRespond');
           const errorMessage = "I'm having a little trouble connecting to my knowledge base right now. Please try your request again in a moment.";
           const translatedError = await translate(errorMessage);
           
-          clearPreparationTimer();
           const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
           speakText(translatedError, errorMsg, () => setBotStatus('idle'));
       }
+    };
+    
+    const handleFinalResponse = (result: GenerateChatResponseOutput) => {
+        if (!isMountedRef.current) return;
+
+        if (result.isClarificationQuestion) {
+            setClarificationAttemptCount(prev => prev + 1);
+        } else {
+            setClarificationAttemptCount(0);
+        }
+        
+        const aiMessage: Message = {
+            id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+            pdfReference: result.pdfReference, distance: result.distance,
+            distanceThreshold: result.distanceThreshold, formality: result.formality,
+            conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+            debugClosestMatch: result.debugClosestMatch,
+        };
+        
+        speakText(result.aiResponse, aiMessage, () => {
+            if (result.shouldEndConversation) {
+                handleEndChatManually();
+            } else if (!hasConversationEnded) {
+                setBotStatus('idle');
+            }
+        });
     };
     
     const handleSendMessage = useCallback((text?: string) => {
@@ -555,11 +485,26 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         setMessages(updatedMessages);
         setInputValue('');
         setBotStatus('preparing');
-        startPreparationTimer();
-
+        
         processAndRespond(updatedMessages);
         
-    }, [inputValue, hasConversationEnded, isBotProcessing, config, clearInactivityTimer, startPreparationTimer, language, communicationMode, clarificationAttemptCount, processAndRespond, handleEndChatManually, logErrorToFirestore, translate]);
+    }, [inputValue, hasConversationEnded, isBotProcessing, config, clearInactivityTimer, processAndRespond]);
+
+    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
+        clearInactivityTimer();
+        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
+        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
+        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
+        
+        setBotStatus('idle');
+        
+        if (reason === 'final-inactive') {
+            setEndedDueToInactivity(true);
+        } else {
+            setEndedDueToInactivity(false);
+        }
+        setHasConversationEnded(true);
+    }, [botStatus, clearInactivityTimer]);
     
     const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
         if (!config || msgs.length === 0 || !config.archiveChatHistoryEnabled || !msgs.some(m => m.sender === 'user')) return;
@@ -612,12 +557,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     useEffect(() => {
         if (hasConversationEnded) {
             clearInactivityTimer();
-            clearPreparationTimer();
             if (!endedDueToInactivity) {
                 archiveAndIndexChat(messages);
             }
         }
-    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, clearPreparationTimer, endedDueToInactivity]);
+    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, endedDueToInactivity]);
 
     useEffect(() => {
         const translateAllUiText = async () => {
@@ -665,8 +609,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 personaTraits: assets.personaTraits || "You are IA Blair v2, a knowledgeable and helpful assistant.",
                 personalBio: assets.personalBio || "I am an AI assistant.",
                 conversationalTopics: assets.conversationalTopics || "",
-                responsePauseTimeMs: assets.responsePauseTimeMs ?? 1500,
-                aiResponsePreparationTimeMs: assets.aiResponsePreparationTimeMs ?? 2000,
+                responsePauseTimeMs: assets.responsePauseTimeMs ?? 750,
                 inactivityTimeoutMs: assets.inactivityTimeoutMs ?? 30000,
                 customGreetingMessage: assets.customGreetingMessage || "",
                 useKnowledgeInGreeting: typeof assets.useKnowledgeInGreeting === 'boolean' ? assets.useKnowledgeInGreeting : true,
@@ -703,9 +646,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     greetingAudioUri = result.media;
                 }
             }
+            
+            const holdMessageResult = await generateHoldMessage({ language: 'English', useCustomTts, ttsApiKey, ttsVoiceId });
 
             if(isMountedRef.current) {
-                setPrecached({ greetingText: greetingTextToCache, greetingAudioUri });
+                setPrecached({ greetingText: greetingTextToCache, greetingAudioUri, holdAudioUri: holdMessageResult.audioDataUri });
             }
             // --- Pre-caching logic ends here ---
 
@@ -723,7 +668,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             isMountedRef.current = false;
             dismissAllToasts();
             clearInactivityTimer();
-            clearPreparationTimer();
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             if (speechPauseTimerRef.current) clearTimeout(speechPauseTimerRef.current);
             if (diagnosticTimerIntervalRef.current) clearInterval(diagnosticTimerIntervalRef.current);
@@ -733,11 +677,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 audioPlayerRef.current.onended = null;
                 audioPlayerRef.current.pause();
                 audioPlayerRef.current.src = '';
-            }
-            if (holdMessageAudioPlayerRef.current) {
-                holdMessageAudioPlayerRef.current.onended = null;
-                holdMessageAudioPlayerRef.current.pause();
-                holdMessageAudioPlayerRef.current.src = '';
             }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -856,9 +795,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     useEffect(() => {
         if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
-            toggleListening();
+            // No auto-listening to prevent loops; user must re-engage if needed
         }
-    }, [botStatus, isInitialized, communicationMode, hasConversationEnded, toggleListening]);
+    }, [botStatus, isInitialized, communicationMode, hasConversationEnded]);
 
     useEffect(() => {
         if (config?.showDiagnosticTimer && botStatus !== 'idle') {
@@ -873,7 +812,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         } else {
             if (diagnosticTimerIntervalRef.current) {
                 clearInterval(diagnosticTimerIntervalRef.current);
-                diagnosticTimerIntervalRef.current = null;
             }
             setDiagnosticTimerValue(0);
         }
@@ -1028,7 +966,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           </div>
           <MessageInput
             onSendMessage={(text) => handleSendMessage()} isSending={isBotProcessing || isBotSpeaking}
-            showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={toggleListening}
+            showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={() => {}}
             inputValue={inputValue} onInputValueChange={setInputValue} disabled={hasConversationEnded}
             placeholder={inputPlaceholder}
           />
@@ -1046,7 +984,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
-
-    
