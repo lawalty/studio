@@ -32,6 +32,7 @@ export interface Message {
   pdfReference?: {
     fileName: string;
     downloadURL: string;
+    shouldEndConversation?: boolean;
   };
   distance?: number;
   distanceThreshold?: number;
@@ -388,27 +389,25 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     });
                 };
                 
-                if (!isGreeting) {
-                    setAnimatedResponse({ ...fullMessage, text: '' });
-                    const totalAnimationDuration = await getAnimationDuration();
-                    const textLength = fullMessage.text.length;
-                    const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
-                    
-                    let currentIndex = 0;
-                    const typeCharacter = () => {
-                        if (!isMountedRef.current) return;
-                        if (currentIndex < textLength) {
-                            setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
-                            currentIndex++;
-                            animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
-                        } else {
-                            if (communicationMode === 'text-only') {
-                                handleEnd();
-                            }
+                setAnimatedResponse({ ...fullMessage, text: '' });
+                const totalAnimationDuration = await getAnimationDuration();
+                const textLength = fullMessage.text.length;
+                const delayPerChar = textLength > 0 ? totalAnimationDuration / textLength : 0;
+                
+                let currentIndex = 0;
+                const typeCharacter = () => {
+                    if (!isMountedRef.current) return;
+                    if (currentIndex < textLength) {
+                        setAnimatedResponse(prev => prev ? { ...prev, text: fullMessage.text.substring(0, currentIndex + 1) } : null);
+                        currentIndex++;
+                        animationTimerRef.current = setTimeout(typeCharacter, delayPerChar);
+                    } else {
+                        if (communicationMode === 'text-only') {
+                            handleEnd();
                         }
-                    };
-                    typeCharacter();
-                }
+                    }
+                };
+                typeCharacter();
             }
             
             if (finalAudioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
