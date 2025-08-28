@@ -485,7 +485,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
     
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually]);
+    }, [communicationMode, hasConversationEnded, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually, botStatus]);
 
     const handleFinalResponse = useCallback((result: GenerateChatResponseOutput) => {
         if (!isMountedRef.current) return;
@@ -710,7 +710,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const greetingText = await translate(precached.greetingText);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now(), isGreeting: true };
                 
-                await speakText(greetingText, greetingMessage, () => {
+                speakText(greetingText, greetingMessage, () => {
                     setBotStatus('idle'); // Transition to idle after greeting is done
                 }, precached.greetingAudioUri);
             } catch (error: any) {
@@ -887,7 +887,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     
     if (!isReady || !config) {
-        return ( <div className="flex flex-col items-center justify-center h-full text-center"> <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" /> <h2 className="mt-6 text-3xl font-bold font-headline text-primary">{uiText.loadingConfig}</h2></div> );
+        return (
+            <div className="flex flex-col items-center justify-center flex-grow h-full text-center">
+                <DatabaseZap className="h-16 w-16 text-primary mb-6 animate-pulse" />
+                <h2 className="mt-6 text-3xl font-bold font-headline text-primary">
+                    {uiText.loadingConfig}
+                </h2>
+            </div>
+        );
     }
 
     const imageProps: React.ComponentProps<typeof Image> = {
