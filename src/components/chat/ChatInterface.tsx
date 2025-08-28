@@ -317,10 +317,10 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, endedDueToInactivity]);
 
-    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void, audioDataUri?: string) => {
+    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: (shouldEnd: boolean) => void, audioDataUri?: string, shouldEndConversation?: boolean) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
-            onSpeechEnd?.();
+            onSpeechEnd?.(shouldEndConversation || false);
             return;
         }
 
@@ -338,7 +338,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             setAnimatedResponse(null);
             addMessage(fullMessage);
-            onSpeechEnd?.();
+            onSpeechEnd?.(shouldEndConversation || false);
         };
 
         let finalAudioDataUri = audioDataUri;
@@ -410,9 +410,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 audioPlayerRef.current.onended = handleEnd;
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
             } else if (finalAudioDataUri && communicationMode === 'audio-only' && audioPlayerRef.current) {
-                audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(); };
+                audioPlayerRef.current.onended = () => { addMessage(fullMessage); onSpeechEnd?.(shouldEndConversation || false); };
                 audioPlayerRef.current.src = finalAudioDataUri;
-                audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(); });
+                audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); addMessage(fullMessage); onSpeechEnd?.(shouldEndConversation || false); });
             } else if (communicationMode !== 'text-only') {
                 handleEnd();
             }
@@ -459,9 +459,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const translatedEndMessage = await translate(uiText.inactivityEndMessage);
                 const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
                 
-                speakText(translatedEndMessage, finalMessage, () => {
-                    handleEndChatManually('final-inactive');
-                });
+                speakText(translatedEndMessage, finalMessage, (shouldEnd) => {
+                    if (shouldEnd) handleEndChatManually('final-inactive');
+                }, undefined, true);
                 return;
             }
             
@@ -494,13 +494,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             debugClosestMatch: result.debugClosestMatch,
         };
         
-        speakText(result.aiResponse, aiMessage, () => {
-            if (result.shouldEndConversation) {
+        speakText(result.aiResponse, aiMessage, (shouldEnd) => {
+            if (shouldEnd) {
                 handleEndChatManually();
             } else if (!hasConversationEnded) {
                 setBotStatus('idle');
             }
-        });
+        }, undefined, result.shouldEndConversation);
     }, [speakText, handleEndChatManually, hasConversationEnded]);
     
     const processAndRespond = useCallback(async (history: Message[]) => {
@@ -547,7 +547,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
           speakText(translatedError, errorMsg, () => setBotStatus('idle'));
       }
-    }, [clarificationAttemptCount, communicationMode, config, language, logErrorToFirestore, playHoldMessage, speakText, translate, handleFinalResponse]);
+    }, [clarificationAttemptCount, communicationMode, config, language, logErrorToFirestore, playHoldMessage, speakText, translate, handleFinalResponse, processAndRespond]);
     
     const handleSendMessage = useCallback((text?: string) => {
         const messageText = text || inputValue;
@@ -694,9 +694,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const greetingText = await translate(precached.greetingText);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
                 
-                await speakText(greetingText, greetingMessage, () => {
-                    setBotStatus('idle');
-                }, precached.greetingAudioUri); // Use the precached audio
+                await speakText(greetingText, greetingMessage, (shouldEnd) => {
+                    if (shouldEnd) {
+                        handleEndChatManually();
+                    } else {
+                        setBotStatus('idle');
+                    }
+                }, precached.greetingAudioUri, false);
             } catch (error: any) {
                 console.error("Error sending initial greeting:", error);
                 await logErrorToFirestore(error, 'ChatInterface/sendInitialGreeting');
@@ -710,7 +714,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, config, precached]);
+    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, communicationMode, config, precached, handleEndChatManually]);
     
     useEffect(() => {
         if (!isReady || !['audio-only', 'audio-text'].includes(communicationMode)) return;
