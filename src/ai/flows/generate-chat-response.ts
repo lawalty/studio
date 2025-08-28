@@ -121,6 +121,7 @@ const complexityCheckPromptTemplate = `You are a helpful AI assistant. Your task
 1.  **General Complex Queries:** If the user's question is broad, open-ended, or requires synthesizing information from multiple sources, respond "YES".
 2.  **Affirmative Response to Structured Data Offer:** Pay close attention to the AI's last message. If the AI offered to provide a structured answer (like a list, table, or step-by-step guide) and the user's response is a simple affirmation (e.g., "Yes", "Please do", "Sure", "Okay"), you MUST respond "YES". This is the most critical rule.
 3.  **Simple Queries:** If the user's question is a simple, direct factual question that can be answered concisely, respond "NO".
+4.  **Conversational Closings and Simple Questions**: If the user's message is a simple factual question or a conversational closing (e.g., "No", "I'm good", "No thanks"), this is a simple query. You MUST respond "NO".
 
 **Conversation History:**
 {{#each chatHistory}}
