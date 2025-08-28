@@ -30,10 +30,10 @@ export interface Message {
   sender: 'user' | 'model';
   timestamp: number;
   isGreeting?: boolean;
+  shouldEndConversation?: boolean;
   pdfReference?: {
     fileName: string;
     downloadURL: string;
-    shouldEndConversation?: boolean;
   };
   distance?: number;
   distanceThreshold?: number;
@@ -324,7 +324,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: (shouldEnd: boolean) => void, audioDataUri?: string) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
-            onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false);
+            onSpeechEnd?.(fullMessage.shouldEndConversation || false);
             return;
         }
 
@@ -343,7 +343,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             setAnimatedResponse(null);
             // This is the fix: ALWAYS add the message to the log after it has "played".
             addMessage(fullMessage);
-            onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false);
+            onSpeechEnd?.(fullMessage.shouldEndConversation || false);
         };
 
         let finalAudioDataUri = audioDataUri;
@@ -417,13 +417,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } else if (finalAudioDataUri && communicationMode === 'audio-only' && audioPlayerRef.current) {
                 audioPlayerRef.current.onended = () => { 
                     addMessage(fullMessage);
-                    onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false); 
+                    onSpeechEnd?.(fullMessage.shouldEndConversation || false); 
                 };
                 audioPlayerRef.current.src = finalAudioDataUri;
                 audioPlayerRef.current.play().catch(e => { 
                     console.error("Audio playback failed:", e); 
                     addMessage(fullMessage);
-                    onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false); 
+                    onSpeechEnd?.(fullMessage.shouldEndConversation || false); 
                 });
             } else if (communicationMode !== 'text-only') {
                 handleEnd();
@@ -501,7 +501,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         
         const aiMessage: Message = {
             id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-            pdfReference: { ...result.pdfReference, shouldEndConversation: result.shouldEndConversation } as any,
+            shouldEndConversation: result.shouldEndConversation,
+            pdfReference: result.pdfReference,
             distance: result.distance,
             distanceThreshold: result.distanceThreshold, formality: result.formality,
             conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
@@ -1035,3 +1036,4 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
 
     
+
