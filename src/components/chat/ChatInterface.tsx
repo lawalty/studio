@@ -29,6 +29,7 @@ export interface Message {
   text: string;
   sender: 'user' | 'model';
   timestamp: number;
+  isGreeting?: boolean;
   pdfReference?: {
     fileName: string;
     downloadURL: string;
@@ -183,7 +184,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [isReady, setIsReady] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
-    const [botStatus, setBotStatus] = useState<BotStatus>('idle');
+    const [botStatus, setBotStatus] = useState<BotStatus>('greeting');
     const [hasConversationEnded, setHasConversationEnded] = useState(false);
     const [endedDueToInactivity, setEndedDueToInactivity] = useState(false);
     const [inputValue, setInputValue] = useState('');
@@ -339,10 +340,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (!isMountedRef.current) return;
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             setAnimatedResponse(null);
-            // Do not add the greeting to the main message log to avoid sending it to the AI
-            if (!isGreeting) {
-                addMessage(fullMessage);
-            }
+            addMessage(fullMessage);
             onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false);
         };
 
@@ -416,13 +414,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 audioPlayerRef.current.play().catch(e => { console.error("Audio playback failed:", e); handleEnd(); });
             } else if (finalAudioDataUri && communicationMode === 'audio-only' && audioPlayerRef.current) {
                 audioPlayerRef.current.onended = () => { 
-                    if (!isGreeting) addMessage(fullMessage);
+                    addMessage(fullMessage);
                     onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false); 
                 };
                 audioPlayerRef.current.src = finalAudioDataUri;
                 audioPlayerRef.current.play().catch(e => { 
                     console.error("Audio playback failed:", e); 
-                    if (!isGreeting) addMessage(fullMessage);
+                    addMessage(fullMessage);
                     onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false); 
                 });
             } else if (communicationMode !== 'text-only') {
@@ -472,7 +470,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
                 
                 speakText(translatedEndMessage, finalMessage, (shouldEnd) => {
-                    if (shouldEnd) handleEndChatManually('final-inactive');
+                    handleEndChatManually('final-inactive');
                 }, undefined, true);
                 return;
             }
@@ -520,7 +518,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       if (!isMountedRef.current || !config) return;
 
       try {
-          const historyForGenkit = history.map(msg => ({ 
+          const historyForGenkit = history
+            .filter(msg => !msg.isGreeting) // Ensure greetings are not sent to the AI
+            .map(msg => ({ 
               role: msg.sender as 'user' | 'model', 
               content: [{ text: msg.text }] 
           }));
@@ -700,13 +700,15 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, []);
 
     useEffect(() => {
-        if (!isReady || isInitialized || messages.length > 0 || !precached || !config) return;
+        if (!isReady || isInitialized || !precached || !config) return;
         
         const sendInitialGreeting = async () => {
+            if (messages.some(m => m.isGreeting)) return;
+            
             setBotStatus('greeting');
             try {
                 const greetingText = await translate(precached.greetingText);
-                const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now() };
+                const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now(), isGreeting: true };
                 
                 await speakText(greetingText, greetingMessage, () => {
                     setBotStatus('idle'); // Transition to idle after greeting is done
@@ -714,7 +716,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             } catch (error: any) {
                 console.error("Error sending initial greeting:", error);
                 await logErrorToFirestore(error, 'ChatInterface/sendInitialGreeting');
-                const fallbackMessage: Message = { id: uuidv4(), text: "Hello! How can I help you today?", sender: 'model', timestamp: Date.now() };
+                const fallbackMessage: Message = { id: uuidv4(), text: "Hello! How can I help you today?", sender: 'model', timestamp: Date.now(), isGreeting: true };
                 await speakText(fallbackMessage.text, fallbackMessage, () => {
                      setBotStatus('idle');
                 }, undefined, true);
@@ -724,7 +726,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         sendInitialGreeting();
         setIsInitialized(true); 
 
-    }, [isReady, isInitialized, messages.length, translate, speakText, logErrorToFirestore, config, precached, handleEndChatManually]);
+    }, [isReady, isInitialized, messages, translate, speakText, logErrorToFirestore, config, precached]);
     
     useEffect(() => {
         if (!isReady || !['audio-only', 'audio-text'].includes(communicationMode)) return;
@@ -813,7 +815,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     useEffect(() => {
         if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
-            recognitionRef.current?.start();
+            if (!recognitionRef.current.isListening) {
+                try {
+                    recognitionRef.current.start();
+                } catch(e) {
+                    // Ignore error if it's already started
+                }
+            }
         }
     }, [botStatus, isInitialized, communicationMode, hasConversationEnded]);
 
@@ -1009,3 +1017,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
+
+    
