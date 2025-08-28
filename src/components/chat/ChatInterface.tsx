@@ -426,8 +426,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           
           if (preflightResult.requiresHoldMessage) {
               playHoldMessage();
-              flowInput.retrievedContext = preflightResult.retrievedContext;
-              const finalResult = await generateFinalResponse(flowInput);
+              const finalFlowInput: GenerateChatResponseInput = {
+                  ...flowInput,
+                  retrievedContext: preflightResult.retrievedContext,
+              };
+              const finalResult = await generateFinalResponse(finalFlowInput);
               handleFinalResponse(finalResult);
           } else {
               // The first call already returned the final response

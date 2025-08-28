@@ -30,6 +30,7 @@ const GenerateChatResponseInputSchema = z.object({
     })),
   })).optional().describe('The history of the conversation so far, including the latest user message.'),
   clarificationAttemptCount: z.number().optional().default(0).describe('The number of consecutive times the AI has had to ask for clarification.'),
+  retrievedContext: z.string().optional(), // Now optional
 });
 export type GenerateChatResponseInput = z.infer<typeof GenerateChatResponseInputSchema>;
 
@@ -338,12 +339,17 @@ export const generateFinalResponse = async ({
     communicationMode = 'text-only',
     clarificationAttemptCount = 0,
     retrievedContext,
-}: GenerateChatResponseInput & { retrievedContext: string }): Promise<GenerateChatResponseOutput> => {
+}: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     const appConfig = await getAppConfig();
     let historyForRAG = chatHistory || [];
     
     if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
         historyForRAG = historyForRAG.slice(1);
+    }
+
+    const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
+    if (!lastUserMessage) {
+        return { aiResponse: "I'm ready when you are. What's on your mind?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
     }
 
     try {
