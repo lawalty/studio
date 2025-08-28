@@ -115,15 +115,24 @@ const buildRetrievedContext = (results: any[], budgetChars = 6000) => {
   return chunks.join('\n\n') || 'NO_CONTEXT_FOUND';
 };
 
-const complexityCheckPromptTemplate = `You are a helpful AI assistant. Analyze the user's question and the provided context. Your task is to determine if generating a comprehensive answer would be a complex task. A complex task is one that requires synthesizing information from multiple paragraphs or sources, involves step-by-step instructions, or addresses a broad, open-ended question. A simple task can be answered with a short, direct fact.
+const complexityCheckPromptTemplate = `You are a helpful AI assistant. Your task is to analyze a conversation and determine if a hold message is needed. A hold message is needed if the user's latest message requires a complex, multi-step, or long answer.
 
-User's Question: "{{lastUserMessage}}"
-Retrieved Context:
+**CRITICAL RULES:**
+1.  **General Complex Queries:** If the user's question is broad, open-ended, or requires synthesizing information from multiple sources, respond "YES".
+2.  **Affirmative Response to Structured Data Offer:** Pay close attention to the AI's last message. If the AI offered to provide a structured answer (like a list, table, or step-by-step guide) and the user's response is a simple affirmation (e.g., "Yes", "Please do", "Sure", "Okay"), you MUST respond "YES". This is the most critical rule.
+3.  **Simple Queries:** If the user's question is a simple, direct factual question that can be answered concisely, respond "NO".
+
+**Conversation History:**
+{{#each chatHistory}}
+**{{role}}**: {{content.[0].text}}
+{{/each}}
+
+**Retrieved Context:**
 <retrieved_context>
 {{{retrievedContext}}}
 </retrieved_context>
 
-Is a detailed and comprehensive answer required? Respond with only the word "YES" or "NO".`;
+Based on the rules, is a "hold message" required before generating the next response? Respond with only the word "YES" or "NO".`;
 
 
 const systemPromptTemplate = `You are a helpful conversational AI. Your persona is: "{{personaTraits}}". Your personal bio/history is: "{{personalBio}}". Your first and most important task is to analyze the 'Response Style Equalizer' values. You MUST then generate a response that strictly adheres to ALL of these style rules.
@@ -294,7 +303,7 @@ const generateChatResponseFlow = async (input: GenerateChatResponseInput): Promi
     let requiresHoldMessage = false;
     try {
         const complexityTemplate = Handlebars.compile(complexityCheckPromptTemplate);
-        const complexityPrompt = complexityTemplate({ lastUserMessage: searchQuery, retrievedContext });
+        const complexityPrompt = complexityTemplate({ chatHistory: historyForRAG, retrievedContext });
         
         const { text: complexityResult } = await withRetry(() => ai.generate({
             model: googleAI.model('gemini-1.5-flash-latest'), // Use a fast model for the check
@@ -436,7 +445,3 @@ export async function generateChatResponse(
   // The history manipulation now happens inside the flows, so we can pass the input directly.
   return generateChatResponseFlow(input);
 }
-
-    
-
-    
