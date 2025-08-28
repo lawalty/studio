@@ -242,9 +242,10 @@ const generateChatResponseFlow = async (input: GenerateChatResponseInput): Promi
     if (historyForRAG.length > 0 && historyForRAG[0].role === 'model') {
         historyForRAG = historyForRAG.slice(1);
     }
+    
+    const lastUserMessageContent = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1].content[0]?.text : '';
+    const lastUserMessage = (historyForRAG.length > 0 && historyForRAG[historyForRAG.length - 1].role === 'user') ? lastUserMessageContent : '';
 
-    const lastMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1] : null;
-    const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
     
     if (!lastUserMessage) {
         // This case handles a scenario where the history is malformed or empty.
@@ -363,17 +364,11 @@ export const generateFinalResponse = async ({
         historyForRAG = historyForRAG.slice(1);
     }
     
-    const lastMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1] : null;
-    const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
+    const lastUserMessageContent = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1].content[0]?.text : '';
+    const lastUserMessage = (historyForRAG.length > 0 && historyForRAG[historyForRAG.length - 1].role === 'user') ? lastUserMessageContent : '';
 
-    if (!lastUserMessage && historyForRAG.length > 0) {
-        // Fallback for cases where the last message is from the model (e.g. after a clarification)
-        // We still need to check if there is ANY user message to respond to.
-         const anyUserMessage = historyForRAG.some(m => m.role === 'user');
-         if (!anyUserMessage) {
-            return { aiResponse: "I'm ready when you are. What's on your mind?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
-         }
-    } else if (historyForRAG.length === 0) {
+    if (!lastUserMessage) {
+       // This case handles a scenario where the history is malformed or empty.
        return { aiResponse: "I'm ready when you are. What's on your mind?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
     }
 

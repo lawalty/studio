@@ -476,7 +476,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
     }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually]);
-    
+
     const handleFinalResponse = useCallback((result: GenerateChatResponseOutput) => {
         if (!isMountedRef.current) return;
 
@@ -799,7 +799,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     useEffect(() => {
         if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
-            // No auto-listening to prevent loops; user must re-engage if needed
+            recognitionRef.current?.start();
         }
     }, [botStatus, isInitialized, communicationMode, hasConversationEnded]);
 
@@ -970,7 +970,13 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           </div>
           <MessageInput
             onSendMessage={(text) => handleSendMessage()} isSending={isBotProcessing || isBotSpeaking}
-            showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={() => {}}
+            showMicButton={communicationMode === 'audio-text'} isListening={isListening} onToggleListening={() => {
+                if(isListening) {
+                    recognitionRef.current?.stop();
+                } else {
+                    recognitionRef.current?.start();
+                }
+            }}
             inputValue={inputValue} onInputValueChange={setInputValue} disabled={hasConversationEnded}
             placeholder={inputPlaceholder}
           />
