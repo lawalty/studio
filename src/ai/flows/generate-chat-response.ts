@@ -214,15 +214,16 @@ const logErrorToFirestore = async (error: any, source: string) => {
 };
 
 // This flow now only performs the pre-flight check.
-const generateChatResponseFlow = async ({ 
-    personaTraits, 
-    personalBio,
-    conversationalTopics, 
-    chatHistory, 
-    language,
-    communicationMode = 'text-only',
-    clarificationAttemptCount = 0,
-}: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
+const generateChatResponseFlow = async (input: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
+    const { 
+        personaTraits, 
+        personalBio,
+        conversationalTopics, 
+        chatHistory, 
+        language,
+        communicationMode,
+        clarificationAttemptCount
+    } = input;
     
     const appConfig = await getAppConfig();
     let historyForRAG = chatHistory || [];
@@ -311,7 +312,7 @@ const generateChatResponseFlow = async ({
     // If no hold message is required, generate the final response immediately.
     if (!requiresHoldMessage) {
         // Pass the corrected history to the final response generator
-        return generateFinalResponse({ ...arguments[0], chatHistory: historyForRAG, retrievedContext });
+        return generateFinalResponse({ ...input, chatHistory: historyForRAG, retrievedContext });
     }
 
     // Otherwise, signal the UI to play the hold message and wait for a second call.

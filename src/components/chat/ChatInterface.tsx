@@ -243,6 +243,79 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, []);
     
+    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
+        clearInactivityTimer();
+        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
+        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
+        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
+        
+        setBotStatus('idle');
+        
+        if (reason === 'final-inactive') {
+            setEndedDueToInactivity(true);
+        } else {
+            setEndedDueToInactivity(false);
+        }
+        setHasConversationEnded(true);
+    }, [botStatus, clearInactivityTimer]);
+    
+    const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
+        if (!config || msgs.length === 0 || !config.archiveChatHistoryEnabled || !msgs.some(m => m.sender === 'user')) return;
+        
+        try {
+            const { default: jsPDF } = await import('jspdf');
+            const { default: html2canvas } = await import('html2canvas');
+            const tempContainer = document.createElement('div');
+            tempContainer.style.width = '700px'; tempContainer.style.position = 'absolute'; tempContainer.style.left = '-9999px'; tempContainer.style.fontFamily = 'Inter, sans-serif';
+            tempContainer.innerHTML = generateChatLogHtml(msgs, config.avatarSrc, "Chat Transcript");
+            document.body.appendChild(tempContainer);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            const canvas = await html2canvas(tempContainer, { scale: 2, useCORS: true, backgroundColor: '#FFFFFF', logging: false });
+            document.body.removeChild(tempContainer);
+            
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+            const pageMargin = 20; const contentWidth = pdf.internal.pageSize.getWidth() - (pageMargin * 2); const imgHeight = (canvas.height * contentWidth) / canvas.width;
+            let heightLeft = imgHeight; let position = pageMargin;
+
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
+            heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
+            while (heightLeft > 0) {
+                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
+                pdf.addPage();
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
+                heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
+            }
+            const pdfBlob = pdf.output('blob');
+            
+            const sourceId = uuidv4();
+            const fileName = `Chat-Transcript-${new Date().toISOString().split('T')[0]}.pdf`;
+            const sourceDocRef = doc(db, 'kb_meta', sourceId);
+            await setDoc(sourceDocRef, { sourceName: fileName, topic: 'Chat History', level: 'Chat History', createdAt: new Date().toISOString(), indexingStatus: 'processing', mimeType: 'application/pdf' });
+            
+            const storagePath = `knowledge_base_files/Chat History/${sourceId}-${fileName}`;
+            await uploadBytes(storageRef(storage, storagePath), pdfBlob);
+            const downloadURL = await getDownloadURL(storageRef(storage, storagePath));
+            await updateDoc(sourceDocRef, { downloadURL });
+
+            const textContentForIndexing = msgs.map(m => `${m.sender}: ${m.text}`).join('\n\n');
+            const indexingResult = await indexDocument({ sourceId, sourceName: fileName, text: textContentForIndexing, level: 'Chat History', topic: 'Chat History', downloadURL });
+            if (!indexingResult.success) throw new Error(indexingResult.error || 'Indexing failed.');
+
+        } catch (error: any) {
+            console.error("Failed to archive chat:", error);
+            await logErrorToFirestore(error, 'ChatInterface/archiveAndIndexChat');
+        }
+    }, [logErrorToFirestore, config]);
+    
+    useEffect(() => {
+        if (hasConversationEnded) {
+            clearInactivityTimer();
+            if (!endedDueToInactivity) {
+                archiveAndIndexChat(messages);
+            }
+        }
+    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, endedDueToInactivity]);
+
     const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: () => void, audioDataUri?: string) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
@@ -401,8 +474,34 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
     
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, speakText, messages]);
+    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually]);
+    
+    const handleFinalResponse = useCallback((result: GenerateChatResponseOutput) => {
+        if (!isMountedRef.current) return;
 
+        if (result.isClarificationQuestion) {
+            setClarificationAttemptCount(prev => prev + 1);
+        } else {
+            setClarificationAttemptCount(0);
+        }
+        
+        const aiMessage: Message = {
+            id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
+            pdfReference: result.pdfReference, distance: result.distance,
+            distanceThreshold: result.distanceThreshold, formality: result.formality,
+            conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
+            debugClosestMatch: result.debugClosestMatch,
+        };
+        
+        speakText(result.aiResponse, aiMessage, () => {
+            if (result.shouldEndConversation) {
+                handleEndChatManually();
+            } else if (!hasConversationEnded) {
+                setBotStatus('idle');
+            }
+        });
+    }, [speakText, handleEndChatManually, hasConversationEnded]);
+    
     const processAndRespond = useCallback(async (history: Message[]) => {
       if (!isMountedRef.current || !config) return;
 
@@ -447,33 +546,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
           speakText(translatedError, errorMsg, () => setBotStatus('idle'));
       }
-    }, [clarificationAttemptCount, communicationMode, config, language, logErrorToFirestore, playHoldMessage, speakText, translate]);
-    
-    const handleFinalResponse = (result: GenerateChatResponseOutput) => {
-        if (!isMountedRef.current) return;
-
-        if (result.isClarificationQuestion) {
-            setClarificationAttemptCount(prev => prev + 1);
-        } else {
-            setClarificationAttemptCount(0);
-        }
-        
-        const aiMessage: Message = {
-            id: uuidv4(), text: result.aiResponse, sender: 'model', timestamp: Date.now(),
-            pdfReference: result.pdfReference, distance: result.distance,
-            distanceThreshold: result.distanceThreshold, formality: result.formality,
-            conciseness: result.conciseness, tone: result.tone, formatting: result.formatting,
-            debugClosestMatch: result.debugClosestMatch,
-        };
-        
-        speakText(result.aiResponse, aiMessage, () => {
-            if (result.shouldEndConversation) {
-                handleEndChatManually();
-            } else if (!hasConversationEnded) {
-                setBotStatus('idle');
-            }
-        });
-    };
+    }, [clarificationAttemptCount, communicationMode, config, language, logErrorToFirestore, playHoldMessage, speakText, translate, handleFinalResponse]);
     
     const handleSendMessage = useCallback((text?: string) => {
         const messageText = text || inputValue;
@@ -492,79 +565,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         processAndRespond(updatedMessages);
         
     }, [inputValue, hasConversationEnded, isBotProcessing, config, clearInactivityTimer, processAndRespond]);
-
-    const handleEndChatManually = useCallback(async (reason?: 'final-inactive') => {
-        clearInactivityTimer();
-        if (botStatus === 'listening') { recognitionRef.current?.stop(); }
-        if (audioPlayerRef.current) { audioPlayerRef.current.pause(); }
-        if (typeof window !== 'undefined') { window.speechSynthesis.cancel(); }
-        
-        setBotStatus('idle');
-        
-        if (reason === 'final-inactive') {
-            setEndedDueToInactivity(true);
-        } else {
-            setEndedDueToInactivity(false);
-        }
-        setHasConversationEnded(true);
-    }, [botStatus, clearInactivityTimer]);
-    
-    const archiveAndIndexChat = useCallback(async (msgs: Message[]) => {
-        if (!config || msgs.length === 0 || !config.archiveChatHistoryEnabled || !msgs.some(m => m.sender === 'user')) return;
-        
-        try {
-            const { default: jsPDF } = await import('jspdf');
-            const { default: html2canvas } = await import('html2canvas');
-            const tempContainer = document.createElement('div');
-            tempContainer.style.width = '700px'; tempContainer.style.position = 'absolute'; tempContainer.style.left = '-9999px'; tempContainer.style.fontFamily = 'Inter, sans-serif';
-            tempContainer.innerHTML = generateChatLogHtml(msgs, config.avatarSrc, "Chat Transcript");
-            document.body.appendChild(tempContainer);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            const canvas = await html2canvas(tempContainer, { scale: 2, useCORS: true, backgroundColor: '#FFFFFF', logging: false });
-            document.body.removeChild(tempContainer);
-            
-            const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-            const pageMargin = 20; const contentWidth = pdf.internal.pageSize.getWidth() - (pageMargin * 2); const imgHeight = (canvas.height * contentWidth) / canvas.width;
-            let heightLeft = imgHeight; let position = pageMargin;
-
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
-            heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
-            while (heightLeft > 0) {
-                position -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
-                pdf.addPage();
-                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pageMargin, position, contentWidth, imgHeight);
-                heightLeft -= (pdf.internal.pageSize.getHeight() - (pageMargin * 2));
-            }
-            const pdfBlob = pdf.output('blob');
-            
-            const sourceId = uuidv4();
-            const fileName = `Chat-Transcript-${new Date().toISOString().split('T')[0]}.pdf`;
-            const sourceDocRef = doc(db, 'kb_meta', sourceId);
-            await setDoc(sourceDocRef, { sourceName: fileName, topic: 'Chat History', level: 'Chat History', createdAt: new Date().toISOString(), indexingStatus: 'processing', mimeType: 'application/pdf' });
-            
-            const storagePath = `knowledge_base_files/Chat History/${sourceId}-${fileName}`;
-            await uploadBytes(storageRef(storage, storagePath), pdfBlob);
-            const downloadURL = await getDownloadURL(storageRef(storage, storagePath));
-            await updateDoc(sourceDocRef, { downloadURL });
-
-            const textContentForIndexing = msgs.map(m => `${m.sender}: ${m.text}`).join('\n\n');
-            const indexingResult = await indexDocument({ sourceId, sourceName: fileName, text: textContentForIndexing, level: 'Chat History', topic: 'Chat History', downloadURL });
-            if (!indexingResult.success) throw new Error(indexingResult.error || 'Indexing failed.');
-
-        } catch (error: any) {
-            console.error("Failed to archive chat:", error);
-            await logErrorToFirestore(error, 'ChatInterface/archiveAndIndexChat');
-        }
-    }, [logErrorToFirestore, config]);
-    
-    useEffect(() => {
-        if (hasConversationEnded) {
-            clearInactivityTimer();
-            if (!endedDueToInactivity) {
-                archiveAndIndexChat(messages);
-            }
-        }
-    }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, endedDueToInactivity]);
 
     useEffect(() => {
         const translateAllUiText = async () => {
