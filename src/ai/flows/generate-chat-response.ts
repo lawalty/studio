@@ -225,18 +225,9 @@ const generateChatResponseFlow = async ({
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     
     const appConfig = await getAppConfig();
-    let historyForRAG = chatHistory || [];
-    let lastUserMessage = '';
-
-    if (historyForRAG.length > 0) {
-        if (historyForRAG.length === 2 && historyForRAG[0].role === 'model') {
-            // This is the user's first real message after the AI's greeting.
-            lastUserMessage = historyForRAG[1]?.content?.[0]?.text || '';
-        } else {
-            // This is a subsequent message in the conversation.
-            lastUserMessage = historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '';
-        }
-    }
+    const historyForRAG = chatHistory || [];
+    const lastMessage = historyForRAG[historyForRAG.length - 1];
+    const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
     
     if (!lastUserMessage) {
         // This case handles a scenario where the history is malformed or empty.
@@ -347,16 +338,22 @@ export const generateFinalResponse = async ({
     retrievedContext,
 }: GenerateChatResponseInput): Promise<GenerateChatResponseOutput> => {
     const appConfig = await getAppConfig();
-    let historyForRAG = chatHistory || [];
+    const historyForRAG = chatHistory || [];
     
-    if (historyForRAG.length === 2 && historyForRAG[0].role === 'model') {
-        historyForRAG = historyForRAG.slice(1);
+    const lastMessage = historyForRAG[historyForRAG.length - 1];
+    const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
+
+    if (!lastUserMessage && historyForRAG.length > 0) {
+        // Fallback for cases where the last message is from the model (e.g. after a clarification)
+        // We still need to check if there is ANY user message to respond to.
+         const anyUserMessage = historyForRAG.some(m => m.role === 'user');
+         if (!anyUserMessage) {
+            return { aiResponse: "I'm ready when you are. What's on your mind?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
+         }
+    } else if (historyForRAG.length === 0) {
+       return { aiResponse: "I'm ready when you are. What's on your mind?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
     }
 
-    const lastUserMessage = historyForRAG.length > 0 ? (historyForRAG[historyForRAG.length - 1].content?.[0]?.text || '') : '';
-    if (!lastUserMessage) {
-        return { aiResponse: "I'm ready when you are. What's on your mind?", isClarificationQuestion: false, shouldEndConversation: false, requiresHoldMessage: false };
-    }
 
     try {
         const template = Handlebars.compile(systemPromptTemplate);
@@ -423,5 +420,13 @@ export const generateFinalResponse = async ({
 export async function generateChatResponse(
   input: GenerateChatResponseInput
 ): Promise<GenerateChatResponseOutput> {
-  return generateChatResponseFlow(input);
+  // This initial history manipulation handles the case where the user's first message follows the AI's greeting.
+  // It ensures the AI doesn't see its own greeting as the first user message.
+  let history = input.chatHistory || [];
+  if (history.length === 2 && history[0].role === 'model') {
+      history = history.slice(1);
+  }
+  const processedInput = { ...input, chatHistory: history };
+  
+  return generateChatResponseFlow(processedInput);
 }
