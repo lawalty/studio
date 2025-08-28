@@ -547,7 +547,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
           speakText(translatedError, errorMsg, () => setBotStatus('idle'));
       }
-    }, [clarificationAttemptCount, communicationMode, config, language, logErrorToFirestore, playHoldMessage, speakText, translate, handleFinalResponse, processAndRespond]);
+    }, [clarificationAttemptCount, communicationMode, config, language, logErrorToFirestore, playHoldMessage, speakText, translate, handleFinalResponse]);
     
     const handleSendMessage = useCallback((text?: string) => {
         const messageText = text || inputValue;
