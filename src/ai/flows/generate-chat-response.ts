@@ -149,7 +149,7 @@ const systemPromptTemplate = `You are a helpful conversational AI. Your persona 
     - If you populate the 'pdfReference' object, you should also naturally weave a comment into your response informing the user that they can download the source document for more details.
     - **Audio-Only Mode Logic**: The user is in '{{communicationMode}}' mode. If the mode is 'audio-only' AND you are providing a 'pdfReference', you MUST explicitly state that the document will be available for download in the chat transcript after the conversation has ended. For other modes, you can refer to the link being available now.
     - If the context is NOT relevant, you are FORBIDDEN from populating the 'pdfReference' object, even if a file was retrieved.
-11. **Structured Answer Formatting**: If you are providing a list, a step-by-step guide, or a detailed explanation, you MUST first provide a brief, one-sentence introduction (e.g., "Here are the steps for the closing procedure:").
+11. **Structured Answer Confirmation**: If you are about to provide a long, structured answer (e.g., a list, a step-by-step guide, a table, or a detailed explanation), you MUST first provide a brief, one-sentence summary. After the summary, you MUST ask the user if they would like to see the full details. For example: "I have the steps for the closing procedure. Would you like me to list them out for you?". If the user says yes, then you will provide the full structured response in your next turn.
 12. **Always Ask a Follow-up Question**: After providing a complete answer, you MUST end your turn with a polite follow-up question. Examples: 'Does that answer your question?', 'Is there anything else I can help with?', 'What else would you like to know?'. This rule applies to all responses except for when you are asking a clarifying question yourself.
 13. **Response Style Equalizer (0-100 scale) - YOU MUST FOLLOW THESE RULES:**
     - **Formality ({{formality}}):**
@@ -233,7 +233,7 @@ const generateChatResponseFlow = async (input: GenerateChatResponseInput): Promi
         historyForRAG = historyForRAG.slice(1);
     }
 
-    const lastMessage = historyForRAG[historyForRAG.length - 1];
+    const lastMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1] : null;
     const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
     
     if (!lastUserMessage) {
@@ -353,7 +353,7 @@ export const generateFinalResponse = async ({
         historyForRAG = historyForRAG.slice(1);
     }
     
-    const lastMessage = historyForRAG[historyForRAG.length - 1];
+    const lastMessage = historyForRAG.length > 0 ? historyForRAG[historyForRAG.length - 1] : null;
     const lastUserMessage = lastMessage?.role === 'user' ? lastMessage.content[0]?.text || '' : '';
 
     if (!lastUserMessage && historyForRAG.length > 0) {
@@ -436,5 +436,7 @@ export async function generateChatResponse(
   // The history manipulation now happens inside the flows, so we can pass the input directly.
   return generateChatResponseFlow(input);
 }
+
+    
 
     
