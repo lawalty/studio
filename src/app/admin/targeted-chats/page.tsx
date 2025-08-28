@@ -25,7 +25,7 @@ export default function TargetedChatsPage() {
         <Construction className="h-4 w-4" />
         <AlertTitle>Under Development</AlertTitle>
         <AlertDescription>
-          The "Targeted Chats" feature is currently being planned. This page is a placeholder for where you will configure custom chat experiences that are separate from the three main, general-purpose chat modes.
+          The &quot;Targeted Chats&quot; feature is currently being planned. This page is a placeholder for where you will configure custom chat experiences that are separate from the three main, general-purpose chat modes.
         </AlertDescription>
       </Alert>
     </div>

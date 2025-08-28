@@ -22,17 +22,21 @@ type GenerateHoldMessageOutput = z.infer<typeof GenerateHoldMessageOutputSchema>
 
 const holdMessages: Record<string, string[]> = {
     English: [
-        "Of course, one moment.",
-        "Good question, let me check on that for you.",
-        "Just a second while I pull that up.",
-        "Let me see... just a moment.",
+      "Please hold on as I get the answer for you.",
+      "Thanks for your patience, I’m looking that up now.",
+      "Give me just a moment while I gather the details.",
+      "Hang tight, I’m pulling that information for you.",
+      "One sec—I want to make sure I get this right for you.",
+      "I appreciate you waiting, I’ll have the answer shortly."
     ],
     Spanish: [
-        "Claro, un momento.",
-        "Buena pregunta, déjame revisarlo.",
-        "Solo un segundo mientras lo busco.",
-        "Déjame ver... un momento.",
-    ],
+      "Por favor, espere mientras busco la respuesta para usted.",
+      "Gracias por su paciencia, estoy buscando eso ahora.",
+      "Deme un momento mientras reúno los detalles.",
+      "Espere un instante, estoy obteniendo esa información para usted.",
+      "Un segundo—quiero asegurarme de darle la respuesta correcta.",
+      "Le agradezco que espere, tendré la respuesta en breve."
+    ]
 };
 
 export async function generateHoldMessage({ 

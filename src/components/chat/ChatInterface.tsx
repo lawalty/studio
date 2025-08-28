@@ -403,7 +403,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
     }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, speakText, messages]);
 
-    const processAndRespond = async (history: Message[]) => {
+    const processAndRespond = useCallback(async (history: Message[]) => {
       if (!isMountedRef.current || !config) return;
 
       try {
@@ -447,7 +447,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
           const errorMsg: Message = { id: uuidv4(), text: translatedError, sender: 'model', timestamp: Date.now() };
           speakText(translatedError, errorMsg, () => setBotStatus('idle'));
       }
-    };
+    }, [clarificationAttemptCount, communicationMode, config, language, logErrorToFirestore, playHoldMessage, speakText, translate]);
     
     const handleFinalResponse = (result: GenerateChatResponseOutput) => {
         if (!isMountedRef.current) return;

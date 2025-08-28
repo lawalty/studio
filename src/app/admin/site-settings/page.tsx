@@ -501,7 +501,7 @@ Please check your environment variables and Google Cloud Console settings.`;
                       step="50"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                      Time to wait before playing the "hold message" audio. Default: {DEFAULT_AI_PREPARATION_TIME_MS}ms.
+                      Time to wait before playing the &quot;hold message&quot; audio. Default: {DEFAULT_AI_PREPARATION_TIME_MS}ms.
                   </p>
                 </div>
                 <div className="space-y-2">
