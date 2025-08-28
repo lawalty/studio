@@ -146,6 +146,7 @@ interface ChatConfig {
     useCustomTts: boolean;
     archiveChatHistoryEnabled: boolean;
     showDiagnosticTimer: boolean;
+    splashScreenWelcomeMessage: string;
 }
 
 interface PrecachedData {
