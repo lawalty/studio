@@ -174,6 +174,7 @@ const ENGLISH_UI_TEXT = {
     messageInputPlaceholderListening: "Listening... Speak now or press send to finish.",
     messageInputPlaceholderEnded: "Conversation ended. Please choose an option above.",
     messageInputPlaceholderTextOnly: "Type your message...",
+    splashScreenWelcomeMessage: "Welcome to AI Chat",
 };
 
 export default function ChatInterface({ communicationMode }: ChatInterfaceProps) {
