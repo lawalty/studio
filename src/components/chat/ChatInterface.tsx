@@ -189,7 +189,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     const [endedDueToInactivity, setEndedDueToInactivity] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [animatedResponse, setAnimatedResponse] = useState<Message | null>(null);
-    const [uiText, setUiText] = useState(ENGLISH_UI_TEXT);
+    const [uiText, setUiText] = useState({ ...ENGLISH_UI_TEXT });
     const [clarificationAttemptCount, setClarificationAttemptCount] = useState(0);
     const [diagnosticTimerValue, setDiagnosticTimerValue] = useState(0);
 
@@ -320,7 +320,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         }
     }, [hasConversationEnded, messages, archiveAndIndexChat, clearInactivityTimer, endedDueToInactivity]);
 
-    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: (shouldEnd: boolean) => void, audioDataUri?: string, isGreeting: boolean = false) => {
+    const speakText = useCallback(async (textToSpeak: string, fullMessage: Message, onSpeechEnd?: (shouldEnd: boolean) => void, audioDataUri?: string) => {
         if (!audioPlayerRef.current) audioPlayerRef.current = new Audio();
         if (!isMountedRef.current || !textToSpeak.trim()) {
             onSpeechEnd?.(fullMessage.pdfReference?.shouldEndConversation || false);
@@ -364,7 +364,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             }
         }
         
-        const targetStatus = isGreeting ? 'greeting' : (communicationMode === 'text-only' ? 'typing' : 'speaking');
+        const targetStatus = fullMessage.isGreeting ? 'greeting' : (communicationMode === 'text-only' ? 'typing' : 'speaking');
         
         const playAndAnimate = async () => {
             setBotStatus(targetStatus);
@@ -471,7 +471,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 
                 speakText(translatedEndMessage, finalMessage, (shouldEnd) => {
                     handleEndChatManually('final-inactive');
-                }, undefined, true);
+                }, undefined);
                 return;
             }
             
@@ -485,7 +485,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
         };
     
         inactivityTimerRef.current = setTimeout(runCheck, config.inactivityTimeoutMs);
-    }, [communicationMode, hasConversationEnded, botStatus, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually]);
+    }, [communicationMode, hasConversationEnded, clearInactivityTimer, uiText, translate, config, speakText, messages, handleEndChatManually]);
 
     const handleFinalResponse = useCallback((result: GenerateChatResponseOutput) => {
         if (!isMountedRef.current) return;
@@ -712,14 +712,14 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 
                 await speakText(greetingText, greetingMessage, () => {
                     setBotStatus('idle'); // Transition to idle after greeting is done
-                }, precached.greetingAudioUri, true);
+                }, precached.greetingAudioUri);
             } catch (error: any) {
                 console.error("Error sending initial greeting:", error);
                 await logErrorToFirestore(error, 'ChatInterface/sendInitialGreeting');
                 const fallbackMessage: Message = { id: uuidv4(), text: "Hello! How can I help you today?", sender: 'model', timestamp: Date.now(), isGreeting: true };
                 await speakText(fallbackMessage.text, fallbackMessage, () => {
                      setBotStatus('idle');
-                }, undefined, true);
+                }, undefined);
             }
         };
         
@@ -815,6 +815,8 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     
     useEffect(() => {
         if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
+            // This is the trigger for the inactivity timer to start
+            startInactivityTimer();
             if (!recognitionRef.current.isListening) {
                 try {
                     recognitionRef.current.start();
@@ -823,7 +825,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 }
             }
         }
-    }, [botStatus, isInitialized, communicationMode, hasConversationEnded]);
+    }, [botStatus, isInitialized, communicationMode, hasConversationEnded, startInactivityTimer]);
 
     useEffect(() => {
         if (config?.showDiagnosticTimer && botStatus !== 'idle') {
