@@ -125,7 +125,7 @@ interface ChatInterfaceProps {
     communicationMode: 'audio-only' | 'audio-text' | 'text-only';
 }
 
-type BotStatus = 'idle' | 'listening' | 'preparing' | 'speaking' | 'greeting';
+type BotStatus = 'idle' | 'listening' | 'preparing' | 'speaking' | 'greeting' | 'typing';
 
 interface ChatConfig {
     avatarSrc: string;
@@ -816,17 +816,20 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
     }, [language, handleSendMessage, clearInactivityTimer, startInactivityTimer, logErrorToFirestore, communicationMode, config, isCheckingInactivity, botStatus]);
     
     useEffect(() => {
-        if (botStatus === 'idle' && isInitialized && communicationMode === 'audio-only' && !hasConversationEnded) {
+        if (!isReady || !isInitialized || hasConversationEnded || isCheckingInactivity || isBotSpeaking || isBotProcessing) {
+            clearInactivityTimer();
+        } else if (communicationMode === 'audio-only' && botStatus === 'idle') {
             startInactivityTimer();
-            if (recognitionRef.current && !recognitionRef.current.isListening) {
+        }
+
+        if (isInitialized && botStatus === 'idle' && communicationMode === 'audio-only' && !hasConversationEnded && !isListening) {
+             if (recognitionRef.current && !recognitionRef.current.isListening) {
                 try {
                     recognitionRef.current.start();
-                } catch(e) {
-                    // Ignore error if it's already started
-                }
+                } catch(e) { /* ignore */ }
             }
         }
-    }, [botStatus, isInitialized, communicationMode, hasConversationEnded, startInactivityTimer]);
+    }, [isReady, isInitialized, botStatus, hasConversationEnded, communicationMode, startInactivityTimer, clearInactivityTimer, isCheckingInactivity, isBotSpeaking, isBotProcessing, isListening]);
 
     useEffect(() => {
         if (config?.showDiagnosticTimer && botStatus !== 'idle') {
