@@ -105,41 +105,43 @@ export default function ChatBubble({
   const finalContent = renderTextWithMarkdown(message.text);
 
   return (
-    <div className={cn("flex mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
-      {!isUser && (
-        <Avatar className="h-8 w-8 mr-2 self-start">
-          {avatarSrc && !avatarSrc.startsWith('https://placehold.co') ? (
-             <AvatarImage src={avatarSrc} alt="AI Avatar" className="object-cover"/>
-          ) : (
-             <AvatarImage src={DEFAULT_AVATAR_PLACEHOLDER} alt="AI Avatar Placeholder" data-ai-hint="professional woman" />
-          )}
-          <AvatarFallback><Bot size={20}/></AvatarFallback>
-        </Avatar>
-      )}
-      <div
-        className={cn(
-          "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg shadow flex flex-col",
-          isUser
-            ? "bg-primary text-primary-foreground rounded-br-none"
-            : "bg-secondary text-secondary-foreground rounded-bl-none"
+    <div className={cn("flex w-full mb-4 items-end animate-in fade-in duration-300", isUser ? "justify-end" : "justify-start")}>
+      <div className={cn("flex items-end gap-2", isUser ? "flex-row-reverse" : "flex-row")}>
+        {!isUser && (
+          <Avatar className="h-8 w-8 self-start">
+            {avatarSrc && !avatarSrc.startsWith('https://placehold.co') ? (
+               <AvatarImage src={avatarSrc} alt="AI Avatar" className="object-cover"/>
+            ) : (
+               <AvatarImage src={DEFAULT_AVATAR_PLACEHOLDER} alt="AI Avatar Placeholder" data-ai-hint="professional woman" />
+            )}
+            <AvatarFallback><Bot size={20}/></AvatarFallback>
+          </Avatar>
         )}
-      >
-        <div className="text-sm whitespace-pre-wrap">
-          {finalContent}
+        {isUser && (
+           <Avatar className="h-8 w-8 self-start">
+            <AvatarFallback><User size={20}/></AvatarFallback>
+          </Avatar>
+        )}
+        <div
+          className={cn(
+            "max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-lg shadow flex flex-col",
+            isUser
+              ? "bg-primary text-primary-foreground rounded-br-none"
+              : "bg-secondary text-secondary-foreground rounded-bl-none"
+          )}
+        >
+          <div className="text-sm whitespace-pre-wrap">
+            {finalContent}
+          </div>
+          {renderPdfLink()}
+          <div className={cn("flex items-center mt-1", isUser ? "justify-end" : "justify-start")}>
+              <p className={cn("text-xs", isUser ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                  {formattedTime}
+              </p>
+          </div>
+          {renderDiagnostics()}
         </div>
-        {renderPdfLink()}
-        <div className="flex justify-between items-center mt-1">
-            <p className={cn("text-xs", isUser ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                {formattedTime}
-            </p>
-        </div>
-        {renderDiagnostics()}
       </div>
-      {isUser && (
-         <Avatar className="h-8 w-8 ml-2 self-start">
-          <AvatarFallback><User size={20}/></AvatarFallback>
-        </Avatar>
-      )}
     </div>
   );
 }
