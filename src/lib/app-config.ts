@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileoverview Centralized application configuration management.
@@ -18,6 +17,7 @@ const DEFAULTS = {
     tone: 50,
     formatting: 50,
     conversationalModel: 'gemini-1.5-pro-latest',
+    deepThinkingEnabled: false,
 };
 
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
@@ -35,6 +35,7 @@ export interface AppConfig {
   formatting: number;
   conversationalModel: string;
   modelDisplayName: string;
+  deepThinkingEnabled: boolean;
 }
 
 /**
@@ -78,6 +79,9 @@ export const getAppConfig = async (): Promise<AppConfig> => {
                 : DEFAULTS.formatting,
             conversationalModel: conversationalModel,
             modelDisplayName: MODEL_DISPLAY_NAMES[conversationalModel] || conversationalModel,
+            deepThinkingEnabled: typeof appConfigData?.deepThinkingEnabled === 'boolean'
+                ? appConfigData.deepThinkingEnabled
+                : DEFAULTS.deepThinkingEnabled,
         };
         
         return config;

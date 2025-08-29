@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from "@/hooks/use-toast";
-import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot, Timer, History, Link2, SlidersHorizontal, Terminal } from 'lucide-react';
+import { Save, UploadCloud, RotateCcw, Clock, Type, Construction, Globe, Monitor, AlertTriangle, Archive, Trash2, Loader2, Bot, Timer, History, Link2, SlidersHorizontal, Terminal, Zap } from 'lucide-react';
 import { storage, db } from '@/lib/firebase';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -62,6 +62,7 @@ const modelOptions = [
 
 interface AppConfig {
   distanceThreshold: number;
+  deepThinkingEnabled: boolean;
 }
 
 
@@ -82,7 +83,7 @@ export default function SiteSettingsPage() {
   const [aiPreparationTime, setAiPreparationTime] = useState<string>(String(DEFAULT_AI_PREPARATION_TIME_MS));
 
   // RAG Tuning State
-  const [config, setConfig] = useState<AppConfig>({ distanceThreshold: 0.8 });
+  const [config, setConfig] = useState<AppConfig>({ distanceThreshold: 0.8, deepThinkingEnabled: false });
   const [isSavingAppConfig, setIsSavingAppConfig] = useState(false);
 
 
@@ -91,6 +92,8 @@ export default function SiteSettingsPage() {
   const [isClearingStats, setIsClearingStats] = useState(false);
   const backgroundImageInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const isGemini2point5Selected = conversationalModel.includes('gemini-2.5');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -143,9 +146,14 @@ export default function SiteSettingsPage() {
             setConversationalModel(data.conversationalModel || DEFAULT_CONVERSATIONAL_MODEL);
             setConfig({
               distanceThreshold: typeof data.distanceThreshold === 'number' ? data.distanceThreshold : 0.8,
+              deepThinkingEnabled: typeof data.deepThinkingEnabled === 'boolean' ? data.deepThinkingEnabled : false,
             });
         } else {
-            await setDoc(appConfigDocRef, { conversationalModel: DEFAULT_CONVERSATIONAL_MODEL, distanceThreshold: 0.8 }, { merge: true });
+            await setDoc(appConfigDocRef, { 
+                conversationalModel: DEFAULT_CONVERSATIONAL_MODEL, 
+                distanceThreshold: 0.8,
+                deepThinkingEnabled: false,
+            }, { merge: true });
         }
 
       } catch (error: any) {
@@ -287,6 +295,10 @@ Please check your environment variables and Google Cloud Console settings.`;
         appConfigUpdate.distanceThreshold = config.distanceThreshold;
         appConfigChanged = true;
       }
+       if (config.deepThinkingEnabled !== (currentAppConfig.deepThinkingEnabled ?? false)) {
+        appConfigUpdate.deepThinkingEnabled = isGemini2point5Selected ? config.deepThinkingEnabled : false;
+        appConfigChanged = true;
+      }
       
       const updatePromises = [];
       if (siteAssetsChanged) {
@@ -297,6 +309,7 @@ Please check your environment variables and Google Cloud Console settings.`;
       }
 
       if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
         toast({ title: "Site Settings Saved", description: "Your site display and app settings have been updated." });
       } else {
         toast({ title: "No Changes", description: "No setting changes detected to save." });
@@ -383,7 +396,7 @@ Please check your environment variables and Google Cloud Console settings.`;
                 </p>
                 <ul className="list-disc pl-5 text-xs space-y-1">
                     <li>For local development, add your `GEMINI_API_KEY` to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
-                    <li>For production, set this as a secret in your hosting provider&apos;s dashboard. See `apphosting.yaml` for the required secret name.</li>
+                    <li>For production, set this as a secret in your hosting provider's dashboard. See `apphosting.yaml` for the required secret name.</li>
                 </ul>
             </AlertDescription>
           </Alert>
@@ -393,7 +406,7 @@ Please check your environment variables and Google Cloud Console settings.`;
               <CardTitle className="font-headline flex items-center gap-2"><Bot /> Conversational Model</CardTitle>
               <CardDescription>Select the Gemini model to be used for generating chat responses.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
                 <RadioGroup value={conversationalModel} onValueChange={setConversationalModel} className="space-y-4">
                     {modelOptions.map(option => (
                         <Label key={option.value} htmlFor={option.value} className="flex items-start gap-4 rounded-md border p-4 cursor-pointer hover:bg-accent/50 has-[:checked]:bg-accent has-[:checked]:border-primary">
@@ -406,6 +419,26 @@ Please check your environment variables and Google Cloud Console settings.`;
                         </Label>
                     ))}
                 </RadioGroup>
+                
+                {isGemini2point5Selected && (
+                  <div className="flex items-center space-x-3 rounded-md border p-3 shadow-sm bg-blue-50 border-blue-200 animate-in fade-in-50">
+                      <Zap className="h-5 w-5 text-blue-600" />
+                      <div className="flex-1 space-y-1">
+                          <Label htmlFor="deepThinkingEnabled" className="font-medium text-blue-800">
+                              Enable Deep Thinking
+                          </Label>
+                          <p className="text-xs text-blue-700">
+                              Allows the Gemini 2.5 model a larger token budget for more complex and nuanced responses.
+                          </p>
+                      </div>
+                      <Switch
+                          id="deepThinkingEnabled"
+                          checked={config.deepThinkingEnabled}
+                          onCheckedChange={(checked) => setConfig(prev => ({...prev, deepThinkingEnabled: checked }))}
+                          aria-label="Toggle Deep Thinking mode"
+                      />
+                  </div>
+                )}
             </CardContent>
           </Card>
 
