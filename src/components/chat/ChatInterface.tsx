@@ -127,7 +127,7 @@ interface ChatInterfaceProps {
     communicationMode: 'audio-only' | 'audio-text' | 'text-only';
 }
 
-type BotStatus = 'idle' | 'listening' | 'preparing' | 'speaking' | 'typing' | 'greeting';
+type BotStatus = 'idle' | 'listening' | 'preparing' | 'speaking' | 'greeting';
 
 interface ChatConfig {
     avatarSrc: string;
@@ -407,9 +407,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         }
                     }
                 };
-                if (!fullMessage.isGreeting || communicationMode !== 'audio-only') {
-                  typeCharacter();
-                }
+                typeCharacter();
             }
             
             if (finalAudioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
@@ -428,9 +426,6 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     onSpeechEnd?.(fullMessage.shouldEndConversation || false); 
                 });
             } else if (communicationMode !== 'text-only') {
-                handleEnd();
-            } else if (fullMessage.isGreeting && communicationMode === 'audio-only') {
-                // For audio-only greetings, just call handleEnd immediately since there's no visual animation.
                 handleEnd();
             }
         };
@@ -475,7 +470,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 promptText = uiText.inactivityPromptSecondary;
             } else {
                 const translatedEndMessage = await translate(uiText.inactivityEndMessage);
-                const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now() };
+                const finalMessage: Message = { id: uuidv4(), text: translatedEndMessage, sender: 'model', timestamp: Date.now(), shouldEndConversation: true };
                 
                 speakText(translatedEndMessage, finalMessage, (shouldEnd) => {
                     handleEndChatManually('final-inactive');
@@ -971,9 +966,11 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     </Button>
                 </div>
                 ) : (
-                <div className="w-full max-w-2xl mt-2 mb-4 flex-grow text-left">
+                <div className="w-full max-w-2xl mt-2 mb-4 flex flex-col h-[70vh]">
                     <h3 className="text-xl font-semibold mb-2 text-center">{uiText.conversationEnded}</h3>
-                    <ConversationLog messages={messages} avatarSrc={config.avatarSrc} emptyLogMessage={emptyLogMessage}/>
+                    <div className="flex-grow overflow-y-auto pr-2">
+                        <ConversationLog messages={messages} avatarSrc={config.avatarSrc} emptyLogMessage={emptyLogMessage}/>
+                    </div>
                     <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-3">
                         <Button onClick={handleSaveConversationAsPdf} variant="outline"> <Save className="mr-2 h-4 w-4" /> {uiText.saveAsPdf} </Button>
                         <Button onClick={() => router.push('/')} variant="outline"> <RotateCcw className="mr-2 h-4 w-4" /> {uiText.startNewChat} </Button>
@@ -1036,10 +1033,3 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
       </div>
     );
 }
-
-    
-
-
-    
-
-
