@@ -47,8 +47,7 @@ const AiResponseSchema = z.object({
 type AiResponseJson = z.infer<typeof AiResponseSchema>;
 
 // The final output includes the parsed AI response plus diagnostic data.
-export type GenerateChatResponseOutput = Omit<AiResponseJson, 'shouldEndConversation'> & {
-    shouldEndConversation: boolean;
+export type GenerateChatResponseOutput = AiResponseJson & {
     requiresHoldMessage: boolean; // New flag to signal the UI
     retrievedContext?: string; // Pass context to the final generation step
     debugClosestMatch?: {
@@ -400,9 +399,17 @@ export const generateFinalResponse = async ({
 
       if (parts.length > 1 && parts[1]) {
           try {
-              const parsedMetadata = JSON.parse(parts[1]);
-              const validatedMetadata = AiResponseSchema.parse(parsedMetadata);
-              output = { ...output, ...validatedMetadata, aiResponse: aiResponseText };
+              // The AI might sometimes wrap the JSON in markdown, so we strip it.
+              const cleanedJsonString = parts[1].replace(/```json/g, '').replace(/```/g, '').trim();
+              const parsedMetadata = JSON.parse(cleanedJsonString);
+              
+              // We use safeParse to avoid throwing an error if the JSON is malformed.
+              const validationResult = AiResponseSchema.safeParse({ ...parsedMetadata, aiResponse: aiResponseText });
+              if (validationResult.success) {
+                  output = { ...output, ...validationResult.data };
+              } else {
+                  console.warn(`[generateFinalResponse] Failed to validate AI metadata. Raw metadata: "${parts[1]}"`, validationResult.error);
+              }
           } catch (e) {
               console.warn(`[generateFinalResponse] Failed to parse AI metadata. Raw metadata: "${parts[1]}"`, e);
           }
