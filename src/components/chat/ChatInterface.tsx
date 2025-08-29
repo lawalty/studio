@@ -341,7 +341,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
             if (!isMountedRef.current) return;
             if (animationTimerRef.current) clearTimeout(animationTimerRef.current);
             setAnimatedResponse(null);
-            // This is the fix: ALWAYS add the message to the log after it has "played".
+            
             addMessage(fullMessage);
             onSpeechEnd?.(fullMessage.shouldEndConversation || false);
         };
@@ -407,7 +407,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                         }
                     }
                 };
-                typeCharacter();
+                if (!fullMessage.isGreeting || communicationMode !== 'audio-only') {
+                  typeCharacter();
+                }
             }
             
             if (finalAudioDataUri && communicationMode !== 'text-only' && audioPlayerRef.current) {
@@ -426,6 +428,9 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                     onSpeechEnd?.(fullMessage.shouldEndConversation || false); 
                 });
             } else if (communicationMode !== 'text-only') {
+                handleEnd();
+            } else if (fullMessage.isGreeting && communicationMode === 'audio-only') {
+                // For audio-only greetings, just call handleEnd immediately since there's no visual animation.
                 handleEnd();
             }
         };
@@ -714,7 +719,7 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
                 const greetingText = await translate(precached.greetingText);
                 const greetingMessage: Message = { id: uuidv4(), text: greetingText, sender: 'model', timestamp: Date.now(), isGreeting: true };
                 
-                speakText(greetingText, greetingMessage, () => {
+                speakText(greetingText, greetingMessage, (shouldEnd) => {
                     setBotStatus('idle'); // Transition to idle after greeting is done
                 }, precached.greetingAudioUri);
             } catch (error: any) {
@@ -1036,4 +1041,5 @@ export default function ChatInterface({ communicationMode }: ChatInterfaceProps)
 
 
     
+
 
