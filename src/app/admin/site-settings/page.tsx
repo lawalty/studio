@@ -41,7 +41,7 @@ const modelOptions = [
     {
         name: 'Gemini 1.5 Flash',
         value: 'gemini-1.5-flash-latest',
-        description: "The speed-and-cost optimized model from the previous generation. It's a reliable workhorse for tasks that need to be fast and efficient."
+        description: "The speed-and-cost optimized model from the previous generation. It&apos;s a reliable workhorse for tasks that need to be fast and efficient."
     },
     {
         name: 'Gemini 1.5 Pro',
@@ -396,7 +396,7 @@ Please check your environment variables and Google Cloud Console settings.`;
                 </p>
                 <ul className="list-disc pl-5 text-xs space-y-1">
                     <li>For local development, add your `GEMINI_API_KEY` to your <code className="font-mono bg-sky-100 p-1 rounded">.env.local</code> file.</li>
-                    <li>For production, set this as a secret in your hosting provider's dashboard. See `apphosting.yaml` for the required secret name.</li>
+                    <li>For production, set this as a secret in your hosting provider&apos;s dashboard. See `apphosting.yaml` for the required secret name.</li>
                 </ul>
             </AlertDescription>
           </Alert>
