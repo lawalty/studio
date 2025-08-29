@@ -22,6 +22,7 @@ import { textToSpeech as googleTextToSpeech } from '@/ai/flows/text-to-speech-fl
 import { generateInitialGreeting } from '@/ai/flows/generate-initial-greeting';
 import { elevenLabsTextToSpeech } from '@/ai/flows/eleven-labs-tts-flow';
 import { generateHoldMessage } from '@/ai/flows/generate-hold-message-flow';
+import { marked } from 'marked';
 
 
 export interface Message {
@@ -56,44 +57,6 @@ const DEFAULT_TYPING_SPEED_MS = 40;
 const DEFAULT_ANIMATION_SYNC_FACTOR = 0.9;
 const DEFAULT_STYLE_VALUE = 50;
 
-// New helper function to convert basic markdown to HTML for the PDF
-function markdownToHtml(text: string): string {
-    let html = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-
-    // Bold
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    // Unordered lists
-    html = html.replace(/^\s*[\-\*]\s+(.*)/gm, '<li>$1</li>');
-    html = html.replace(/((<li>.*<\/li>\s*)+)/g, '<ul>$1</ul>');
-
-    // Ordered lists
-    html = html.replace(/^\s*\d+\.\s+(.*)/gm, '<li>$1</li>');
-    html = html.replace(/((<li>.*<\/li>\s*)+)/g, (match, p1) => {
-        if (match.includes('<ol>')) return match; // Avoid double wrapping
-        return match.includes('<ul>') ? match : `<ol>${p1}</ol>`;
-    });
-
-    // Handle paragraphs by replacing newlines with <br>, but not inside lists/tables
-    const blocks = html.split(/(<\/?(ul|ol|li|table|thead|tbody|tr|th|td|strong|p|h[1-6])[^>]*>)/);
-    let finalHtml = '';
-    for (let i = 0; i < blocks.length; i++) {
-        if (i % 2 === 0) { // This is plain text
-            finalHtml += blocks[i].replace(/\n/g, '<br />');
-        } else { // This is an HTML tag
-            finalHtml += blocks[i];
-        }
-    }
-    
-    return finalHtml;
-}
-
-
 function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, titleMessage: string): string {
   const primaryBg = 'hsl(210 13% 50%)';
   const primaryFg = 'hsl(0 0% 98%)';
@@ -119,14 +82,14 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
     const isUser = message.sender === 'user';
     const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // Use the new markdownToHtml converter
-    const formattedText = markdownToHtml(message.text);
+    // Use the `marked` library to convert markdown to HTML
+    const formattedText = marked.parse(message.text, { gfm: true, breaks: true });
 
     if (isUser) {
       html += `
         <div style="display: flex; justify-content: flex-end; margin-bottom: 16px; align-items: flex-start;">
           <div style="max-width: 75%; background-color: ${primaryBg}; color: ${primaryFg}; padding: 10px 12px; border-radius: 12px; border-bottom-right-radius: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-            <div style="font-size: 14px; white-space: pre-wrap; margin: 0; word-wrap: break-word;">${formattedText}</div>
+            <div style="font-size: 14px; white-space: normal; margin: 0; word-wrap: break-word;">${formattedText}</div>
             <p style="font-size: 10px; color: hsla(0,0%,98%,0.75); text-align: right; margin: 5px 0 0 0;">${time}</p>
           </div>
           <div style="width: 32px; height: 32px; margin-left: 8px; background-color: ${userAvatarBg}; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size:14px; font-weight: 500; color: ${defaultFg}; flex-shrink: 0;">
@@ -139,7 +102,7 @@ function generateChatLogHtml(messagesToRender: Message[], aiAvatarSrc: string, t
         <div style="display: flex; justify-content: flex-start; margin-bottom: 16px; align-items: flex-start;">
           <img src="${aiAvatarSrc || DEFAULT_AVATAR_PLACEHOLDER_URL}" alt="AI Avatar" style="width: 32px; height: 32px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; object-fit: cover;" />
           <div style="max-width: 75%; background-color: ${secondaryBg}; color: ${secondaryFg}; padding: 10px 12px; border-radius: 12px; border-bottom-left-radius: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-            <div style="font-size: 14px; white-space: pre-wrap; margin: 0; word-wrap: break-word;">${formattedText}</div>
+            <div style="font-size: 14px; white-space: normal; margin: 0; word-wrap: break-word;">${formattedText}</div>
             <p style="font-size: 10px; color: ${mutedFg}; text-align: left; margin: 5px 0 0 0;">${time}</p>
           </div>
         </div>
